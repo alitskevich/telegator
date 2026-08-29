@@ -82,17 +82,18 @@ export function fakeMessageRepo(initial: readonly Message[] = []): FakeMessageRe
       writeCount++;
       rows.set(message.id, structuredClone(message));
     },
-    mergeMember: async ({ id, itemId, block, attributes }: MemberMerge) => {
+    mergeMember: async ({ id, members, attributes }: MemberMerge) => {
       const existing = rows.get(id);
       if (existing === undefined) throw new Error(`no such message: ${id}`);
       writeCount++;
 
-      // `SET #members.#itemId = :block` plus a SET per named scalar. tgId and
-      // tgAt are absent from MessageMergeAttributes, so they survive untouched.
+      // One `SET #members.#itemId = :block` per member, plus a SET per named
+      // scalar. tgId and tgAt are absent from MessageMergeAttributes, so they
+      // survive untouched.
       rows.set(id, {
         ...existing,
         ...attributes,
-        members: { ...existing.members, [itemId]: block },
+        members: { ...existing.members, ...members },
       });
     },
     markPublished: async ({ id, tgId, tgAt, ts }: PublishResult) => {

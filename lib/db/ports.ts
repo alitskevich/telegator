@@ -31,11 +31,19 @@ export interface SourceRepo {
   updateCursor(id: string, cursor: SourceCursor): Promise<void>;
 }
 
-/** R9's attribute-level merge: `SET #members.#itemId = :block` plus scalars. */
+/**
+ * R9's attribute-level merge: one `SET #members.#itemId = :block` per member,
+ * plus the scalar attributes.
+ *
+ * `members` is a map rather than a single block because one batch can absorb
+ * several items into the same message (§6 L544 keys `pending` by message id).
+ * Emitting one write per member instead would publish an intermediate
+ * `memberCount` that disagrees with the map — a state §2.3 L145's invariant
+ * forbids and `MessageSchema` rejects.
+ */
 export interface MemberMerge {
   readonly id: string;
-  readonly itemId: string;
-  readonly block: MemberBlock;
+  readonly members: Readonly<Record<string, MemberBlock>>;
   readonly attributes: MessageMergeAttributes;
 }
 

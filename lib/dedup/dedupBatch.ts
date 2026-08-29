@@ -1,0 +1,286 @@
+import type { EmbeddingProvider } from "../ai/ports.js";
+import type { Clock } from "../clock.js";
+import { packEmbedding, unpackEmbedding } from "../db/embeddingCodec.js";
+import type { MemberMerge } from "../db/ports.js";
+import { sourceIdOf } from "../domain/ids.js";
+import type { AnalyzedItem } from "../domain/item.js";
+import {
+  DEFAULT_TG_CHANNEL,
+  type DedupCandidate,
+  type MemberBlock,
+  type Message,
+  type MessageMergeAttributes,
+} from "../domain/message.js";
+import { mergeTags } from "../domain/tags.js";
+import type { MetricSink } from "../metrics/ports.js";
+import { DIMENSIONS, MAX_MEMBERS, SIMILARITY_THRESHOLD } from "./constants.js";
+import { cosineSimilarity } from "./cosine.js";
+import { buildEmbeddingText } from "./embeddingText.js";
+import { elementwiseMean } from "./vectors.js";
+
+/**
+ * The normative deduplication algorithm of §6 (L488–553).
+ *
+ * Pure: it performs no table write and enqueues nothing. §6 L547–552 leave both
+ * to the caller, and keeping them out is what makes the whole of §6 testable
+ * with no AWS at all.
+ *
+ * Four recorded reconciliations are implemented here rather than transcribed:
+ *
+ *  - **R7** — §6 builds records as `{...item, …}`, which would write `body`,
+ *    `kind`, `importance`, `properNames` and `forwardedFrom`, none of them in
+ *    §2.3's field table. The descriptive fields are picked explicitly.
+ *  - **R8** — §6 assigns `ts` on neither branch, yet §2.3 L152 makes it the sort
+ *    key on both GSIs. Every write carries it.
+ *  - **R9** — §6 L515 takes candidates from `date-index`, which §7.2 L598 says
+ *    projects no `members`. A merge is emitted as an attribute-level operation
+ *    and the matched record's members are loaded from the base table first.
+ *  - **R10** — §6 L515 re-queries per item, so an item that scores below
+ *    threshold against the batch's fresher copy of a message can still match the
+ *    stale stored copy and overwrite the batch's own work. Pass 2 skips any
+ *    candidate already touched in this batch.
+ *  - **R11** — §6 L522 stamps `ts: now()` unconditionally, which makes AC-3.7's
+ *    byte-identical replay impossible. An existing member keeps its original
+ *    `ts`.
+ */
+
+export interface DedupDeps {
+  readonly embeddings: EmbeddingProvider;
+  /** §6 L515 — the `date-index` query. */
+  loadCandidatesByDate(date: string): Promise<DedupCandidate[]>;
+  /** R9 — the base-table read that supplies the members a candidate lacks. */
+  loadMessage(id: string): Promise<Message | undefined>;
+  readonly clock: Clock;
+  readonly metrics: MetricSink;
+  /**
+   * §11.3 L864 requires the threshold to be recalibrated against Cohere before
+   * production. Injected so that is a configuration change, not a code edit.
+   */
+  readonly similarityThreshold?: number;
+}
+
+export type DedupWrite =
+  | { readonly kind: "create"; readonly message: Message }
+  | { readonly kind: "merge"; readonly merge: MemberMerge };
+
+export interface DedupResult {
+  readonly writes: readonly DedupWrite[];
+  /** §6 L548 — every touched message id. */
+  readonly toPublish: readonly string[];
+  /** §7.2 L600 — alarmed above 500, where §6's in-memory assumption stops holding. */
+  readonly candidateCount: number;
+}
+
+/** The effective state of a message touched by this batch. */
+interface Pending {
+  readonly id: string;
+  readonly date: string;
+  readonly isNew: boolean;
+  embedding: number[];
+  members: Record<string, MemberBlock>;
+  /** The members *this batch* wrote — the ones a merge must SET. */
+  addedMembers: Record<string, MemberBlock>;
+  tags: string;
+  image: string | undefined;
+  title: string | undefined;
+  category: string | undefined;
+  country: string | undefined;
+  location: string | undefined;
+  peoples: string | undefined;
+  tgChannel: string;
+}
+
+export async function dedupBatch(
+  batch: readonly AnalyzedItem[],
+  deps: DedupDeps,
+): Promise<DedupResult> {
+  if (batch.length === 0) {
+    return { writes: [], toPublish: [], candidateCount: 0 };
+  }
+
+  const threshold = deps.similarityThreshold ?? SIMILARITY_THRESHOLD;
+
+  // §6 L495–497 — one text per item, one provider call for the batch.
+  const vectors = await deps.embeddings.embedBatch(batch.map(buildEmbeddingText), DIMENSIONS);
+
+  const pending = new Map<string, Pending>();
+  const toPublish: string[] = [];
+  // All items in a batch share one date (§7.3 L607's FIFO group), and nothing is
+  // written until the caller applies the result — so §6 L515's per-item query
+  // returns the same rows every time. Caching it is what §6 L557's own cost
+  // model ("10 items x 200 candidates is 2,000 comparisons") already assumes.
+  const candidatesByDate = new Map<string, DedupCandidate[]>();
+  let candidateCount = 0;
+
+  for (const [index, item] of batch.entries()) {
+    const vec = vectors[index];
+    if (vec === undefined) {
+      throw new Error(`embedding provider returned no vector for item ${item.id}`);
+    }
+
+    // Pass 1 — messages touched earlier in this batch (§6 L505–511).
+    let best: Pending | undefined;
+    let bestScore = 0;
+    for (const candidate of pending.values()) {
+      if (candidate.embedding.length === 0 || candidate.date !== item.date) continue;
+      const score = cosineSimilarity(vec, candidate.embedding);
+      // L510 records any improvement, with no threshold test.
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+    let matchId = best !== undefined && bestScore >= threshold ? best.id : undefined;
+
+    // Pass 2 — stored messages on the same date (§6 L513–519).
+    if (matchId === undefined && item.date !== "") {
+      let candidates = candidatesByDate.get(item.date);
+      if (candidates === undefined) {
+        candidates = await deps.loadCandidatesByDate(item.date);
+        candidatesByDate.set(item.date, candidates);
+        candidateCount += candidates.length;
+      }
+
+      for (const candidate of candidates) {
+        // R10 — the batch already holds a fresher copy of this message.
+        if (pending.has(candidate.id)) continue;
+        if (candidate.embedding === undefined || candidate.embedding.byteLength === 0) continue;
+
+        const score = cosineSimilarity(vec, unpackEmbedding(candidate.embedding));
+        if (score >= threshold && score > bestScore) {
+          bestScore = score;
+          matchId = candidate.id;
+        }
+      }
+    }
+
+    const state =
+      matchId === undefined ? undefined : (pending.get(matchId) ?? (await load(matchId, deps)));
+
+    if (matchId !== undefined && state === undefined) {
+      throw new Error(`matched message ${matchId} disappeared between query and read`);
+    }
+
+    if (state !== undefined) {
+      // §6 L525–526 — the cap rejects only a *new* key, so a replay of an item
+      // already present still merges. `continue` drops the item outright: no
+      // message is created for it and nothing is enqueued.
+      if (Object.keys(state.members).length >= MAX_MEMBERS && !(item.id in state.members)) {
+        deps.metrics.count("MemberCapReached", 1);
+        continue;
+      }
+    }
+
+    // §6 L521–522, with R11's preservation.
+    const existing = state?.members[item.id];
+    const block: MemberBlock = {
+      summary: item.summary,
+      links: item.links,
+      channel: sourceIdOf(item.id),
+      ts: existing?.ts ?? deps.clock.now(),
+    };
+
+    const next: Pending =
+      state === undefined
+        ? {
+            id: item.id,
+            date: item.date,
+            isNew: true,
+            embedding: vec,
+            members: { [item.id]: block },
+            addedMembers: { [item.id]: block },
+            tags: mergeTags(item.tags),
+            image: item.image,
+            title: item.title,
+            category: item.category,
+            country: item.country,
+            location: item.location,
+            peoples: item.peoples,
+            tgChannel: item.tgChannel ?? DEFAULT_TG_CHANNEL,
+          }
+        : {
+            ...state,
+            embedding: elementwiseMean(state.embedding, vec),
+            members: { ...state.members, [item.id]: block },
+            addedMembers: { ...state.addedMembers, [item.id]: block },
+            // §6 L532 — item side first, so a replay is a fixed point.
+            tags: mergeTags(item.tags, state.tags),
+            // §6 L530 uses `??`, which keeps an empty-string image (R30).
+            image: state.image ?? item.image,
+            // §3.3 L285 — the newest item's descriptive fields overwrite.
+            title: item.title,
+            category: item.category,
+            country: item.country,
+            location: item.location,
+            peoples: item.peoples,
+            tgChannel: item.tgChannel ?? DEFAULT_TG_CHANNEL,
+          };
+
+    deps.metrics.count(state === undefined ? "MessagesCreated" : "MessagesMerged", 1);
+
+    pending.set(next.id, next);
+    if (!toPublish.includes(next.id)) toPublish.push(next.id);
+  }
+
+  deps.metrics.count("DedupCandidateCount", candidateCount);
+
+  const now = deps.clock.now();
+  const writes = [...pending.values()].map((state) => toWrite(state, now));
+
+  return { writes, toPublish, candidateCount };
+}
+
+/** R9 — a `date-index` candidate carries no members, so read the base record. */
+async function load(id: string, deps: DedupDeps): Promise<Pending | undefined> {
+  const message = await deps.loadMessage(id);
+  if (message === undefined) return undefined;
+
+  return {
+    id: message.id,
+    date: message.date,
+    isNew: false,
+    embedding: message.embedding === undefined ? [] : unpackEmbedding(message.embedding),
+    members: message.members,
+    addedMembers: {},
+    tags: message.tags ?? "",
+    image: message.image,
+    title: message.title,
+    category: message.category,
+    country: message.country,
+    location: message.location,
+    peoples: message.peoples,
+    tgChannel: message.tgChannel,
+  };
+}
+
+function toWrite(state: Pending, ts: number): DedupWrite {
+  const memberCount = Object.keys(state.members).length;
+
+  const shared = {
+    memberCount,
+    embedding: packEmbedding(state.embedding),
+    date: state.date,
+    title: state.title,
+    category: state.category,
+    country: state.country,
+    location: state.location,
+    peoples: state.peoples,
+    tags: state.tags,
+    image: state.image,
+    tgChannel: state.tgChannel,
+    status: "topublish",
+    ts,
+  } satisfies MessageMergeAttributes;
+
+  if (state.isNew) {
+    return { kind: "create", message: { id: state.id, members: state.members, ...shared } };
+  }
+
+  // Attribute-level, so `tgId` and `tgAt` — which publish owns — are untouched.
+  // Every member this batch added is SET, not just the last: one batch can
+  // absorb several items into the same message.
+  return {
+    kind: "merge",
+    merge: { id: state.id, members: state.addedMembers, attributes: shared },
+  };
+}

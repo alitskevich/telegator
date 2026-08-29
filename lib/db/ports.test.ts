@@ -141,8 +141,7 @@ describe("fakeMessageRepo", () => {
 
     await repo.mergeMember({
       id: message.id,
-      itemId: "nexta_live/98765",
-      block: { ...block, channel: "nexta_live", ts: 200 },
+      members: { "nexta_live/98765": { ...block, channel: "nexta_live", ts: 200 } },
       attributes: { memberCount: 2, status: "topublish", ts: 2_000 },
     });
 
@@ -157,8 +156,7 @@ describe("fakeMessageRepo", () => {
 
     await repo.mergeMember({
       id: message.id,
-      itemId: "yigal_levin/12345",
-      block,
+      members: { "yigal_levin/12345": block },
       attributes: { memberCount: 1, status: "topublish", ts: 1_000 },
     });
 
@@ -177,8 +175,7 @@ describe("fakeMessageRepo", () => {
 
     await repo.mergeMember({
       id: message.id,
-      itemId: "nexta_live/98765",
-      block,
+      members: { "nexta_live/98765": block },
       attributes: { memberCount: 2, status: "topublish", ts: 2_000 },
     });
 
