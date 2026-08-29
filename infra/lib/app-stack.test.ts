@@ -15,6 +15,10 @@ vi.setConfig({ testTimeout: 60_000 });
 
 const isolatedOutdir = () => mkdtempSync(join(tmpdir(), "telegator-cdk-"));
 
+/** A syntactically real ARN with a zeroed account id — no account id enters this repo. */
+const SESSION_SECRET_ARN =
+  "arn:aws:secretsmanager:eu-central-1:000000000000:secret:telegator/session-key-AbCdEf";
+
 const cache = new Map<string, Template>();
 
 function templateFor(context: Record<string, unknown> = {}): Template {
@@ -110,6 +114,35 @@ describe("TelegatorAppStack", () => {
       }
     });
 
+    /**
+     * §8.6's hosted UI. `readAuthConfig` in `lib/auth/config.ts` requires six
+     * variables; the stack must set the five it owns, or every sign-in fails at
+     * runtime with a message naming one of them.
+     */
+    test("carries the hosted-UI configuration the dashboard reads", () => {
+      const names = Object.keys(variables(templateFor()));
+
+      for (const required of [
+        "TELEGATOR_USER_POOL_ID",
+        "TELEGATOR_USER_POOL_CLIENT_ID",
+        "TELEGATOR_COGNITO_DOMAIN",
+        "TELEGATOR_APP_URL",
+        "TELEGATOR_SESSION_SECRET_ARN",
+      ]) {
+        expect(names).toContain(required);
+      }
+    });
+
+    /**
+     * The secret's ARN is configuration; its value never is. A literal key here
+     * would put it in the CloudFormation template and in this repository.
+     */
+    test("carries the session secret's arn and not its value", () => {
+      const declared = variables(templateFor({ sessionSecretArn: SESSION_SECRET_ARN }));
+
+      expect(declared.TELEGATOR_SESSION_SECRET_ARN).toBe(SESSION_SECRET_ARN);
+    });
+
     /** §8.4 L752/L754 — runScraper and replayDlq invoke by function name. */
     test("carries the two function names the manual triggers invoke", () => {
       const names = Object.keys(variables(templateFor()));
@@ -178,14 +211,56 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
-     * R24 records that Cognito user-management APIs are deliberately NOT
-     * granted: §8.2, §8.3 and §8.4 define no user-management route, page or
-     * action, so the grant would exceed the task §8.6 L786 describes.
+     * R34 revises R24, and narrows rather than relaxes it. R24 withheld Cognito
+     * from this role because §8.2–§8.4 define no user-management surface, so the
+     * "user management" grant of §8.6 L786 would exceed the task. But §8.6 L788
+     * states normatively that "a disabled user is rejected at every action", and
+     * enforcing that needs a live read of one field. `AdminGetUser` is that read
+     * — and it is the ONLY Cognito action this role may hold.
      */
-    test("is granted no Cognito administration", () => {
-      const actions = policyStatements(templateFor()).flatMap(actionsOf);
+    test("is granted exactly one Cognito action, the disabled-user read", () => {
+      const cognito = policyStatements(templateFor())
+        .flatMap(actionsOf)
+        .filter((action) => action.startsWith("cognito-idp:"));
 
-      expect(actions.filter((action) => action.startsWith("cognito-idp:"))).toEqual([]);
+      expect(cognito).toEqual(["cognito-idp:AdminGetUser"]);
+    });
+
+    /**
+     * Named individually, because "exactly one action" is a rule a future edit
+     * can satisfy while swapping which one. These are the §8.6 L786 grants that
+     * have no route, page or action behind them.
+     */
+    test("is granted no user-management API", () => {
+      const actions = new Set(policyStatements(templateFor()).flatMap(actionsOf));
+
+      for (const forbidden of [
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminDeleteUser",
+        "cognito-idp:AdminDisableUser",
+        "cognito-idp:AdminEnableUser",
+        "cognito-idp:AdminAddUserToGroup",
+        "cognito-idp:AdminRemoveUserFromGroup",
+        "cognito-idp:AdminSetUserPassword",
+        "cognito-idp:ListUsers",
+      ]) {
+        expect(actions.has(forbidden)).toBe(false);
+      }
+    });
+
+    /**
+     * The cookie sealing key forges admin sessions, so the role reads it from
+     * Secrets Manager at runtime (`handlers/publish.ts` does the same for the
+     * bot token) rather than carrying it as an Amplify environment variable
+     * anyone who can describe the app could read.
+     */
+    test("may read the session secret, and only that secret", () => {
+      const reads = policyStatements(templateFor({ sessionSecretArn: SESSION_SECRET_ARN })).filter(
+        (statement) => actionsOf(statement).includes("secretsmanager:GetSecretValue"),
+      );
+
+      expect(reads).toHaveLength(1);
+      expect(reads[0]?.Resource).toBe(SESSION_SECRET_ARN);
     });
   });
 

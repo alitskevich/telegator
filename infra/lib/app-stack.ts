@@ -24,7 +24,19 @@ export const DASHBOARD_ENV_VARS = {
   dlqReplayFunctionName: "TELEGATOR_DLQ_REPLAY_FUNCTION_NAME",
   userPoolId: "TELEGATOR_USER_POOL_ID",
   userPoolClientId: "TELEGATOR_USER_POOL_CLIENT_ID",
+  hostedUiDomain: "TELEGATOR_COGNITO_DOMAIN",
+  appUrl: "TELEGATOR_APP_URL",
+  /** The ARN. The key itself is fetched at runtime — see `grantAppPermissions`. */
+  sessionSecretArn: "TELEGATOR_SESSION_SECRET_ARN",
 } as const;
+
+/**
+ * Amplify assigns the app's domain after the app exists, so it cannot be read at
+ * synth without a circular reference. It is deployment configuration the spec
+ * does not state, so it comes from context, defaulting to the dev origin that
+ * `infra/lib/auth-stack.ts` already registers as a callback URL.
+ */
+const DEFAULT_APP_URL = "http://localhost:3000";
 
 export interface TelegatorAppStackProps extends StackProps {
   readonly config: TelegatorConfig;
@@ -47,7 +59,12 @@ export class TelegatorAppStack extends Stack {
       assumedBy: new ServicePrincipal("amplify.amazonaws.com"),
     });
 
-    this.grantAppPermissions(data, queues, pipeline);
+    const sessionSecretArn = String(
+      this.node.tryGetContext("sessionSecretArn") ??
+        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:${config.name("session-key")}`,
+    );
+
+    this.grantAppPermissions(data, queues, pipeline, auth, sessionSecretArn);
 
     const [analyzeDlq, aggregateDlq, publishDlq] = queues.deadLetterQueues;
     if (analyzeDlq === undefined || aggregateDlq === undefined || publishDlq === undefined) {
@@ -71,6 +88,17 @@ export class TelegatorAppStack extends Stack {
       // §8.6 L780 — the hosted-UI session layer.
       [DASHBOARD_ENV_VARS.userPoolId, auth.userPool.userPoolId],
       [DASHBOARD_ENV_VARS.userPoolClientId, auth.userPoolClient.userPoolClientId],
+      // `baseUrl()` is the hosted UI's origin, derived from the domain this
+      // build already creates rather than reconstructed from a string template.
+      [DASHBOARD_ENV_VARS.hostedUiDomain, auth.userPoolDomain.baseUrl()],
+      [DASHBOARD_ENV_VARS.appUrl, String(this.node.tryGetContext("appUrl") ?? DEFAULT_APP_URL)],
+      /**
+       * The ARN, never the value. A literal key here would sit in the
+       * CloudFormation template and be readable by anyone who can describe the
+       * Amplify app — and this key seals the session cookie, so it forges admin
+       * sessions. `handlers/publish.ts` treats the bot token the same way.
+       */
+      [DASHBOARD_ENV_VARS.sessionSecretArn, sessionSecretArn],
     ].map(([name, value]) => ({ name: String(name), value: String(value) }));
 
     new CfnApp(this, "DashboardApp", {
@@ -107,11 +135,39 @@ export class TelegatorAppStack extends Stack {
     data: TelegatorDataStack,
     queues: TelegatorQueueStack,
     pipeline: TelegatorPipelineStack,
+    auth: TelegatorAuthStack,
+    sessionSecretArn: string,
   ): void {
     // §7.6 L673 — "read both tables, write `sources`/`messages`". Soft deletes
     // (§8.4 L751) are writes, so no DeleteItem is needed.
     data.sources.grantReadWriteData(this.appRole);
     data.messages.grantReadWriteData(this.appRole);
+
+    /**
+     * R34. §8.6 L788 — "a disabled user is rejected at every action" — needs a
+     * live read, and this is it. R24 withheld Cognito from this role because
+     * §8.2–§8.4 define no user-management surface; that still holds, and this
+     * grant does not reopen it: one read action, on this pool only. The
+     * user-management APIs of §8.6 L786 remain ungranted, and a test names them.
+     */
+    this.appRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["cognito-idp:AdminGetUser"],
+        resources: [auth.userPool.userPoolArn],
+      }),
+    );
+
+    // The cookie sealing key, read at runtime rather than carried in the app's
+    // environment. Scoped to the one secret; `secretsmanager:GetSecretValue` on
+    // `*` would also read the Telegram bot token of §7.6 L663.
+    this.appRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [sessionSecretArn],
+      }),
+    );
 
     this.appRole.addToPolicy(
       new PolicyStatement({

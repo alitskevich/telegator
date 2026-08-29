@@ -10,11 +10,17 @@ export const AUTH_ENV_VARS = {
   userPoolClientId: "TELEGATOR_USER_POOL_CLIENT_ID",
   hostedUiDomain: "TELEGATOR_COGNITO_DOMAIN",
   appUrl: "TELEGATOR_APP_URL",
-  /** 32 random bytes, base64. Sealing key for the session cookie. */
-  sessionSecret: "TELEGATOR_SESSION_SECRET",
+  /**
+   * ARN of the Secrets Manager secret holding the cookie sealing key, following
+   * `handlers/publish.ts` for the bot token: the *ARN* is configuration, the
+   * secret is fetched at runtime. An Amplify environment variable holding the
+   * key itself would be readable by anyone who can describe the app, and this
+   * key forges admin sessions.
+   */
+  sessionSecretArn: "TELEGATOR_SESSION_SECRET_ARN",
 } as const;
 
-const SESSION_KEY_BYTES = 32;
+export const SESSION_KEY_BYTES = 32;
 
 export interface AuthConfig {
   readonly region: string;
@@ -22,7 +28,7 @@ export interface AuthConfig {
   readonly clientId: string;
   readonly hostedUiDomain: string;
   readonly appUrl: string;
-  readonly sessionKey: Uint8Array;
+  readonly sessionSecretArn: string;
 }
 
 function required(env: Record<string, string | undefined>, name: string): string {
@@ -36,19 +42,29 @@ function required(env: Record<string, string | undefined>, name: string): string
 }
 
 export function readAuthConfig(env: Record<string, string | undefined> = process.env): AuthConfig {
-  const sessionKey = Buffer.from(required(env, AUTH_ENV_VARS.sessionSecret), "base64");
-  if (sessionKey.length !== SESSION_KEY_BYTES) {
-    throw new Error(
-      `${AUTH_ENV_VARS.sessionSecret} must decode to ${SESSION_KEY_BYTES} bytes, got ${sessionKey.length}`,
-    );
-  }
-
   return {
     region: required(env, AUTH_ENV_VARS.region),
     userPoolId: required(env, AUTH_ENV_VARS.userPoolId),
     clientId: required(env, AUTH_ENV_VARS.userPoolClientId),
     hostedUiDomain: required(env, AUTH_ENV_VARS.hostedUiDomain).replace(/\/+$/, ""),
     appUrl: required(env, AUTH_ENV_VARS.appUrl).replace(/\/+$/, ""),
-    sessionKey,
+    sessionSecretArn: required(env, AUTH_ENV_VARS.sessionSecretArn),
   };
+}
+
+/**
+ * Decode the secret's string value into an AES-256 key.
+ *
+ * Checked rather than assumed: a short key would be rejected by `createCipheriv`
+ * at the first sign-in, but a *wrong-length-yet-valid* one would silently weaken
+ * every cookie, and the failure would look like nothing at all.
+ */
+export function sessionKeyFromSecret(secretString: string): Uint8Array {
+  const key = Buffer.from(secretString.trim(), "base64");
+  if (key.length !== SESSION_KEY_BYTES) {
+    throw new Error(
+      `${AUTH_ENV_VARS.sessionSecretArn} must hold ${SESSION_KEY_BYTES} base64 bytes, got ${key.length}`,
+    );
+  }
+  return key;
 }

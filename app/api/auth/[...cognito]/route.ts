@@ -1,8 +1,10 @@
+import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { cookies } from "next/headers";
 import { httpTokenEndpoint, jwksIdTokenVerifier } from "../../../../lib/auth/cognito.js";
 import { readAuthConfig } from "../../../../lib/auth/config.js";
 import type { CookieJar, CookieOptions } from "../../../../lib/auth/ports.js";
 import { handleAuthRequest } from "../../../../lib/auth/routes.js";
+import { createSessionKeyReader } from "../../../../lib/auth/sessionKey.js";
 import { systemClock } from "../../../../lib/clock.js";
 
 /**
@@ -25,18 +27,27 @@ function cookieJar(store: NextCookies): CookieJar {
   };
 }
 
+/**
+ * Module scope, so the SDK client and the fetched key survive between requests
+ * on a warm Amplify server instance.
+ */
+const config = readAuthConfig();
+const readSessionKey = createSessionKeyReader(
+  config.sessionSecretArn,
+  new SecretsManagerClient({ region: config.region }),
+);
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ cognito?: string[] }> },
 ): Promise<Response> {
-  const config = readAuthConfig();
   const { cognito = [] } = await context.params;
 
   return handleAuthRequest(cognito, request, {
     tokens: httpTokenEndpoint(config),
     verifier: jwksIdTokenVerifier(config),
     jar: cookieJar(await cookies()),
-    key: config.sessionKey,
+    key: await readSessionKey(),
     clock: systemClock,
     config: {
       hostedUiDomain: config.hostedUiDomain,
