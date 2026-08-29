@@ -22,3 +22,20 @@ export function advancingClock(start: number, stepMs = 1): Clock {
     },
   };
 }
+
+/**
+ * A clock that stands still until a test moves it.
+ *
+ * Session expiry (§8.6) is the case `fixedClock` and `advancingClock` cannot
+ * express: the test must hold time still across several reads, then step it
+ * over a boundary by an exact amount.
+ */
+export function manualClock(start: number): Clock & { advance(ms: number): void } {
+  let instant = start;
+  return {
+    now: () => instant,
+    advance: (ms) => {
+      instant += ms;
+    },
+  };
+}
