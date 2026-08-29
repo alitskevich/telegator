@@ -1,18 +1,22 @@
 import "server-only";
 import { CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { LambdaClient } from "@aws-sdk/client-lambda";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { SQSClient } from "@aws-sdk/client-sqs";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { cookies } from "next/headers";
-import { ENV_VARS } from "../handlers/env.js";
+import { DASHBOARD_ENV_VARS, ENV_VARS } from "../handlers/env.js";
 import { readAuthConfig } from "../lib/auth/config.js";
 import type { CookieJar, CookieOptions } from "../lib/auth/ports.js";
 import type { RequireRoleDeps } from "../lib/auth/session.js";
 import { createSessionKeyReader } from "../lib/auth/sessionKey.js";
 import { cognitoUserStatusReader } from "../lib/auth/userStatus.js";
+import { lambdaInvoker } from "../lib/aws/lambda.js";
 import { systemClock } from "../lib/clock.js";
 import { createMessageRepo } from "../lib/db/messages.js";
 import { createSourceRepo } from "../lib/db/sources.js";
+import { createSqsQueueProducer } from "../lib/queues/sqs.js";
 
 /**
  * The one place a server action reaches for AWS.
@@ -70,3 +74,20 @@ export async function authContext(): Promise<RequireRoleDeps> {
 
   return { jar, key: await readSessionKey(), clock: systemClock, status };
 }
+
+export const lambda = lambdaInvoker(new LambdaClient({ region: config.region }));
+
+export const publishQueue = createSqsQueueProducer({
+  client: new SQSClient({ region: config.region }),
+  queueUrl: requireEnv(ENV_VARS.publishQueueUrl),
+});
+
+/**
+ * §8.4 L752/L754 — the two functions the manual triggers invoke, by name. The
+ * names are set by `infra/lib/app-stack.ts`, which grants InvokeFunction on
+ * exactly these two.
+ */
+export const functions = {
+  scrape: requireEnv(DASHBOARD_ENV_VARS.scrapeFunctionName),
+  dlqReplay: requireEnv(DASHBOARD_ENV_VARS.dlqReplayFunctionName),
+} as const;

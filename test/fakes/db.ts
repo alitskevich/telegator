@@ -36,6 +36,7 @@ export function fakeSourceRepo(initial: readonly Source[] = []): FakeSourceRepo 
       // UpdateItem with a SET for each named attribute.
       rows.set(id, { ...existing, ...cursor });
     },
+    listAll: async () => [...rows.values()].filter((s) => s.deleted !== true),
     patch: async (id: string, delta: Readonly<Record<string, unknown>>) => {
       const existing = rows.get(id);
       if (existing === undefined) throw new Error(`no such source: ${id}`);

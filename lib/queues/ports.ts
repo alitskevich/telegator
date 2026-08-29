@@ -75,6 +75,17 @@ export interface QueueDrainer {
   delete(receiptHandle: string): Promise<void>;
 }
 
+/**
+ * §7.3 L610 — "each has a matching DLQ". The three queues an operator may drain.
+ *
+ * Defined here rather than in `handlers/dlqReplay.ts` so the dashboard can name
+ * them without importing a module that imports `lib/pipeline/`, which §8.2 L734
+ * forbids it from depending on.
+ */
+export const REPLAYABLE_QUEUES = ["analyze", "aggregate", "publish"] as const;
+
+export type ReplayableQueue = (typeof REPLAYABLE_QUEUES)[number];
+
 export interface QueueProducer {
   /**
    * Sends a batch.

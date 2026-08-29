@@ -1,9 +1,11 @@
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { createLogger, stdoutSink } from "../lib/logging/logger.js";
 import { type DlqReplaySummary, replayDlq } from "../lib/pipeline/dlqReplay.js";
+import { REPLAYABLE_QUEUES, type ReplayableQueue } from "../lib/queues/ports.js";
 import { createSqsQueueDrainer, createSqsQueueProducer } from "../lib/queues/sqs.js";
 import { ENV_VARS, requireEnv } from "./env.js";
 
+export type { ReplayableQueue };
 /**
  * The `telegator-dlq-replay` entry point (§7.5 L653) — manual, invoked from the
  * dashboard (§8.4 L754, `admin` only).
@@ -12,9 +14,7 @@ import { ENV_VARS, requireEnv } from "./env.js";
  * it arrives in the event rather than the environment; the queue pairs are
  * fixed by §7.3 L610's "each has a matching DLQ".
  */
-export const REPLAYABLE_QUEUES = ["analyze", "aggregate", "publish"] as const;
-
-export type ReplayableQueue = (typeof REPLAYABLE_QUEUES)[number];
+export { REPLAYABLE_QUEUES };
 
 export interface DlqReplayEvent {
   readonly queueName: string;

@@ -2,7 +2,7 @@ import { SecretValue, Stack, type StackProps } from "aws-cdk-lib";
 import { CfnApp } from "aws-cdk-lib/aws-amplify";
 import { Effect, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import type { Construct } from "constructs";
-import { ENV_VARS } from "../../handlers/env.js";
+import { DASHBOARD_ENV_VARS, ENV_VARS } from "../../handlers/env.js";
 import type { TelegatorAuthStack } from "./auth-stack.js";
 import type { TelegatorConfig } from "./config.js";
 import type { TelegatorDataStack } from "./data-stack.js";
@@ -19,16 +19,12 @@ import type { TelegatorQueueStack } from "./queue-stack.js";
  */
 
 /** Env vars the dashboard needs beyond the pipeline's own (`handlers/env.ts`). */
-export const DASHBOARD_ENV_VARS = {
-  scrapeFunctionName: "TELEGATOR_SCRAPE_FUNCTION_NAME",
-  dlqReplayFunctionName: "TELEGATOR_DLQ_REPLAY_FUNCTION_NAME",
-  userPoolId: "TELEGATOR_USER_POOL_ID",
-  userPoolClientId: "TELEGATOR_USER_POOL_CLIENT_ID",
-  hostedUiDomain: "TELEGATOR_COGNITO_DOMAIN",
-  appUrl: "TELEGATOR_APP_URL",
-  /** The ARN. The key itself is fetched at runtime — see `grantAppPermissions`. */
-  sessionSecretArn: "TELEGATOR_SESSION_SECRET_ARN",
-} as const;
+/**
+ * Re-exported so this stack keeps one import surface, but *defined* in
+ * `handlers/env.ts` — a server action reads the same names and cannot import a
+ * CDK module to get them.
+ */
+export { DASHBOARD_ENV_VARS };
 
 /**
  * Amplify assigns the app's domain after the app exists, so it cannot be read at

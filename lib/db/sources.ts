@@ -1,4 +1,10 @@
-import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  ScanCommand,
+  UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
 import { type Source, type SourceCursor, SourceSchema } from "../domain/source.js";
 import type { DocumentSender } from "./messages.js";
 import { softDeleteCommand, updateAttributes } from "./patch.js";
@@ -87,6 +93,39 @@ export function createSourceRepo(options: SourceRepoOptions): SourceRepo {
           ExpressionAttributeValues: values,
         }),
       );
+    },
+
+    /**
+     * §8.3 L741 — every source, whatever its status.
+     *
+     * A Scan, because there is no index over "all sources" and no sensible
+     * partition to query: §2.1's table is one row per channel, tens of rows, and
+     * an index existing only to avoid a Scan of that size would cost more than
+     * the Scan. Paginated all the same — a Scan stops at 1 MB like a Query.
+     */
+    listAll: async (): Promise<Source[]> => {
+      const found: Source[] = [];
+      let cursor: Record<string, unknown> | undefined;
+
+      do {
+        const output = await client.send(
+          new ScanCommand({
+            TableName: tableName,
+            // R16 — soft-deleted sources are filtered at this layer, not by
+            // every caller remembering to.
+            FilterExpression: "attribute_not_exists(#deleted) OR #deleted = :notDeleted",
+            ExpressionAttributeNames: { "#deleted": "deleted" },
+            ExpressionAttributeValues: { ":notDeleted": false },
+            ...(cursor === undefined ? {} : { ExclusiveStartKey: cursor }),
+          }),
+        );
+
+        const items = "Items" in output ? (output.Items ?? []) : [];
+        for (const item of items) found.push(SourceSchema.parse(item));
+        cursor = "LastEvaluatedKey" in output ? output.LastEvaluatedKey : undefined;
+      } while (cursor !== undefined);
+
+      return found;
     },
 
     /** §8.4 L749 — an operator edit. The action validates the delta first. */

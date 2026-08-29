@@ -1,4 +1,10 @@
-import type { GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import type {
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  ScanCommand,
+  UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
 import { describe, expect, test } from "vitest";
 import { MessageSchema } from "../domain/message.js";
 import { packEmbedding } from "./embeddingCodec.js";
@@ -7,7 +13,7 @@ import { createMessageRepo, type DocumentSender } from "./messages.js";
 const TABLE = "telegator-dev-messages";
 const ITEM_ID = "yigal_levin/12345";
 
-type AnyCommand = GetCommand | PutCommand | QueryCommand | UpdateCommand;
+type AnyCommand = GetCommand | PutCommand | QueryCommand | ScanCommand | UpdateCommand;
 
 /**
  * A recording stub for the DynamoDB document client.

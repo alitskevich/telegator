@@ -5,6 +5,8 @@ import {
   type PutCommandOutput,
   QueryCommand,
   type QueryCommandOutput,
+  type ScanCommand,
+  type ScanCommandOutput,
   UpdateCommand,
   type UpdateCommandOutput,
 } from "@aws-sdk/lib-dynamodb";
@@ -28,11 +30,12 @@ import type { MemberMerge, MessageRepo, PublishResult } from "./ports.js";
  * attribute-value envelopes.
  */
 
-type DocumentCommand = GetCommand | PutCommand | QueryCommand | UpdateCommand;
+type DocumentCommand = GetCommand | PutCommand | QueryCommand | ScanCommand | UpdateCommand;
 type DocumentOutput =
   | GetCommandOutput
   | PutCommandOutput
   | QueryCommandOutput
+  | ScanCommandOutput
   | UpdateCommandOutput;
 
 /**

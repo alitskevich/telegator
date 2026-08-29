@@ -35,3 +35,22 @@ export function requireEnv(name: string): string {
   }
   return value;
 }
+
+/**
+ * The variables only the dashboard reads (§8.4 L752/L754, §8.6 L780).
+ *
+ * Here rather than in `infra/lib/app-stack.ts`, for the reason `ROLE_GROUPS`
+ * moved out of the auth stack: a server action importing the stack would pull
+ * `aws-cdk-lib` into the Next bundle to learn four strings. The stack imports
+ * this instead.
+ */
+export const DASHBOARD_ENV_VARS = {
+  scrapeFunctionName: "TELEGATOR_SCRAPE_FUNCTION_NAME",
+  dlqReplayFunctionName: "TELEGATOR_DLQ_REPLAY_FUNCTION_NAME",
+  userPoolId: "TELEGATOR_USER_POOL_ID",
+  userPoolClientId: "TELEGATOR_USER_POOL_CLIENT_ID",
+  hostedUiDomain: "TELEGATOR_COGNITO_DOMAIN",
+  appUrl: "TELEGATOR_APP_URL",
+  /** The ARN. The key itself is fetched at runtime — see `grantAppPermissions`. */
+  sessionSecretArn: "TELEGATOR_SESSION_SECRET_ARN",
+} as const;
