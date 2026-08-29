@@ -279,7 +279,19 @@ export class TelegatorPipelineStack extends Stack {
     // §7.6 L671. The secret's ARN is configuration rather than a lookup, so the
     // grant is scoped to that ARN string rather than to a construct.
     queues.publish.grantConsumeMessages(publish);
-    data.messages.grantReadWriteData(publish);
+    /**
+     * §7.6 L672 says "read/write `messages`", and `grantReadWriteData` matches
+     * that literally — including `DeleteItem` and `BatchWriteItem`. This stage
+     * calls exactly two APIs: `GetItem` for §3.4 L316's load and `UpdateItem`
+     * for L345's result write.
+     *
+     * The narrow reading is taken because of what the wide one permits. §7.2
+     * makes `messages` the only durable record of a Telegram post — §1.3 L49
+     * says a post that never merges "leaves no row anywhere" — and §8.4 L751
+     * makes even an operator's delete soft for that reason. A stage that never
+     * deletes should not be able to, least of all irrecoverably.
+     */
+    data.messages.grant(publish, "dynamodb:GetItem", "dynamodb:UpdateItem");
     publish.addToRolePolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,

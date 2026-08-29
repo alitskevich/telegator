@@ -230,6 +230,44 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     }
   });
 
+  /**
+   * §7.6 L672 reads "read/write `messages`", which `grantReadWriteData` matches
+   * literally — and that helper also grants DeleteItem and BatchWriteItem.
+   * `publish` calls exactly two APIs: `GetItem` (§3.4 L316's load) and
+   * `UpdateItem` (§3.4 L345's result write).
+   *
+   * The narrow reading wins here because of what the wide one enables. §7.2
+   * makes `messages` the only durable record of a Telegram post — §1.3 L49 says
+   * a post that never merges "leaves no row anywhere" — and §8.4 L751 makes even
+   * an operator's delete soft for that reason. A stage that never deletes should
+   * not be able to, least of all irrecoverably.
+   */
+  test("publish may read and update messages, and nothing more (§7.6 L672)", () => {
+    const statements = statementsByFunction(templateFor()).get("telegator-dev-publish") ?? [];
+    const dynamo = new Set(
+      statements
+        .flatMap((statement) => [statement.Action].flat().map(String))
+        .filter((action) => action.startsWith("dynamodb:")),
+    );
+
+    expect(dynamo).toEqual(new Set(["dynamodb:GetItem", "dynamodb:UpdateItem"]));
+  });
+
+  /** Named individually, because a set equality can be satisfied by a later edit. */
+  test("publish may not delete or overwrite a message record", () => {
+    const statements = statementsByFunction(templateFor()).get("telegator-dev-publish") ?? [];
+    const dynamo = statements.flatMap((statement) => [statement.Action].flat().map(String));
+
+    for (const forbidden of [
+      "dynamodb:DeleteItem",
+      "dynamodb:BatchWriteItem",
+      "dynamodb:PutItem",
+      "dynamodb:Scan",
+    ]) {
+      expect(dynamo).not.toContain(forbidden);
+    }
+  });
+
   test("grants secretsmanager:GetSecretValue to exactly one function (§7.6 L671)", () => {
     const secrets = policyStatements(templateFor()).filter((s) =>
       [s.Action].flat().map(String).includes("secretsmanager:GetSecretValue"),
