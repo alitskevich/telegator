@@ -53,4 +53,6 @@ export const DASHBOARD_ENV_VARS = {
   appUrl: "TELEGATOR_APP_URL",
   /** The ARN. The key itself is fetched at runtime — see `grantAppPermissions`. */
   sessionSecretArn: "TELEGATOR_SESSION_SECRET_ARN",
+  /** §8.5 L771 — the log group the category chart runs Logs Insights over. */
+  analyzeLogGroup: "TELEGATOR_ANALYZE_LOG_GROUP",
 } as const;

@@ -7,7 +7,7 @@ import type {
 import type { Clock } from "../clock.js";
 import type { MessageRepo } from "../db/ports.js";
 import { MESSAGE_STATUSES, type MessageListItem } from "../domain/message.js";
-import { SKIP_REASONS, type SkipReason } from "../pipeline/analyze/route.js";
+import { SKIP_REASONS, type SkipReason } from "../metrics/ports.js";
 
 /**
  * §8.5 L763-772 — one named function per card.

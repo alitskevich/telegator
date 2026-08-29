@@ -2,9 +2,8 @@ import type { GetMetricDataCommand } from "@aws-sdk/client-cloudwatch";
 import type { GetQueryResultsCommand, StartQueryCommand } from "@aws-sdk/client-cloudwatch-logs";
 import type { GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
 import { describe, expect, test } from "vitest";
-import { METRIC_NAMESPACE } from "../metrics/ports.js";
-import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../pipeline/analyze/index.js";
-import { SKIP_REASONS } from "../pipeline/analyze/route.js";
+import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../logging/fields.js";
+import { METRIC_NAMESPACE, SKIP_REASONS } from "../metrics/ports.js";
 import {
   cloudWatchMetricReader,
   logsInsightsCategoryReader,

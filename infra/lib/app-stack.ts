@@ -95,6 +95,9 @@ export class TelegatorAppStack extends Stack {
        * sessions. `handlers/publish.ts` treats the bot token the same way.
        */
       [DASHBOARD_ENV_VARS.sessionSecretArn, sessionSecretArn],
+      // §8.5 L771. Taken from the function's own log group rather than rebuilt
+      // as `/aws/lambda/${name}`, so a change to either stays in step.
+      [DASHBOARD_ENV_VARS.analyzeLogGroup, pipeline.functions.analyze.logGroup.logGroupName],
     ].map(([name, value]) => ({ name: String(name), value: String(value) }));
 
     new CfnApp(this, "DashboardApp", {

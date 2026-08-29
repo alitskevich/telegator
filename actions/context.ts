@@ -1,4 +1,6 @@
 import "server-only";
+import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
+import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { LambdaClient } from "@aws-sdk/client-lambda";
@@ -13,7 +15,13 @@ import type { RequireRoleDeps } from "../lib/auth/session.js";
 import { createSessionKeyReader } from "../lib/auth/sessionKey.js";
 import { cognitoUserStatusReader } from "../lib/auth/userStatus.js";
 import { lambdaInvoker } from "../lib/aws/lambda.js";
+import {
+  cloudWatchMetricReader,
+  logsInsightsCategoryReader,
+  sqsQueueDepthReader,
+} from "../lib/aws/observability.js";
 import { systemClock } from "../lib/clock.js";
+import { cachedCategoryLogReader, cachedMetricReader } from "../lib/dashboard/cache.js";
 import { createMessageRepo } from "../lib/db/messages.js";
 import { createSourceRepo } from "../lib/db/sources.js";
 import { createSqsQueueProducer } from "../lib/queues/sqs.js";
@@ -34,6 +42,8 @@ const documents = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   // read that resurrected them as null would fail `MessageSchema`.
   marshallOptions: { removeUndefinedValues: true },
 });
+
+const sqs = new SQSClient({ region: config.region });
 
 const readSessionKey = createSessionKeyReader(
   config.sessionSecretArn,
@@ -78,7 +88,7 @@ export async function authContext(): Promise<RequireRoleDeps> {
 export const lambda = lambdaInvoker(new LambdaClient({ region: config.region }));
 
 export const publishQueue = createSqsQueueProducer({
-  client: new SQSClient({ region: config.region }),
+  client: sqs,
   queueUrl: requireEnv(ENV_VARS.publishQueueUrl),
 });
 
@@ -90,4 +100,35 @@ export const publishQueue = createSqsQueueProducer({
 export const functions = {
   scrape: requireEnv(DASHBOARD_ENV_VARS.scrapeFunctionName),
   dlqReplay: requireEnv(DASHBOARD_ENV_VARS.dlqReplayFunctionName),
+} as const;
+
+/**
+ * §8.5's read side, with L774's 60 s cache applied at the port so every
+ * CloudWatch read is covered — including ones added later.
+ */
+export const metrics = cachedMetricReader(
+  cloudWatchMetricReader(new CloudWatchClient({ region: config.region })),
+  systemClock,
+);
+
+export const categoryLogs = cachedCategoryLogReader(
+  logsInsightsCategoryReader(
+    new CloudWatchLogsClient({ region: config.region }),
+    requireEnv(DASHBOARD_ENV_VARS.analyzeLogGroup),
+  ),
+  systemClock,
+);
+
+export const queueDepths = sqsQueueDepthReader(sqs);
+
+export const queueUrls = {
+  analyze: requireEnv(ENV_VARS.analyzeQueueUrl),
+  aggregate: requireEnv(ENV_VARS.aggregateQueueUrl),
+  publish: requireEnv(ENV_VARS.publishQueueUrl),
+} as const;
+
+export const dlqUrls = {
+  analyze: requireEnv(ENV_VARS.analyzeDlqUrl),
+  aggregate: requireEnv(ENV_VARS.aggregateDlqUrl),
+  publish: requireEnv(ENV_VARS.publishDlqUrl),
 } as const;

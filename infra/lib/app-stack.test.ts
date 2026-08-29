@@ -134,6 +134,16 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
+     * §8.5 L771's category chart is a Logs Insights query over the analyze log
+     * group, and `logsInsightsCategoryReader` takes the group name as an
+     * argument. Without this variable the chart has nothing to query, and the
+     * role's existing logs:StartQuery grant would be pointed at nothing.
+     */
+    test("carries the analyze log group the category chart queries", () => {
+      expect(Object.keys(variables(templateFor()))).toContain("TELEGATOR_ANALYZE_LOG_GROUP");
+    });
+
+    /**
      * The secret's ARN is configuration; its value never is. A literal key here
      * would put it in the CloudFormation template and in this repository.
      */

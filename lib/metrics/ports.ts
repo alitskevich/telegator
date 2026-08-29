@@ -35,6 +35,19 @@ export type MetricDimensionName = "Source" | "Reason" | "Method";
 
 export type MetricDimensions = Partial<Record<MetricDimensionName, string>>;
 
+/**
+ * §7.7 L688 — the values `ItemsSkipped` carries in its `Reason` dimension.
+ *
+ * Here rather than in `lib/pipeline/analyze/route.ts` because both the stage that
+ * emits them and §8.5 L767's card that reads them need the same list, and §8.2
+ * L734 forbids the dashboard from reaching a pipeline stage to get it.
+ * CloudWatch cannot enumerate a dimension's values, so this list is the only
+ * thing keeping the emitted set and the queried set in step.
+ */
+export const SKIP_REASONS = ["low", "category", "nobody"] as const;
+
+export type SkipReason = (typeof SKIP_REASONS)[number];
+
 export interface MetricSink {
   count(name: MetricName, value: number, dimensions?: MetricDimensions): void;
 }

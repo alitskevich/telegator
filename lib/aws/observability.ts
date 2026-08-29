@@ -14,8 +14,8 @@ import {
   type GetQueueAttributesCommandOutput,
   QueueAttributeName,
 } from "@aws-sdk/client-sqs";
+import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../logging/fields.js";
 import { METRIC_NAMESPACE, type MetricDimensionName, type MetricName } from "../metrics/ports.js";
-import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../pipeline/analyze/index.js";
 import type {
   CategoryCount,
   CategoryLogReader,

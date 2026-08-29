@@ -7,11 +7,15 @@ import { NEWS_ITEM_SCHEMA } from "../../ai/newsItemSchema.js";
 import type { Classifier } from "../../ai/ports.js";
 import { SYSTEM_PROMPT } from "../../ai/prompt.js";
 import type { ScrapedItem } from "../../domain/item.js";
+import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../../logging/fields.js";
 import type { Logger } from "../../logging/logger.js";
 import type { MetricSink } from "../../metrics/ports.js";
 import type { QueueMessage, QueueProducer } from "../../queues/ports.js";
 import { AnalyzeQueuePayloadSchema, aggregateQueueMessage } from "../../queues/ports.js";
 import { normalizeAnalyzed, prefilter, route, skippedDimensions } from "./route.js";
+
+/** Re-exported for the stage's own tests; defined in `lib/logging/fields.ts`. */
+export { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE };
 
 /**
  * Stage 2 — the `analyze` SQS consumer (§3.2 L227–246).
@@ -29,23 +33,6 @@ export const ANALYZE_BATCH_SIZE = 10;
 
 /** One item, one count. Named because `style/noMagicNumbers` is an error in `lib/`. */
 const ONE_ITEM = 1;
-
-/**
- * The field §8.5 L771's category chart groups on.
- *
- * §7.7 L695 refuses a per-category CloudWatch metric — thirty-five category
- * dimensions would be thirty-five billable metrics for a chart nobody watches
- * minute-to-minute — and sources the chart from a Logs Insights query over this
- * stage's structured logs instead. Insights discovers fields from the top level
- * of each JSON line, which is why this is spread into the log fields rather than
- * nested under an object, and why the name is exported: a rename here makes
- * `stats count(*) by category` return an empty result set with no error
- * anywhere. A test pins it.
- */
-export const CATEGORY_LOG_FIELD = "category";
-
-/** The `msg` of the line carrying `CATEGORY_LOG_FIELD`, so the query can filter on it. */
-export const CLASSIFIED_LOG_MESSAGE = "item classified";
 
 /** One SQS record, reduced to the two fields this stage reads. */
 export interface AnalyzeRecord {

@@ -3,6 +3,7 @@ import type { NewsItem } from "../../ai/newsItemSchema.js";
 import type { AnalyzedItem, ScrapedItem } from "../../domain/item.js";
 import { mergeTags } from "../../domain/tags.js";
 import type { MetricDimensions } from "../../metrics/ports.js";
+import { SKIP_REASONS, type SkipReason } from "../../metrics/ports.js";
 
 /**
  * Stage 2's pre-filter, routing table and field normalisers (§3.2 L231–244) as
@@ -16,10 +17,9 @@ import type { MetricDimensions } from "../../metrics/ports.js";
  * scattered across branches.
  */
 
-/** §7.7 L688 — `ItemsSkipped` dimension `Reason` = `low` | `category` | `nobody`. */
-export const SKIP_REASONS = ["low", "category", "nobody"] as const;
-
-export type SkipReason = (typeof SKIP_REASONS)[number];
+export type { SkipReason };
+/** Re-exported for this stage's callers; defined in `lib/metrics/ports.ts`. */
+export { SKIP_REASONS };
 
 /**
  * What the orchestrator should do with one item.
