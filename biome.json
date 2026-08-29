@@ -37,6 +37,11 @@
       }
     },
     {
+      "includes": ["test/fixtures/**/*.html"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
       "includes": ["**/*.test.ts", "test/**/*.ts"],
       "linter": {
         "rules": {
