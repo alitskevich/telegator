@@ -78,6 +78,12 @@
           }
         }
       }
+    },
+    {
+      "includes": ["tsconfig.json", "next-env.d.ts"],
+      "formatter": {
+        "enabled": false
+      }
     }
   ],
   "javascript": {

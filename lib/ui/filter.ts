@@ -35,7 +35,7 @@ export function filterByKeyword<T extends Record<string, unknown>>(
   return rows.filter((row) =>
     visibleColumns.some((column) => {
       const text = searchableText(row[column]);
-      return text !== undefined && text.toLowerCase().includes(needle);
+      return text?.toLowerCase().includes(needle) === true;
     }),
   );
 }

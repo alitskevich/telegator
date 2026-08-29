@@ -11,7 +11,6 @@ function secretsClient(reply: () => unknown) {
     get calls() {
       return calls;
     },
-    // biome-ignore lint/suspicious/noExplicitAny: the SDK's send() overloads are wider than this port.
     send: (async () => {
       calls += 1;
       return reply();

@@ -37,7 +37,6 @@ import { runPipeline } from "./harness.js";
 
 const NOW = Date.UTC(2026, 7, 29, 12, 0, 0);
 const REPLAY_DELAY_MS = 90 * 60_000;
-const POST = "100675";
 const MERGING = ["source_a", "source_b"] as const;
 const ALONE = "source_c";
 

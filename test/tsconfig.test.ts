@@ -24,8 +24,34 @@ const tsconfig = () =>
  * scopes `include` back to directories, which is the regression that matters.
  */
 describe("the tsc gate covers the whole tree", () => {
-  test("include is the two wide globs, not a directory list", () => {
-    expect(tsconfig().include).toEqual(["**/*.ts", "**/*.tsx"]);
+  /**
+   * Contains the two wide globs, rather than being exactly them.
+   *
+   * `next dev` rewrites this file — it adds `.next/types/**` to `include`, sets
+   * `jsx`, and expands the formatting — so pinning the array made the tree dirty
+   * every time anyone started the dev server, and the guard failed for a reason
+   * that had nothing to do with coverage. What matters is that no file is left
+   * unchecked, and that survives Next's additions.
+   */
+  test("include carries the two wide globs, whatever else Next adds", () => {
+    const include = tsconfig().include ?? [];
+
+    expect(include).toContain("**/*.ts");
+    expect(include).toContain("**/*.tsx");
+  });
+
+  /**
+   * A directory-scoped entry is the shape the old `include` had, and the one
+   * that left four categories of file unchecked. Next only ever adds globs
+   * under `.next/`, so anything else scoped to a source directory is a
+   * regression rather than tooling.
+   */
+  test("no include entry narrows the tree to a source directory", () => {
+    const narrowing = (tsconfig().include ?? []).filter(
+      (pattern) => !pattern.startsWith("**/") && !pattern.startsWith(".next/"),
+    );
+
+    expect(narrowing).toEqual([]);
   });
 
   /**
