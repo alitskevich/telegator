@@ -20,18 +20,6 @@
       }
     ]
   },
-  "include": [
-    "next-env.d.ts",
-    "lib/**/*.ts",
-    "handlers/**/*.ts",
-    "infra/**/*.ts",
-    "actions/**/*.ts",
-    "app/**/*.ts",
-    "app/**/*.tsx",
-    "components/**/*.tsx",
-    "scripts/**/*.ts",
-    "test/**/*.ts",
-    "*.config.ts"
-  ],
-  "exclude": ["node_modules", "cdk.out", ".next"]
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "cdk.out", ".next", "coverage"]
 }
