@@ -304,7 +304,15 @@ describe("§3.3 aggregate consumer", () => {
 
     await runAggregate([sqsRecord(a), sqsRecord(b)], h.deps);
 
-    // Different dates never merge (§3.3 L274), so both ids are touched.
+    /**
+     * AC-4.6 (§3.4 L354) — the STAGE's enqueue, not just the builder's.
+     * `lib/queues/ports.test.ts` pins `publishQueueMessage`; a stage that
+     * constructed its own message, or called a different builder, would leave
+     * that test passing and two publish requests for one message free to run
+     * concurrently.
+     *
+     * Different dates never merge (§3.3 L274), so both ids are touched.
+     */
     expect(h.queue.sent).toHaveLength(2);
     expect(h.queue.sendCalls).toBe(1);
     for (const [index, id] of ["chan_a/1", "chan_b/2"].entries()) {

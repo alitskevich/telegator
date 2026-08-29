@@ -321,3 +321,81 @@ describe("runPublish when the status write fails after a successful send", () =>
     expect(summary.batchItemFailures).toEqual([]);
   });
 });
+
+describe("AC-4.6 — the guard that survives a duplicate delivery", () => {
+  /**
+   * AC-4.6 (§3.4 L354) — "Two publish requests for the same message id within 5
+   * minutes result in **one** Telegram call."
+   *
+   * BLOCKED as stated: the five-minute window is SQS FIFO's fixed, non
+   * -configurable deduplication interval, and no test here can observe it.
+   * `infra/lib/queue-stack.test.ts` pins the settings it depends on.
+   *
+   * These tests are the half that is ours, and the one that matters more. SQS's
+   * window is a floor rather than a lock — a redelivery after the visibility
+   * timeout, or a replay of the publish DLQ an hour later, is outside it — so
+   * §3.4 L316's status check is what actually stops a second post. Delivering
+   * the same record twice is the direct test of that, and it did not exist:
+   * every other publish test delivers each record once.
+   */
+  test("the same record delivered twice sends once", async () => {
+    const stored = [message({ id: "chan_a/1" })];
+    const { deps: d, bot } = deps(stored);
+
+    await runPublish([record("chan_a/1")], d);
+    await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls).toHaveLength(1);
+  });
+
+  test("and the second delivery is acknowledged, not failed back", async () => {
+    const stored = [message({ id: "chan_a/1" })];
+    const { deps: d } = deps(stored);
+
+    await runPublish([record("chan_a/1")], d);
+    const second = await runPublish([record("chan_a/1")], d);
+
+    // Reporting it would return it to the queue and keep it circulating until
+    // the DLQ, for work that is already done.
+    expect(second.batchItemFailures).toEqual([]);
+  });
+
+  test("a third delivery changes nothing either", async () => {
+    const stored = [message({ id: "chan_a/1" })];
+    const { deps: d, bot } = deps(stored);
+
+    await runPublish([record("chan_a/1")], d);
+    await runPublish([record("chan_a/1")], d);
+    await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls).toHaveLength(1);
+  });
+
+  test("the stored record is written once, not on every delivery", async () => {
+    const stored = [message({ id: "chan_a/1" })];
+    const { deps: d, messages } = deps(stored);
+
+    await runPublish([record("chan_a/1")], d);
+    const writes = messages.writeCount;
+    await runPublish([record("chan_a/1")], d);
+
+    expect(messages.writeCount).toBe(writes);
+  });
+
+  /**
+   * The guard must suppress a duplicate without suppressing real work. §6 L527
+   * returns a message to `topublish` when a merge adds a member, and §3.4 L340
+   * then edits the live post — so a delivery after that is not a duplicate and
+   * must go through.
+   */
+  test("but a delivery after a genuine merge does publish", async () => {
+    const stored = [message({ id: "chan_a/1" })];
+    const { deps: d, messages, bot } = deps(stored);
+
+    await runPublish([record("chan_a/1")], d);
+    await messages.patch("chan_a/1", { status: "topublish" });
+    await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls.map((call) => call.method)).toEqual(["sendMessage", "editMessageText"]);
+  });
+});

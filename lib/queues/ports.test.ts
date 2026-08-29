@@ -87,7 +87,14 @@ describe("aggregateQueueMessage", () => {
 });
 
 describe("publishQueueMessage", () => {
-  /** §3.3 L292-293 — group serialises edits to one Telegram message; dedup collapses repeats. */
+  /**
+   * §3.3 L292-293 — the group serialises edits to one Telegram message and the
+   * deduplication id collapses repeats inside SQS's window.
+   *
+   * AC-4.6 (§3.4 L354) rests on both. The window itself is SQS's and is BLOCKED;
+   * the ids are ours, and a group or dedup id that was not the message id would
+   * leave two requests for one message free to run concurrently.
+   */
   test("groups and dedups by the message id, both the same value", () => {
     const message = publishQueueMessage("yigal_levin/12345");
 
