@@ -75,6 +75,12 @@ describe("TelegatorQueueStack", () => {
 
     test.each(["telegator-dev-aggregate.fifo", "telegator-dev-publish.fifo"])(
       "%s is FIFO",
+      /**
+       * AC-3.9 (§3.3 L308) and AC-4.6 (§3.4 L354) both rest on this. A FIFO queue
+       * delivers one message group to a single consumer at a time and deduplicates
+       * inside a five-minute window; neither is a property any runtime test can
+       * observe, and both are false the moment the queue is Standard.
+       */
       (name) => {
         expect(queue(stackFor().template, name)?.FifoQueue).toBe(true);
       },

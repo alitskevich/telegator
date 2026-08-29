@@ -54,7 +54,17 @@ describe("aggregateQueueMessage", () => {
    * in parallel. Getting this attribute wrong does not fail; it silently allows
    * two invocations to each miss the other's write and create duplicate messages.
    */
-  test("groups by date and dedups by item id", () => {
+  /**
+   * AC-3.9 (§3.3 L308) — "Two items with the same `date` are never processed by
+   * two concurrent invocations."
+   *
+   * That guarantee is SQS's, not this code's: a FIFO queue delivers one message
+   * group to one consumer at a time. What is assertable here is the precondition
+   * it rests on — that the group key IS the date — and the queue's FIFO setting,
+   * which `infra/lib/queue-stack.test.ts` pins. Get the group key wrong and SQS
+   * still behaves correctly while the criterion is false.
+   */
+  test("AC-3.9 groups by date and dedups by item id", () => {
     const message = aggregateQueueMessage(analyzed);
 
     expect(message.messageGroupId).toBe("2026-08-29");
