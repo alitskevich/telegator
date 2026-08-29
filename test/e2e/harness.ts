@@ -43,6 +43,13 @@ export interface PipelineRun {
   /** `{messageId}` envelopes aggregate enqueued (§7.3 L608). */
   readonly publishMessages: QueueMessage[];
   readonly scrape: Awaited<ReturnType<typeof runScrape>>;
+  /**
+   * Calls made during *this* run.
+   *
+   * A slice, not the bot's live array: a criterion that runs the pipeline twice
+   * over one world would otherwise see the second run's calls in the first run's
+   * result, and a "one send" assertion would fail on correct behaviour.
+   */
   readonly telegramCalls: FakeBot["calls"];
   /** Every structured log line, parsed. */
   readonly logs: Record<string, unknown>[];
@@ -61,6 +68,7 @@ const asRecords = (messages: readonly QueueMessage[], prefix: string) =>
  * being run twice.
  */
 export async function runPipeline(world: PipelineWorld): Promise<PipelineRun> {
+  const callsBefore = world.bot.calls.length;
   const metrics = recordingMetrics();
   const sink = recordingSink();
   const logger = createLogger(sink);
@@ -111,7 +119,7 @@ export async function runPipeline(world: PipelineWorld): Promise<PipelineRun> {
     aggregateMessages: [...aggregateQueue.sent],
     publishMessages: [...publishQueue.sent],
     scrape,
-    telegramCalls: world.bot.calls,
+    telegramCalls: world.bot.calls.slice(callsBefore),
     logs: sink.lines.map((line) => JSON.parse(line) as Record<string, unknown>),
     metrics,
   };
