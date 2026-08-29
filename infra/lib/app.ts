@@ -1,4 +1,5 @@
 import { App, type AppProps } from "aws-cdk-lib";
+import { TelegatorAppStack } from "./app-stack.js";
 import { TelegatorAuthStack } from "./auth-stack.js";
 import { resolveConfig } from "./config.js";
 import { TelegatorDataStack } from "./data-stack.js";
@@ -26,11 +27,18 @@ export function createApp(props?: AppProps): App {
   // §9.1 L806 — Data, Queue and Auth have no dependencies on each other.
   const data = new TelegatorDataStack(app, "TelegatorDataStack", { config });
   const queues = new TelegatorQueueStack(app, "TelegatorQueueStack", { config });
-  new TelegatorAuthStack(app, "TelegatorAuthStack", { config });
+  const auth = new TelegatorAuthStack(app, "TelegatorAuthStack", { config });
 
   // ...then Pipeline, which consumes both. The constructs are passed rather
   // than imported by name, so CDK emits the cross-stack exports itself.
-  new TelegatorPipelineStack(app, "TelegatorPipelineStack", { config, data, queues });
+  const pipeline = new TelegatorPipelineStack(app, "TelegatorPipelineStack", {
+    config,
+    data,
+    queues,
+  });
+
+  // ...and App last, which consumes every other stack.
+  new TelegatorAppStack(app, "TelegatorAppStack", { config, data, queues, auth, pipeline });
 
   return app;
 }
