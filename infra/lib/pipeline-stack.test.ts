@@ -64,6 +64,24 @@ const NAMES = [
 ];
 
 describe("TelegatorPipelineStack functions", () => {
+  /**
+   * §8.5 L771's category chart is a Logs Insights query grouping by a top-level
+   * `category` field, which only works if Lambda emits the line the analyze
+   * stage produced and nothing else. `LoggingFormat.JSON` wraps every record in
+   * an envelope and carries ours as a `message` string, so the query would match
+   * nothing and the chart would be permanently empty with no error anywhere.
+   * TEXT is today's default; declaring it means a future default cannot change
+   * that silently.
+   */
+  test("logs in TEXT format, which §8.5 L771's query depends on", () => {
+    const formats = functions(stackFor().template).map(
+      (fn) => (fn.LoggingConfig as { LogFormat?: string } | undefined)?.LogFormat,
+    );
+
+    expect(formats).toHaveLength(5);
+    expect(formats.every((format) => format === "Text")).toBe(true);
+  });
+
   /** §7.5 L655 — "Five functions, down from the source system's seven". */
   test("declares exactly the five functions §7.5 L649-653 inventories", () => {
     expect(functions(stackFor().template)).toHaveLength(5);

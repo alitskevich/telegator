@@ -9,7 +9,7 @@ import {
 import { Rule, Schedule } from "aws-cdk-lib/aws-events";
 import { LambdaFunction as LambdaTarget } from "aws-cdk-lib/aws-events-targets";
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
-import { Architecture, Runtime } from "aws-cdk-lib/aws-lambda";
+import { Architecture, LoggingFormat, Runtime } from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
@@ -157,6 +157,16 @@ export class TelegatorPipelineStack extends Stack {
         handler: "handler",
         runtime: RUNTIME,
         architecture: Architecture.ARM_64,
+        /**
+         * §8.5 L771's category chart is a Logs Insights query grouping by a
+         * top-level `category` field, and `lib/logging/logger.ts` writes one
+         * JSON object per line for it. `LoggingFormat.JSON` would wrap each
+         * record in an envelope and carry ours as a `message` string, so the
+         * query would match nothing and the chart would be permanently empty
+         * with no error anywhere. TEXT is today's default; stating it means a
+         * future default cannot change that silently.
+         */
+        loggingFormat: LoggingFormat.TEXT,
         timeout: TIMEOUT,
         memorySize: spec.memorySize,
         environment,
