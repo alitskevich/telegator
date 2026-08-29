@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# build output
+.next/
+out/
+dist/
+cdk.out/
+*.tsbuildinfo
+
+# environment
+.env*
+
+# ralph loop working files (the user's, and the ledger)
+.claude/*.local.md
+
+# os
+.DS_Store
