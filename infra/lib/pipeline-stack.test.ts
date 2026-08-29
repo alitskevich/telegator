@@ -132,7 +132,7 @@ describe("TelegatorPipelineStack functions", () => {
      * FIFO groups exist to allow.
      */
     test.each(["telegator-dev-aggregate", "telegator-dev-publish"])(
-      "%s reserves nothing, because the message group is the control",
+      "AC-3.9: %s reserves nothing, because the message group is the control",
       (name) => {
         expect(named(stackFor().template, name)?.ReservedConcurrentExecutions).toBeUndefined();
       },

@@ -101,7 +101,7 @@ describe("TelegatorQueueStack", () => {
      * with identical text would collapse into one.
      */
     test.each(["telegator-dev-aggregate.fifo", "telegator-dev-publish.fifo"])(
-      "%s does not deduplicate on content",
+      "AC-3.9/AC-4.6: %s does not deduplicate on content",
       (name) => {
         // Asserted as an explicit false rather than an absent property: the
         // template should say so, not rely on an SQS default that a later CDK

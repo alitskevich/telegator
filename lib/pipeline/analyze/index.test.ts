@@ -159,7 +159,17 @@ describe("runAnalyze — pre-filter (§3.2 L231)", () => {
 });
 
 describe("runAnalyze — enqueue to aggregate (§3.2 L242)", () => {
-  test("the aggregate message carries MessageGroupId = date and MessageDeduplicationId = itemId", async () => {
+  /**
+   * AC-3.9 (§3.3 L308), the half this code owns. The criterion — "two items with
+   * the same `date` are never processed by two concurrent invocations" — is
+   * SQS's FIFO message-group guarantee, and a fake queue asserting it would only
+   * be demonstrating its own single-threaded loop.
+   *
+   * What is ours is the key SQS groups by. `lib/queues/ports.test.ts` pins the
+   * builder; this pins the stage, because a stage that built its own message, or
+   * called a different builder, would be correct there and wrong here.
+   */
+  test("AC-3.9 the aggregate message carries MessageGroupId = date and MessageDeduplicationId = itemId", async () => {
     const item = scraped("chan/7", "Prose worth keeping.", { tags: "belarus,minsk" });
     const h = harness(stubClassifier({ [item.body]: classification({ tags: "minsk,economy" }) }));
 
