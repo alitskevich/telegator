@@ -11,6 +11,16 @@ import { packEmbedding } from "./embeddingCodec.js";
 import { createMessageRepo, type DocumentSender } from "./messages.js";
 
 const TABLE = "telegator-dev-messages";
+
+/** The smallest record `MessageSchema` accepts, for the write-shape tests. */
+const baseMessage = {
+  id: "yigal_levin/12345",
+  status: "topublish",
+  members: {},
+  memberCount: 0,
+  date: "2026-08-29",
+  ts: 1,
+};
 const ITEM_ID = "yigal_levin/12345";
 
 type AnyCommand = GetCommand | PutCommand | QueryCommand | ScanCommand | UpdateCommand;
@@ -299,5 +309,33 @@ describe("createMessageRepo.countByStatus", () => {
 
   test("an absent Count reads as zero", async () => {
     expect(await repoWith(stub([{}])).countByStatus("error")).toBe(0);
+  });
+});
+
+describe("createMessageRepo.putNew is conditional (R38)", () => {
+  /**
+   * §6 L539's create branch writes a whole record keyed by the creating item's
+   * id (§2.3 L142). An id that already exists therefore means the item is a
+   * replay — never new work — and an unconditional PutItem would overwrite the
+   * record it could not see, destroying its `members`, its `tgId` and its date.
+   * Item 8.4 measured that: 6 Telegram sends for 3 stories, with the first three
+   * posts orphaned.
+   */
+  test("refuses to overwrite an existing message", async () => {
+    const s = stub([{}]);
+    await repoWith(s).putNew(MessageSchema.parse(baseMessage));
+
+    expect(String(s.input()?.ConditionExpression)).toContain("attribute_not_exists");
+  });
+
+  test("the condition names the primary key", async () => {
+    const s = stub([{}]);
+    await repoWith(s).putNew(MessageSchema.parse(baseMessage));
+
+    const names = s.input()?.ExpressionAttributeNames as Record<string, string> | undefined;
+    const condition = String(s.input()?.ConditionExpression);
+    const attribute = Object.entries(names ?? {}).find(([alias]) => condition.includes(alias))?.[1];
+
+    expect(attribute ?? condition).toContain("id");
   });
 });

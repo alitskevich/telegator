@@ -142,9 +142,37 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
       return total;
     },
 
-    /** §6 L539's create branch — a whole new record. */
+    /**
+     * §6 L539's create branch — a whole new record, written only if there is not
+     * one already (R38).
+     *
+     * A message is keyed by the id of the item that created it (§2.3 L142), so
+     * an id that already exists means this item is a replay rather than new
+     * work. §6's pseudocode says only "WRITE pending.values()", and R9 already
+     * read the merge half of that as attribute-level; this reads the create half
+     * as conditional, for the same reason — a write that cannot see the record
+     * it is replacing must not replace it.
+     *
+     * Unconditional, item 8.4 measured what a lost cursor plus a date rollover
+     * costs: §6's Pass 2 looks only in `date-index` for the item's own date, so
+     * yesterday's message is invisible, the create branch runs, and the PutItem
+     * overwrites it — new date, `memberCount` back to 1, and the stored `tgId`
+     * destroyed, which orphans the live Telegram post beyond any future edit.
+     * Six sends for three stories.
+     *
+     * The condition turns that into a failed write, which `runAggregate` already
+     * attributes to its SQS records: they retry and reach the DLQ, where §3.5's
+     * replay is an operator's decision rather than a silent duplicate.
+     */
     putNew: async (message: Message): Promise<void> => {
-      await client.send(new PutCommand({ TableName: tableName, Item: message }));
+      await client.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: message,
+          ConditionExpression: "attribute_not_exists(#id)",
+          ExpressionAttributeNames: { "#id": "id" },
+        }),
+      );
     },
 
     /**

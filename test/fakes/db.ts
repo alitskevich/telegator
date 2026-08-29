@@ -113,6 +113,13 @@ export function fakeMessageRepo(initial: readonly Message[] = []): FakeMessageRe
       // Counts live rows only, matching R16's filter in the real adapter.
       live().filter((m) => m.status === status).length,
     putNew: async (message) => {
+      // R38 — `attribute_not_exists(id)`. The fake enforces it because the
+      // condition is the behaviour: without it a replay silently overwrites.
+      if (rows.has(message.id)) {
+        throw Object.assign(new Error(`message ${message.id} already exists`), {
+          name: "ConditionalCheckFailedException",
+        });
+      }
       writeCount++;
       rows.set(message.id, structuredClone(message));
     },

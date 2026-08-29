@@ -203,45 +203,58 @@ describe("E2E-3 — R29's bound on §3.1 L210's safety net", () => {
   });
 
   /**
-   * The bound, measured. It is worse than R29's prose said, so R29 is amended
-   * rather than restated: there is no *second* message record, because a message
-   * id is `{sourceId}/{telegramMessageId}` (§2.4) and §6 L539's create branch is
-   * a PutItem. The re-scraped item overwrites the record it cannot see —
-   * carrying the new date, a fresh `tgId`, and `memberCount` back to 1.
+   * The bound, after R38 closed it.
    *
-   * The consequence is the one §9.5 L834 forbids, and then some: every story is
-   * posted to Telegram a second time, and the FIRST post's `tgId` is destroyed
-   * in the overwrite, so it can never be edited or reconciled again.
+   * Item 8.4 measured what this did before the create branch became conditional:
+   * §6 Pass 2 looks only in `date-index` for the item's own date, so yesterday's
+   * message is invisible, the create branch runs, and an unconditional PutItem
+   * overwrote it — six Telegram sends for three stories, with the first three
+   * `tgId`s destroyed and those posts orphaned beyond any future edit.
    *
-   * Asserted rather than fixed. R29 recorded this as an accepted bound, and the
-   * operational guard is real — `scripts/reseed-cursors.ts` refuses to move a
-   * cursor backwards for exactly this reason. Item 8.4a carries the design
-   * question.
+   * Now the write fails its condition, `runAggregate` attributes the failure to
+   * the SQS records, and they retry to the DLQ. Nothing is published twice and
+   * nothing is lost; recovering is §3.5's replay, which is an operator's
+   * decision rather than a silent duplicate.
    */
-  test("across midnight it overwrites the record and posts everything twice", async () => {
+  test("across midnight the duplicate is refused rather than published again", async () => {
     await runPipeline(world());
     const before = await messages.queryByStatus("published");
     const firstSends = bot.calls.length;
-    const firstTgIds = before.map((message) => message.tgId);
 
     clock.advance(NEXT_POLL_MS);
     await sources.patch(SOURCE, { lastItemId: undefined });
     // §3.1 L276 makes the UTC date a correctness rule, and `date-index` is
     // partitioned by it, so the duplicate cannot see yesterday's message.
     clock.advance(DAY_MS);
-    await runPipeline(rescrape());
+    const second = await runPipeline(rescrape());
 
+    // The re-scrape happened — it is the write that was refused, not the read.
+    expect(second.analyzeMessages).toHaveLength(3);
+
+    // Nothing published twice, and nothing enqueued for publishing.
+    expect(bot.calls.length).toBe(firstSends);
+    expect(second.publishMessages).toEqual([]);
+
+    // The stored records are untouched: same date, same tgIds, same members.
     const after = await messages.queryByStatus("published");
+    expect(after.map((message) => message.date)).toEqual(before.map((message) => message.date));
+    expect(after.map((message) => message.tgId)).toEqual(before.map((message) => message.tgId));
+    expect(after.map((message) => message.memberCount)).toEqual(
+      before.map((message) => message.memberCount),
+    );
+  });
 
-    // Not a second record: the same primary keys, rewritten.
-    expect(after.map((message) => message.id)).toEqual(before.map((message) => message.id));
+  /** The failure has to be loud, or a DLQ item is the first anyone hears of it. */
+  test("and the refusal is logged against the message it protected", async () => {
+    await runPipeline(world());
+    clock.advance(NEXT_POLL_MS);
+    await sources.patch(SOURCE, { lastItemId: undefined });
+    clock.advance(DAY_MS);
+    const second = await runPipeline(rescrape());
 
-    // Every story posted again, and the first posts orphaned.
-    expect(bot.calls.length).toBe(firstSends * 2);
-    expect(after.map((message) => message.tgId)).not.toEqual(firstTgIds);
-    for (const message of after) {
-      expect(message.memberCount).toBe(1);
-      expect(message.date).toBe("2026-08-30");
-    }
+    const failures = second.logs.filter((line) => line.msg === "aggregate write failed");
+
+    expect(failures).toHaveLength(3);
+    expect(String(failures[0]?.messageId)).toContain(SOURCE);
   });
 });
