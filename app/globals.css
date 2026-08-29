@@ -1,0 +1,102 @@
+/*
+ * An internal operator console (§8.1): dense, legible, no brand surface. The
+ * palette is neutral with one accent, and status colours are shared by the
+ * tables of §8.3 and the pie charts of §8.5 so that "published" is the same
+ * green in the chart and in the row beneath it.
+ */
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-raised: #1f232c;
+  --border: #2a2f3a;
+  --text: #e6e8ec;
+  --text-dim: #9aa3b2;
+  --accent: #4a9eff;
+
+  --ok: #3fb950;
+  --warn: #d29922;
+  --error: #f85149;
+  --idle: #6e7681;
+
+  --radius: 6px;
+  --gap: 16px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  height: 52px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-brand {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.app-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.app-nav a {
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  color: var(--text-dim);
+}
+
+.app-nav a:hover {
+  background: var(--panel-raised);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.app-main {
+  flex: 1;
+  padding: 24px;
+  /* The §8.3 tables are wide (Messages carries nine columns plus an expandable
+     member list) but not unbounded; this keeps them readable on a large display
+     without letting a line of body text run the full width of it. */
+  max-width: 1440px;
+  width: 100%;
+}
