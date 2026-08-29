@@ -1,4 +1,5 @@
 import { App } from "aws-cdk-lib";
+import { resolveConfig } from "./config.js";
 import { TelegatorDataStack } from "./data-stack.js";
 
 /**
@@ -14,8 +15,9 @@ import { TelegatorDataStack } from "./data-stack.js";
  */
 export function createApp(): App {
   const app = new App();
+  const config = resolveConfig(app);
 
-  new TelegatorDataStack(app, "TelegatorDataStack");
+  new TelegatorDataStack(app, "TelegatorDataStack", { config });
 
   return app;
 }
