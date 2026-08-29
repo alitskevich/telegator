@@ -1,6 +1,18 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import { describe, expect, test } from "vitest";
+
+/**
+ * A private CDK output directory per App.
+ *
+ * `NodejsFunction` stages its bundle on disk during synth, so parallel vitest
+ * workers sharing one cdk.out race over the staging directory.
+ */
+const isolatedOutdir = () => mkdtempSync(join(tmpdir(), "telegator-cdk-"));
+
 import { SETTLE_DELAY_SECONDS } from "../../lib/dedup/constants.js";
 import { resolveConfig } from "./config.js";
 import { TelegatorQueueStack } from "./queue-stack.js";
@@ -9,7 +21,7 @@ const FOURTEEN_DAYS_SECONDS = 1_209_600;
 const VISIBILITY_SECONDS = 1_800;
 
 function stackFor(context: Record<string, unknown> = {}) {
-  const app = new App({ context });
+  const app = new App({ context, outdir: isolatedOutdir() });
   const stack = new TelegatorQueueStack(app, "TelegatorQueueStack", { config: resolveConfig(app) });
   return { stack, template: Template.fromStack(stack) };
 }
@@ -158,7 +170,7 @@ describe("TelegatorQueueStack", () => {
   });
 
   test("is environment-agnostic and requests no context lookup", () => {
-    const app = new App({ context: {} });
+    const app = new App({ context: {}, outdir: isolatedOutdir() });
     new TelegatorQueueStack(app, "TelegatorQueueStack", { config: resolveConfig(app) });
     const assembly = app.synth();
 

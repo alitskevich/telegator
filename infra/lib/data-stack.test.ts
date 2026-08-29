@@ -1,11 +1,23 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { describe, expect, test } from "vitest";
+
+/**
+ * A private CDK output directory per App.
+ *
+ * `NodejsFunction` stages its bundle on disk during synth, so parallel vitest
+ * workers sharing one cdk.out race over the staging directory.
+ */
+const isolatedOutdir = () => mkdtempSync(join(tmpdir(), "telegator-cdk-"));
+
 import { resolveConfig } from "./config.js";
 import { TelegatorDataStack } from "./data-stack.js";
 
 function templateFor(context: Record<string, unknown> = {}): Template {
-  const app = new App({ context });
+  const app = new App({ context, outdir: isolatedOutdir() });
   const stack = new TelegatorDataStack(app, "TelegatorDataStack", {
     config: resolveConfig(app),
   });
@@ -135,7 +147,7 @@ describe("TelegatorDataStack", () => {
    * credentials while every stack stays environment-agnostic.
    */
   test("is environment-agnostic and requests no context lookup", () => {
-    const app = new App({ context: {} });
+    const app = new App({ context: {}, outdir: isolatedOutdir() });
     new TelegatorDataStack(app, "TelegatorDataStack", { config: resolveConfig(app) });
     const assembly = app.synth();
 
@@ -152,7 +164,7 @@ describe("TelegatorDataStack", () => {
   });
 
   test("exposes both tables to the stacks that consume them", () => {
-    const app = new App({ context: {} });
+    const app = new App({ context: {}, outdir: isolatedOutdir() });
     const stack = new TelegatorDataStack(app, "TelegatorDataStack", { config: resolveConfig(app) });
 
     expect(stack.sources.tableName).toBeDefined();
