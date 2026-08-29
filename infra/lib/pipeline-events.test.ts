@@ -1,19 +1,18 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
-import { describe, expect, test, vi } from "vitest";
+import { afterAll, describe, expect, test, vi } from "vitest";
 import { CLASSIFIER_MODEL_ID, EMBEDDING_MODEL_ID } from "../../lib/ai/constants.js";
 import { METRIC_NAMESPACE } from "../../lib/metrics/ports.js";
+import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir.js";
 import { resolveConfig } from "./config.js";
 import { TelegatorDataStack } from "./data-stack.js";
 import { TelegatorPipelineStack } from "./pipeline-stack.js";
 import { TelegatorQueueStack } from "./queue-stack.js";
 
-vi.setConfig({ testTimeout: 60_000 });
+// Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
+afterAll(removeIsolatedOutdirs);
 
-const isolatedOutdir = () => mkdtempSync(join(tmpdir(), "telegator-cdk-"));
+vi.setConfig({ testTimeout: 60_000 });
 
 const cache = new Map<string, Template>();
 

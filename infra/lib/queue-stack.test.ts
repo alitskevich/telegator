@@ -1,9 +1,6 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 
 /**
  * A private CDK output directory per App.
@@ -11,11 +8,14 @@ import { describe, expect, test } from "vitest";
  * `NodejsFunction` stages its bundle on disk during synth, so parallel vitest
  * workers sharing one cdk.out race over the staging directory.
  */
-const isolatedOutdir = () => mkdtempSync(join(tmpdir(), "telegator-cdk-"));
 
 import { SETTLE_DELAY_SECONDS } from "../../lib/dedup/constants.js";
+import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir.js";
 import { resolveConfig } from "./config.js";
 import { TelegatorQueueStack } from "./queue-stack.js";
+
+// Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
+afterAll(removeIsolatedOutdirs);
 
 const FOURTEEN_DAYS_SECONDS = 1_209_600;
 const VISIBILITY_SECONDS = 1_800;

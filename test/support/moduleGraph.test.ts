@@ -1,12 +1,15 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
+import { isolatedOutdir, removeIsolatedOutdirs } from "./cdkOutdir.js";
+
+afterAll(removeIsolatedOutdirs);
+
 import { reachableFrom } from "./moduleGraph.js";
 
 /** Builds a throwaway module tree, so the resolver is tested on real files. */
 function tree(files: Record<string, string>): { root: string; path: (name: string) => string } {
-  const root = mkdtempSync(join(tmpdir(), "telegator-graph-"));
+  const root = isolatedOutdir("telegator-graph-");
 
   for (const [name, source] of Object.entries(files)) {
     const path = join(root, name);

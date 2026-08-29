@@ -1,8 +1,5 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, expect, test, vi } from "vitest";
-
+import { afterAll, describe, expect, test, vi } from "vitest";
+import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir.js";
 /**
  * A private CDK output directory per App.
  *
@@ -11,7 +8,8 @@ import { describe, expect, test, vi } from "vitest";
  */
 import { createApp } from "./app.js";
 
-const isolatedOutdir = () => mkdtempSync(join(tmpdir(), "telegator-cdk-"));
+// Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
+afterAll(removeIsolatedOutdirs);
 
 // The app now contains the pipeline stack, whose synth bundles five Lambdas.
 vi.setConfig({ testTimeout: 60_000 });

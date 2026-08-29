@@ -1,9 +1,11 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { App, Duration } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
-import { describe, expect, test, vi } from "vitest";
+import { afterAll, describe, expect, test, vi } from "vitest";
+import { isolatedOutdir, removeIsolatedOutdirs } from "./support/cdkOutdir.js";
+
+// Item 10.0 — synthesising leaves bundles behind unless they are removed.
+afterAll(removeIsolatedOutdirs);
+
 import { resolveConfig } from "../infra/lib/config.js";
 import { TelegatorDataStack } from "../infra/lib/data-stack.js";
 import { TelegatorPipelineStack } from "../infra/lib/pipeline-stack.js";
@@ -29,7 +31,7 @@ let cached: { template: Template; settleDelaySeconds: number } | undefined;
 function stack() {
   if (cached !== undefined) return cached;
 
-  const app = new App({ context: {}, outdir: mkdtempSync(join(tmpdir(), "telegator-nfr-")) });
+  const app = new App({ context: {}, outdir: isolatedOutdir("telegator-nfr-") });
   const config = resolveConfig(app);
   const data = new TelegatorDataStack(app, "Data", { config });
   const queues = new TelegatorQueueStack(app, "Queues", { config });
@@ -43,7 +45,7 @@ function stack() {
 }
 
 const dataTemplate = () => {
-  const app = new App({ context: {}, outdir: mkdtempSync(join(tmpdir(), "telegator-nfr-data-")) });
+  const app = new App({ context: {}, outdir: isolatedOutdir("telegator-nfr-data-") });
   return Template.fromStack(new TelegatorDataStack(app, "Data", { config: resolveConfig(app) }));
 };
 

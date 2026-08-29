@@ -6,7 +6,6 @@ import type { AnalyzedItem, ScrapedItem } from "../../lib/domain/item.js";
 import { createLogger } from "../../lib/logging/logger.js";
 import { runAggregate } from "../../lib/pipeline/aggregate/index.js";
 import { runAnalyze } from "../../lib/pipeline/analyze/index.js";
-import { unitVectorAtAngle } from "../fakes/ai.js";
 import { fixedClock } from "../fakes/clock.js";
 import { fakeMessageRepo } from "../fakes/db.js";
 import { recordingSink } from "../fakes/logging.js";

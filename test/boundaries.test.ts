@@ -1,7 +1,10 @@
-import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
+import { isolatedOutdir, removeIsolatedOutdirs } from "./support/cdkOutdir.js";
+
+afterAll(removeIsolatedOutdirs);
+
 import { reachableFrom } from "./support/moduleGraph.js";
 
 const repoRoot = resolve(import.meta.dirname, "..");
@@ -77,7 +80,7 @@ describe("the §8.2 L734 boundary", () => {
    * committed one would be a real violation the moment someone widened a glob.
    */
   test("and the rule would catch a violation", () => {
-    const scratch = mkdtempSync(join(tmpdir(), "telegator-boundary-"));
+    const scratch = isolatedOutdir("telegator-boundary-");
     const offender = join(scratch, "page.tsx");
     // A relative specifier, because that is the form the resolver handles and
     // the form real source uses. Writing an absolute path here made this test

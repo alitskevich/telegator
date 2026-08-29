@@ -1,9 +1,6 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
-import { describe, expect, test, vi } from "vitest";
+import { afterAll, describe, expect, test, vi } from "vitest";
 
 /**
  * A private CDK output directory per App.
@@ -11,16 +8,19 @@ import { describe, expect, test, vi } from "vitest";
  * `NodejsFunction` stages its bundle on disk during synth, so parallel vitest
  * workers sharing one cdk.out race over the staging directory.
  */
-const isolatedOutdir = () => mkdtempSync(join(tmpdir(), "telegator-cdk-"));
 
 // Synthesising this stack bundles five Lambdas with esbuild, which exceeds the
 // 5 s default on a cold run.
 vi.setConfig({ testTimeout: 60_000 });
 
+import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir.js";
 import { resolveConfig } from "./config.js";
 import { TelegatorDataStack } from "./data-stack.js";
 import { PIPELINE_FUNCTIONS, TelegatorPipelineStack } from "./pipeline-stack.js";
 import { TelegatorQueueStack } from "./queue-stack.js";
+
+// Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
+afterAll(removeIsolatedOutdirs);
 
 const TIMEOUT_SECONDS = 300;
 

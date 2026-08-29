@@ -1,9 +1,6 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 
 /**
  * A private CDK output directory per App.
@@ -11,10 +8,13 @@ import { describe, expect, test } from "vitest";
  * `NodejsFunction` stages its bundle on disk during synth, so parallel vitest
  * workers sharing one cdk.out race over the staging directory.
  */
-const isolatedOutdir = () => mkdtempSync(join(tmpdir(), "telegator-cdk-"));
 
+import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir.js";
 import { ROLE_GROUPS, TelegatorAuthStack } from "./auth-stack.js";
 import { resolveConfig } from "./config.js";
+
+// Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
+afterAll(removeIsolatedOutdirs);
 
 function stackFor(context: Record<string, unknown> = {}) {
   const app = new App({ context, outdir: isolatedOutdir() });
