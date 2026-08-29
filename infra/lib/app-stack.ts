@@ -177,12 +177,33 @@ export class TelegatorAppStack extends Stack {
       }),
     );
 
+    /**
+     * §8.5 L771's category chart runs one Logs Insights query over one log
+     * group — the analyze function's, which is the only group
+     * `lib/aws/observability.ts` is ever constructed with. `StartQuery` takes a
+     * resource, so it is scoped to that group; on `*` this role could query
+     * every log group in the account.
+     */
     this.appRole.addToPolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,
-        // R24 — §7.6 L673 grants only StartQuery, which on its own returns
-        // nothing: §8.5 L771's category chart needs the results too.
-        actions: ["logs:StartQuery", "logs:GetQueryResults", "logs:StopQuery"],
+        actions: ["logs:StartQuery"],
+        resources: [pipeline.functions.analyze.logGroup.logGroupArn],
+      }),
+    );
+
+    /**
+     * R24 — §7.6 L673 grants only `StartQuery`, which on its own returns
+     * nothing: the chart needs the results too.
+     *
+     * These two key off an ephemeral query id rather than a log group and
+     * cannot be resource-scoped, so `*` is the only form AWS accepts. Kept as a
+     * separate statement so the narrowing above is not undone by grouping them.
+     */
+    this.appRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["logs:GetQueryResults", "logs:StopQuery"],
         resources: ["*"],
       }),
     );

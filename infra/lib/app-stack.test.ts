@@ -259,6 +259,45 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
+     * `logs:StartQuery` supports resource-level scoping, and the dashboard
+     * queries exactly one log group — §8.5 L771's category chart over the
+     * analyze logs, the only group `lib/aws/observability.ts` is ever
+     * constructed with. On `*` this role could run Insights queries against
+     * every log group in the account, which for an operator console is a
+     * strictly larger blast radius than anything §7.6 asks for.
+     */
+    test("may start a query only against the analyze log group", () => {
+      const starts = policyStatements(templateFor()).filter((statement) =>
+        actionsOf(statement).includes("logs:StartQuery"),
+      );
+
+      expect(starts).toHaveLength(1);
+      expect(starts[0]?.Resource).not.toBe("*");
+
+      // A cross-stack reference to the analyze function's own log group, so the
+      // ARN is a Fn::Join rather than a literal.
+      const resource = JSON.stringify(starts[0]?.Resource);
+      expect(resource).toContain(":log-group:");
+      expect(resource).toMatch(/analyze/i);
+    });
+
+    /**
+     * `GetQueryResults` and `StopQuery` key off an ephemeral query id rather
+     * than a log group, so they cannot be scoped and must stay `*`. Asserted so
+     * that the narrowing above is not "fixed" later by scoping these too, which
+     * would break the chart with an access error naming nothing useful.
+     */
+    test("may read its own query results, which cannot be resource-scoped", () => {
+      const reads = policyStatements(templateFor()).filter((statement) =>
+        actionsOf(statement).includes("logs:GetQueryResults"),
+      );
+
+      expect(reads).toHaveLength(1);
+      expect(reads[0]?.Resource).toBe("*");
+      expect(actionsOf(reads[0] ?? {})).not.toContain("logs:StartQuery");
+    });
+
+    /**
      * The cookie sealing key forges admin sessions, so the role reads it from
      * Secrets Manager at runtime (`handlers/publish.ts` does the same for the
      * bot token) rather than carrying it as an Amplify environment variable
