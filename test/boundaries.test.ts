@@ -1,8 +1,12 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
+import { reachableFrom } from "./support/moduleGraph.js";
 
 const repoRoot = resolve(import.meta.dirname, "..");
+
+const under = (path: string, directory: string) => path.startsWith(join(repoRoot, directory));
 
 /**
  * Shipped dashboard source only. The scan reads file *text* looking for banned
@@ -47,6 +51,70 @@ describe("the §8.2 L734 boundary", () => {
     );
 
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The same rule over the transitive closure, which is what actually ships.
+   *
+   * The direct check above passes for a dashboard file that imports a module
+   * which itself imports a stage — and that is not hypothetical: in item 5.10,
+   * `REPLAYABLE_QUEUES` lived in `handlers/dlqReplay.ts`, one hop from
+   * `lib/pipeline/dlqReplay.ts`. A bundle contains the closure, so the boundary
+   * has to be measured over it.
+   */
+  test("nothing reachable from the dashboard is a pipeline stage", () => {
+    const reached = [...reachableFrom(dashboardSources()).files].filter((path) =>
+      under(path, "lib/pipeline"),
+    );
+
+    expect(reached).toEqual([]);
+  });
+
+  /**
+   * The detector must be able to fail, or the assertion above is a statement
+   * about the resolver rather than about this repository. A file that violates
+   * the rule is written to a temporary directory instead of committed, because a
+   * committed one would be a real violation the moment someone widened a glob.
+   */
+  test("and the rule would catch a violation", () => {
+    const scratch = mkdtempSync(join(tmpdir(), "telegator-boundary-"));
+    const offender = join(scratch, "page.tsx");
+    // A relative specifier, because that is the form the resolver handles and
+    // the form real source uses. Writing an absolute path here made this test
+    // pass vacuously on its first run — the resolver read it as a package name.
+    const stage = relative(scratch, join(repoRoot, "lib/pipeline/scrape/index.js"));
+    writeFileSync(offender, `import { runScrape } from "${stage}";\nexport default runScrape;\n`);
+
+    const reached = [...reachableFrom([offender]).files].filter((path) =>
+      under(path, "lib/pipeline"),
+    );
+
+    expect(reached.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * §9.3 L814 deploys this on Amplify. A CDK import would pull the whole
+   * construct library into the server bundle to read a constant — which is what
+   * `actions/context.ts` briefly did in item 5.10 for `DASHBOARD_ENV_VARS`, and
+   * what moving `ROLE_GROUPS` avoided in item 5.2.
+   */
+  test("no infrastructure library is reachable from the dashboard", () => {
+    const { packages } = reachableFrom(dashboardSources());
+
+    expect([...packages].filter((name) => name.startsWith("aws-cdk-lib"))).toEqual([]);
+    expect([...packages].filter((name) => name.startsWith("@aws-cdk/"))).toEqual([]);
+    expect(packages.has("constructs")).toBe(false);
+  });
+
+  /**
+   * A closure no larger than its entries means the resolver stopped resolving,
+   * and every assertion above would pass while checking nothing.
+   */
+  test("the closure actually reaches past the entry files", () => {
+    const entries = dashboardSources();
+    const { files } = reachableFrom(entries);
+
+    expect(files.size).toBeGreaterThan(entries.length);
   });
 
   /**
