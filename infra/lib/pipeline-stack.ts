@@ -152,6 +152,26 @@ export class TelegatorPipelineStack extends Stack {
     };
 
     const built = SPECS.map((spec) => {
+      /**
+       * R41 — built before the function and handed to it, rather than declared
+       * beside it.
+       *
+       * `@aws-cdk/aws-lambda:useCdkManagedLogGroup` makes every function declare
+       * its own `/aws/lambda/<name>` group. A second group with that name is
+       * rejected on deploy ("already exists in stack"), and before it collided
+       * it was simply inert — the retention in force was the managed group's
+       * default, never §12.5 L887's 90 days. Passing it in means one group,
+       * owned here, with the retention the category chart depends on.
+       */
+      const logGroup =
+        spec.logRetention === undefined
+          ? undefined
+          : new LogGroup(this, `${spec.key}LogGroup`, {
+              logGroupName: `/aws/lambda/${config.name(spec.name)}`,
+              retention: spec.logRetention,
+              removalPolicy: RemovalPolicy.DESTROY,
+            });
+
       const fn = new NodejsFunction(this, `${spec.key}Function`, {
         functionName: config.name(spec.name),
         entry: `handlers/${spec.entry}`,
@@ -172,18 +192,13 @@ export class TelegatorPipelineStack extends Stack {
         memorySize: spec.memorySize,
         environment,
         bundling: { ...BUNDLING },
-        ...(spec.reservedConcurrency === undefined
+        // R40 — the account's quota can make any reservation uncreatable; see
+        // `TelegatorConfig.reserveConcurrency`.
+        ...(spec.reservedConcurrency === undefined || !config.reserveConcurrency
           ? {}
           : { reservedConcurrentExecutions: spec.reservedConcurrency }),
+        ...(logGroup === undefined ? {} : { logGroup }),
       });
-
-      if (spec.logRetention !== undefined) {
-        new LogGroup(this, `${spec.key}LogGroup`, {
-          logGroupName: `/aws/lambda/${config.name(spec.name)}`,
-          retention: spec.logRetention,
-          removalPolicy: RemovalPolicy.DESTROY,
-        });
-      }
 
       return [spec.key, fn] as const;
     });
@@ -433,7 +448,15 @@ export class TelegatorPipelineStack extends Stack {
     new Alarm(this, "LambdaErrorRateAlarm", {
       alarmName: config.name("lambda-error-rate"),
       metric: new MathExpression({
-        expression: "100 * errors / MAX([invocations, 1])",
+        /**
+         * `IF` rather than the more obvious `MAX([invocations, 1])` guard:
+         * CloudWatch rejects that one at create time with "Unsupported operand
+         * type(s) for MAX: '[Array[TimeSeries, Scalar]]'" — every element of a
+         * MAX array must be a TimeSeries, and `1` is a scalar. Metric math is
+         * parsed by the service, never by `cdk synth`, so the invalid form
+         * passed all four gates and only failed on deploy.
+         */
+        expression: "IF(invocations > 0, 100 * errors / invocations, 0)",
         usingMetrics: { errors, invocations },
         period: Duration.minutes(15),
       }),

@@ -1,6 +1,7 @@
 {
   "app": "npx tsx infra/bin/telegator.ts",
   "output": "cdk.out",
+  "requireApproval": "never",
   "notices": false,
   "versionReporting": false,
   "context": {

@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test, vi } from "vitest";
+import { cdkContext } from "../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
 /**
  * A private CDK output directory per App.
@@ -16,12 +17,16 @@ vi.setConfig({ testTimeout: 60_000 });
 
 describe("the CDK app", () => {
   test("synthesizes without AWS credentials", () => {
-    expect(() => createApp({ outdir: isolatedOutdir() }).synth()).not.toThrow();
+    expect(() =>
+      createApp({ context: cdkContext(), outdir: isolatedOutdir() }).synth(),
+    ).not.toThrow();
   });
 
   test("declares at least one stack, or `cdk synth` exits 1", () => {
     // Empirically: an App with no stacks fails with "This app contains no stacks".
-    expect(createApp({ outdir: isolatedOutdir() }).synth().stacks.length).toBeGreaterThan(0);
+    expect(
+      createApp({ context: cdkContext(), outdir: isolatedOutdir() }).synth().stacks.length,
+    ).toBeGreaterThan(0);
   });
 
   /**
@@ -31,14 +36,15 @@ describe("the CDK app", () => {
    * the only infrastructure gate this machine has.
    */
   test("every stack is environment-agnostic", () => {
-    for (const stack of createApp({ outdir: isolatedOutdir() }).synth().stacks) {
+    for (const stack of createApp({ context: cdkContext(), outdir: isolatedOutdir() }).synth()
+      .stacks) {
       expect(stack.environment.account).toBe("unknown-account");
       expect(stack.environment.region).toBe("unknown-region");
     }
   });
 
   test("no stack asks for a context lookup", () => {
-    const assembly = createApp({ outdir: isolatedOutdir() }).synth();
+    const assembly = createApp({ context: cdkContext(), outdir: isolatedOutdir() }).synth();
 
     for (const stack of assembly.stacks) {
       // CDK records unresolved lookups as `missing` context entries and returns

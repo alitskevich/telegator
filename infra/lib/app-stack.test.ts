@@ -1,6 +1,7 @@
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import { afterAll, describe, expect, test, vi } from "vitest";
+import { cdkContext } from "../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
 import { TelegatorAppStack } from "./app-stack";
 import { TelegatorAuthStack } from "./auth-stack";
@@ -25,7 +26,7 @@ function templateFor(context: Record<string, unknown> = {}): Template {
   const existing = cache.get(key);
   if (existing !== undefined) return existing;
 
-  const app = new App({ context, outdir: isolatedOutdir() });
+  const app = new App({ context: cdkContext(context), outdir: isolatedOutdir() });
   const config = resolveConfig(app);
   const data = new TelegatorDataStack(app, "Data", { config });
   const queues = new TelegatorQueueStack(app, "Queues", { config });
@@ -324,10 +325,21 @@ describe("TelegatorAppStack", () => {
       expect(starts).toHaveLength(1);
       expect(starts[0]?.Resource).not.toBe("*");
 
-      // A cross-stack reference to the analyze function's own log group, so the
-      // ARN is a Fn::Join rather than a literal.
+      /**
+       * A cross-stack reference to the analyze function's own log group.
+       *
+       * R41 changed its shape: the group is now a construct this stack owns and
+       * hands to the function, so the reference is an `Fn::ImportValue` of its
+       * `Arn` attribute. Before, `analyze.logGroup` resolved to the group CDK
+       * managed implicitly and rendered as an `Fn::Join` carrying `:log-group:`
+       * — which also meant this grant, and §8.5's env var, pointed at the
+       * managed group rather than at the 90-day one §12.5 L887 requires.
+       *
+       * What matters is unchanged and asserted the same way: one statement,
+       * never `*`, resolving to the analyze group.
+       */
       const resource = JSON.stringify(starts[0]?.Resource);
-      expect(resource).toContain(":log-group:");
+      expect(resource).toMatch(/:log-group:|LogGroup[A-Za-z0-9]*Arn/);
       expect(resource).toMatch(/analyze/i);
     });
 
@@ -364,7 +376,7 @@ describe("TelegatorAppStack", () => {
   });
 
   test("is environment-agnostic and requests no context lookup", () => {
-    const app = new App({ context: {}, outdir: isolatedOutdir() });
+    const app = new App({ context: cdkContext(), outdir: isolatedOutdir() });
     const config = resolveConfig(app);
     const data = new TelegatorDataStack(app, "Data", { config });
     const queues = new TelegatorQueueStack(app, "Queues", { config });

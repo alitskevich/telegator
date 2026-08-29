@@ -1,6 +1,7 @@
 import { App } from "aws-cdk-lib";
 import { describe, expect, test } from "vitest";
 import { SETTLE_DELAY_SECONDS, SQS_MAX_DELAY_SECONDS } from "../../lib/dedup/constants";
+import { cdkContext } from "../../test/support/cdkContext";
 import { ENVIRONMENTS, resolveConfig } from "./config";
 import { resourceName } from "./naming";
 
@@ -26,7 +27,7 @@ describe("resourceName", () => {
 });
 
 describe("resolveConfig", () => {
-  const appWith = (context: Record<string, unknown>) => new App({ context });
+  const appWith = (context: Record<string, unknown>) => new App({ context: cdkContext(context) });
 
   test("reads the environment from context", () => {
     expect(resolveConfig(appWith({ env: "prod" })).env).toBe("prod");

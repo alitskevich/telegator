@@ -9,6 +9,7 @@ import { afterAll, describe, expect, test } from "vitest";
  * workers sharing one cdk.out race over the staging directory.
  */
 
+import { cdkContext } from "../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
 import { resolveConfig } from "./config";
 import { TelegatorDataStack } from "./data-stack";
@@ -17,7 +18,7 @@ import { TelegatorDataStack } from "./data-stack";
 afterAll(removeIsolatedOutdirs);
 
 function templateFor(context: Record<string, unknown> = {}): Template {
-  const app = new App({ context, outdir: isolatedOutdir() });
+  const app = new App({ context: cdkContext(context), outdir: isolatedOutdir() });
   const stack = new TelegatorDataStack(app, "TelegatorDataStack", {
     config: resolveConfig(app),
   });
@@ -147,7 +148,7 @@ describe("TelegatorDataStack", () => {
    * credentials while every stack stays environment-agnostic.
    */
   test("is environment-agnostic and requests no context lookup", () => {
-    const app = new App({ context: {}, outdir: isolatedOutdir() });
+    const app = new App({ context: cdkContext(), outdir: isolatedOutdir() });
     new TelegatorDataStack(app, "TelegatorDataStack", { config: resolveConfig(app) });
     const assembly = app.synth();
 
@@ -164,7 +165,7 @@ describe("TelegatorDataStack", () => {
   });
 
   test("exposes both tables to the stacks that consume them", () => {
-    const app = new App({ context: {}, outdir: isolatedOutdir() });
+    const app = new App({ context: cdkContext(), outdir: isolatedOutdir() });
     const stack = new TelegatorDataStack(app, "TelegatorDataStack", { config: resolveConfig(app) });
 
     /**

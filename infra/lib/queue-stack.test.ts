@@ -10,6 +10,7 @@ import { afterAll, describe, expect, test } from "vitest";
  */
 
 import { SETTLE_DELAY_SECONDS } from "../../lib/dedup/constants";
+import { cdkContext } from "../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
 import { resolveConfig } from "./config";
 import { TelegatorQueueStack } from "./queue-stack";
@@ -21,7 +22,7 @@ const FOURTEEN_DAYS_SECONDS = 1_209_600;
 const VISIBILITY_SECONDS = 1_800;
 
 function stackFor(context: Record<string, unknown> = {}) {
-  const app = new App({ context, outdir: isolatedOutdir() });
+  const app = new App({ context: cdkContext(context), outdir: isolatedOutdir() });
   const stack = new TelegatorQueueStack(app, "TelegatorQueueStack", { config: resolveConfig(app) });
   return { stack, template: Template.fromStack(stack) };
 }
@@ -176,7 +177,7 @@ describe("TelegatorQueueStack", () => {
   });
 
   test("is environment-agnostic and requests no context lookup", () => {
-    const app = new App({ context: {}, outdir: isolatedOutdir() });
+    const app = new App({ context: cdkContext(), outdir: isolatedOutdir() });
     new TelegatorQueueStack(app, "TelegatorQueueStack", { config: resolveConfig(app) });
     const assembly = app.synth();
 

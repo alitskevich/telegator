@@ -3,6 +3,7 @@ import { Match, Template } from "aws-cdk-lib/assertions";
 import { afterAll, describe, expect, test, vi } from "vitest";
 import { CLASSIFIER_MODEL_ID, EMBEDDING_MODEL_ID } from "../../lib/ai/constants";
 import { METRIC_NAMESPACE } from "../../lib/metrics/ports";
+import { cdkContext } from "../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
 import { resolveConfig } from "./config";
 import { TelegatorDataStack } from "./data-stack";
@@ -21,7 +22,7 @@ function templateFor(context: Record<string, unknown> = {}): Template {
   const existing = cache.get(key);
   if (existing !== undefined) return existing;
 
-  const app = new App({ context, outdir: isolatedOutdir() });
+  const app = new App({ context: cdkContext(context), outdir: isolatedOutdir() });
   const config = resolveConfig(app);
   const data = new TelegatorDataStack(app, "Data", { config });
   const queues = new TelegatorQueueStack(app, "Queues", { config });
@@ -401,5 +402,25 @@ describe("alarms (§7.7 L699)", () => {
 
     expect(rate?.Threshold).toBe(10);
     expect(JSON.stringify(rate)).toContain("900");
+  });
+
+  /**
+   * The expression is pinned rather than merely present. CloudWatch parses
+   * metric math only when the alarm is created, so `cdk synth` emits a valid
+   * template around an expression the service rejects outright — all four gates
+   * stay green and the deploy fails at `CREATE_FAILED`.
+   *
+   * The original divide-by-zero guard, `MAX([invocations, 1])`, is exactly that:
+   * CloudWatch answers "Unsupported operand type(s) for MAX: '[Array[TimeSeries,
+   * Scalar]]'", because every element of a MAX array must be a TimeSeries and
+   * `1` is a scalar. `IF` guards the same division and is accepted — verified
+   * against `cloudwatch:GetMetricData`, which parses the expression server-side.
+   */
+  test("guards the error-rate division with an expression CloudWatch accepts", () => {
+    const rate = alarms(templateFor()).find((a) => a.Metrics !== undefined);
+    const metrics = (rate?.Metrics ?? []) as { Expression?: string }[];
+    const expression = metrics.find((m) => m.Expression !== undefined)?.Expression;
+
+    expect(expression).toBe("IF(invocations > 0, 100 * errors / invocations, 0)");
   });
 });

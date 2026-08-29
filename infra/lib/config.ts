@@ -34,6 +34,18 @@ export interface TelegatorConfig {
    * than something a producer sets per message.
    */
   readonly settleDelaySeconds: number;
+  /**
+   * R40. §3.1 L185 and §3.2 L229 give scrape, analyze and dlq-replay a reserved
+   * concurrency, but a reservation is creatable only while the account keeps 5
+   * concurrent executions unreserved. A cold account's entire quota is 5, so AWS
+   * rejects every reservation and the stack cannot be created at all.
+   *
+   * Its own parameter rather than a dev-only branch, for R23's reason: the
+   * driver is the account's quota, not the environment name — a prod account
+   * with a cold quota fails identically. It defaults to `true`, so the spec is
+   * what deploys unless a deploy states otherwise on the command line.
+   */
+  readonly reserveConcurrency: boolean;
   /** `resourceName` already bound to this environment. */
   name(resource: string, options?: NameOptions): string;
 }
@@ -112,6 +124,7 @@ export function resolveConfig(app: App): TelegatorConfig {
     env,
     scheduleEnabled,
     settleDelaySeconds: readSettleDelay(app.node.tryGetContext("settleDelaySeconds")),
+    reserveConcurrency: readBoolean(app.node.tryGetContext("reserveConcurrency"), true),
     name: (resource, options) => resourceName(env, resource, options),
   };
 }

@@ -13,6 +13,7 @@ import { afterAll, describe, expect, test, vi } from "vitest";
 // 5 s default on a cold run.
 vi.setConfig({ testTimeout: 60_000 });
 
+import { cdkContext } from "../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
 import { resolveConfig } from "./config";
 import { TelegatorDataStack } from "./data-stack";
@@ -42,7 +43,7 @@ function stackFor(context: Record<string, unknown> = {}) {
 }
 
 function build(context: Record<string, unknown>) {
-  const app = new App({ context, outdir: isolatedOutdir() });
+  const app = new App({ context: cdkContext(context), outdir: isolatedOutdir() });
   const config = resolveConfig(app);
   const data = new TelegatorDataStack(app, "Data", { config });
   const queues = new TelegatorQueueStack(app, "Queues", { config });
@@ -145,6 +146,40 @@ describe("TelegatorPipelineStack functions", () => {
 
       expect(reserved).toHaveLength(3);
     });
+
+    /**
+     * R40 — `reserveConcurrency=false` drops every reservation.
+     *
+     * A reservation is only creatable while the account keeps 5 concurrent
+     * executions unreserved. A cold account's quota is 5 in total, so AWS
+     * rejects *any* reservation: "Specified ReservedConcurrentExecutions for
+     * function decreases account's UnreservedConcurrentExecution below its
+     * minimum value of [5]". §3.1 L185 and §3.2 L229 are then undeployable
+     * through no fault of the template.
+     *
+     * Its own parameter rather than a dev-only branch, for R23's reason: the
+     * driver is the account's quota, not the environment name — a prod account
+     * with a cold quota fails identically. The default stays spec-faithful, so
+     * a deploy has to opt out and say so on the command line.
+     */
+    test("reserveConcurrency=false drops every reservation", () => {
+      const reserved = functions(stackFor({ reserveConcurrency: "false" }).template).filter(
+        (f) => f.ReservedConcurrentExecutions !== undefined,
+      );
+
+      expect(reserved).toHaveLength(0);
+    });
+
+    test("the opt-out changes nothing else about the functions", () => {
+      const withReservation = named(stackFor().template, "telegator-dev-scrape");
+      const without = named(
+        stackFor({ reserveConcurrency: "false" }).template,
+        "telegator-dev-scrape",
+      );
+
+      expect(without?.MemorySize).toBe(withReservation?.MemorySize);
+      expect(without?.Timeout).toBe(withReservation?.Timeout);
+    });
   });
 
   /** §12.5 L887 — analyze's logs are the source of §8.5 L771's category chart. */
@@ -155,6 +190,75 @@ describe("TelegatorPipelineStack functions", () => {
     const analyze = groups.find((g) => String(g.LogGroupName).includes("analyze"));
 
     expect(analyze?.RetentionInDays).toBe(90);
+  });
+
+  /**
+   * R41 — the retention has to apply to the group the function actually writes
+   * to, not merely to a group that exists.
+   *
+   * `@aws-cdk/aws-lambda:useCdkManagedLogGroup` makes every function declare its
+   * own `/aws/lambda/<name>` group. Declaring a second one beside it for
+   * retention collides on deploy ("already exists in stack"), and until it
+   * collided it was inert: the function used the managed group's 731 days while
+   * this suite asserted 90 against the group nothing referenced. The assertion
+   * above could not see the difference — the managed group's name is an
+   * `Fn::Join`, so `String(...)` renders "[object Object]" and never matches.
+   */
+  /**
+   * The count is the evidence that cdk.json's flags reached this synthesis.
+   * `@aws-cdk/aws-lambda:useCdkManagedLogGroup` gives every function a log
+   * group; without it CDK emits only the one this stack declares, and the suite
+   * is asserting against a template that never deploys.
+   */
+  test("synthesises a log group per function, as the deploy does", () => {
+    const groups = Object.keys(stackFor().template.findResources("AWS::Logs::LogGroup"));
+
+    expect(groups).toHaveLength(PIPELINE_FUNCTIONS.length);
+  });
+
+  test("declares one log group per name, so the deploy does not collide", () => {
+    const template = stackFor().template;
+    const resources = template.toJSON().Resources as Record<
+      string,
+      { Type: string; Properties?: Record<string, unknown> }
+    >;
+
+    /**
+     * Resolved, not stringified. The managed group names itself with an
+     * `Fn::Join` over a `Ref` to the function while the declared one uses a
+     * literal, so comparing the raw values finds two distinct names for one
+     * physical log group — which is precisely the collision CloudFormation
+     * rejects.
+     */
+    const resolve = (value: unknown): string => {
+      if (typeof value === "string") return value;
+      const join = (value as { "Fn::Join"?: [string, unknown[]] })["Fn::Join"];
+      if (join === undefined) return JSON.stringify(value);
+      return join[1]
+        .map((part) => {
+          if (typeof part === "string") return part;
+          const ref = (part as { Ref?: string }).Ref;
+          return ref === undefined
+            ? JSON.stringify(part)
+            : String(resources[ref]?.Properties?.FunctionName ?? ref);
+        })
+        .join("");
+    };
+
+    const names = Object.values(resources)
+      .filter((r) => r.Type === "AWS::Logs::LogGroup")
+      .map((r) => resolve(r.Properties?.LogGroupName));
+
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  test("points analyze at the 90-day group rather than a managed one", () => {
+    const template = stackFor().template;
+    const logging = named(template, "telegator-dev-analyze")?.LoggingConfig as
+      | { LogGroup?: unknown }
+      | undefined;
+
+    expect(logging?.LogGroup).toBeDefined();
   });
 
   test("supplies every environment variable handlers/env.ts requires", async () => {
@@ -179,7 +283,7 @@ describe("TelegatorPipelineStack functions", () => {
   });
 
   test("is environment-agnostic and requests no context lookup", () => {
-    const app = new App({ context: {}, outdir: isolatedOutdir() });
+    const app = new App({ context: cdkContext(), outdir: isolatedOutdir() });
     const config = resolveConfig(app);
     const data = new TelegatorDataStack(app, "Data", { config });
     const queues = new TelegatorQueueStack(app, "Queues", { config });

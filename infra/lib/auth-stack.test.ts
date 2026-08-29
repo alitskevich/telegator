@@ -9,6 +9,7 @@ import { afterAll, describe, expect, test } from "vitest";
  * workers sharing one cdk.out race over the staging directory.
  */
 
+import { cdkContext } from "../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
 import { ROLE_GROUPS, TelegatorAuthStack } from "./auth-stack";
 import { resolveConfig } from "./config";
@@ -17,7 +18,7 @@ import { resolveConfig } from "./config";
 afterAll(removeIsolatedOutdirs);
 
 function stackFor(context: Record<string, unknown> = {}) {
-  const app = new App({ context, outdir: isolatedOutdir() });
+  const app = new App({ context: cdkContext(context), outdir: isolatedOutdir() });
   const stack = new TelegatorAuthStack(app, "TelegatorAuthStack", { config: resolveConfig(app) });
   return { stack, template: Template.fromStack(stack) };
 }
@@ -116,7 +117,7 @@ describe("TelegatorAuthStack", () => {
   });
 
   test("is environment-agnostic and requests no context lookup", () => {
-    const app = new App({ context: {}, outdir: isolatedOutdir() });
+    const app = new App({ context: cdkContext(), outdir: isolatedOutdir() });
     new TelegatorAuthStack(app, "TelegatorAuthStack", { config: resolveConfig(app) });
     const assembly = app.synth();
 
