@@ -555,3 +555,17 @@ a:hover {
   color: var(--text-dim);
   word-break: break-all;
 }
+
+/*
+ * The two auth boundaries of §8.6 (`unauthorized.tsx`, `forbidden.tsx`). They
+ * render inside the shell, so they need nothing but room to breathe and a
+ * measure short enough to read.
+ */
+.auth-gate {
+  max-width: 46ch;
+  padding: 48px 0;
+}
+
+.auth-gate p {
+  margin: 0 0 12px;
+}

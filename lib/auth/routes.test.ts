@@ -201,3 +201,85 @@ describe("unknown segments", () => {
     ).toBe(404);
   });
 });
+
+/**
+ * The blank 400.
+ *
+ * A first sign-in against a fresh pool produced one: the state cookie lives for
+ * ten minutes, the operator spent longer creating the account, and the callback
+ * arrived with nothing to match. The status was right and the page was empty —
+ * no reason, no way back, and nothing on screen to tell an expired attempt
+ * apart from a genuinely forged one.
+ */
+describe("a refused callback explains itself", () => {
+  const refuse = (query: string) =>
+    handleAuthRequest(
+      ["callback"],
+      new Request(`${config.appUrl}/api/auth/callback?${query}`),
+      deps(),
+    );
+
+  const armed = () =>
+    jar.set(OAUTH_STATE_COOKIE, "state-abc", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+    });
+
+  test("an expired or missing state offers a way to start again", async () => {
+    const response = await refuse("code=auth-code&state=state-abc");
+    const body = await response.text();
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(body).toContain("/api/auth/login");
+  });
+
+  test("a mismatched state is refused with the same page", async () => {
+    armed();
+
+    const response = await refuse("code=auth-code&state=attacker-state");
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain("/api/auth/login");
+  });
+
+  test("a callback with no code is refused with the same page", async () => {
+    armed();
+
+    const response = await refuse("state=state-abc");
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain("/api/auth/login");
+  });
+
+  /**
+   * A rejected code fails at a different gate and carries a different status,
+   * but it strands the operator in exactly the same place, so it renders the
+   * same way. This is the branch a stale or replayed authorization code takes.
+   */
+  test("a rejected authorization code strands nobody either", async () => {
+    armed();
+
+    const response = await refuse("code=unknown-code&state=state-abc");
+
+    expect(response.status).toBe(401);
+    expect(await response.text()).toContain("/api/auth/login");
+  });
+
+  /**
+   * The page is built from fixed strings only. Both values on this URL are
+   * attacker-controlled — the whole point of the state check is that anyone can
+   * send a browser here — so echoing either into the HTML would turn the error
+   * page into reflected XSS on the operator console's own origin.
+   */
+  test("never reflects the state or code back into the page", async () => {
+    const response = await refuse("code=<script>alert(1)</script>&state=</p><b>x");
+    const body = await response.text();
+
+    expect(body).not.toContain("<script>alert(1)</script>");
+    expect(body).not.toContain("<b>x");
+    expect(body).not.toContain("alert(1)");
+  });
+});

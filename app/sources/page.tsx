@@ -7,6 +7,7 @@ import { exportTable, runScraper } from "../../actions/triggers";
 import { SourcesTable } from "../../components/SourcesTable";
 import { hasRole } from "../../lib/auth/roles";
 import { requireRole } from "../../lib/auth/session";
+import { authorized } from "../authorize";
 
 /**
  * §8.3 L741 — the Sources page.
@@ -21,7 +22,7 @@ export const dynamic = "force-dynamic";
 export default async function SourcesPage() {
   // §8.6 L782 — `viewer` reads every page. An unauthorised caller gets the
   // AuthorizationError rather than a table with the controls hidden.
-  const session = await requireRole("viewer", await authContext());
+  const session = await authorized(requireRole("viewer", await authContext()));
   const principal = { roles: session.roles, enabled: true };
 
   const rows = await sources.listAll();

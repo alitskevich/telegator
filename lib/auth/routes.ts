@@ -32,6 +32,48 @@ const transientCookie = (maxAge: number): CookieOptions => ({
   maxAge,
 });
 
+/**
+ * The page a refused sign-in renders.
+ *
+ * A bare `Response(null, { status: 400 })` is what an operator first met here:
+ * a blank window, no reason and no way back. The status was never wrong — the
+ * request really is malformed — but this is also the likeliest thing to go
+ * wrong in the whole flow, because the state cookie above lives for
+ * `STATE_TTL_SECONDS` and a sign-in that pauses for longer than that arrives
+ * with nothing left to match.
+ *
+ * Fixed strings only, and deliberately so: `state` and `code` are both
+ * attacker-supplied — anyone on the internet can send a browser to this route,
+ * which is the entire reason the state check exists — so echoing either into
+ * the HTML would put reflected XSS on the operator console's own origin.
+ *
+ * One page for every refusal, rather than one per branch. An expired attempt
+ * and a forged one get the same answer, so a prober learns nothing about which
+ * check rejected them, and the operator's next step is the same either way.
+ */
+const SIGN_IN_FAILED_PAGE = `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sign-in failed</title></head>
+<body style="background:#0f1115;color:#e6e8ec;font-family:ui-sans-serif,system-ui,sans-serif;margin:0">
+<main style="max-width:46ch;padding:48px 24px">
+<h1 style="font-size:20px;margin:0 0 20px">Sign-in could not be completed</h1>
+<p style="color:#9aa3b2;font-size:12px;margin:0 0 12px">
+This usually means the attempt took longer than ten minutes, or it began in a
+different browser session. Starting again will issue a fresh one.
+</p>
+<p style="margin:0"><a href="/api/auth/login" style="color:#4a9eff;text-decoration:none">Start again &rarr;</a></p>
+</main>
+</body>
+</html>
+`;
+
+/** §8.2 L722's refusals, as something an operator can act on. */
+const signInFailed = (status: number): Response =>
+  new Response(SIGN_IN_FAILED_PAGE, {
+    status,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+
 const redirectUri = (config: HostedUiConfig) => `${config.appUrl}/api/auth/callback`;
 
 const redirect = (location: string) => new Response(null, { status: FOUND, headers: { location } });
@@ -87,20 +129,21 @@ async function callback(request: Request, deps: AuthRouteDeps): Promise<Response
 
   // Checked before the exchange, so a forged callback costs no token request.
   if (expected === undefined || state === null || state !== expected) {
-    return new Response(null, { status: BAD_REQUEST });
+    return signInFailed(BAD_REQUEST);
   }
 
   // Single-use, whatever happens next: a replayed callback must not re-authenticate.
   deps.jar.delete(OAUTH_STATE_COOKIE);
 
-  if (code === null) return new Response(null, { status: BAD_REQUEST });
+  if (code === null) return signInFailed(BAD_REQUEST);
 
   try {
     await startSession(code, redirectUri(deps.config), deps);
   } catch {
     // A rejected code or an unverifiable token is a failed sign-in, not a server
-    // fault, and the reason is not the browser's business.
-    return new Response(null, { status: UNAUTHORIZED });
+    // fault, and the reason is not the browser's business — but the operator
+    // still needs the way back, so it is the same page at a different status.
+    return signInFailed(UNAUTHORIZED);
   }
 
   return redirect(`${deps.config.appUrl}/`);

@@ -5,6 +5,7 @@ import { MessagesTable } from "../../components/MessagesTable";
 import { hasRole } from "../../lib/auth/roles";
 import { requireRole } from "../../lib/auth/session";
 import { MessageStatusSchema } from "../../lib/domain/message";
+import { authorized } from "../authorize";
 
 /**
  * §8.3 L742 — the Messages page.
@@ -21,7 +22,7 @@ export default async function MessagesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const session = await requireRole("viewer", await authContext());
+  const session = await authorized(requireRole("viewer", await authContext()));
   const principal = { roles: session.roles, enabled: true };
 
   // §8.2 L722's example is `?status=topublish`, which is also the tab an

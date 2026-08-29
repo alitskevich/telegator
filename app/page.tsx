@@ -11,6 +11,7 @@ import { Dashboard } from "../components/Dashboard";
 import { requireRole } from "../lib/auth/session";
 import { systemClock } from "../lib/clock";
 import { loadOverview } from "../lib/dashboard/overview";
+import { authorized } from "./authorize";
 
 /**
  * §8.3 L740 — the dashboard.
@@ -35,7 +36,7 @@ export default async function DashboardPage() {
    * Before the load, not after: `loadOverview` reads DynamoDB, CloudWatch and
    * SQS, and an unauthorised request should cost none of them.
    */
-  await requireRole("viewer", await authContext());
+  await authorized(requireRole("viewer", await authContext()));
 
   const overview = await loadOverview({
     metrics,

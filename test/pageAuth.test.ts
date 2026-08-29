@@ -70,6 +70,25 @@ describe("every page authorises (§8.6 L790)", () => {
   });
 
   /**
+   * Authorising is half of it. `requireRole` refuses by throwing, and a throw
+   * out of a server component is a 500 — which is what all four of these pages
+   * served to a signed-out browser, the state every first visit is in. The
+   * refusal has to reach `app/authorize.ts`, which turns it into the 401 that
+   * offers the sign-in route or the 403 that explains itself.
+   *
+   * Scanned per page for the same reason as the rule above: a fifth page added
+   * later will call `requireRole` because that pattern is visible in its
+   * neighbours, and will silently 500 unless something asks about this too.
+   */
+  test("every page routes its refusal through authorized()", () => {
+    const unhandled = pageFiles()
+      .filter((path) => !/\bauthorized\(\s*requireRole\(/.test(readFileSync(path, "utf8")))
+      .map((path) => relative(repoRoot, path));
+
+    expect(unhandled).toEqual([]);
+  });
+
+  /**
    * §8.2 L722's Cognito callbacks are the one route that must stay reachable
    * unauthenticated — it is where a session comes from. Asserting it is not a
    * page keeps the rule above from being "fixed" later by exempting things.

@@ -24,6 +24,12 @@ const nextConfig: NextConfig = {
   // schema allows, and every route here is `force-dynamic`, so it governs
   // nothing but the prerender guard above.
   experimental: {
+    // §8.6's refusals are `unauthorized()` and `forbidden()`, which Next gates
+    // behind this flag. Without it both throw "experimental ... not enabled"
+    // instead of interrupting, and every page is a 500 again — the state this
+    // console shipped in. See `app/authorize.ts`.
+    authInterrupts: true,
+
     staleTimes: { dynamic: 0, static: 30 },
   },
 };

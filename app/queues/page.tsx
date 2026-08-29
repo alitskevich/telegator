@@ -5,6 +5,7 @@ import { hasRole } from "../../lib/auth/roles";
 import { requireRole } from "../../lib/auth/session";
 import { loadQueues } from "../../lib/dashboard/queues";
 import type { DlqMessage } from "../../lib/queues/inspect";
+import { authorized } from "../authorize";
 
 /**
  * §8.2 L723 — "Queue depths + DLQ inspection/replay".
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 export default async function QueuesPage() {
   const deps = await queuePageDeps();
-  const session = await requireRole("viewer", deps.auth);
+  const session = await authorized(requireRole("viewer", deps.auth));
 
   const rows = await loadQueues(deps);
 
