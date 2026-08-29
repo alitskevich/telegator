@@ -1,27 +1,76 @@
-import {
-  type PublishDeps,
-  type PublishResultSummary,
-  runPublish,
-} from "../lib/pipeline/publish/index.js";
+import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { systemClock } from "../lib/clock.js";
+import { createMessageRepo } from "../lib/db/messages.js";
+import { createLogger, stdoutSink } from "../lib/logging/logger.js";
+import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch.js";
+import { type PublishResultSummary, runPublish } from "../lib/pipeline/publish/index.js";
+import { createTelegramBot } from "../lib/telegram/bot.js";
+import { createHttpPost } from "../lib/telegram/http.js";
+import { ENV_VARS, requireEnv } from "./env.js";
 
 /**
- * The `telegator-publish` Lambda entry point (§7.5 L652).
+ * The `telegator-publish` entry point (§7.5 L652, SQS FIFO, batch size 1).
  *
- * A thin wrapper, per §8.2 L734: `lib/pipeline/` holds the single implementation
- * of every stage and a handler adds nothing but the event shape. No stage logic
- * belongs here.
- *
- * There is deliberately no `export const handler` yet. This stage needs a
- * DynamoDB `MessageRepo` (ledger 5.4), a CloudWatch `MetricSink` (6.1), a
- * Telegram `HttpPost` adapter and a Secrets Manager token provider (both 6.0) —
- * none of which exist. Inventing one here would put an untested adapter on the
- * publish path, so the handler is a factory until 6.0 and 5.4 land, and item 4.5
- * wires the real entry point.
+ * A thin wrapper per §8.2 L734; the status guard of §3.4 L316 and the send-mode
+ * decision live in `lib/pipeline/publish/`.
  */
 export interface SqsEvent {
   readonly Records: ReadonlyArray<{ readonly messageId: string; readonly body: string }>;
 }
 
-export function createPublishHandler(deps: PublishDeps) {
-  return async (event: SqsEvent): Promise<PublishResultSummary> => runPublish(event.Records, deps);
+let cached: ReturnType<typeof buildDeps> | undefined;
+let cachedToken: string | undefined;
+
+/**
+ * §7.6 L663 keeps the bot token in Secrets Manager. Fetched on first use and
+ * cached for the life of the container — item 3.12 deliberately does not cache
+ * it, leaving the decision here where the container lifetime is known.
+ */
+async function readToken(secrets: SecretsManagerClient): Promise<string> {
+  if (cachedToken !== undefined) return cachedToken;
+
+  const secretArn = requireEnv(ENV_VARS.telegramSecretArn);
+  const response = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn }));
+  if (response.SecretString === undefined) {
+    throw new Error("the Telegram bot token secret has no string value");
+  }
+
+  cachedToken = response.SecretString;
+  return cachedToken;
 }
+
+function buildDeps() {
+  const secrets = new SecretsManagerClient({});
+  const metrics = createCloudWatchMetrics({
+    client: new CloudWatchClient({}),
+    logger: createLogger(stdoutSink),
+  });
+
+  return {
+    messages: createMessageRepo({
+      client: DynamoDBDocumentClient.from(new DynamoDBClient({})),
+      tableName: requireEnv(ENV_VARS.messagesTable),
+    }),
+    bot: createTelegramBot({
+      http: createHttpPost(),
+      tokenProvider: () => readToken(secrets),
+      // §3.4 L343's pacing. Real time here; the stage's tests inject their own.
+      sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
+      logger: createLogger(stdoutSink),
+      metrics,
+    }),
+    metrics,
+    clock: systemClock,
+    logger: createLogger(stdoutSink),
+  };
+}
+
+export const handler = async (event: SqsEvent): Promise<PublishResultSummary> => {
+  if (cached === undefined) cached = buildDeps();
+  const deps = cached;
+
+  return withMetricFlush(deps.metrics, () => runPublish(event.Records, deps));
+};
