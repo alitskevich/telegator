@@ -1,0 +1,41 @@
+{
+  "name": "telegator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram news pipeline on AWS (SQS, Lambda, DynamoDB, Bedrock) with a Next.js operator dashboard",
+  "license": "ISC",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "synth": "cdk synth"
+  },
+  "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.33.3",
+    "@aws-sdk/client-bedrock-runtime": "^3.1121.0",
+    "@aws-sdk/client-cloudwatch": "^3.1121.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.1121.0",
+    "@aws-sdk/client-dynamodb": "^3.1121.0",
+    "@aws-sdk/client-lambda": "^3.1121.0",
+    "@aws-sdk/client-secrets-manager": "^3.1121.0",
+    "@aws-sdk/client-sqs": "^3.1121.0",
+    "@aws-sdk/lib-dynamodb": "^3.1121.0",
+    "zod": "^4.5.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.11",
+    "@types/node": "^26.4.0",
+    "aws-cdk": "^2.1139.0",
+    "aws-cdk-lib": "^2.267.0",
+    "aws-sdk-client-mock": "^4.1.0",
+    "constructs": "^10.8.1",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
