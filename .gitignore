@@ -18,3 +18,8 @@ cdk.out/
 
 # os
 .DS_Store
+
+# the operator's export, staged here to be read by scripts/seed.ts.
+# R21: it lives outside this repository — it is operational data, not source,
+# and biome (vcs.useIgnoreFile) must not format someone else's export.
+data/

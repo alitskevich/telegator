@@ -85,10 +85,25 @@ export function toSeedSource(row: unknown): Source {
   return seeded as Source;
 }
 
-export function seedSourcesFrom(exported: unknown): Source[] {
-  if (!Array.isArray(exported)) throw new Error("data-sources.json must contain an array");
+/**
+ * The export is an object keyed by table name — `{ "sources": [...] }` — not the
+ * bare array this module was first written against. A bare array is still
+ * accepted, because that is what every fixture and every caller that slices the
+ * file itself already passes.
+ */
+function rowsOf(exported: unknown): unknown[] {
+  if (Array.isArray(exported)) return exported;
 
-  return exported.map((row, index) => {
+  if (typeof exported === "object" && exported !== null) {
+    const { sources } = exported as { sources?: unknown };
+    if (Array.isArray(sources)) return sources;
+  }
+
+  throw new Error("data-sources.json must contain an array, or a sources array");
+}
+
+export function seedSourcesFrom(exported: unknown): Source[] {
+  return rowsOf(exported).map((row, index) => {
     try {
       return toSeedSource(row);
     } catch (error) {

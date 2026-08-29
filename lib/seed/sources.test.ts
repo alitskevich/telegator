@@ -168,7 +168,24 @@ describe("seedSourcesFrom", () => {
     expect(() => seedSourcesFrom([exported(), { status: "ok" }])).toThrow(/1/);
   });
 
-  test("rejects a file that is not an array", () => {
-    expect(() => seedSourcesFrom({ sources: [] })).toThrow();
+  /**
+   * The real export is an object keyed by table name, not a bare array — this
+   * suite guessed otherwise, and every gate stayed green against a seeder that
+   * could not read the only file it exists to read.
+   */
+  test("reads the export's { sources: [...] } wrapper", () => {
+    const rows = seedSourcesFrom({ sources: [exported(), exported({ id: "sports_daily" })] });
+
+    expect(rows.map((row) => row.id)).toEqual(["yigal_levin", "sports_daily"]);
+  });
+
+  test("names the row that failed inside the wrapper too", () => {
+    expect(() => seedSourcesFrom({ sources: [exported(), { status: "ok" }] })).toThrow(/1/);
+  });
+
+  test("rejects a file that holds neither an array nor a sources array", () => {
+    expect(() => seedSourcesFrom({})).toThrow();
+    expect(() => seedSourcesFrom({ sources: {} })).toThrow();
+    expect(() => seedSourcesFrom("nope")).toThrow();
   });
 });
