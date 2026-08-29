@@ -1,4 +1,5 @@
 import { App } from "aws-cdk-lib";
+import { TelegatorAuthStack } from "./auth-stack.js";
 import { resolveConfig } from "./config.js";
 import { TelegatorDataStack } from "./data-stack.js";
 import { TelegatorQueueStack } from "./queue-stack.js";
@@ -21,6 +22,7 @@ export function createApp(): App {
   // §9.1 L806 — Data, Queue and Auth have no dependencies on each other.
   new TelegatorDataStack(app, "TelegatorDataStack", { config });
   new TelegatorQueueStack(app, "TelegatorQueueStack", { config });
+  new TelegatorAuthStack(app, "TelegatorAuthStack", { config });
 
   return app;
 }
