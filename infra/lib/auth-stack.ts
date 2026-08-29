@@ -8,6 +8,7 @@ import {
   type UserPoolDomain,
 } from "aws-cdk-lib/aws-cognito";
 import type { Construct } from "constructs";
+import { ROLE_GROUPS } from "../../lib/auth/roles.js";
 import type { TelegatorConfig } from "./config.js";
 
 /**
@@ -25,11 +26,11 @@ export interface TelegatorAuthStackProps extends StackProps {
 }
 
 /**
- * §8.6 L782–786, least privileged first. The grants are cumulative — `editor`
- * is viewer "+", `admin` is editor "+" — so precedence runs the other way and is
- * derived below rather than written twice.
+ * Re-exported so this stack keeps a single import surface, but *defined* in
+ * `lib/auth/roles.ts` — the dashboard authorises against the same array that
+ * names these groups, and it cannot import a CDK module to get it.
  */
-export const ROLE_GROUPS = ["viewer", "editor", "admin"] as const;
+export { ROLE_GROUPS };
 
 /** A dev synth must not require context, so the callback falls back to localhost. */
 const DEFAULT_CALLBACK_URLS = ["http://localhost:3000/api/auth/callback"];
