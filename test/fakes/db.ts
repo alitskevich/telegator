@@ -78,6 +78,9 @@ export function fakeMessageRepo(initial: readonly Message[] = []): FakeMessageRe
 
       return limit === undefined ? listed : listed.slice(0, limit);
     },
+    countByStatus: async (status: MessageStatus): Promise<number> =>
+      // Counts live rows only, matching R16's filter in the real adapter.
+      live().filter((m) => m.status === status).length,
     putNew: async (message) => {
       writeCount++;
       rows.set(message.id, structuredClone(message));

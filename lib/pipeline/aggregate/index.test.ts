@@ -238,6 +238,7 @@ describe("§3.3 aggregate consumer", () => {
       queryByStatus: (status, limit) => base.queryByStatus(status, limit),
       putNew: (message) => base.putNew(message),
       mergeMember: (merge) => base.mergeMember(merge),
+      countByStatus: (status) => base.countByStatus(status),
       markPublished: (published) => base.markPublished(published),
     };
     const h = harness({
@@ -374,6 +375,7 @@ describe("§3.3 aggregate consumer", () => {
         return base.putNew(message);
       },
       mergeMember: (merge) => base.mergeMember(merge),
+      countByStatus: (status) => base.countByStatus(status),
       markPublished: (published) => base.markPublished(published),
     };
     const h = harness({

@@ -63,8 +63,10 @@ export class FakeCategoryLogReader implements CategoryLogReader {
   private rows: CategoryCount[] = [];
   private failure: Error | undefined;
 
+  /** Also clears any armed failure — a test recovering from one is the point. */
   set(rows: readonly CategoryCount[]): void {
     this.rows = [...rows];
+    this.failure = undefined;
   }
 
   /** Logs Insights can time out or fail; §8.5's chart has to survive that. */

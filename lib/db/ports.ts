@@ -62,6 +62,14 @@ export interface MessageRepo {
   queryByDate(date: string): Promise<DedupCandidate[]>;
   /** §8.5 L772 — `status-index`, `ts` descending. */
   queryByStatus(status: MessageStatus, limit?: number): Promise<MessageListItem[]>;
+  /**
+   * §8.5 L768 — the "Messages published" card, window "all".
+   *
+   * A count rather than a list length: the archive only grows, and fetching
+   * every published message to measure it would make the cheapest card on the
+   * page the most expensive query on it.
+   */
+  countByStatus(status: MessageStatus): Promise<number>;
   /** §6 L539's create branch — a whole new record. */
   putNew(message: Message): Promise<void>;
   /**

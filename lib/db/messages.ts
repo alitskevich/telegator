@@ -100,6 +100,44 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
       return items.map((item) => MessageListItemSchema.parse(item));
     },
 
+    /**
+     * §8.5 L768 — `Select: COUNT` over `status-index`, across every page.
+     *
+     * A Query stops at 1 MB of scanned data and returns a cursor. Counting only
+     * the first page would make this card silently plateau as the archive grew:
+     * the number would simply stop rising, with nothing anywhere looking broken.
+     */
+    countByStatus: async (status: MessageStatus): Promise<number> => {
+      let total = 0;
+      let cursor: Record<string, unknown> | undefined;
+
+      do {
+        const output = await client.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: "status-index",
+            KeyConditionExpression: "#status = :status",
+            // R16 — DynamoDB applies the filter before counting, so a
+            // soft-deleted message is excluded from `Count` and not merely
+            // hidden from a page of results.
+            FilterExpression: NOT_DELETED,
+            ExpressionAttributeNames: { "#status": "status", "#deleted": "deleted" },
+            ExpressionAttributeValues: { ":status": status, ":notDeleted": false },
+            Select: "COUNT",
+            ...(cursor === undefined ? {} : { ExclusiveStartKey: cursor }),
+          }),
+        );
+
+        // Narrowed the way `queryByStatus` narrows `Items`: `DocumentSender`'s
+        // return type is the union of every command's output, and only the
+        // Query member carries these.
+        total += "Count" in output ? (output.Count ?? 0) : 0;
+        cursor = "LastEvaluatedKey" in output ? output.LastEvaluatedKey : undefined;
+      } while (cursor !== undefined);
+
+      return total;
+    },
+
     /** §6 L539's create branch — a whole new record. */
     putNew: async (message: Message): Promise<void> => {
       await client.send(new PutCommand({ TableName: tableName, Item: message }));

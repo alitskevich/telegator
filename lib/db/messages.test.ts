@@ -245,3 +245,53 @@ describe("createMessageRepo writes", () => {
     expect(Object.values(values)).toContain("4711");
   });
 });
+
+describe("createMessageRepo.countByStatus", () => {
+  /**
+   * §8.5 L768 — "DynamoDB count on `status-index` (`published`)", window "all".
+   * `Select: COUNT` because the card needs a number: fetching every published
+   * message to call `.length` would grow unboundedly with the archive.
+   */
+  test("queries status-index with Select COUNT", async () => {
+    const s = stub([{ Count: 42 }]);
+    expect(await repoWith(s).countByStatus("published")).toBe(42);
+
+    expect(s.input()?.IndexName).toBe("status-index");
+    expect(s.input()?.Select).toBe("COUNT");
+    expect(s.input()?.ExpressionAttributeValues).toMatchObject({ ":status": "published" });
+  });
+
+  /**
+   * R16 — `deleted` is filtered at the repository layer. DynamoDB applies the
+   * filter before counting, so a soft-deleted message must not be counted.
+   */
+  test("filters soft-deleted rows", async () => {
+    const s = stub([{ Count: 1 }]);
+    await repoWith(s).countByStatus("published");
+
+    expect(String(s.input()?.FilterExpression)).toContain("deleted");
+  });
+
+  /**
+   * A Query stops at 1 MB of scanned data and returns a cursor, so a single call
+   * counts only the first page. With "all" as the window, an unpaginated count
+   * would silently plateau as the archive grew — the card would simply stop
+   * rising, and nothing would look broken.
+   */
+  test("follows every page", async () => {
+    const s = stub([
+      { Count: 100, LastEvaluatedKey: { id: "a" } },
+      { Count: 100, LastEvaluatedKey: { id: "b" } },
+      { Count: 7 },
+    ]);
+
+    expect(await repoWith(s).countByStatus("published")).toBe(207);
+    expect(s.commands).toHaveLength(3);
+    const second = s.commands[1]?.input as Record<string, unknown> | undefined;
+    expect(second?.ExclusiveStartKey).toEqual({ id: "a" });
+  });
+
+  test("an absent Count reads as zero", async () => {
+    expect(await repoWith(stub([{}])).countByStatus("error")).toBe(0);
+  });
+});
