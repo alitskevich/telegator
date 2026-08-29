@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import {
   deleteRecords as deleteRecordsCore,
+  loadMembers as loadMembersCore,
+  type MemberRow,
   type RecordActionDeps,
   upsertRecord as upsertRecordCore,
 } from "../lib/dashboard/records.js";
@@ -24,4 +26,9 @@ export async function upsertRecord(input: unknown): Promise<void> {
 
 export async function deleteRecords(input: unknown): Promise<void> {
   await deleteRecordsCore(input, await deps());
+}
+
+/** R26 — the lazy base-table read behind §8.3 L742's expandable member list. */
+export async function loadMembers(input: unknown): Promise<MemberRow[]> {
+  return loadMembersCore(input, await deps());
 }

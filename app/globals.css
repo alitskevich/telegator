@@ -393,3 +393,63 @@ a:hover {
   width: 100%;
   min-width: 90px;
 }
+
+/* §8.3 L742's status tabs. Links, not buttons — the tab is `?status=`. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: var(--gap);
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 8px 14px;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.tab-current {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.member-panel td {
+  background: var(--bg);
+  padding: 12px var(--gap);
+}
+
+.member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.member-list li {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.member-channel {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.member-summary {
+  color: var(--text-dim);
+}

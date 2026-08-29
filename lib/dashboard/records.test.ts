@@ -7,6 +7,7 @@ import type { Message } from "../domain/message.js";
 import type { Source } from "../domain/source.js";
 import {
   deleteRecords,
+  loadMembers,
   MESSAGE_WRITABLE_FIELDS,
   SOURCE_WRITABLE_FIELDS,
   upsertRecord,
@@ -318,5 +319,72 @@ describe('upsertRecord as add — §8.3 L741\'s "add"', () => {
     await expect(
       upsertRecord({ table: "sources", id: "", delta: { status: "ok" } }, deps()),
     ).rejects.toThrow();
+  });
+});
+
+describe("loadMembers — R26", () => {
+  /**
+   * §8.3 L742 wants an expandable member list, and §7.2 L598 projects `members`
+   * on no index. So the list query returns `memberCount` and expanding one row
+   * issues a base-table GetItem — this action. Rendering every member list from
+   * the index result is the defect R26 exists to prevent, and it would fail
+   * silently: the map is simply absent, so every row would expand to nothing.
+   */
+  test("returns the member blocks for one message", async () => {
+    signedInAs("viewer");
+    messages = fakeMessageRepo([
+      {
+        ...message(1),
+        memberCount: 2,
+        members: {
+          "example/1": { summary: "first", links: [], channel: "a", ts: 10 },
+          "example/2": { summary: "second", links: [], channel: "b", ts: 20 },
+        },
+      },
+    ]);
+
+    const members = await loadMembers({ messageId: "example/1" }, deps());
+
+    expect(members.map((m) => m.itemId)).toEqual(["example/1", "example/2"]);
+    expect(members[0]?.summary).toBe("first");
+  });
+
+  /** §3.4 L318 sorts members by `ts` for stable ordering; the list shows the same. */
+  test("orders members oldest first, as the published message does", async () => {
+    signedInAs("viewer");
+    messages = fakeMessageRepo([
+      {
+        ...message(1),
+        memberCount: 2,
+        members: {
+          "example/9": { summary: "later", links: [], channel: "b", ts: 99 },
+          "example/2": { summary: "earlier", links: [], channel: "a", ts: 1 },
+        },
+      },
+    ]);
+
+    expect((await loadMembers({ messageId: "example/1" }, deps())).map((m) => m.summary)).toEqual([
+      "earlier",
+      "later",
+    ]);
+  });
+
+  /** §8.4 L755 makes reading a `viewer` right; every action still re-checks. */
+  test("an unauthenticated caller is rejected", async () => {
+    await expect(loadMembers({ messageId: "example/1" }, deps())).rejects.toBeInstanceOf(
+      AuthorizationError,
+    );
+  });
+
+  test("a message with no members yields an empty list", async () => {
+    signedInAs("viewer");
+    expect(await loadMembers({ messageId: "example/1" }, deps())).toEqual([]);
+  });
+
+  test("an unknown message is rejected", async () => {
+    signedInAs("viewer");
+    await expect(loadMembers({ messageId: "example/99" }, deps())).rejects.toThrow(
+      /no such message/,
+    );
   });
 });

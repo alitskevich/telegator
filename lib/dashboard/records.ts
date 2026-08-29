@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { type RequireRoleDeps, requireRole } from "../auth/session.js";
 import type { MessageRepo, SourceRepo } from "../db/ports.js";
+import { ItemIdSchema } from "../domain/ids.js";
+import type { MemberBlock } from "../domain/message.js";
 import { SourceSchema } from "../domain/source.js";
 
 /**
@@ -137,4 +139,43 @@ export async function deleteRecords(input: unknown, deps: RecordActionDeps): Pro
 
   await repoFor(table, deps).softDelete(ids);
   deps.revalidate(pathFor(table));
+}
+
+/** One member of a merged message, flattened for display. */
+export interface MemberRow extends MemberBlock {
+  readonly itemId: string;
+}
+
+const MembersInputSchema = z.object({ messageId: ItemIdSchema });
+
+/**
+ * R26 — the expandable member list of §8.3 L742, one message at a time.
+ *
+ * §7.2 L598 projects `members` on no index, so the list query returns
+ * `memberCount` and expanding a row comes here for a base-table `GetItem`.
+ * Rendering the list from the index result instead is the defect this prevents,
+ * and it would fail silently: the map is simply absent, so every row would
+ * expand to nothing at all.
+ *
+ * Lazy per row rather than eager for the page, because a `GetItem` per message
+ * would turn one query into as many reads as the table has rows — for a panel
+ * most of them will never open.
+ */
+export async function loadMembers(input: unknown, deps: RecordActionDeps): Promise<MemberRow[]> {
+  await requireRole("viewer", deps.auth);
+
+  const { messageId } = MembersInputSchema.parse(input);
+
+  const message = await deps.messages.get(messageId);
+  if (message === undefined || message.deleted === true) {
+    throw new Error(`no such message: ${messageId}`);
+  }
+
+  return (
+    Object.entries(message.members)
+      .map(([itemId, block]) => ({ itemId, ...block }))
+      // §3.4 L318 sorts members by `ts` when it renders the published message; the
+      // panel shows the same order, so an operator can match one to the other.
+      .sort((a, b) => a.ts - b.ts)
+  );
 }
