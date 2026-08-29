@@ -262,3 +262,61 @@ describe("deleteRecords — §8.4 L750", () => {
     expect(revalidated).toEqual(["/sources"]);
   });
 });
+
+describe('upsertRecord as add — §8.3 L741\'s "add"', () => {
+  /**
+   * §8.4 L749 calls this `upsertRecord`, and the Sources table offers "add", so
+   * a delta for an id that does not exist creates the row. A bare UpdateItem
+   * would create a *partial* one — no `lastCount`, no `zeroYieldRuns` — and
+   * §3.1's refresh heuristic and §4.1's staleness alarm both read those, so the
+   * source would poll wrongly and never alarm.
+   */
+  test("creates a complete source when the id is new", async () => {
+    signedInAs("editor");
+
+    await upsertRecord(
+      { table: "sources", id: "channel-new", delta: { status: "ok", tgChannel: "@t" } },
+      deps(),
+    );
+
+    const created = await sources.get("channel-new");
+    expect(created).toMatchObject({ id: "channel-new", status: "ok", tgChannel: "@t" });
+    expect(created?.lastCount).toBe(0);
+    expect(created?.zeroYieldRuns).toBe(0);
+  });
+
+  test("an existing source is patched, not replaced", async () => {
+    signedInAs("editor");
+    await upsertRecord(
+      { table: "sources", id: "channel-a", delta: { category: "sports" } },
+      deps(),
+    );
+
+    const patched = await sources.get("channel-a");
+    expect(patched?.category).toBe("sports");
+    // The scrape-owned cursor fields survive an operator edit.
+    expect(patched?.lastCount).toBe(4);
+  });
+
+  /**
+   * A message id is `{sourceId}/{telegramMessageId}` — minted by the scrape
+   * stage from a real Telegram post. There is nothing an operator could type
+   * that would correspond to one, so creating a message from the dashboard would
+   * only ever produce a record §6's dedup could never match.
+   */
+  test("a message that does not exist is rejected rather than created", async () => {
+    signedInAs("editor");
+
+    await expect(
+      upsertRecord({ table: "messages", id: "example/99", delta: { title: "invented" } }, deps()),
+    ).rejects.toThrow(/no such message/);
+  });
+
+  test("a new source id must still be a valid id", async () => {
+    signedInAs("editor");
+
+    await expect(
+      upsertRecord({ table: "sources", id: "", delta: { status: "ok" } }, deps()),
+    ).rejects.toThrow();
+  });
+});

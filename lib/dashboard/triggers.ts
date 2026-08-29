@@ -5,6 +5,7 @@ import type { MessageRepo, SourceRepo } from "../db/ports.js";
 import { ItemIdSchema } from "../domain/ids.js";
 import { MESSAGE_STATUSES } from "../domain/message.js";
 import { publishQueueMessage, type QueueProducer, REPLAYABLE_QUEUES } from "../queues/ports.js";
+import { MESSAGE_COLUMNS, SOURCE_COLUMNS } from "../ui/columns.js";
 import { toCsv } from "../ui/csv.js";
 
 /**
@@ -89,28 +90,11 @@ export async function republishMessage(input: unknown, deps: TriggerDeps): Promi
   deps.revalidate("/messages");
 }
 
-/** §8.3 L741 — the Sources table's columns, and so the export's. */
-export const SOURCE_EXPORT_COLUMNS = [
-  "id",
-  "status",
-  "tgChannel",
-  "category",
-  "teaser",
-  "lastCount",
-  "lastResult",
-  "zeroYieldRuns",
-] as const;
-
-/** §8.3 L742 — the Messages table's columns, minus the expandable member list. */
-export const MESSAGE_EXPORT_COLUMNS = [
-  "id",
-  "title",
-  "category",
-  "status",
-  "date",
-  "tgChannel",
-  "memberCount",
-] as const;
+/**
+ * Re-exported under their export-facing names; defined in `lib/ui/columns.ts`
+ * so the page and the export cannot show different columns.
+ */
+export { MESSAGE_COLUMNS as MESSAGE_EXPORT_COLUMNS, SOURCE_COLUMNS as SOURCE_EXPORT_COLUMNS };
 
 const ExportInputSchema = z.object({ table: z.enum(["sources", "messages"]) });
 
@@ -127,7 +111,7 @@ export async function exportTable(input: unknown, deps: TriggerDeps): Promise<st
   const { table } = ExportInputSchema.parse(input);
 
   if (table === "sources") {
-    return toCsv(await deps.sources.listAll(), SOURCE_EXPORT_COLUMNS);
+    return toCsv(await deps.sources.listAll(), SOURCE_COLUMNS);
   }
 
   // `status-index` is partitioned by status, so "every message" is the union of
@@ -136,5 +120,5 @@ export async function exportTable(input: unknown, deps: TriggerDeps): Promise<st
     MESSAGE_STATUSES.map((status) => deps.messages.queryByStatus(status)),
   );
 
-  return toCsv(perStatus.flat(), MESSAGE_EXPORT_COLUMNS);
+  return toCsv(perStatus.flat(), MESSAGE_COLUMNS);
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type RequireRoleDeps, requireRole } from "../auth/session.js";
 import type { MessageRepo, SourceRepo } from "../db/ports.js";
+import { SourceSchema } from "../domain/source.js";
 
 /**
  * §8.4 L749-751 — `upsertRecord` and `deleteRecords`, both `editor`.
@@ -96,7 +97,36 @@ export async function upsertRecord(input: unknown, deps: RecordActionDeps): Prom
 
   const { table, id, delta } = UpsertInputSchema.parse(input);
 
-  await repoFor(table, deps).patch(id, delta);
+  if (table === "messages") {
+    /**
+     * A message id is `{sourceId}/{telegramMessageId}`, minted by the scrape
+     * stage from a real Telegram post. Nothing an operator could type
+     * corresponds to one, so a create here could only produce a record §6's
+     * dedup would never match. Checked explicitly rather than left to
+     * `UpdateItem`, which creates the row it cannot find.
+     */
+    const existing = await deps.messages.get(id);
+    if (existing === undefined) throw new Error(`no such message: ${id}`);
+
+    await deps.messages.patch(id, delta);
+    deps.revalidate(pathFor(table));
+    return;
+  }
+
+  const existing = await deps.sources.get(id);
+
+  if (existing === undefined) {
+    /**
+     * §8.3 L741's "add". A bare `UpdateItem` would create a *partial* source —
+     * no `lastCount`, no `zeroYieldRuns` — and §3.1's refresh heuristic and
+     * §4.1's staleness alarm both read those, so the source would poll on the
+     * wrong schedule and never alarm. `SourceSchema` supplies the defaults.
+     */
+    await deps.sources.put(SourceSchema.parse({ id, ...delta }));
+  } else {
+    await deps.sources.patch(id, delta);
+  }
+
   deps.revalidate(pathFor(table));
 }
 
