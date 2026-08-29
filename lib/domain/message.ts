@@ -168,6 +168,14 @@ export const MessageMergeAttributesSchema = messageFields
     ts: true,
   })
   .partial()
-  .required({ memberCount: true, status: true, ts: true });
+  /**
+   * `status` is optional (R39). §6 L527's merge branch normally returns the
+   * message to `topublish` so §3.4 L340 edits the live post with the new
+   * member — but a merge that changes nothing a reader would see must leave the
+   * status where it is, or every replayed message is re-published with its own
+   * text. `memberCount` and `ts` stay required: §2.3 L145's invariant and §6
+   * L522's stamp hold for every write.
+   */
+  .required({ memberCount: true, ts: true });
 
 export type MessageMergeAttributes = z.infer<typeof MessageMergeAttributesSchema>;

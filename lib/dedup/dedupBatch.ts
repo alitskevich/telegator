@@ -80,6 +80,22 @@ interface Pending {
   members: Record<string, MemberBlock>;
   /** The members *this batch* wrote — the ones a merge must SET. */
   addedMembers: Record<string, MemberBlock>;
+  /**
+   * What the stored record rendered as before this batch touched it (R39).
+   *
+   * `undefined` for a message this batch created. §2.3 L168 argues that
+   * "re-processing a replayed item writes `members.{itemId}` with the same value
+   * — a no-op", but §6 L527's merge branch also writes `status: "topublish"`,
+   * which returns an already-published message to the publish queue and edits
+   * the live post with its own text. Comparing the finished state against this
+   * snapshot is what tells the two apart.
+   *
+   * A snapshot rather than a running flag, because §3.3 L285 has each item's
+   * descriptive fields overwrite: replaying two members writes the first item's
+   * title and then the second's, so an incremental check sees a change in a
+   * state that ends up identical.
+   */
+  readonly origin: PublishedContent | undefined;
   tags: string;
   image: string | undefined;
   title: string | undefined;
@@ -189,6 +205,7 @@ export async function dedupBatch(
             embedding: vec,
             members: { [item.id]: block },
             addedMembers: { [item.id]: block },
+            origin: undefined,
             tags: mergeTags(item.tags),
             image: item.image,
             title: item.title,
@@ -227,7 +244,20 @@ export async function dedupBatch(
   const now = deps.clock.now();
   const writes = [...pending.values()].map((state) => toWrite(state, now));
 
-  return { writes, toPublish, candidateCount };
+  // R39 — a merge that changed nothing a reader would see must not be published
+  // again. Filtered here rather than per item because §3.3 L285's overwrite
+  // makes an intermediate state differ from one that ends up identical.
+  const republished = new Set(
+    [...pending.values()]
+      .filter((state) => changedPublishedContent(state))
+      .map((state) => state.id),
+  );
+
+  return {
+    writes,
+    toPublish: toPublish.filter((id) => republished.has(id)),
+    candidateCount,
+  };
 }
 
 /** R9 — a `date-index` candidate carries no members, so read the base record. */
@@ -239,6 +269,7 @@ async function load(id: string, deps: DedupDeps): Promise<Pending | undefined> {
     id: message.id,
     date: message.date,
     isNew: false,
+    origin: publishedContentOf(message),
     embedding: message.embedding === undefined ? [] : unpackEmbedding(message.embedding),
     members: message.members,
     addedMembers: {},
@@ -251,6 +282,55 @@ async function load(id: string, deps: DedupDeps): Promise<Pending | undefined> {
     peoples: message.peoples,
     tgChannel: message.tgChannel,
   };
+}
+
+/**
+ * The fields §3.4 actually renders: the member blocks carry the text, the rest
+ * carry the header and the hashtag line.
+ *
+ * `embedding` is deliberately absent. §6 L559's centroid drift changes it on
+ * every replay and no reader ever sees it, so including it would make every
+ * merge look like a change and the comparison pointless.
+ */
+interface PublishedContent {
+  readonly members: string;
+  readonly title: string | undefined;
+  readonly category: string | undefined;
+  readonly country: string | undefined;
+  readonly location: string | undefined;
+  readonly peoples: string | undefined;
+  readonly tags: string;
+  readonly image: string | undefined;
+}
+
+const publishedContentOf = (message: {
+  members: Record<string, MemberBlock>;
+  title?: string;
+  category?: string;
+  country?: string;
+  location?: string;
+  peoples?: string;
+  tags?: string;
+  image?: string;
+}): PublishedContent => ({
+  members: JSON.stringify(message.members),
+  title: message.title,
+  category: message.category,
+  country: message.country,
+  location: message.location,
+  peoples: message.peoples,
+  tags: message.tags ?? "",
+  image: message.image,
+});
+
+/** Whether the finished state renders differently from what was stored. */
+function changedPublishedContent(state: Pending): boolean {
+  if (state.origin === undefined) return true;
+
+  const now = publishedContentOf(state);
+  return (Object.keys(now) as (keyof PublishedContent)[]).some(
+    (key) => now[key] !== state.origin?.[key],
+  );
 }
 
 function toWrite(state: Pending, ts: number): DedupWrite {
@@ -268,12 +348,20 @@ function toWrite(state: Pending, ts: number): DedupWrite {
     tags: state.tags,
     image: state.image,
     tgChannel: state.tgChannel,
-    status: "topublish",
     ts,
+    // R39 — omitted when the merge is publication-neutral, so a replayed
+    // message stays `published` instead of being edited with its own text.
+    ...(changedPublishedContent(state) ? { status: "topublish" } : {}),
   } satisfies MessageMergeAttributes;
 
   if (state.isNew) {
-    return { kind: "create", message: { id: state.id, members: state.members, ...shared } };
+    // A create always publishes: there is no stored record for it to render
+    // identically to. Stated rather than inherited from `shared`, whose `status`
+    // is conditional for the merge branch below (R39).
+    return {
+      kind: "create",
+      message: { id: state.id, members: state.members, ...shared, status: "topublish" },
+    };
   }
 
   // Attribute-level, so `tgId` and `tgAt` — which publish owns — are untouched.

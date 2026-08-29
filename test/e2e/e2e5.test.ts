@@ -144,6 +144,7 @@ async function runThenReplay() {
 
   // §3.5 L358 — the replay puts the same bodies back on the source queue.
   clock.advance(REPLAY_DELAY_MS);
+  const publishQueue = fakeQueueProducer();
   const replay = await runAggregate(
     run.aggregateMessages.map((message, index) => ({
       messageId: `replay-${index}`,
@@ -152,14 +153,18 @@ async function runThenReplay() {
     {
       embeddings,
       messages,
-      queue: fakeQueueProducer(),
+      queue: publishQueue,
       clock,
       metrics: recordingMetrics(),
       logger: createLogger(recordingSink()),
     },
   );
 
-  return { before, after: await snapshot(), replay };
+  return {
+    before,
+    after: await snapshot(),
+    replay: { ...replay, enqueued: [...publishQueue.sent] },
+  };
 }
 
 async function snapshot(): Promise<Message[]> {
@@ -222,26 +227,30 @@ describe("E2E-5 (§11.2 L852)", () => {
   });
 
   /**
-   * A third deviation from "byte-identical", beyond the `ts` stamp and the
-   * centroid drift the ledger anticipated: §6 L527's merge branch writes
-   * `status: "topublish"`, so replaying a published message returns it to the
-   * publish queue.
+   * Item 8.6 found a third deviation here — §6 L527's merge branch wrote
+   * `status: "topublish"` unconditionally, so a replay returned every published
+   * message to the publish queue and §3.4 L340 edited the live post with
+   * identical text. R39 closed it: a merge that changes nothing a reader would
+   * see leaves the status alone.
    *
-   * That is right when a merge actually adds a member — §3.4 L340 then edits the
-   * live post, which is E2E-4. On a replay it adds nothing: §2.3 L168's own
-   * argument is that "re-processing a replayed item writes `members.{itemId}`
-   * with the same value — a no-op". The status write is what stops it being one.
-   *
-   * Asserted rather than fixed, and the cost recorded: draining a full aggregate
-   * DLQ re-publishes every message it touches as an `editMessageText` with
-   * identical text — harmless to read, but one Telegram call per message against
-   * §4.2's rate limit. Item 8.6a carries the question.
+   * So only two deviations from "byte-identical" survive, and both are the
+   * spec's own: §6 L522's `ts` stamp and §6 L559's centroid drift.
    */
-  test("but a replay returns a published message to topublish", async () => {
+  test("status survives the replay, so nothing is re-published", async () => {
     const { before, after } = await runThenReplay();
 
     expect(before.map((message) => message.status)).toEqual(["published", "published"]);
-    expect(after.map((message) => message.status)).toEqual(["topublish", "topublish"]);
+    expect(after.map((message) => message.status)).toEqual(["published", "published"]);
+  });
+
+  /**
+   * The claim behind the status one. Draining a full DLQ used to cost one
+   * Telegram call per message touched, against §4.2's rate limit.
+   */
+  test("and nothing is enqueued for publishing", async () => {
+    const { replay } = await runThenReplay();
+
+    expect(replay.enqueued).toEqual([]);
   });
 
   /**

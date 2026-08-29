@@ -52,6 +52,43 @@ function storedMessage(over: Partial<Message> & Pick<Message, "id">): Message {
   });
 }
 
+/**
+ * A stored message whose single member is exactly what `item(id)` would produce,
+ * so re-processing that item is a true replay — R11 preserves the `ts`, and the
+ * block compares equal.
+ */
+function replayable(source: AnalyzedItem, over: Partial<Message> = {}): Message {
+  return storedMessage({
+    id: source.id,
+    embedding: packEmbedding(unitVectorAtAngle(1, DIMENSIONS)),
+    title: source.title,
+    category: source.category,
+    country: source.country,
+    location: source.location,
+    tags: source.tags ?? "",
+    members: {
+      [source.id]: {
+        summary: source.summary,
+        links: source.links,
+        channel: source.id.split("/")[0] ?? "c",
+        ts: 1,
+      },
+    },
+    ...over,
+  });
+}
+
+const replayDeps = (stored: readonly Message[], items: readonly AnalyzedItem[]) => {
+  const repo = fakeMessageRepo(stored);
+  return {
+    loadCandidatesByDate: repo.queryByDate,
+    loadMessage: repo.get,
+    clock: fixedClock(9000),
+    metrics,
+    embeddings: embedderFor(items.map((i) => [i, unitVectorAtAngle(1, DIMENSIONS)])),
+  } satisfies DedupDeps;
+};
+
 let metrics: ReturnType<typeof recordingMetrics>;
 
 beforeEach(() => {
@@ -712,7 +749,20 @@ describe("replay idempotency (AC-3.7 L306, E2E-5 L852)", () => {
     expect(cosineSimilarity(before, after)).toBe(1);
   });
 
-  test("a replay still enqueues a publish request; SQS dedup collapses it, not this code", async () => {
+  /**
+   * This test previously asserted the opposite — that a replay still enqueues,
+   * and SQS's five-minute FIFO deduplication window collapses it rather than
+   * this code. R39 changed that deliberately: the window is five minutes, and a
+   * DLQ drained an hour after the failure is outside it, so every replayed
+   * message was re-published as an `editMessageText` carrying its own text.
+   * Item 8.6 measured that against E2E-5, which calls itself the master
+   * idempotency test.
+   *
+   * SQS deduplication is still the backstop for a replay *inside* the window.
+   * It is no longer the only thing standing between a DLQ drain and one Telegram
+   * call per message.
+   */
+  test("a replay enqueues nothing, rather than relying on SQS's 5-minute window", async () => {
     const a = item("chan_a/1");
     const vec = unitVectorAtAngle(1, DIMENSIONS);
     const { repo, deps: d } = repoDeps([], { embeddings: embedderFor([[a, vec]]) });
@@ -723,7 +773,7 @@ describe("replay idempotency (AC-3.7 L306, E2E-5 L852)", () => {
 
     const second = await dedupBatch([a], d);
 
-    expect(second.toPublish).toEqual(["chan_a/1"]);
+    expect(second.toPublish).toEqual([]);
   });
 });
 
@@ -743,5 +793,66 @@ describe("metrics", () => {
 
     expect(metrics.get("MessagesCreated")).toBe(1);
     expect(metrics.get("MessagesMerged")).toBe(1);
+  });
+});
+
+describe("a merge that changes nothing does not re-publish (R39)", () => {
+  /**
+   * §2.3 L168 argues idempotency is free: "Re-processing a replayed item writes
+   * `members.{itemId}` with the same value — a no-op." §6 L527's merge branch
+   * writes `status: "topublish"` unconditionally, which is what stops it being
+   * one — a replayed message returns to the publish queue and §3.4 L340 edits
+   * the live post with identical text.
+   */
+  test("a replayed member leaves the status alone", async () => {
+    const replayed = item("chan_a/1");
+    const existing = replayable(replayed, { status: "published" });
+
+    const result = await dedupBatch([replayed], replayDeps([existing], [replayed]));
+
+    const [write] = result.writes;
+    expect(write?.kind).toBe("merge");
+    expect(write?.kind === "merge" ? write.merge.attributes.status : undefined).toBeUndefined();
+  });
+
+  test("and is not enqueued for publishing", async () => {
+    const replayed = item("chan_a/1");
+    const existing = replayable(replayed, { status: "published" });
+
+    const result = await dedupBatch([replayed], replayDeps([existing], [replayed]));
+
+    expect(result.toPublish).toEqual([]);
+  });
+
+  /**
+   * The other direction, which is E2E-4: a merge that genuinely adds a member
+   * must still return the message to `topublish`, or the live post never gains
+   * the new member.
+   */
+  test("a merge that adds a member still republishes", async () => {
+    const first = item("chan_a/1");
+    const second = item("chan_b/2");
+    const existing = replayable(first, { status: "published" });
+
+    const result = await dedupBatch([second], replayDeps([existing], [second]));
+
+    const [write] = result.writes;
+    expect(write?.kind === "merge" ? write.merge.attributes.status : undefined).toBe("topublish");
+    expect(result.toPublish).toEqual([existing.id]);
+  });
+
+  /**
+   * A post edited upstream keeps its item id but changes its summary, so the
+   * member block differs and the live message must be corrected.
+   */
+  test("a replayed item whose content changed does republish", async () => {
+    const original = item("chan_a/1");
+    const existing = replayable(original, { status: "published" });
+    const edited = item("chan_a/1", { summary: "summary chan_a/1 (updated)" });
+
+    const result = await dedupBatch([edited], replayDeps([existing], [edited]));
+
+    const [write] = result.writes;
+    expect(write?.kind === "merge" ? write.merge.attributes.status : undefined).toBe("topublish");
   });
 });
