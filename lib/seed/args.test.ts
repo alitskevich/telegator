@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseSeedArgs } from "./args.js";
+import { parseReseedArgs, parseSeedArgs } from "./args.js";
 
 describe("parseSeedArgs — R21", () => {
   /**
@@ -36,5 +36,26 @@ describe("parseSeedArgs — R21", () => {
   /** A typo must not be read as "no flag" and quietly change what runs. */
   test("rejects an unknown flag", () => {
     expect(() => parseSeedArgs(["--data-dir", "/x", "--wirte"])).toThrow(/--wirte/);
+  });
+});
+
+describe("parseReseedArgs — §9.5 step 6", () => {
+  test("requires --cursors", () => {
+    expect(() => parseReseedArgs([])).toThrow(/--cursors/);
+  });
+
+  test("reads both spellings", () => {
+    expect(parseReseedArgs(["--cursors", "/tmp/c.json"]).cursorsFile).toBe("/tmp/c.json");
+    expect(parseReseedArgs(["--cursors=/tmp/c.json"]).cursorsFile).toBe("/tmp/c.json");
+  });
+
+  /** Same reasoning as the seed: a cutover step must be read before it is run. */
+  test("is a dry run unless --write is given", () => {
+    expect(parseReseedArgs(["--cursors", "/tmp/c.json"]).write).toBe(false);
+    expect(parseReseedArgs(["--cursors", "/tmp/c.json", "--write"]).write).toBe(true);
+  });
+
+  test("rejects an unknown flag", () => {
+    expect(() => parseReseedArgs(["--cursors", "/x", "--forse"])).toThrow(/--forse/);
   });
 });
