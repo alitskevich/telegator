@@ -19,6 +19,7 @@ import { CLASSIFIER_MODEL_ID, EMBEDDING_MODEL_ID } from "../../lib/ai/constants.
 import { METRIC_NAMESPACE } from "../../lib/metrics/ports.js";
 import type { TelegatorConfig } from "./config.js";
 import type { TelegatorDataStack } from "./data-stack.js";
+import { grantTableActions } from "./grants.js";
 import type { TelegatorQueueStack } from "./queue-stack.js";
 
 /**
@@ -262,7 +263,10 @@ export class TelegatorPipelineStack extends Stack {
     const { scrape, analyze, aggregate, publish, dlqReplay } = this.functions;
 
     // §7.6 L668 — scrape reads and writes `sources` and sends to analyze.
-    data.sources.grantReadWriteData(scrape);
+    // §3.1 L187 selects sources with a Query on `status-index`; §3.1 L216
+    // advances the cursor with an UpdateItem. It reads no source by id, creates
+    // none and deletes none.
+    grantTableActions(data.sources, scrape, "dynamodb:Query", "dynamodb:UpdateItem");
     queues.analyze.grantSendMessages(scrape);
 
     // §7.6 L669.
@@ -272,7 +276,16 @@ export class TelegatorPipelineStack extends Stack {
 
     // §7.6 L670.
     queues.aggregate.grantConsumeMessages(aggregate);
-    data.messages.grantReadWriteData(aggregate);
+    // §6's two passes: `queryByDate` on `date-index`, `get` for R9's base-table
+    // read, then either L539's create (PutItem) or L527's merge (UpdateItem).
+    grantTableActions(
+      data.messages,
+      aggregate,
+      "dynamodb:GetItem",
+      "dynamodb:Query",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    );
     queues.publish.grantSendMessages(aggregate);
     aggregate.addToRolePolicy(invokeModel(EMBEDDING_MODEL_ID));
 
@@ -291,7 +304,7 @@ export class TelegatorPipelineStack extends Stack {
      * makes even an operator's delete soft for that reason. A stage that never
      * deletes should not be able to, least of all irrecoverably.
      */
-    data.messages.grant(publish, "dynamodb:GetItem", "dynamodb:UpdateItem");
+    grantTableActions(data.messages, publish, "dynamodb:GetItem", "dynamodb:UpdateItem");
     publish.addToRolePolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,

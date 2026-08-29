@@ -133,6 +133,57 @@ describe("TelegatorAppStack", () => {
       }
     });
 
+    const dynamoStatements = (t: Template) =>
+      policyStatements(t).filter((statement) =>
+        actionsOf(statement).some((action) => action.startsWith("dynamodb:")),
+      );
+
+    /**
+     * §7.6 L673 — "read both tables, write `sources`/`messages`". The dashboard
+     * calls `get`, `listAll` (a Scan), `put`, `patch` and `softDelete` on
+     * sources, and `get`, `queryByStatus`, `countByStatus`, `patch` and
+     * `softDelete` on messages. Every write is an UpdateItem or a PutItem —
+     * §8.4 L751's delete is soft, so it is an update.
+     */
+    test("holds only the DynamoDB actions §8.4's pages and actions perform", () => {
+      const actions = new Set(
+        dynamoStatements(templateFor())
+          .flatMap(actionsOf)
+          .filter((action) => action.startsWith("dynamodb:")),
+      );
+
+      expect(actions).toEqual(
+        new Set([
+          "dynamodb:GetItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+        ]),
+      );
+    });
+
+    /**
+     * The rule §8.4 L751 states — "Deletes are **soft**, matching the source" —
+     * expressed as a permission. An operator's delete sets `deleted: true`; a
+     * role that could also delete the row makes that promise unenforceable.
+     */
+    test("cannot hard-delete a record", () => {
+      const actions = dynamoStatements(templateFor()).flatMap(actionsOf);
+
+      expect(actions).not.toContain("dynamodb:DeleteItem");
+      expect(actions).not.toContain("dynamodb:BatchWriteItem");
+    });
+
+    /** §8.3's tables and §8.5's counts all read a GSI, which is a separate ARN. */
+    test("its queries reach the indexes they query", () => {
+      const queries = dynamoStatements(templateFor()).filter((statement) =>
+        actionsOf(statement).includes("dynamodb:Query"),
+      );
+
+      expect(JSON.stringify(queries)).toContain("/index/*");
+    });
+
     /**
      * §8.5 L771's category chart is a Logs Insights query over the analyze log
      * group, and `logsInsightsCategoryReader` takes the group name as an

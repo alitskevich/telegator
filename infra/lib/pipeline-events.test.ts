@@ -268,6 +268,70 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     }
   });
 
+  const dynamoActionsFor = (template: Template, functionName: string) =>
+    new Set(
+      (statementsByFunction(template).get(functionName) ?? [])
+        .flatMap((statement) => [statement.Action].flat().map(String))
+        .filter((action) => action.startsWith("dynamodb:")),
+    );
+
+  /**
+   * §7.6 L668 — "read/write `sources`". `scrape` calls `listByStatus` (a Query
+   * on `status-index`) and `updateCursor` (an UpdateItem). It never reads a
+   * source by id, never creates one, and never deletes one.
+   */
+  test("scrape may query and update sources, and nothing more", () => {
+    expect(dynamoActionsFor(templateFor(), "telegator-dev-scrape")).toEqual(
+      new Set(["dynamodb:Query", "dynamodb:UpdateItem"]),
+    );
+  });
+
+  /**
+   * §7.6 L670 — "read/write `messages`". `aggregate` calls `get`, `queryByDate`
+   * (on `date-index`), `putNew` and `mergeMember`: §6's create branch genuinely
+   * needs PutItem, which is why this stage is not `publish`.
+   */
+  test("aggregate may get, query, put and update messages, and nothing more", () => {
+    expect(dynamoActionsFor(templateFor(), "telegator-dev-aggregate")).toEqual(
+      new Set(["dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:UpdateItem"]),
+    );
+  });
+
+  /**
+   * A Query against a GSI is authorised on the index ARN, not the table's —
+   * `table.grant()` grants only the table, so a narrowed Query that forgot the
+   * index would fail at runtime on §3.1 L187's source selection and §6 L515's
+   * dedup read, which is a worse outcome than the widening being removed.
+   */
+  test("a narrowed Query still reaches the indexes it queries", () => {
+    const byFunction = statementsByFunction(templateFor());
+
+    for (const name of ["telegator-dev-scrape", "telegator-dev-aggregate"]) {
+      const queries = (byFunction.get(name) ?? []).filter((statement) =>
+        [statement.Action].flat().map(String).includes("dynamodb:Query"),
+      );
+
+      expect(JSON.stringify(queries)).toContain("/index/*");
+    }
+  });
+
+  /** No stage deletes a record: §8.4 L751 makes even an operator's delete soft. */
+  test("no pipeline function may delete a record", () => {
+    const template = templateFor();
+
+    for (const name of [
+      "telegator-dev-scrape",
+      "telegator-dev-analyze",
+      "telegator-dev-aggregate",
+      "telegator-dev-publish",
+      "telegator-dev-dlq-replay",
+    ]) {
+      const actions = dynamoActionsFor(template, name);
+      expect(actions.has("dynamodb:DeleteItem")).toBe(false);
+      expect(actions.has("dynamodb:BatchWriteItem")).toBe(false);
+    }
+  });
+
   test("grants secretsmanager:GetSecretValue to exactly one function (§7.6 L671)", () => {
     const secrets = policyStatements(templateFor()).filter((s) =>
       [s.Action].flat().map(String).includes("secretsmanager:GetSecretValue"),

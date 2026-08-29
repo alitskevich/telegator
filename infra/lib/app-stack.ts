@@ -6,6 +6,7 @@ import { DASHBOARD_ENV_VARS, ENV_VARS } from "../../handlers/env.js";
 import type { TelegatorAuthStack } from "./auth-stack.js";
 import type { TelegatorConfig } from "./config.js";
 import type { TelegatorDataStack } from "./data-stack.js";
+import { grantTableActions } from "./grants.js";
 import type { TelegatorPipelineStack } from "./pipeline-stack.js";
 import type { TelegatorQueueStack } from "./queue-stack.js";
 
@@ -139,8 +140,28 @@ export class TelegatorAppStack extends Stack {
   ): void {
     // §7.6 L673 — "read both tables, write `sources`/`messages`". Soft deletes
     // (§8.4 L751) are writes, so no DeleteItem is needed.
-    data.sources.grantReadWriteData(this.appRole);
-    data.messages.grantReadWriteData(this.appRole);
+    // §8.3 L741's table is a Scan (`listAll`); §8.4 L749 creates a source with a
+    // PutItem and edits one with an UpdateItem; L751's delete is soft, so it is
+    // an update too.
+    grantTableActions(
+      data.sources,
+      this.appRole,
+      "dynamodb:GetItem",
+      "dynamodb:Scan",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    );
+
+    // §8.3 L742's tabs and §8.5 L768's count are Queries on `status-index`.
+    // No PutItem: R37 — a message id is minted by the scrape stage, so the
+    // dashboard cannot create one.
+    grantTableActions(
+      data.messages,
+      this.appRole,
+      "dynamodb:GetItem",
+      "dynamodb:Query",
+      "dynamodb:UpdateItem",
+    );
 
     /**
      * R34. §8.6 L788 — "a disabled user is rejected at every action" — needs a
