@@ -167,8 +167,21 @@ describe("TelegatorDataStack", () => {
     const app = new App({ context: {}, outdir: isolatedOutdir() });
     const stack = new TelegatorDataStack(app, "TelegatorDataStack", { config: resolveConfig(app) });
 
-    expect(stack.sources.tableName).toBeDefined();
-    expect(stack.messages.tableName).toBeDefined();
-    expect(Match.anyValue()).toBeDefined();
+    /**
+     * Named rather than merely defined. `Match.anyValue()` stood here, which
+     * constructs a matcher object and can never be undefined — it asserted
+     * nothing at all.
+     *
+     * What is worth asserting is that the two properties are not swapped. Every
+     * consumer wires them by name (`data.sources`, `data.messages`), both are
+     * DynamoDB tables, and a swap type-checks and synthesises: the pipeline
+     * would write messages into the sources table, and §7.2's indexes would be
+     * missing on whichever it read.
+     *
+     * `tableName` cannot carry this: it resolves to a CDK token, not the
+     * configured string, so a substring check on it fails against correct code.
+     */
+    expect(stack.sources.node.id).toBe("SourcesTable");
+    expect(stack.messages.node.id).toBe("MessagesTable");
   });
 });

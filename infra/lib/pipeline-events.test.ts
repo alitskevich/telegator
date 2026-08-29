@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { describe, expect, test, vi } from "vitest";
+import { CLASSIFIER_MODEL_ID, EMBEDDING_MODEL_ID } from "../../lib/ai/constants.js";
 import { METRIC_NAMESPACE } from "../../lib/metrics/ports.js";
 import { resolveConfig } from "./config.js";
 import { TelegatorDataStack } from "./data-stack.js";
@@ -142,15 +143,90 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     expect(JSON.stringify(putMetric)).toContain(METRIC_NAMESPACE);
   });
 
-  test("grants each function bedrock:InvokeModel only where §7.6 says", () => {
+  /**
+   * Attribute each policy statement to the function it was attached to, through
+   * the role both reference. Without this the Bedrock assertions below can only
+   * say "two functions got a model" — and the two are different models with
+   * different costs and capabilities, so which function got which is the whole
+   * content of §7.6 L669-670.
+   */
+  function statementsByFunction(template: Template): Map<string, Record<string, unknown>[]> {
+    const roleToFunction = new Map<string, string>();
+
+    for (const fn of Object.values(template.findResources("AWS::Lambda::Function"))) {
+      const role = (fn.Properties?.Role as { "Fn::GetAtt"?: string[] } | undefined)?.["Fn::GetAtt"];
+      const name = fn.Properties?.FunctionName;
+      if (role?.[0] !== undefined && typeof name === "string") roleToFunction.set(role[0], name);
+    }
+
+    const byFunction = new Map<string, Record<string, unknown>[]>();
+
+    for (const policy of Object.values(template.findResources("AWS::IAM::Policy"))) {
+      const roles = (policy.Properties?.Roles ?? []) as { Ref?: string }[];
+      const statements = ((
+        policy.Properties?.PolicyDocument as { Statement?: Record<string, unknown>[] }
+      )?.Statement ?? []) as Record<string, unknown>[];
+
+      for (const { Ref } of roles) {
+        const name = Ref === undefined ? undefined : roleToFunction.get(Ref);
+        if (name === undefined) continue;
+        byFunction.set(name, [...(byFunction.get(name) ?? []), ...statements]);
+      }
+    }
+
+    return byFunction;
+  }
+
+  const modelsFor = (template: Template, functionName: string) =>
+    JSON.stringify(
+      (statementsByFunction(template).get(functionName) ?? []).filter((statement) =>
+        [statement.Action].flat().map(String).includes("bedrock:InvokeModel"),
+      ),
+    );
+
+  test("grants bedrock:InvokeModel to exactly two functions, on a named model", () => {
     const bedrock = policyStatements(templateFor()).filter((s) =>
       [s.Action].flat().map(String).includes("bedrock:InvokeModel"),
     );
 
-    // §7.6 L669-670 — analyze on the Claude ARN, aggregate on the Cohere ARN.
     expect(bedrock).toHaveLength(2);
     for (const statement of bedrock) {
       expect(statement.Resource).not.toBe("*");
+    }
+  });
+
+  /**
+   * §7.6 L669 — analyze classifies, so it gets the Claude model and nothing
+   * else. The previous version of this test counted the statements and checked
+   * they were not `*`, which a swap of the two ARNs would have passed: analyze
+   * would then hold only an embedding model and every classification would fail
+   * at runtime with an access error naming a model nobody expected it to call.
+   */
+  test("analyze may invoke the classifier model, and not the embedding model", () => {
+    const models = modelsFor(templateFor(), "telegator-dev-analyze");
+
+    expect(models).toContain(CLASSIFIER_MODEL_ID);
+    expect(models).not.toContain(EMBEDDING_MODEL_ID);
+  });
+
+  /** §7.6 L670 — aggregate embeds, so it gets the Cohere model and nothing else. */
+  test("aggregate may invoke the embedding model, and not the classifier model", () => {
+    const models = modelsFor(templateFor(), "telegator-dev-aggregate");
+
+    expect(models).toContain(EMBEDDING_MODEL_ID);
+    expect(models).not.toContain(CLASSIFIER_MODEL_ID);
+  });
+
+  /** §7.6 grants Bedrock to those two stages only; scrape and publish call no model. */
+  test("no other function may invoke a model", () => {
+    const template = templateFor();
+
+    for (const name of [
+      "telegator-dev-scrape",
+      "telegator-dev-publish",
+      "telegator-dev-dlq-replay",
+    ]) {
+      expect(modelsFor(template, name)).toBe("[]");
     }
   });
 
