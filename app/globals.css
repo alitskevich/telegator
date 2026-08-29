@@ -100,3 +100,57 @@ a:hover {
   max-width: 1440px;
   width: 100%;
 }
+
+/* §8.5 L776's two pie charts. The wedges carry their own fills from the palette
+   in `lib/ui/pie.ts`, so nothing here names a colour a slice also names. */
+.pie-chart {
+  margin: 0;
+  padding: var(--gap);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pie-chart-title {
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.pie-chart-svg {
+  display: block;
+  width: 180px;
+  height: 180px;
+  margin: 0 auto 12px;
+}
+
+.pie-chart-empty {
+  color: var(--text-dim);
+  margin: 24px 0;
+  text-align: center;
+}
+
+.pie-chart-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.pie-chart-legend li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.pie-chart-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.pie-chart-value {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
