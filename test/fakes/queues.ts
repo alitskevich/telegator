@@ -1,3 +1,4 @@
+import type { DlqInspector, DlqMessage } from "../../lib/queues/inspect.js";
 import type {
   QueueDrainer,
   QueueMessage,
@@ -94,4 +95,19 @@ export function fakeQueueDrainer(messages: readonly ReceivedMessage[] = []): Fak
       if (index >= 0) remaining.splice(index, 1);
     },
   };
+}
+
+/** An in-memory DLQ inspector for §8.2 L723's panel. */
+export class FakeDlqInspector implements DlqInspector {
+  readonly asked: string[] = [];
+  private readonly contents = new Map<string, DlqMessage[]>();
+
+  set(queueUrl: string, messages: readonly DlqMessage[]): void {
+    this.contents.set(queueUrl, [...messages]);
+  }
+
+  async peek(queueUrl: string): Promise<DlqMessage[]> {
+    this.asked.push(queueUrl);
+    return [...(this.contents.get(queueUrl) ?? [])];
+  }
 }

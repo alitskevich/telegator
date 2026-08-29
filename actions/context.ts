@@ -24,6 +24,7 @@ import { systemClock } from "../lib/clock.js";
 import { cachedCategoryLogReader, cachedMetricReader } from "../lib/dashboard/cache.js";
 import { createMessageRepo } from "../lib/db/messages.js";
 import { createSourceRepo } from "../lib/db/sources.js";
+import { createSqsDlqInspector } from "../lib/queues/inspect.js";
 import { createSqsQueueProducer } from "../lib/queues/sqs.js";
 
 /**
@@ -132,3 +133,6 @@ export const dlqUrls = {
   aggregate: requireEnv(ENV_VARS.aggregateDlqUrl),
   publish: requireEnv(ENV_VARS.publishDlqUrl),
 } as const;
+
+/** §8.2 L723 — reads DLQ bodies without consuming them. */
+export const dlqInspector = createSqsDlqInspector(sqs);
