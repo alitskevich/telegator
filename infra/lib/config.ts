@@ -1,4 +1,5 @@
 import type { App } from "aws-cdk-lib";
+import { productionBlocker, readCalibrationRecord } from "../../lib/calibration/record.js";
 import { SETTLE_DELAY_SECONDS, SQS_MAX_DELAY_SECONDS } from "../../lib/dedup/constants.js";
 import { type NameOptions, resourceName } from "./naming.js";
 
@@ -75,12 +76,41 @@ function readSettleDelay(raw: unknown): number {
   return value;
 }
 
+/**
+ * §11.3's closing rule, as a gate rather than a sentence: "Until this is done
+ * the pipeline must not publish to production channels."
+ *
+ * R23 already keeps the schedule off by default in both environments, but
+ * nothing stopped `scheduleEnabled=true` for prod — which is the one action the
+ * rule forbids. dev is deliberately exempt: §9.5 step 4 deploys prod against
+ * test channels with the schedule disabled, and dev exists to exercise the
+ * pipeline before the calibration does.
+ *
+ * The check reads a file at synth time. That keeps `cdk synth` credential-free,
+ * which is the property the whole infrastructure gate rests on.
+ */
+function assertPublishable(env: string, scheduleEnabled: boolean): void {
+  if (env !== "prod" || !scheduleEnabled) return;
+
+  const blocker = productionBlocker(readCalibrationRecord());
+  if (blocker === null) return;
+
+  throw new Error(
+    `cannot enable the prod schedule: ${blocker}. ` +
+      "§11.3 is mandatory before production — run the sweep in `lib/calibration/` and " +
+      "record the result, or deploy prod with the schedule disabled (§9.5 step 4).",
+  );
+}
+
 export function resolveConfig(app: App): TelegatorConfig {
   const env = readEnvironment(app.node.tryGetContext("env"));
+  const scheduleEnabled = readBoolean(app.node.tryGetContext("scheduleEnabled"), false);
+
+  assertPublishable(env, scheduleEnabled);
 
   return {
     env,
-    scheduleEnabled: readBoolean(app.node.tryGetContext("scheduleEnabled"), false),
+    scheduleEnabled,
     settleDelaySeconds: readSettleDelay(app.node.tryGetContext("settleDelaySeconds")),
     name: (resource, options) => resourceName(env, resource, options),
   };

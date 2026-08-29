@@ -52,13 +52,49 @@ describe("resolveConfig", () => {
    * Telegram channels is a defect, and so is a prod deploy that starts posting
    * before the 48-hour soak of L830.
    */
+  /**
+   * §11.3's closing rule — "Until this is done the pipeline must not publish to
+   * production channels" — as a gate rather than a sentence. R23 already keeps
+   * the schedule off by default, but nothing stopped someone passing
+   * `scheduleEnabled=true` for prod, and that is the one action §11.3 forbids.
+   *
+   * dev is deliberately unaffected: §9.5 step 4 runs prod against TEST channels
+   * with the schedule disabled, and the whole point of dev is to exercise the
+   * pipeline before the calibration exists.
+   */
+  test("refuses to enable the prod schedule while §11.3's recalibration is outstanding", () => {
+    expect(() => resolveConfig(appWith({ env: "prod", scheduleEnabled: true }))).toThrow(/11\.3/);
+  });
+
+  test("names what is missing, not merely that something is", () => {
+    expect(() => resolveConfig(appWith({ env: "prod", scheduleEnabled: true }))).toThrow(
+      /recalibration has not been done/,
+    );
+  });
+
+  test("dev may enable its schedule, because dev cannot post to production channels", () => {
+    expect(resolveConfig(appWith({ env: "dev", scheduleEnabled: true })).scheduleEnabled).toBe(
+      true,
+    );
+  });
+
+  test("prod with the schedule disabled is fine — §9.5 step 4 deploys exactly that", () => {
+    expect(resolveConfig(appWith({ env: "prod" })).scheduleEnabled).toBe(false);
+  });
+
   test("defaults scheduleEnabled to false in every environment", () => {
     expect(resolveConfig(appWith({ env: "dev" })).scheduleEnabled).toBe(false);
     expect(resolveConfig(appWith({ env: "prod" })).scheduleEnabled).toBe(false);
   });
 
+  /**
+   * The opt-in still exists; it is prod that is now gated. This test used prod
+   * and had to move to dev when §11.3's rule became a check — the mechanism it
+   * covers is "explicit opt-in", and the environment it used was incidental to
+   * that.
+   */
   test("enables the schedule only when a deploy opts in explicitly", () => {
-    expect(resolveConfig(appWith({ env: "prod", scheduleEnabled: true })).scheduleEnabled).toBe(
+    expect(resolveConfig(appWith({ env: "dev", scheduleEnabled: true })).scheduleEnabled).toBe(
       true,
     );
   });
