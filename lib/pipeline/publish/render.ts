@@ -1,5 +1,6 @@
 import type { MemberBlock } from "../../domain/message.js";
 import { MEMBER_RENDER_LIMIT } from "../../domain/message.js";
+import { escapeHtml } from "./escape.js";
 
 /**
  * Stage 4's member renderer (§3.4 L318–321).
@@ -12,23 +13,6 @@ import { MEMBER_RENDER_LIMIT } from "../../domain/message.js";
 
 /** `[text](#N)` — §2.2 L122's inline-link token, as it survives into `summary`. */
 const LINK_TOKEN = /\[([^\]]*)\]\(#(\d+)\)/g;
-
-/**
- * §3.4 L342 sends with `parse_mode: html`, so every value interpolated into the
- * block must be escaped or Telegram parses it as markup — a summary containing
- * `<` or `&` otherwise yields broken tags or a rejected send. The spec does not
- * state this; it is a recorded correctness decision.
- *
- * Escaping happens *before* token substitution (see `renderMember`) so that the
- * anchors L319 introduces stay real markup while their text does not.
- */
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
 
 /**
  * §3.4 L319 — resolve each `[text](#N)` against *this* member's links.

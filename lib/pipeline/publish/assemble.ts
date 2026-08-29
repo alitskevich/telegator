@@ -1,5 +1,6 @@
 import type { Message } from "../../domain/message.js";
 import { chatIdFor, TELEGRAM_MESSAGE_LIMIT } from "../../telegram/ports.js";
+import { escapeHtml } from "./escape.js";
 import { buildHashtagLine } from "./hashtags.js";
 import { renderMembers } from "./render.js";
 
@@ -48,23 +49,6 @@ const BLANK_LINE = "\n\n";
 
 /** §3.4 L333 — "joined with `\", \"`". */
 const HEADER_PART_SEPARATOR = ", ";
-
-/**
- * §3.4 L342 sends with `parse_mode: html`, so header values — which are model
- * output (§3.2), not literals — must be escaped or a location like `R&D` yields
- * a rejected send.
- *
- * `render.ts` escapes at the same boundary but keeps its helper private; these
- * four substitutions are duplicated rather than widening that module's API for
- * a caller in the same directory.
- */
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
 
 /** Absent, empty and whitespace-only are all "empty" for §3.4 L333 and L342. */
 function hasValue(value: string | undefined): value is string {
