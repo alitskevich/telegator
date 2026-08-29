@@ -4,6 +4,7 @@ import { fakeMessageRepo } from "../../../test/fakes/db.js";
 import { recordingSink } from "../../../test/fakes/logging.js";
 import { recordingMetrics } from "../../../test/fakes/metrics.js";
 import { fakeBot } from "../../../test/fakes/telegram.js";
+import type { MessageRepo } from "../../db/ports.js";
 import { type Message, MessageSchema } from "../../domain/message.js";
 import { createLogger } from "../../logging/logger.js";
 import { type PublishDeps, runPublish } from "./index.js";
@@ -195,5 +196,128 @@ describe("runPublish", () => {
     for (const line of sink.lines) {
       expect(line).not.toContain("Выбухі");
     }
+  });
+});
+
+describe("runPublish when the status write fails after a successful send", () => {
+  /**
+   * The window item 7.3 found. §3.4 L345 sends first and records second, so a
+   * transient DynamoDB failure between the two leaves a live Telegram post with
+   * `status: topublish` and no `tgId` — and on redelivery §3.4 L316's guard sees
+   * `topublish`, `assembleMessage` sees no `tgId`, and Telegram gets a SECOND
+   * post that no future edit can ever reach.
+   */
+  function failingRepo(stored: readonly Message[], failures: number) {
+    const base = fakeMessageRepo(stored);
+    let attempts = 0;
+
+    return {
+      repo: {
+        ...base,
+        get attempts() {
+          return attempts;
+        },
+        markPublished: async (result: Parameters<typeof base.markPublished>[0]) => {
+          attempts += 1;
+          if (attempts <= failures) throw new Error("ProvisionedThroughputExceededException");
+          await base.markPublished(result);
+        },
+      },
+      base,
+      get attempts() {
+        return attempts;
+      },
+    };
+  }
+
+  function depsWith(repo: MessageRepo, bot = fakeBot()) {
+    return {
+      deps: {
+        messages: repo,
+        bot,
+        metrics,
+        clock: fixedClock(NOW),
+        logger: createLogger(sink),
+        wait: async () => {},
+      } satisfies PublishDeps,
+      bot,
+    };
+  }
+
+  /** A throttled write is ordinary; one retry must not cost a second post. */
+  test("retries the write and does not send twice", async () => {
+    const stored = [message({ id: "chan_a/1" })];
+    const failing = failingRepo(stored, 1);
+    const { deps: d, bot } = depsWith(failing.repo);
+
+    const summary = await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls).toHaveLength(1);
+    expect(summary.batchItemFailures).toEqual([]);
+    expect(failing.attempts).toBe(2);
+    expect((await failing.base.get("chan_a/1"))?.status).toBe("published");
+  });
+
+  /**
+   * When the write cannot be made to land, the message is ACKNOWLEDGED rather
+   * than reported as a failure. Reporting it guarantees a redelivery, and a
+   * redelivery into this state guarantees a second live post — the one outcome
+   * §9.5 L834 and §3.4 exist to prevent. The post succeeded; only the
+   * bookkeeping failed, so the queue's work is done.
+   */
+  test("acknowledges rather than guaranteeing a duplicate", async () => {
+    const stored = [message({ id: "chan_a/1" })];
+    const failing = failingRepo(stored, 99);
+    const { deps: d, bot } = depsWith(failing.repo);
+
+    const summary = await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls).toHaveLength(1);
+    expect(summary.batchItemFailures).toEqual([]);
+  });
+
+  /**
+   * Acknowledging only defends the invariant if the inconsistency is loud. §7.7
+   * L679 makes CloudWatch the system of record, and this is a state no metric
+   * counts — so the log line must carry the tgId, which is the only handle an
+   * operator has on the orphaned post.
+   */
+  test("logs the tgId so the orphaned post can be reconciled", async () => {
+    const stored = [message({ id: "chan_a/1" })];
+    const failing = failingRepo(stored, 99);
+    const { deps: d } = depsWith(failing.repo);
+
+    await runPublish([record("chan_a/1")], d);
+
+    const errors = sink.lines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((line) => line.level === "error");
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.tgId).toBeDefined();
+    expect(String(errors[0]?.messageId)).toBe("chan_a/1");
+  });
+
+  /** A send that never happened must still fail the record back to SQS. */
+  test("a failed send is still reported, unchanged", async () => {
+    const stored = [message({ id: "chan_a/1" })];
+    const bot = fakeBot({ failWith: { description: "chat not found" } });
+    const { deps: d } = depsWith(fakeMessageRepo(stored), bot);
+
+    const summary = await runPublish([record("chan_a/1")], d);
+
+    expect(summary.batchItemFailures).toEqual([{ itemIdentifier: "sqs-chan_a/1" }]);
+  });
+
+  /** An edit that fails to record is the same story and takes the same path. */
+  test("an edit whose write fails is acknowledged too", async () => {
+    const stored = [message({ id: "chan_a/1", tgId: "555", status: "topublish" })];
+    const failing = failingRepo(stored, 99);
+    const { deps: d, bot } = depsWith(failing.repo);
+
+    const summary = await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls).toHaveLength(1);
+    expect(summary.batchItemFailures).toEqual([]);
   });
 });

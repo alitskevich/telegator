@@ -25,7 +25,20 @@ export interface PublishDeps {
   readonly metrics: MetricSink;
   readonly clock: Clock;
   readonly logger: Logger;
+  /** Injected so the retry below costs a test nothing. */
+  readonly wait?: (ms: number) => Promise<void>;
 }
+
+/**
+ * §3.4 L345 sends first and records second, and nothing can make those atomic:
+ * Telegram has no idempotency key, and a post cannot be un-sent. So the gap is
+ * narrowed rather than closed. Three attempts covers the failure that actually
+ * happens here — a throttled `UpdateItem` — while leaving the loop bounded.
+ */
+const STATUS_WRITE_ATTEMPTS = 3;
+const STATUS_WRITE_BACKOFF_MS = 200;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export interface PublishResultSummary {
   readonly batchItemFailures: ReadonlyArray<{ readonly itemIdentifier: string }>;
@@ -131,18 +144,77 @@ export async function runPublish(
     }
 
     const now = deps.clock.now();
-    await deps.messages.markPublished({
-      id: messageId,
-      // §2.3 L150 — an edit keeps the id it is editing; a first send takes the
-      // one Telegram just issued.
-      tgId: stored.tgId ?? String(response.result?.message_id ?? ""),
-      tgAt: now,
-      ts: now,
-    });
+    // §2.3 L150 — an edit keeps the id it is editing; a first send takes the
+    // one Telegram just issued.
+    const tgId = stored.tgId ?? String(response.result?.message_id ?? "");
+
+    const recorded = await recordPublished(deps, { id: messageId, tgId, tgAt: now, ts: now });
+
+    if (!recorded) {
+      /**
+       * The post is live on Telegram and the status write will not land.
+       *
+       * The message is ACKNOWLEDGED, not reported. Reporting it returns it to
+       * SQS, and a redelivery finds `status: topublish` with no stored `tgId` —
+       * so §3.4 L316's guard passes, `assembleMessage` picks `sendMessage`
+       * again, and subscribers get a second post that no future edit can reach.
+       * That is the outcome §9.5 L834 calls out as the thing that must never
+       * happen. §3.4's "Failure → throw" is about a failure to publish; this
+       * publish succeeded, and only its bookkeeping did not.
+       *
+       * The trade is deliberate: a duplicate is visible to every subscriber and
+       * unrecoverable, while an unrecorded post is one record an operator can
+       * repair — provided they can find it, which is why the tgId is logged.
+       */
+      deps.logger.error("published but not recorded", {
+        messageId,
+        tgId,
+        method: assembled.method,
+        // Named so the log line says what to do, not merely what broke.
+        action: "message is live on Telegram; set status and tgId by hand",
+      });
+      continue;
+    }
 
     deps.metrics.count(wasEdit ? "MessagesEdited" : "MessagesPublished", 1);
     deps.logger.info("published", { messageId, method: assembled.method });
   }
 
   return { batchItemFailures };
+}
+
+/**
+ * Write the publish result, retrying a transient failure.
+ *
+ * Returns `false` rather than throwing, because the caller's decision is not
+ * "did this fail" but "is the post already live" — and the answer to that is
+ * yes in every path that reaches here.
+ */
+async function recordPublished(
+  deps: PublishDeps,
+  result: { id: string; tgId: string; tgAt: number; ts: number },
+): Promise<boolean> {
+  const wait = deps.wait ?? sleep;
+
+  for (let attempt = 1; attempt <= STATUS_WRITE_ATTEMPTS; attempt += 1) {
+    try {
+      await deps.messages.markPublished(result);
+      return true;
+    } catch (error) {
+      if (attempt === STATUS_WRITE_ATTEMPTS) {
+        deps.logger.warn("status write exhausted its retries", {
+          messageId: result.id,
+          attempts: attempt,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+
+      // A throttled table is the case this exists for, and an immediate retry
+      // arrives while it is still throttled.
+      await wait(STATUS_WRITE_BACKOFF_MS * attempt);
+    }
+  }
+
+  return false;
 }
