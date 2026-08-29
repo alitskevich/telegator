@@ -75,7 +75,7 @@ export class TelegatorDataStack extends Stack {
       partitionKey: { name: "id", type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
       // The cursors in this table are what stop a redeploy re-scraping and
-      // double-posting (§9.5 step 6), so the table outlives its stack.
+      // double-posting (§9.5 step 5), so the table outlives its stack.
       removalPolicy: RemovalPolicy.RETAIN,
     });
 

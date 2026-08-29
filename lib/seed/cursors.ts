@@ -1,14 +1,14 @@
 import type { Source } from "../domain/source.js";
 
 /**
- * §9.5 step 6 (L832) — "Re-seed source cursors (`lastItemId`) from the live
+ * §9.5 step 5 (L831) — "Re-seed source cursors (`lastItemId`) from the live
  * Firebase values, so AWS resumes where Firebase stopped rather than
  * re-scraping."
  *
- * Ordering is load-bearing and this script cannot check it: step 6 must run
- * *after* step 5 disables the Firebase Telegram schedulers (L831). Run earlier
- * and Firebase advances its own cursors underneath this, so step 7 enables AWS
- * against a stale value and re-scrapes the gap — which is L836's double-post.
+ * Ordering is load-bearing and nothing here can check it: the values have to be
+ * the ones Firebase stopped at. If Firebase is still advancing its own cursors
+ * when this runs, step 6 (L832) enables the AWS schedule against a stale value
+ * and re-scrapes the gap — which is L834's double-post.
  *
  * The spec names no source for the live values, so they arrive as a JSON map.
  */
@@ -55,12 +55,16 @@ export interface CursorPlan {
 /**
  * Work out what to write, without writing it.
  *
- * A backwards move is refused rather than applied. §9.5 L836 is the invariant of
+ * A backwards move is refused rather than applied. §9.5 L834 is the invariant of
  * the whole cutover — "The two systems must never publish the same Telegram
  * content concurrently — they would double-post" — and moving a cursor back
  * makes AWS re-scrape posts it has already published, which is that failure
  * exactly. Refusing puts the conflict in front of an operator who can still fix
  * the file, rather than in the channel where subscribers see it.
+ *
+ * §9.5 no longer carries a step disabling the Firebase Telegram schedulers, so
+ * this refusal is the only mechanical guard L834 has left. It is deliberately
+ * strict for that reason: one conflicting cursor blocks the whole write.
  */
 export function planCursorReseed(sources: readonly Source[], cursors: CursorMap): CursorPlan {
   // R16 — a soft-deleted source is not a source. Reseeding one would resurrect

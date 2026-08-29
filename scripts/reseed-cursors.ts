@@ -7,14 +7,16 @@ import { parseReseedArgs } from "../lib/seed/args.js";
 import { parseCursorFile, planCursorReseed } from "../lib/seed/cursors.js";
 
 /**
- * §9.5 step 6 (L832) — re-seed `lastItemId` so AWS resumes where Firebase
+ * §9.5 step 5 (L831) — re-seed `lastItemId` so AWS resumes where Firebase
  * stopped rather than re-scraping.
  *
- * **Run this only after step 5** has disabled the Firebase Telegram schedulers
- * (L831). Run it earlier and Firebase keeps advancing its own cursors
- * underneath, so step 7 enables AWS against a stale value and re-scrapes the
- * gap — which is L836's double-post. Nothing here can verify that ordering, so
- * the script says so and stops short of writing unless asked.
+ * **The cursors must be the values Firebase stopped at.** If the Firebase
+ * Telegram schedulers are still running when this is taken, they keep advancing
+ * their own cursors underneath, so step 6 (L832) enables the AWS schedule
+ * against a stale value and re-scrapes the gap — which is L834's double-post.
+ * §9.5 no longer carries a step for stopping them, and nothing here can verify
+ * that they have stopped, so the script says so and refuses any cursor that
+ * would move backwards.
  *
  * Everything worth testing is in `lib/seed/cursors.ts`.
  */
@@ -42,7 +44,7 @@ async function main(): Promise<void> {
   for (const conflict of plan.backwards) {
     console.error(
       `  ${conflict.id}: REFUSED, ${conflict.lastItemId} is behind ${conflict.from} — ` +
-        "re-scraping would re-publish (§9.5 L836)",
+        "re-scraping would re-publish (§9.5 L834)",
     );
   }
 
@@ -53,7 +55,10 @@ async function main(): Promise<void> {
   }
 
   if (!write) {
-    console.log("dry run — pass --write to apply, and only after §9.5 step 5");
+    console.log(
+      "dry run — pass --write to apply. Confirm the Firebase Telegram schedulers are " +
+        "stopped first: these cursors must be the values they stopped at (§9.5 L834).",
+    );
     return;
   }
 

@@ -39,7 +39,7 @@ describe("parseSeedArgs — R21", () => {
   });
 });
 
-describe("parseReseedArgs — §9.5 step 6", () => {
+describe("parseReseedArgs — §9.5 step 5", () => {
   test("requires --cursors", () => {
     expect(() => parseReseedArgs([])).toThrow(/--cursors/);
   });
