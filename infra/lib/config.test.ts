@@ -1,8 +1,8 @@
 import { App } from "aws-cdk-lib";
 import { describe, expect, test } from "vitest";
-import { SETTLE_DELAY_SECONDS, SQS_MAX_DELAY_SECONDS } from "../../lib/dedup/constants.js";
-import { ENVIRONMENTS, resolveConfig } from "./config.js";
-import { resourceName } from "./naming.js";
+import { SETTLE_DELAY_SECONDS, SQS_MAX_DELAY_SECONDS } from "../../lib/dedup/constants";
+import { ENVIRONMENTS, resolveConfig } from "./config";
+import { resourceName } from "./naming";
 
 describe("resourceName", () => {
   /** §9.2 L810 requires environment-prefixed names but never gives the form. */

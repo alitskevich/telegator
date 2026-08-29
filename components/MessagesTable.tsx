@@ -1,15 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { MemberRow } from "../lib/dashboard/records.js";
-import { MESSAGE_WRITABLE_FIELDS } from "../lib/dashboard/records.js";
-import {
-  MESSAGE_STATUSES,
-  type MessageListItem,
-  type MessageStatus,
-} from "../lib/domain/message.js";
-import { MESSAGE_COLUMNS } from "../lib/ui/columns.js";
-import { filterByKeyword } from "../lib/ui/filter.js";
+import type { MemberRow } from "../lib/dashboard/records";
+import { MESSAGE_WRITABLE_FIELDS } from "../lib/dashboard/records";
+import { MESSAGE_STATUSES, type MessageListItem, type MessageStatus } from "../lib/domain/message";
+import { MESSAGE_COLUMNS } from "../lib/ui/columns";
+import { filterByKeyword } from "../lib/ui/filter";
 
 /**
  * §8.3 L742 — "Status tabs; table of id, title, category, status, date,

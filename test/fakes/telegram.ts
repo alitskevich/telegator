@@ -5,7 +5,7 @@ import type {
   SendPhotoArgs,
   TelegramBot,
   TelegramResponse,
-} from "../../lib/telegram/ports.js";
+} from "../../lib/telegram/ports";
 
 export interface FetchRequest {
   readonly url: string;

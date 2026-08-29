@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { DateKeySchema } from "./date.js";
-import { ItemIdSchema } from "./ids.js";
+import { DateKeySchema } from "./date";
+import { ItemIdSchema } from "./ids";
 
 /**
  * The in-flight item — an SQS payload, never a table row (§2.2 L115, §1.3 L42).

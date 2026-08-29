@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Clock } from "../clock.js";
+import type { Clock } from "../clock";
 
 /**
  * The pipeline's date key, `YYYY-MM-DD`.

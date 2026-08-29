@@ -8,8 +8,8 @@ import {
   type UserPoolDomain,
 } from "aws-cdk-lib/aws-cognito";
 import type { Construct } from "constructs";
-import { ROLE_GROUPS } from "../../lib/auth/roles.js";
-import type { TelegatorConfig } from "./config.js";
+import { ROLE_GROUPS } from "../../lib/auth/roles";
+import type { TelegatorConfig } from "./config";
 
 /**
  * §9.1 L803 — Cognito user pool, groups, app client.

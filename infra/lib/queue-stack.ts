@@ -1,7 +1,7 @@
 import { Duration, Stack, type StackProps } from "aws-cdk-lib";
 import { type IQueue, Queue } from "aws-cdk-lib/aws-sqs";
 import type { Construct } from "constructs";
-import type { TelegatorConfig } from "./config.js";
+import type { TelegatorConfig } from "./config";
 
 /**
  * §9.1 L801 — three queues, three DLQs, redrive policies.

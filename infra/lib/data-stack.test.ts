@@ -9,9 +9,9 @@ import { afterAll, describe, expect, test } from "vitest";
  * workers sharing one cdk.out race over the staging directory.
  */
 
-import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir.js";
-import { resolveConfig } from "./config.js";
-import { TelegatorDataStack } from "./data-stack.js";
+import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
+import { resolveConfig } from "./config";
+import { TelegatorDataStack } from "./data-stack";
 
 // Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
 afterAll(removeIsolatedOutdirs);

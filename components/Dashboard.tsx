@@ -1,6 +1,6 @@
-import type { Overview, QueueStripEntry } from "../lib/dashboard/overview.js";
-import type { MessageListItem } from "../lib/domain/message.js";
-import { PieChart } from "./PieChart.js";
+import type { Overview, QueueStripEntry } from "../lib/dashboard/overview";
+import type { MessageListItem } from "../lib/domain/message";
+import { PieChart } from "./PieChart";
 
 /**
  * §8.3 L740 — "Stat cards (items scraped / analysed / skipped 24 h, messages

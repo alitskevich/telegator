@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db.js";
-import { packEmbedding } from "./embeddingCodec.js";
+import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db";
+import { packEmbedding } from "./embeddingCodec";
 
 const source = {
   id: "yigal_levin",

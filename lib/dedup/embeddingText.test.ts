@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildEmbeddingText } from "./embeddingText.js";
+import { buildEmbeddingText } from "./embeddingText";
 
 const item = {
   title: "Capital explosions reported",

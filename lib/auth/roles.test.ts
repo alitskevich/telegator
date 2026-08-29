@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { hasRole, isRole, ROLE_GROUPS, RoleSchema } from "./roles.js";
+import { hasRole, isRole, ROLE_GROUPS, RoleSchema } from "./roles";
 
 const principal = (roles: readonly string[], enabled = true) => ({ roles, enabled });
 

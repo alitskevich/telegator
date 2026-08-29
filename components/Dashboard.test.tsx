@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import type { Overview } from "../lib/dashboard/overview.js";
-import { Dashboard } from "./Dashboard.js";
+import type { Overview } from "../lib/dashboard/overview";
+import { Dashboard } from "./Dashboard";
 
 const overview = (extra: Partial<Overview> = {}): Overview => ({
   scraped: 412,

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { ENV_VARS, requireEnv } from "./env.js";
+import { ENV_VARS, requireEnv } from "./env";
 
 const ORIGINAL = { ...process.env };
 

@@ -1,4 +1,4 @@
-import type { LogSink } from "../../lib/logging/logger.js";
+import type { LogSink } from "../../lib/logging/logger";
 
 export interface RecordingSink extends LogSink {
   readonly lines: string[];

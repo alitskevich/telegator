@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { type RequireRoleDeps, requireRole } from "../auth/session.js";
-import type { MessageRepo, SourceRepo } from "../db/ports.js";
-import { ItemIdSchema } from "../domain/ids.js";
-import type { MemberBlock } from "../domain/message.js";
-import { SourceSchema } from "../domain/source.js";
+import { type RequireRoleDeps, requireRole } from "../auth/session";
+import type { MessageRepo, SourceRepo } from "../db/ports";
+import { ItemIdSchema } from "../domain/ids";
+import type { MemberBlock } from "../domain/message";
+import { SourceSchema } from "../domain/source";
 
 /**
  * §8.4 L749-751 — `upsertRecord` and `deleteRecords`, both `editor`.

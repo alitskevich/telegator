@@ -1,13 +1,13 @@
 import { describe, expect, test } from "vitest";
-import type { NewsItem } from "../../lib/ai/newsItemSchema.js";
-import type { Classifier } from "../../lib/ai/ports.js";
-import type { ScrapedItem } from "../../lib/domain/item.js";
-import { createLogger } from "../../lib/logging/logger.js";
-import { SKIP_REASONS } from "../../lib/metrics/ports.js";
-import { runAnalyze } from "../../lib/pipeline/analyze/index.js";
-import { recordingSink } from "../fakes/logging.js";
-import { recordingMetrics } from "../fakes/metrics.js";
-import { fakeQueueProducer } from "../fakes/queues.js";
+import type { NewsItem } from "../../lib/ai/newsItemSchema";
+import type { Classifier } from "../../lib/ai/ports";
+import type { ScrapedItem } from "../../lib/domain/item";
+import { createLogger } from "../../lib/logging/logger";
+import { SKIP_REASONS } from "../../lib/metrics/ports";
+import { runAnalyze } from "../../lib/pipeline/analyze/index";
+import { recordingSink } from "../fakes/logging";
+import { recordingMetrics } from "../fakes/metrics";
+import { fakeQueueProducer } from "../fakes/queues";
 
 /**
  * E2E-7 (§11.2 L854) — "A Bedrock outage sends every in-flight item to the

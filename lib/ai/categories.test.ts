@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { CATEGORIES, CategorySchema, DROPPED_CATEGORY } from "./categories.js";
+import { CATEGORIES, CategorySchema, DROPPED_CATEGORY } from "./categories";
 
 describe("CATEGORIES", () => {
   /**

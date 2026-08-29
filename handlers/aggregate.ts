@@ -2,14 +2,14 @@ import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { createBedrockEmbeddingProvider } from "../lib/ai/bedrock.js";
-import { systemClock } from "../lib/clock.js";
-import { createMessageRepo } from "../lib/db/messages.js";
-import { createLogger, stdoutSink } from "../lib/logging/logger.js";
-import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch.js";
-import { type AggregateResult, runAggregate } from "../lib/pipeline/aggregate/index.js";
-import { createSqsQueueProducer } from "../lib/queues/sqs.js";
-import { ENV_VARS, requireEnv } from "./env.js";
+import { createBedrockEmbeddingProvider } from "../lib/ai/bedrock";
+import { systemClock } from "../lib/clock";
+import { createMessageRepo } from "../lib/db/messages";
+import { createLogger, stdoutSink } from "../lib/logging/logger";
+import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch";
+import { type AggregateResult, runAggregate } from "../lib/pipeline/aggregate/index";
+import { createSqsQueueProducer } from "../lib/queues/sqs";
+import { ENV_VARS, requireEnv } from "./env";
 
 /**
  * The `telegator-aggregate` entry point (§7.5 L651, SQS FIFO).

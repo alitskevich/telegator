@@ -1,4 +1,4 @@
-import type { NewsItem } from "./newsItemSchema.js";
+import type { NewsItem } from "./newsItemSchema";
 
 /**
  * The two model boundaries, as interfaces.

@@ -27,7 +27,7 @@ The product value is **deduplicated, categorised, translated news digests** — 
 ### 1.2 Actors
 
 | Actor | Role |
-|---|---|
+| --- | --- |
 | **Operator** | Signs in to the dashboard. Curates sources, reviews and edits messages, replays failed work, watches pipeline health. |
 | **Scheduler** | One EventBridge rule invoking the scraper every 30 minutes. The only scheduled component. |
 | **Queues** | Carry work between the remaining stages. Provide retry, back-pressure and failure isolation. |
@@ -97,7 +97,7 @@ Consequences that shape everything downstream:
 ### 2.1 `sources` — Telegram channels to poll *(table)*
 
 | Field | Type | Written by | Meaning |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `id` | string | operator/seed | Telegram channel username, e.g. `yigal_levin`. Also the scrape URL segment. |
 | `status` | string | operator | `ok` enables polling. Any other value disables the source. |
 | `tgChannel` | string | operator | **Target** channel this source's content publishes to. |
@@ -117,7 +117,7 @@ An item is a queue message. Its shape changes as it moves down the pipeline.
 **Stage A — `scrape` → analyze queue:**
 
 | Field | Type | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | `id` | string | Composite `{sourceId}/{telegramMessageId}`. Stored verbatim; no encoding (§2.4). |
 | `body` | string | Plain text with inline links replaced by `[text](#N)` tokens. |
 | `links` | array | `[{id: number, href: string}]` resolving the `#N` tokens. |
@@ -138,7 +138,7 @@ Payloads are well under the **256 KB** SQS limit — Telegram caps a post at 409
 The only durable record of a Telegram post.
 
 | Field | Type | Written by | Meaning |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `id` | string | aggregate | Id of the **first** item that created the message. |
 | `status` | enum | aggregate/publish | `topublish` \| `published` \| `error` |
 | `members` | **Map** | aggregate | `{itemId → MemberBlock}`. Replaces the source's comma-separated `items` string. |
@@ -197,7 +197,7 @@ Take the first **10**. Three tiers: a **hot** source (>20 posts last run) is alw
 **Parse.** Split the HTML on the literal marker `<div class="tgme_widget_message_wrap js-widget_message_wrap">`, discarding the first fragment (page chrome). Each remaining chunk is one post:
 
 | Field | Extraction rule |
-|---|---|
+| --- | --- |
 | `id` | First `href="https://t.me/{any}/{digits}"` → capture the digits. |
 | body (raw) | Inner HTML of `<div class="tgme_widget_message_text …">`. |
 | `links` + tokenised body | Replace each `<a href="X">Y</a>` with `[Y](#N)`, N from 1; collect `{id: N, href: X}`. |
@@ -235,7 +235,7 @@ Take the first **10**. Three tiers: a **hot** source (>20 posts last run) is alw
 **Routing.**
 
 | Condition | Action |
-|---|---|
+| --- | --- |
 | No category returned, or provider error | Throw → SQS retry → DLQ after 3 attempts |
 | `importance === "low"` | **Drop**, metric `ItemsSkipped{reason=low}` |
 | `category === "crime&law"` | **Drop**, metric `ItemsSkipped{reason=category}` |
@@ -441,7 +441,7 @@ Your responses MUST follow the rules:
 **Schema.** Required: `title`, `summary`, `country`, `location`, `importance`, `category`. Optional: `peoples`, `properNames`, `tags`.
 
 | Field | Constraint | Description |
-|---|---|---|
+| --- | --- | --- |
 | `title` | string | Essential subject in three words, English. |
 | `summary` | string | Brief factual matter — no implications, opinions or judgements. **In Belarusian.** |
 | `country` | string | ISO-3166 alpha-2 code. |
@@ -565,7 +565,7 @@ for msgId in toPublish:
 ### 7.1 Component map
 
 | Concern | Source (Firebase) | Target (AWS) |
-|---|---|---|
+| --- | --- | --- |
 | Work in flight | `items` table + `status` column | **SQS** (3 queues + 3 DLQs) |
 | Durable records | 4 Firestore collections | DynamoDB (**2 tables**) |
 | Vector search | Firestore `findNearest` | Date-partitioned query + in-memory cosine |
@@ -583,7 +583,7 @@ for msgId in toPublish:
 **Two tables**, both `PAY_PER_REQUEST`. Nothing is co-queried across them, so single-table modelling would add ceremony with no payoff.
 
 | Table | PK | GSIs |
-|---|---|---|
+| --- | --- | --- |
 | `telegator-sources` | `id` (S) | `status-index`: PK `status` — drives scrape selection |
 | `telegator-messages` | `id` (S) | `status-index`: PK `status`, SK `ts` — publish backlog, dashboard listing, counts<br>`date-index`: PK `date`, SK `ts` — **the deduplication index** |
 
@@ -602,7 +602,7 @@ const unpackEmbedding = (b: Buffer) =>
 ### 7.3 SQS design
 
 | Queue | Type | Producer | Consumer | Key settings |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `telegator-analyze` | **Standard** | scrape | analyze | `batchSize 10`, window 60 s, visibility 1800 s, `maxReceiveCount 3` |
 | `telegator-aggregate` | **FIFO** | analyze | aggregate | `MessageGroupId = date`, `MessageDeduplicationId = itemId`, `batchSize 10`, window 300 s, visibility 1800 s, `maxReceiveCount 3` |
 | `telegator-publish` | **FIFO** | aggregate | publish | `MessageGroupId = messageId`, `MessageDeduplicationId = messageId`, `batchSize 1`, `DelaySeconds 300`, visibility 1800 s, `maxReceiveCount 5` |
@@ -630,7 +630,7 @@ Each has a matching DLQ. **Message retention: 14 days** (the SQS maximum) on eve
 What queues add over polling:
 
 | Property | Scheduled polling | SQS |
-|---|---|---|
+| --- | --- | --- |
 | End-to-end latency | Up to 4 hours (schedule-bound) | Seconds to minutes |
 | Retry | Hand-rolled via `status: error`; nothing re-reads it | Native, with backoff and `maxReceiveCount` |
 | Failure isolation | One bad row can abort a batch | Partial batch failure reporting |
@@ -645,7 +645,7 @@ The scraper stays on EventBridge because nothing can push to us — Telegram mus
 All Node.js 22, ARM64, bundled with esbuild.
 
 | Function | Trigger | Timeout | Memory | Concurrency |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `telegator-scrape` | EventBridge `rate(30 minutes)` | 300 s | 512 MB | 1 (reserved) |
 | `telegator-analyze` | SQS `telegator-analyze` | 300 s | 512 MB | 5 (reserved) |
 | `telegator-aggregate` | SQS `telegator-aggregate` (FIFO) | 300 s | 1024 MB | by message group |
@@ -659,7 +659,7 @@ All Node.js 22, ARM64, bundled with esbuild.
 ### 7.6 Secrets and IAM
 
 | Secret | Store | Consumers |
-|---|---|---|
+| --- | --- | --- |
 | `telegator/telegram-bot-token` | Secrets Manager | `publish` |
 | Bedrock access | **No secret** — IAM role policy | `analyze`, `aggregate` |
 
@@ -681,7 +681,7 @@ Because there is no items table, **CloudWatch is the pipeline's system of record
 **Counters** (custom metrics, namespace `Telegator`):
 
 | Metric | Dimensions | Emitted by |
-|---|---|---|
+| --- | --- | --- |
 | `ItemsScraped` | `Source` | scrape |
 | `ItemsDropped` | `Reason` = `forward`\|`empty` | scrape |
 | `ItemsAnalyzed` | — | analyze |
@@ -736,7 +736,7 @@ actions/                      Server actions (§8.4)
 ### 8.3 Pages
 
 | Page | Content |
-|---|---|
+| --- | --- |
 | **Dashboard** | Stat cards (items scraped / analysed / skipped 24 h, messages published), status and category charts from CloudWatch, queue-depth strip, 10 most recent messages |
 | **Sources** | Table of id, status, tgChannel, category, `teaser`, lastCount, lastResult, `zeroYieldRuns`; inline edit; add; delete; export; **Scrape now** trigger |
 | **Messages** | Status tabs; table of id, title, category, status, date, tgChannel, `memberCount`, with an expandable member list rendered from the `members` map; inline edit; **Re-publish**; export |
@@ -746,7 +746,7 @@ Search on every table filters across visible columns, matching the source's `fil
 ### 8.4 Server actions
 
 | Action | Signature | Authorisation |
-|---|---|---|
+| --- | --- | --- |
 | `upsertRecord` | `(table, id, delta) => Record` | `editor` |
 | `deleteRecords` | `(table, ids[]) => void` | `editor` — soft delete, sets `deleted: true` |
 | `runScraper` | `() => {processed}` | `admin` — invokes the scraper Lambda |
@@ -761,7 +761,7 @@ Deletes are **soft**, matching the source. Every action validates input with Zod
 The source computed these in the browser over the full IndexedDB mirror. Their new sources:
 
 | Card / chart | Source | Window |
-|---|---|---|
+| --- | --- | --- |
 | Items scraped | CloudWatch `ItemsScraped` Sum | 24 h |
 | Items analysed | CloudWatch `ItemsAnalyzed` Sum | 24 h |
 | Items skipped | CloudWatch `ItemsSkipped` Sum by `Reason` | 24 h |
@@ -780,7 +780,7 @@ The pie charts keep the source's hand-built SVG arc geometry (centre 100,100, ra
 **Amazon Cognito user pool**, hosted UI, one group per role.
 
 | Role | Grants |
-|---|---|
+| --- | --- |
 | `viewer` | Read all pages, export |
 | `editor` | + inline edit, add, delete |
 | `admin` | + manual triggers, DLQ replay, re-publish, user management |
@@ -796,7 +796,7 @@ Ported rules: a new user is created **disabled** with no roles and must be enabl
 ### 9.1 Stacks (AWS CDK, TypeScript)
 
 | Stack | Contents |
-|---|---|
+| --- | --- |
 | `TelegatorDataStack` | 2 DynamoDB tables + GSIs, PITR on `messages` |
 | `TelegatorQueueStack` | 3 queues + 3 DLQs, redrive policies |
 | `TelegatorPipelineStack` | 5 Lambdas, 1 EventBridge schedule, 3 event source mappings, IAM roles, alarms |
@@ -818,7 +818,7 @@ Order: `Data`, `Queue`, `Auth` → `Pipeline` → `App`.
 `scripts/seed.ts` reads the existing `data/*.json` exports and writes the two tables. Because the schema changed, seeding is a **migration**, not a copy:
 
 | Source file | Target | Transform |
-|---|---|---|
+| --- | --- | --- |
 | `data-sources.json` | `sources` | Direct, minus unused stat columns (`members`, `views`, `adv_*`, …). |
 | `data-messages.json` | `messages` | Convert the comma-separated `items` string to a `members` map; **discard `embedding`**. |
 
@@ -828,10 +828,8 @@ Order: `Data`, `Queue`, `Auth` → `Pipeline` → `App`.
 2. Trigger the scraper manually; verify every §11 criterion.
 3. Recalibrate the similarity threshold (§11.3).
 4. Deploy to `prod` with the schedule **disabled**, pointed at test Telegram channels; run 48 hours.
-5. Disable the Firebase Telegram schedulers. **Leave the RSS schedulers running** — that pipeline stays on Firebase (D19).
-6. Re-seed source cursors (`lastItemId`) from the live Firebase values, so AWS resumes where Firebase stopped rather than re-scraping.
-7. Enable the AWS schedule against production channels.
-8. Keep Firebase readable for 30 days. **It cannot be fully decommissioned while RSS runs there** — decide RSS's fate before planning shutdown (D19).
+5. Re-seed source cursors (`lastItemId`) from the live Firebase values, so AWS resumes where Firebase stopped rather than re-scraping.
+6. Enable the AWS schedule against production channels.
 
 The two systems must never publish the same Telegram content concurrently — they would double-post. The RSS pipeline is unaffected, since AWS never publishes RSS content.
 
@@ -868,7 +866,7 @@ Until this is done the pipeline must not publish to production channels.
 ### 11.4 Non-functional
 
 | Property | Target |
-|---|---|
+| --- | --- |
 | End-to-end latency | Telegram post → published within **15 minutes** (scrape interval + settle delay) |
 | Stage duration | p95 < 60 s per invocation |
 | Queue age | Oldest message < 1 hour under normal load |

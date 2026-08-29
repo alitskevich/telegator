@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { EMBEDDING_MODEL_ID } from "../ai/constants.js";
-import { SIMILARITY_THRESHOLD } from "../dedup/constants.js";
+import { EMBEDDING_MODEL_ID } from "../ai/constants";
+import { SIMILARITY_THRESHOLD } from "../dedup/constants";
 import {
   CALIBRATION_RECORD_PATH,
   MIN_LABELLED_PAIRS,
   productionBlocker,
   readCalibrationRecord,
-} from "./record.js";
+} from "./record";
 
 const record = (over: Record<string, unknown> = {}) => ({
   model: EMBEDDING_MODEL_ID,

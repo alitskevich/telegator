@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { AiFieldsSchema } from "../domain/item.js";
-import { CategorySchema } from "./categories.js";
+import { AiFieldsSchema } from "../domain/item";
+import { CategorySchema } from "./categories";
 
 /**
  * The classification response schema, §5.2 L441–453.

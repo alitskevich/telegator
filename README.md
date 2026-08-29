@@ -51,6 +51,18 @@ npm run dev         # the dashboard, at localhost:3000
 `cdk synth` is deliberately credential-free — nothing in `infra/` uses a context
 lookup — so the templates are built and asserted on without an AWS account.
 
+The first four need nothing else. `npm run dev` does: the dashboard reads live
+DynamoDB, SQS, CloudWatch and Cognito, so it needs a deployed environment named
+by `.env.local.example` — copy it to `.env.local` and fill it in; every variable
+is documented there with where its value comes from. Without it the server
+starts and then answers every route with `missing required environment variable`;
+with it but without credentials for that account, the pages render and the data
+reads fail with `AccessDeniedException`.
+
+Note that no gate above runs a bundler. `npx next build` is the only thing that
+compiles `app/`, and it needs the same environment, so a change that breaks the
+dashboard at runtime can pass all four.
+
 ## Deploying
 
 **This repository carries no AWS credentials, and nothing here has been

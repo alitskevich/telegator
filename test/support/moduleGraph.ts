@@ -11,10 +11,9 @@ import { dirname, resolve } from "node:path";
  * boundary has to be measured over.
  *
  * Deliberately not a real resolver: it handles the forms this repository uses —
- * relative ESM specifiers written with a `.js` extension — and records everything
- * else as a package name. A specifier it cannot resolve is ignored rather than
- * thrown on, so an unrelated refactor cannot turn this into a failing gate for
- * the wrong reason.
+ * extensionless relative specifiers — and records everything else as a package
+ * name. A specifier it cannot resolve is ignored rather than thrown on, so an
+ * unrelated refactor cannot turn this into a failing gate for the wrong reason.
  */
 
 /**
@@ -66,8 +65,13 @@ const isFile = (path: string): boolean => {
 /**
  * Resolve a relative specifier to a file on disk.
  *
- * This repository is ESM, so imports are written `./x.js` for a file that is
- * `x.ts` on disk; `.tsx` covers the components of §8.5.
+ * Imports are written `./x` for a file that is `x.ts` on disk, because Turbopack
+ * does not substitute an extension; `.tsx` covers the components of §8.5.
+ *
+ * The `.js` branch stays. A specifier written the old way has to be *found* by
+ * this scan rather than silently skipped — a skipped edge is a hole in the §8.2
+ * L734 boundary, and forbidding the form is `test/importExtensions.test.ts`'s
+ * job, not this one's.
  */
 function resolveRelative(fromFile: string, specifier: string): string | undefined {
   const base = resolve(dirname(fromFile), specifier);

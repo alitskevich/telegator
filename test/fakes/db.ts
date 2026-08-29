@@ -1,4 +1,4 @@
-import type { MemberMerge, MessageRepo, PublishResult, SourceRepo } from "../../lib/db/ports.js";
+import type { MemberMerge, MessageRepo, PublishResult, SourceRepo } from "../../lib/db/ports";
 import {
   type DedupCandidate,
   DedupCandidateSchema,
@@ -6,8 +6,8 @@ import {
   type MessageListItem,
   MessageListItemSchema,
   type MessageStatus,
-} from "../../lib/domain/message.js";
-import type { Source, SourceCursor } from "../../lib/domain/source.js";
+} from "../../lib/domain/message";
+import type { Source, SourceCursor } from "../../lib/domain/source";
 
 export interface FakeSourceRepo extends SourceRepo {
   readonly writeCount: number;

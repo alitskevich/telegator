@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { SUMMARY_MAX_LENGTH } from "../../domain/item.js";
-import type { MemberBlock, Message } from "../../domain/message.js";
-import { MEMBER_RENDER_LIMIT, MemberBlockSchema, MessageSchema } from "../../domain/message.js";
-import { TELEGRAM_MESSAGE_LIMIT } from "../../telegram/ports.js";
-import { assembleMessage, buildHeader, PHOTO_SUPPRESSION_LIMIT } from "./assemble.js";
-import { buildHashtagLine } from "./hashtags.js";
+import { SUMMARY_MAX_LENGTH } from "../../domain/item";
+import type { MemberBlock, Message } from "../../domain/message";
+import { MEMBER_RENDER_LIMIT, MemberBlockSchema, MessageSchema } from "../../domain/message";
+import { TELEGRAM_MESSAGE_LIMIT } from "../../telegram/ports";
+import { assembleMessage, buildHeader, PHOTO_SUPPRESSION_LIMIT } from "./assemble";
+import { buildHashtagLine } from "./hashtags";
 
 /**
  * Fixtures go through the schemas rather than object literals: the house rule

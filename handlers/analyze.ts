@@ -1,11 +1,11 @@
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { SQSClient } from "@aws-sdk/client-sqs";
-import { createBedrockClassifier } from "../lib/ai/bedrock.js";
-import { createLogger, stdoutSink } from "../lib/logging/logger.js";
-import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch.js";
-import { type AnalyzeResult, runAnalyze } from "../lib/pipeline/analyze/index.js";
-import { createSqsQueueProducer } from "../lib/queues/sqs.js";
-import { ENV_VARS, requireEnv } from "./env.js";
+import { createBedrockClassifier } from "../lib/ai/bedrock";
+import { createLogger, stdoutSink } from "../lib/logging/logger";
+import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch";
+import { type AnalyzeResult, runAnalyze } from "../lib/pipeline/analyze/index";
+import { createSqsQueueProducer } from "../lib/queues/sqs";
+import { ENV_VARS, requireEnv } from "./env";
 
 /**
  * The `telegator-analyze` entry point (§7.5 L650, SQS `telegator-analyze`).

@@ -43,6 +43,12 @@ Each of these is enforced by a test, and each was violated at least once.
   into an authenticated call and breaks the only infrastructure gate there is.
 - **Every `app/**/page.tsx` calls `requireRole("viewer", …)`** —
   `test/pageAuth.test.ts`. The dashboard root shipped once without it.
+- **Relative imports carry no extension** — `test/importExtensions.test.ts`.
+  Write `"../lib/clock"`, never `"../lib/clock.js"`. Turbopack does not perform
+  TypeScript's `.js` → `.ts` substitution and reports `Module not found`; every
+  dashboard route then 500s. `tsc`, Vite, esbuild and tsx all substitute, so the
+  whole repo was written this way and all four gates stayed green against an app
+  that could not serve a page. There is no Turbopack setting that restores it.
 - **Item ids are `{sourceId}/{telegramMessageId}`, used verbatim** (§2.4).
 - **Every AC-x.y in §3.1–3.4 is named by a test** — `test/acceptance.test.ts`
   audits both directions.
@@ -60,9 +66,27 @@ Each of these is enforced by a test, and each was violated at least once.
   `handlers/` and `actions/`.
 - A source scan that names what it forbids will match itself. That has happened
   four times; exclude the file, or scan only shipped source.
+- **None of the four gates runs a bundler.** `npx next build` is the only thing
+  that compiles `app/`, and it needs §9.3's environment set, so it is not one of
+  them. A change that breaks the dashboard at runtime — resolution, a client/
+  server boundary, an invalid `next.config.ts` option — passes all four. Run the
+  dev server and request the routes before believing `app/` works.
+- An invalid `experimental` option in `next.config.ts` is warned about and then
+  **dropped whole**, so its valid siblings stop applying too. The warning is one
+  line at startup, above the ready banner.
 
 ## Before production
 
 `cdk synth -c env=prod -c scheduleEnabled=true` refuses until §11.3's
 recalibration is recorded in `calibration/record.json`. That is deliberate — the
 sweep harness is `lib/calibration/`.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

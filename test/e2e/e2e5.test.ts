@@ -1,22 +1,22 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import type { NewsItem } from "../../lib/ai/newsItemSchema.js";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports.js";
-import { unpackEmbedding } from "../../lib/db/embeddingCodec.js";
-import { DIMENSIONS } from "../../lib/dedup/constants.js";
-import { cosineSimilarity } from "../../lib/dedup/cosine.js";
-import type { Message } from "../../lib/domain/message.js";
-import type { Source } from "../../lib/domain/source.js";
-import { createLogger } from "../../lib/logging/logger.js";
-import { runAggregate } from "../../lib/pipeline/aggregate/index.js";
-import { unitVectorAtAngle } from "../fakes/ai.js";
-import { manualClock } from "../fakes/clock.js";
-import { fakeMessageRepo, fakeSourceRepo } from "../fakes/db.js";
-import { recordingSink } from "../fakes/logging.js";
-import { recordingMetrics } from "../fakes/metrics.js";
-import { fakeQueueProducer } from "../fakes/queues.js";
-import { fakeBot, fakeFetcher } from "../fakes/telegram.js";
-import { telegramFixture } from "../fixtures/telegram/index.js";
-import { runPipeline } from "./harness.js";
+import type { NewsItem } from "../../lib/ai/newsItemSchema";
+import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
+import { unpackEmbedding } from "../../lib/db/embeddingCodec";
+import { DIMENSIONS } from "../../lib/dedup/constants";
+import { cosineSimilarity } from "../../lib/dedup/cosine";
+import type { Message } from "../../lib/domain/message";
+import type { Source } from "../../lib/domain/source";
+import { createLogger } from "../../lib/logging/logger";
+import { runAggregate } from "../../lib/pipeline/aggregate/index";
+import { unitVectorAtAngle } from "../fakes/ai";
+import { manualClock } from "../fakes/clock";
+import { fakeMessageRepo, fakeSourceRepo } from "../fakes/db";
+import { recordingSink } from "../fakes/logging";
+import { recordingMetrics } from "../fakes/metrics";
+import { fakeQueueProducer } from "../fakes/queues";
+import { fakeBot, fakeFetcher } from "../fakes/telegram";
+import { telegramFixture } from "../fixtures/telegram/index";
+import { runPipeline } from "./harness";
 
 /**
  * E2E-5 (§11.2 L852) — "**Replaying the entire aggregate DLQ leaves the messages

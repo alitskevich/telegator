@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
-import { EMBEDDING_MODEL_ID } from "../ai/constants.js";
-import { SIMILARITY_THRESHOLD } from "../dedup/constants.js";
+import { EMBEDDING_MODEL_ID } from "../ai/constants";
+import { SIMILARITY_THRESHOLD } from "../dedup/constants";
 
 /**
  * §11.3 step 5's record — "Record the value, the curve and the labelled set in

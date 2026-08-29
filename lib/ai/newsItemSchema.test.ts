@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { SUMMARY_MAX_LENGTH } from "../domain/item.js";
-import { CATEGORIES } from "./categories.js";
-import { NEWS_ITEM_SCHEMA, NewsItemSchema } from "./newsItemSchema.js";
+import { SUMMARY_MAX_LENGTH } from "../domain/item";
+import { CATEGORIES } from "./categories";
+import { NEWS_ITEM_SCHEMA, NewsItemSchema } from "./newsItemSchema";
 
 const valid = {
   title: "Capital explosions reported",

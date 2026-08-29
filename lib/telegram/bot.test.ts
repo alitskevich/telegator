@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { createLogger } from "../logging/logger.js";
-import type { MetricDimensions, MetricName, MetricSink } from "../metrics/ports.js";
+import { createLogger } from "../logging/logger";
+import type { MetricDimensions, MetricName, MetricSink } from "../metrics/ports";
 import {
   createTelegramBot,
   DEFAULT_PARSE_MODE,
@@ -10,7 +10,7 @@ import {
   SEND_PAUSE_MS,
   TELEGRAM_API_BASE,
   TOO_MANY_REQUESTS_STATUS,
-} from "./bot.js";
+} from "./bot";
 
 /**
  * An obvious placeholder. §7.6 L663 keeps the real token in Secrets Manager and

@@ -1,10 +1,10 @@
-import { authContext, messages } from "../../actions/context.js";
-import { loadMembers, upsertRecord as upsertRecordAction } from "../../actions/records.js";
-import { exportTable, republishMessage } from "../../actions/triggers.js";
-import { MessagesTable } from "../../components/MessagesTable.js";
-import { hasRole } from "../../lib/auth/roles.js";
-import { requireRole } from "../../lib/auth/session.js";
-import { MessageStatusSchema } from "../../lib/domain/message.js";
+import { authContext, messages } from "../../actions/context";
+import { loadMembers, upsertRecord as upsertRecordAction } from "../../actions/records";
+import { exportTable, republishMessage } from "../../actions/triggers";
+import { MessagesTable } from "../../components/MessagesTable";
+import { hasRole } from "../../lib/auth/roles";
+import { requireRole } from "../../lib/auth/session";
+import { MessageStatusSchema } from "../../lib/domain/message";
 
 /**
  * §8.3 L742 — the Messages page.

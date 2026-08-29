@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { QueueRow } from "../lib/dashboard/queues.js";
-import type { DlqMessage } from "../lib/queues/inspect.js";
+import type { QueueRow } from "../lib/dashboard/queues";
+import type { DlqMessage } from "../lib/queues/inspect";
 
 /**
  * §8.2 L723 — "Queue depths + DLQ inspection/replay".

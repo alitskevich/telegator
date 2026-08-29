@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { DIMENSIONS } from "../dedup/constants.js";
+import { DIMENSIONS } from "../dedup/constants";
 import {
   CLASSIFIER_EFFORT,
   CLASSIFIER_MAX_TOKENS,
@@ -7,7 +7,7 @@ import {
   EMBEDDING_INPUT_TYPE,
   EMBEDDING_MAX_BATCH,
   EMBEDDING_MODEL_ID,
-} from "./constants.js";
+} from "./constants";
 
 describe("the classification model (R2)", () => {
   /**

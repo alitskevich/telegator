@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { fixedClock } from "../../test/fakes/clock.js";
-import { DateKeySchema, toDateKey, todayKey } from "./date.js";
+import { fixedClock } from "../../test/fakes/clock";
+import { DateKeySchema, toDateKey, todayKey } from "./date";
 
 const utc = (y: number, m: number, d: number, h = 0, min = 0, s = 0): number =>
   Date.UTC(y, m - 1, d, h, min, s);

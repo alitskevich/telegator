@@ -16,8 +16,15 @@ const nextConfig: NextConfig = {
   // request, which is precisely the number an operator is on this page to check.
   // Individual pages opt in to `force-dynamic`; this only stops the build from
   // silently prerendering one that forgot.
+  //
+  // `static` was `0`, which Next's config schema rejects — it is `z.number().gte(30)`.
+  // An invalid `experimental` block is *warned about and dropped*, so the whole
+  // object went unapplied and `dynamic` silently kept its default too: the exact
+  // client-side router caching this is here to switch off. 30 is the floor the
+  // schema allows, and every route here is `force-dynamic`, so it governs
+  // nothing but the prerender guard above.
   experimental: {
-    staleTimes: { dynamic: 0, static: 0 },
+    staleTimes: { dynamic: 0, static: 30 },
   },
 };
 

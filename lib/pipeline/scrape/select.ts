@@ -1,5 +1,5 @@
-import type { Source } from "../../domain/source.js";
-import { SOURCE_STATUS_OK } from "../../domain/source.js";
+import type { Source } from "../../domain/source";
+import { SOURCE_STATUS_OK } from "../../domain/source";
 
 /** One minute in milliseconds — the unit §3.1 L190 writes as `* 60_000`. */
 const MINUTE_MS = 60_000;

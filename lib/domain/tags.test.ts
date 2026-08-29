@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { mergeTags, splitTags } from "./tags.js";
+import { mergeTags, splitTags } from "./tags";
 
 describe("splitTags", () => {
   test("splits on commas and trims each token", () => {

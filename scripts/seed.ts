@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { ENV_VARS } from "../handlers/env.js";
-import { createSourceRepo } from "../lib/db/sources.js";
-import { parseSeedArgs } from "../lib/seed/args.js";
-import { seedSourcesFrom } from "../lib/seed/sources.js";
+import { ENV_VARS } from "../handlers/env";
+import { createSourceRepo } from "../lib/db/sources";
+import { parseSeedArgs } from "../lib/seed/args";
+import { seedSourcesFrom } from "../lib/seed/sources";
 
 /**
  * §9.4 — the seed, run by hand during §9.5's cutover.

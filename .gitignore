@@ -10,6 +10,8 @@ cdk.out/
 
 # environment
 .env*
+# — except the documented template, which holds names and ARNs, never a value.
+!.env.local.example
 
 # ralph loop working files (the user's, and the ledger)
 .claude/*.local.md

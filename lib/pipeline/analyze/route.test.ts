@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { CATEGORIES, CategorySchema, DROPPED_CATEGORY } from "../../ai/categories.js";
-import type { NewsItem } from "../../ai/newsItemSchema.js";
-import { NewsItemSchema } from "../../ai/newsItemSchema.js";
-import type { ScrapedItem } from "../../domain/item.js";
-import { AnalyzedItemSchema, ScrapedItemSchema } from "../../domain/item.js";
+import { CATEGORIES, CategorySchema, DROPPED_CATEGORY } from "../../ai/categories";
+import type { NewsItem } from "../../ai/newsItemSchema";
+import { NewsItemSchema } from "../../ai/newsItemSchema";
+import type { ScrapedItem } from "../../domain/item";
+import { AnalyzedItemSchema, ScrapedItemSchema } from "../../domain/item";
 import {
   normalizeAnalyzed,
   normalizeCountry,
@@ -11,7 +11,7 @@ import {
   prefilter,
   route,
   skippedDimensions,
-} from "./route.js";
+} from "./route";
 
 /**
  * Fixtures are parsed rather than cast: the house rule bans type assertions, and

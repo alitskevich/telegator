@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { FakeCookieJar, FakeUserStatusReader } from "../../test/fakes/auth.js";
-import { manualClock } from "../../test/fakes/clock.js";
-import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db.js";
-import { fakeQueueProducer } from "../../test/fakes/queues.js";
-import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "../auth/session.js";
-import type { LambdaInvoker } from "../aws/lambda.js";
-import type { Message } from "../domain/message.js";
-import type { Source } from "../domain/source.js";
-import { exportTable, replayDlq, republishMessage, runScraper } from "./triggers.js";
+import { FakeCookieJar, FakeUserStatusReader } from "../../test/fakes/auth";
+import { manualClock } from "../../test/fakes/clock";
+import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db";
+import { fakeQueueProducer } from "../../test/fakes/queues";
+import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "../auth/session";
+import type { LambdaInvoker } from "../aws/lambda";
+import type { Message } from "../domain/message";
+import type { Source } from "../domain/source";
+import { exportTable, replayDlq, republishMessage, runScraper } from "./triggers";
 
 const NOW = 1_770_000_000_000;
 const SUB = "e4f1a2b3-0000-4000-8000-000000000001";

@@ -1,10 +1,10 @@
-import type { Clock } from "../../clock.js";
-import type { MessageRepo } from "../../db/ports.js";
-import type { Logger } from "../../logging/logger.js";
-import type { MetricSink } from "../../metrics/ports.js";
-import { PublishQueuePayloadSchema } from "../../queues/ports.js";
-import type { TelegramBot, TelegramResponse } from "../../telegram/ports.js";
-import { type AssembledMessage, assembleMessage } from "./assemble.js";
+import type { Clock } from "../../clock";
+import type { MessageRepo } from "../../db/ports";
+import type { Logger } from "../../logging/logger";
+import type { MetricSink } from "../../metrics/ports";
+import { PublishQueuePayloadSchema } from "../../queues/ports";
+import type { TelegramBot, TelegramResponse } from "../../telegram/ports";
+import { type AssembledMessage, assembleMessage } from "./assemble";
 
 /**
  * §3.4 — the publish consumer.

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import type { Source } from "../domain/source.js";
-import { parseCursorFile, planCursorReseed } from "./cursors.js";
+import type { Source } from "../domain/source";
+import { parseCursorFile, planCursorReseed } from "./cursors";
 
 const source = (id: string, lastItemId?: string): Source => ({
   id,

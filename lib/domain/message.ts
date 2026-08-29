@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { DateKeySchema } from "./date.js";
-import { ItemIdSchema } from "./ids.js";
-import { LinkSchema, SUMMARY_MAX_LENGTH } from "./item.js";
+import { DateKeySchema } from "./date";
+import { ItemIdSchema } from "./ids";
+import { LinkSchema, SUMMARY_MAX_LENGTH } from "./item";
 
 /**
  * `messages` — aggregated, publishable stories (§2.3 L136–152).

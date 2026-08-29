@@ -1,4 +1,4 @@
-export { MEMBER_RENDER_LIMIT as PUBLISH_RENDER_LIMIT } from "../domain/message.js";
+export { MEMBER_RENDER_LIMIT as PUBLISH_RENDER_LIMIT } from "../domain/message";
 
 /**
  * The constants of the normative deduplication algorithm (§6 L491–493), plus

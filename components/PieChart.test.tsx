@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { PIE_PALETTE } from "../lib/ui/pie.js";
-import { PieChart } from "./PieChart.js";
+import { PIE_PALETTE } from "../lib/ui/pie";
+import { PieChart } from "./PieChart";
 
 const render = (slices: { label: string; value: number }[], title = "Status") =>
   renderToStaticMarkup(<PieChart title={title} slices={slices} />);

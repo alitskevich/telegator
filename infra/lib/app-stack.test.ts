@@ -1,13 +1,13 @@
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import { afterAll, describe, expect, test, vi } from "vitest";
-import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir.js";
-import { TelegatorAppStack } from "./app-stack.js";
-import { TelegatorAuthStack } from "./auth-stack.js";
-import { resolveConfig } from "./config.js";
-import { TelegatorDataStack } from "./data-stack.js";
-import { TelegatorPipelineStack } from "./pipeline-stack.js";
-import { TelegatorQueueStack } from "./queue-stack.js";
+import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
+import { TelegatorAppStack } from "./app-stack";
+import { TelegatorAuthStack } from "./auth-stack";
+import { resolveConfig } from "./config";
+import { TelegatorDataStack } from "./data-stack";
+import { TelegatorPipelineStack } from "./pipeline-stack";
+import { TelegatorQueueStack } from "./queue-stack";
 
 // Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
 afterAll(removeIsolatedOutdirs);

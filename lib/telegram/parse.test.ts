@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { type TelegramFixtureName, telegramFixture } from "../../test/fixtures/telegram/index.js";
-import type { ParsedPost } from "./parse.js";
-import { parseTelegramPage } from "./parse.js";
+import { type TelegramFixtureName, telegramFixture } from "../../test/fixtures/telegram/index";
+import type { ParsedPost } from "./parse";
+import { parseTelegramPage } from "./parse";
 
 /**
  * Every case runs over the recorded `t.me/s/` markup captured in item 3.1, never

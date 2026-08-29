@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { unpackEmbedding } from "../db/embeddingCodec.js";
-import { cosineSimilarity } from "../dedup/cosine.js";
-import { buildEmbeddingText } from "../dedup/embeddingText.js";
-import type { PairLabel, ScoredPair } from "./sweep.js";
+import { unpackEmbedding } from "../db/embeddingCodec";
+import { cosineSimilarity } from "../dedup/cosine";
+import { buildEmbeddingText } from "../dedup/embeddingText";
+import type { PairLabel, ScoredPair } from "./sweep";
 
 /**
  * §11.3 step 5 — "Record the value, the curve and the labelled set in the

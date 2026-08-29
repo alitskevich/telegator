@@ -6,7 +6,7 @@ import {
   MemberBlockSchema,
   MessageListItemSchema,
   MessageSchema,
-} from "./message.js";
+} from "./message";
 
 const block = {
   summary: "Выбухі ў сталіцы [паведамляе](#1)",

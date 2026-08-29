@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { formatItemId, ItemIdSchema, parseItemId, sourceIdOf } from "./ids.js";
+import { formatItemId, ItemIdSchema, parseItemId, sourceIdOf } from "./ids";
 
 describe("formatItemId", () => {
   test("joins the source and Telegram message id with a slash (§2.2 L121)", () => {

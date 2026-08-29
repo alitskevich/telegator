@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import type { QueueRow } from "../lib/dashboard/queues.js";
-import type { DlqMessage } from "../lib/queues/inspect.js";
-import { QueuesPanel } from "./QueuesPanel.js";
+import type { QueueRow } from "../lib/dashboard/queues";
+import type { DlqMessage } from "../lib/queues/inspect";
+import { QueuesPanel } from "./QueuesPanel";
 
 type InspectFn = (queueName: string) => Promise<DlqMessage[]>;
 type ReplayFn = (queueName: string, max: number) => Promise<{ replayed: number }>;

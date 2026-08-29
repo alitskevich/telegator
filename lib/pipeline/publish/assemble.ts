@@ -1,8 +1,8 @@
-import type { Message } from "../../domain/message.js";
-import { chatIdFor, TELEGRAM_MESSAGE_LIMIT } from "../../telegram/ports.js";
-import { escapeHtml } from "./escape.js";
-import { buildHashtagLine } from "./hashtags.js";
-import { renderMembers } from "./render.js";
+import type { Message } from "../../domain/message";
+import { chatIdFor, TELEGRAM_MESSAGE_LIMIT } from "../../telegram/ports";
+import { escapeHtml } from "./escape";
+import { buildHashtagLine } from "./hashtags";
+import { renderMembers } from "./render";
 
 /**
  * §3.4 L323–342 — message assembly and the send-mode decision, as pure

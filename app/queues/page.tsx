@@ -1,10 +1,10 @@
-import { inspectDlq, queuePageDeps } from "../../actions/queues.js";
-import { replayDlq } from "../../actions/triggers.js";
-import { QueuesPanel } from "../../components/QueuesPanel.js";
-import { hasRole } from "../../lib/auth/roles.js";
-import { requireRole } from "../../lib/auth/session.js";
-import { loadQueues } from "../../lib/dashboard/queues.js";
-import type { DlqMessage } from "../../lib/queues/inspect.js";
+import { inspectDlq, queuePageDeps } from "../../actions/queues";
+import { replayDlq } from "../../actions/triggers";
+import { QueuesPanel } from "../../components/QueuesPanel";
+import { hasRole } from "../../lib/auth/roles";
+import { requireRole } from "../../lib/auth/session";
+import { loadQueues } from "../../lib/dashboard/queues";
+import type { DlqMessage } from "../../lib/queues/inspect";
 
 /**
  * §8.2 L723 — "Queue depths + DLQ inspection/replay".

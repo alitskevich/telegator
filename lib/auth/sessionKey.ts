@@ -2,7 +2,7 @@ import {
   GetSecretValueCommand,
   type GetSecretValueCommandOutput,
 } from "@aws-sdk/client-secrets-manager";
-import { sessionKeyFromSecret } from "./config.js";
+import { sessionKeyFromSecret } from "./config";
 
 /** The slice of `SecretsManagerClient` this uses; injected so tests build none. */
 export interface SecretsReadClient {

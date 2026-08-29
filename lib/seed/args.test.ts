@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseReseedArgs, parseSeedArgs } from "./args.js";
+import { parseReseedArgs, parseSeedArgs } from "./args";
 
 describe("parseSeedArgs — R21", () => {
   /**

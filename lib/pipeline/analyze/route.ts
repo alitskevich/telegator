@@ -1,9 +1,9 @@
-import { DROPPED_CATEGORY } from "../../ai/categories.js";
-import type { NewsItem } from "../../ai/newsItemSchema.js";
-import type { AnalyzedItem, ScrapedItem } from "../../domain/item.js";
-import { mergeTags } from "../../domain/tags.js";
-import type { MetricDimensions } from "../../metrics/ports.js";
-import { SKIP_REASONS, type SkipReason } from "../../metrics/ports.js";
+import { DROPPED_CATEGORY } from "../../ai/categories";
+import type { NewsItem } from "../../ai/newsItemSchema";
+import type { AnalyzedItem, ScrapedItem } from "../../domain/item";
+import { mergeTags } from "../../domain/tags";
+import type { MetricDimensions } from "../../metrics/ports";
+import { SKIP_REASONS, type SkipReason } from "../../metrics/ports";
 
 /**
  * Stage 2's pre-filter, routing table and field normalisers (§3.2 L231–244) as

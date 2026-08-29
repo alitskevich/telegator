@@ -7,8 +7,8 @@ import {
   republishMessage as republishMessageCore,
   runScraper as runScraperCore,
   type TriggerDeps,
-} from "../lib/dashboard/triggers.js";
-import { authContext, functions, lambda, messages, publishQueue, sources } from "./context.js";
+} from "../lib/dashboard/triggers";
+import { authContext, functions, lambda, messages, publishQueue, sources } from "./context";
 
 /**
  * §8.4 L752-755. Thin wrappers: the role gates, the input validation and the

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { fakeQueueProducer } from "../../test/fakes/queues.js";
+import { fakeQueueProducer } from "../../test/fakes/queues";
 import {
   AggregateQueuePayloadSchema,
   AnalyzeQueuePayloadSchema,
@@ -8,7 +8,7 @@ import {
   PublishQueuePayloadSchema,
   publishQueueMessage,
   SQS_MAX_BATCH_ENTRIES,
-} from "./ports.js";
+} from "./ports";
 
 const scraped = {
   id: "yigal_levin/12345",

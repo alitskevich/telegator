@@ -1,6 +1,6 @@
-import type { CategoryLogReader, MetricReader, TimeWindow } from "../aws/ports.js";
-import type { Clock } from "../clock.js";
-import type { MetricDimensionName, MetricName } from "../metrics/ports.js";
+import type { CategoryLogReader, MetricReader, TimeWindow } from "../aws/ports";
+import type { Clock } from "../clock";
+import type { MetricDimensionName, MetricName } from "../metrics/ports";
 
 /**
  * §8.5 L774 — "All CloudWatch reads are cached 60 s ... so a refresh does not

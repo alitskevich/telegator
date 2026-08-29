@@ -6,16 +6,16 @@
  * end without a network, a secret, or a real three-second wait.
  */
 
-import type { Logger } from "../logging/logger.js";
-import type { MetricSink } from "../metrics/ports.js";
+import type { Logger } from "../logging/logger";
+import type { MetricSink } from "../metrics/ports";
 import type {
   EditMessageTextArgs,
   SendMessageArgs,
   SendPhotoArgs,
   TelegramBot,
   TelegramResponse,
-} from "./ports.js";
-import { chatIdFor } from "./ports.js";
+} from "./ports";
+import { chatIdFor } from "./ports";
 
 /** §4.2 L377 — "Base: `https://api.telegram.org/bot{token}`". */
 export const TELEGRAM_API_BASE = "https://api.telegram.org";

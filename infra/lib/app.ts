@@ -1,10 +1,10 @@
 import { App, type AppProps } from "aws-cdk-lib";
-import { TelegatorAppStack } from "./app-stack.js";
-import { TelegatorAuthStack } from "./auth-stack.js";
-import { resolveConfig } from "./config.js";
-import { TelegatorDataStack } from "./data-stack.js";
-import { TelegatorPipelineStack } from "./pipeline-stack.js";
-import { TelegatorQueueStack } from "./queue-stack.js";
+import { TelegatorAppStack } from "./app-stack";
+import { TelegatorAuthStack } from "./auth-stack";
+import { resolveConfig } from "./config";
+import { TelegatorDataStack } from "./data-stack";
+import { TelegatorPipelineStack } from "./pipeline-stack";
+import { TelegatorQueueStack } from "./queue-stack";
 
 /**
  * Builds the CDK app.

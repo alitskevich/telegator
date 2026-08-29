@@ -1,11 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { isolatedOutdir, removeIsolatedOutdirs } from "./cdkOutdir.js";
+import { isolatedOutdir, removeIsolatedOutdirs } from "./cdkOutdir";
 
 afterAll(removeIsolatedOutdirs);
 
-import { reachableFrom } from "./moduleGraph.js";
+import { reachableFrom } from "./moduleGraph";
 
 /** Builds a throwaway module tree, so the resolver is tested on real files. */
 function tree(files: Record<string, string>): { root: string; path: (name: string) => string } {

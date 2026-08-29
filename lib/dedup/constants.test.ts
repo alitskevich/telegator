@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { MEMBER_RENDER_LIMIT } from "../domain/message.js";
+import { MEMBER_RENDER_LIMIT } from "../domain/message";
 import {
   DIMENSIONS,
   EMBEDDING_BYTE_LENGTH,
@@ -9,7 +9,7 @@ import {
   SETTLE_DELAY_SECONDS,
   SIMILARITY_THRESHOLD,
   SQS_MAX_DELAY_SECONDS,
-} from "./constants.js";
+} from "./constants";
 
 describe("the §6 CONST block (L491-493)", () => {
   test("SIMILARITY_THRESHOLD is 0.85", () => {

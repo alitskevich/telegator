@@ -6,11 +6,11 @@ import {
   metrics,
   queueDepths,
   queueUrls,
-} from "../actions/context.js";
-import { Dashboard } from "../components/Dashboard.js";
-import { requireRole } from "../lib/auth/session.js";
-import { systemClock } from "../lib/clock.js";
-import { loadOverview } from "../lib/dashboard/overview.js";
+} from "../actions/context";
+import { Dashboard } from "../components/Dashboard";
+import { requireRole } from "../lib/auth/session";
+import { systemClock } from "../lib/clock";
+import { loadOverview } from "../lib/dashboard/overview";
 
 /**
  * §8.3 L740 — the dashboard.

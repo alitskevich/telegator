@@ -1,18 +1,14 @@
-import {
-  CLASSIFIER_EFFORT,
-  CLASSIFIER_MAX_TOKENS,
-  CLASSIFIER_MODEL_ID,
-} from "../../ai/constants.js";
-import { NEWS_ITEM_SCHEMA } from "../../ai/newsItemSchema.js";
-import type { Classifier } from "../../ai/ports.js";
-import { SYSTEM_PROMPT } from "../../ai/prompt.js";
-import type { ScrapedItem } from "../../domain/item.js";
-import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../../logging/fields.js";
-import type { Logger } from "../../logging/logger.js";
-import type { MetricSink } from "../../metrics/ports.js";
-import type { QueueMessage, QueueProducer } from "../../queues/ports.js";
-import { AnalyzeQueuePayloadSchema, aggregateQueueMessage } from "../../queues/ports.js";
-import { normalizeAnalyzed, prefilter, route, skippedDimensions } from "./route.js";
+import { CLASSIFIER_EFFORT, CLASSIFIER_MAX_TOKENS, CLASSIFIER_MODEL_ID } from "../../ai/constants";
+import { NEWS_ITEM_SCHEMA } from "../../ai/newsItemSchema";
+import type { Classifier } from "../../ai/ports";
+import { SYSTEM_PROMPT } from "../../ai/prompt";
+import type { ScrapedItem } from "../../domain/item";
+import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../../logging/fields";
+import type { Logger } from "../../logging/logger";
+import type { MetricSink } from "../../metrics/ports";
+import type { QueueMessage, QueueProducer } from "../../queues/ports";
+import { AnalyzeQueuePayloadSchema, aggregateQueueMessage } from "../../queues/ports";
+import { normalizeAnalyzed, prefilter, route, skippedDimensions } from "./route";
 
 /** Re-exported for the stage's own tests; defined in `lib/logging/fields.ts`. */
 export { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE };

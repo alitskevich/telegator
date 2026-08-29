@@ -16,8 +16,8 @@ import type {
   ReceivedMessage,
   SendFailure,
   SendResult,
-} from "./ports.js";
-import { SQS_MAX_BATCH_ENTRIES } from "./ports.js";
+} from "./ports";
+import { SQS_MAX_BATCH_ENTRIES } from "./ports";
 
 /**
  * The `QueueProducer` (lib/queues/ports.ts) adapter over `SendMessageBatch`,

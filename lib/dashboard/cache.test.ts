@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { manualClock } from "../../test/fakes/clock.js";
-import { FakeCategoryLogReader, FakeMetricReader } from "../../test/fakes/observability.js";
-import { CACHE_TTL_MS, cachedCategoryLogReader, cachedMetricReader } from "./cache.js";
+import { manualClock } from "../../test/fakes/clock";
+import { FakeCategoryLogReader, FakeMetricReader } from "../../test/fakes/observability";
+import { CACHE_TTL_MS, cachedCategoryLogReader, cachedMetricReader } from "./cache";
 
 const NOW = 1_770_000_000_000;
 const WINDOW = { startMs: NOW - 86_400_000, endMs: NOW };

@@ -1,22 +1,22 @@
-import type { EmbeddingProvider } from "../ai/ports.js";
-import type { Clock } from "../clock.js";
-import { packEmbedding, unpackEmbedding } from "../db/embeddingCodec.js";
-import type { MemberMerge } from "../db/ports.js";
-import { sourceIdOf } from "../domain/ids.js";
-import type { AnalyzedItem } from "../domain/item.js";
+import type { EmbeddingProvider } from "../ai/ports";
+import type { Clock } from "../clock";
+import { packEmbedding, unpackEmbedding } from "../db/embeddingCodec";
+import type { MemberMerge } from "../db/ports";
+import { sourceIdOf } from "../domain/ids";
+import type { AnalyzedItem } from "../domain/item";
 import {
   DEFAULT_TG_CHANNEL,
   type DedupCandidate,
   type MemberBlock,
   type Message,
   type MessageMergeAttributes,
-} from "../domain/message.js";
-import { mergeTags } from "../domain/tags.js";
-import type { MetricSink } from "../metrics/ports.js";
-import { DIMENSIONS, MAX_MEMBERS, SIMILARITY_THRESHOLD } from "./constants.js";
-import { cosineSimilarity } from "./cosine.js";
-import { buildEmbeddingText } from "./embeddingText.js";
-import { elementwiseMean } from "./vectors.js";
+} from "../domain/message";
+import { mergeTags } from "../domain/tags";
+import type { MetricSink } from "../metrics/ports";
+import { DIMENSIONS, MAX_MEMBERS, SIMILARITY_THRESHOLD } from "./constants";
+import { cosineSimilarity } from "./cosine";
+import { buildEmbeddingText } from "./embeddingText";
+import { elementwiseMean } from "./vectors";
 
 /**
  * The normative deduplication algorithm of §6 (L488–553).

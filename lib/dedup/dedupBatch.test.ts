@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { stubEmbedder, unitVectorAtAngle } from "../../test/fakes/ai.js";
-import { advancingClock, fixedClock } from "../../test/fakes/clock.js";
-import { fakeMessageRepo } from "../../test/fakes/db.js";
-import { recordingMetrics } from "../../test/fakes/metrics.js";
-import { packEmbedding, unpackEmbedding } from "../db/embeddingCodec.js";
-import { type AnalyzedItem, AnalyzedItemSchema } from "../domain/item.js";
-import { type MemberBlock, type Message, MessageSchema } from "../domain/message.js";
-import { DIMENSIONS, MAX_MEMBERS, SIMILARITY_THRESHOLD } from "./constants.js";
-import { cosineSimilarity } from "./cosine.js";
-import { type DedupDeps, dedupBatch } from "./dedupBatch.js";
-import { buildEmbeddingText } from "./embeddingText.js";
+import { stubEmbedder, unitVectorAtAngle } from "../../test/fakes/ai";
+import { advancingClock, fixedClock } from "../../test/fakes/clock";
+import { fakeMessageRepo } from "../../test/fakes/db";
+import { recordingMetrics } from "../../test/fakes/metrics";
+import { packEmbedding, unpackEmbedding } from "../db/embeddingCodec";
+import { type AnalyzedItem, AnalyzedItemSchema } from "../domain/item";
+import { type MemberBlock, type Message, MessageSchema } from "../domain/message";
+import { DIMENSIONS, MAX_MEMBERS, SIMILARITY_THRESHOLD } from "./constants";
+import { cosineSimilarity } from "./cosine";
+import { type DedupDeps, dedupBatch } from "./dedupBatch";
+import { buildEmbeddingText } from "./embeddingText";
 
 const DATE = "2026-08-29";
 

@@ -13,11 +13,11 @@ import { afterAll, describe, expect, test, vi } from "vitest";
 // 5 s default on a cold run.
 vi.setConfig({ testTimeout: 60_000 });
 
-import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir.js";
-import { resolveConfig } from "./config.js";
-import { TelegatorDataStack } from "./data-stack.js";
-import { PIPELINE_FUNCTIONS, TelegatorPipelineStack } from "./pipeline-stack.js";
-import { TelegatorQueueStack } from "./queue-stack.js";
+import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
+import { resolveConfig } from "./config";
+import { TelegatorDataStack } from "./data-stack";
+import { PIPELINE_FUNCTIONS, TelegatorPipelineStack } from "./pipeline-stack";
+import { TelegatorQueueStack } from "./queue-stack";
 
 // Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
 afterAll(removeIsolatedOutdirs);
@@ -158,7 +158,7 @@ describe("TelegatorPipelineStack functions", () => {
   });
 
   test("supplies every environment variable handlers/env.ts requires", async () => {
-    const { ENV_VARS } = await import("../../handlers/env.js");
+    const { ENV_VARS } = await import("../../handlers/env");
     const template = stackFor().template;
 
     const declared = new Set(

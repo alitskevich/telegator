@@ -1,30 +1,26 @@
 import { describe, expect, test } from "vitest";
-import { stubClassifier } from "../../../test/fakes/ai.js";
-import type { RecordingSink } from "../../../test/fakes/logging.js";
-import { recordingSink } from "../../../test/fakes/logging.js";
-import { recordingMetrics } from "../../../test/fakes/metrics.js";
-import type { FakeQueueOptions } from "../../../test/fakes/queues.js";
-import { fakeQueueProducer } from "../../../test/fakes/queues.js";
-import {
-  CLASSIFIER_EFFORT,
-  CLASSIFIER_MAX_TOKENS,
-  CLASSIFIER_MODEL_ID,
-} from "../../ai/constants.js";
-import type { NewsItem } from "../../ai/newsItemSchema.js";
-import { NEWS_ITEM_SCHEMA, NewsItemSchema } from "../../ai/newsItemSchema.js";
-import type { Classifier } from "../../ai/ports.js";
-import { SYSTEM_PROMPT } from "../../ai/prompt.js";
-import type { ScrapedItem } from "../../domain/item.js";
-import { AnalyzedItemSchema, ScrapedItemSchema } from "../../domain/item.js";
-import { createLogger } from "../../logging/logger.js";
-import type { AnalyzeDeps, AnalyzeRecord } from "./index.js";
+import { stubClassifier } from "../../../test/fakes/ai";
+import type { RecordingSink } from "../../../test/fakes/logging";
+import { recordingSink } from "../../../test/fakes/logging";
+import { recordingMetrics } from "../../../test/fakes/metrics";
+import type { FakeQueueOptions } from "../../../test/fakes/queues";
+import { fakeQueueProducer } from "../../../test/fakes/queues";
+import { CLASSIFIER_EFFORT, CLASSIFIER_MAX_TOKENS, CLASSIFIER_MODEL_ID } from "../../ai/constants";
+import type { NewsItem } from "../../ai/newsItemSchema";
+import { NEWS_ITEM_SCHEMA, NewsItemSchema } from "../../ai/newsItemSchema";
+import type { Classifier } from "../../ai/ports";
+import { SYSTEM_PROMPT } from "../../ai/prompt";
+import type { ScrapedItem } from "../../domain/item";
+import { AnalyzedItemSchema, ScrapedItemSchema } from "../../domain/item";
+import { createLogger } from "../../logging/logger";
+import type { AnalyzeDeps, AnalyzeRecord } from "./index";
 import {
   ANALYZE_BATCH_SIZE,
   buildClassificationRequest,
   CATEGORY_LOG_FIELD,
   CLASSIFIED_LOG_MESSAGE,
   runAnalyze,
-} from "./index.js";
+} from "./index";
 
 const DATE = "2026-08-29";
 

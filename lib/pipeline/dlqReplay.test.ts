@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { recordingSink } from "../../test/fakes/logging.js";
-import { fakeQueueDrainer, fakeQueueProducer } from "../../test/fakes/queues.js";
-import { createLogger } from "../logging/logger.js";
-import { replayDlq } from "./dlqReplay.js";
+import { recordingSink } from "../../test/fakes/logging";
+import { fakeQueueDrainer, fakeQueueProducer } from "../../test/fakes/queues";
+import { createLogger } from "../logging/logger";
+import { replayDlq } from "./dlqReplay";
 
 const message = (id: string, groupId?: string) => ({
   receiptHandle: `rh-${id}`,

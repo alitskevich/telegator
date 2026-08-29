@@ -1,4 +1,4 @@
-import type { Source } from "../domain/source.js";
+import type { Source } from "../domain/source";
 
 /**
  * §9.4 L820-822 — "Because the schema changed, seeding is a **migration**, not a

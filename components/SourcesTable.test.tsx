@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import type { Source } from "../lib/domain/source.js";
-import { SourcesTable } from "./SourcesTable.js";
+import type { Source } from "../lib/domain/source";
+import { SourcesTable } from "./SourcesTable";
 
 const source = (id: string, extra: Partial<Source> = {}): Source => ({
   id,

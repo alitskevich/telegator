@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { ScrapedItemSchema } from "../../domain/item.js";
-import type { Source } from "../../domain/source.js";
-import { SourceSchema } from "../../domain/source.js";
-import type { TransformInput } from "./transform.js";
-import { transformPost } from "./transform.js";
+import { ScrapedItemSchema } from "../../domain/item";
+import type { Source } from "../../domain/source";
+import { SourceSchema } from "../../domain/source";
+import type { TransformInput } from "./transform";
+import { transformPost } from "./transform";
 
 const DATE = "2026-08-29";
 

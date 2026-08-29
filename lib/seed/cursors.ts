@@ -1,4 +1,4 @@
-import type { Source } from "../domain/source.js";
+import type { Source } from "../domain/source";
 
 /**
  * §9.5 step 5 (L831) — "Re-seed source cursors (`lastItemId`) from the live

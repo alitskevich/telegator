@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { filterByKeyword } from "./filter.js";
+import { filterByKeyword } from "./filter";
 
 const rows = [
   { id: "example/1", title: "Election result", category: "politics", lastCount: 12 },

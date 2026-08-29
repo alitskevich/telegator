@@ -1,6 +1,6 @@
 import type { ReceiveMessageCommand } from "@aws-sdk/client-sqs";
 import { describe, expect, test } from "vitest";
-import { createSqsDlqInspector, DLQ_PEEK_LIMIT } from "./inspect.js";
+import { createSqsDlqInspector, DLQ_PEEK_LIMIT } from "./inspect";
 
 // biome-ignore lint/suspicious/noExplicitAny: the SDK's send() overloads are wider than this port.
 type AnySend = any;

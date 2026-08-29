@@ -1,4 +1,4 @@
-import { splitTags } from "../../domain/tags.js";
+import { splitTags } from "../../domain/tags";
 
 /**
  * The §3.4 L335 hashtag line.

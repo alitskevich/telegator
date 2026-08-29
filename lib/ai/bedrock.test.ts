@@ -1,15 +1,15 @@
 import type { InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import { describe, expect, it } from "vitest";
-import { DIMENSIONS } from "../dedup/constants.js";
-import type { ClassificationRequest } from "../pipeline/analyze/index.js";
-import { buildClassificationRequest } from "../pipeline/analyze/index.js";
+import { DIMENSIONS } from "../dedup/constants";
+import type { ClassificationRequest } from "../pipeline/analyze/index";
+import { buildClassificationRequest } from "../pipeline/analyze/index";
 import {
   type BedrockInvoker,
   type ClassifierClient,
   createBedrockClassifier,
   createBedrockEmbeddingProvider,
-} from "./bedrock.js";
-import { EMBEDDING_INPUT_TYPE, EMBEDDING_MAX_BATCH, EMBEDDING_MODEL_ID } from "./constants.js";
+} from "./bedrock";
+import { EMBEDDING_INPUT_TYPE, EMBEDDING_MAX_BATCH, EMBEDDING_MODEL_ID } from "./constants";
 
 /**
  * Tests for the two Bedrock adapters (§5.1 L392).

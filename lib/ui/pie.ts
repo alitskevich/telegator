@@ -1,4 +1,4 @@
-import type { Slice } from "../dashboard/computations.js";
+import type { Slice } from "../dashboard/computations";
 
 /**
  * §8.5 L776 — "the source's hand-built SVG arc geometry (centre 100,100, radius

@@ -6,7 +6,7 @@ import {
   type IdTokenVerifier,
   type TokenEndpoint,
   type TokenSet,
-} from "./ports.js";
+} from "./ports";
 
 /**
  * The production adapters for §8.6 L780's hosted UI. Both are network calls, and

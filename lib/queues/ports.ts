@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { ItemIdSchema } from "../domain/ids.js";
-import { AnalyzedItemSchema, ScrapedItemSchema } from "../domain/item.js";
+import { ItemIdSchema } from "../domain/ids";
+import { AnalyzedItemSchema, ScrapedItemSchema } from "../domain/item";
 
 /**
  * The three queues of §7.3 L604–608, their payload schemas, and the producer

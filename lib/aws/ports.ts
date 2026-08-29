@@ -1,4 +1,4 @@
-import type { MetricDimensionName, MetricName } from "../metrics/ports.js";
+import type { MetricDimensionName, MetricName } from "../metrics/ports";
 
 /**
  * The read side of §8.5 L763-772: what the dashboard's cards are computed from.

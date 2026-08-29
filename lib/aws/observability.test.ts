@@ -2,14 +2,14 @@ import type { GetMetricDataCommand } from "@aws-sdk/client-cloudwatch";
 import type { GetQueryResultsCommand, StartQueryCommand } from "@aws-sdk/client-cloudwatch-logs";
 import type { GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
 import { describe, expect, test } from "vitest";
-import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../logging/fields.js";
-import { METRIC_NAMESPACE, SKIP_REASONS } from "../metrics/ports.js";
+import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../logging/fields";
+import { METRIC_NAMESPACE, SKIP_REASONS } from "../metrics/ports";
 import {
   cloudWatchMetricReader,
   logsInsightsCategoryReader,
   MAX_QUERY_POLLS,
   sqsQueueDepthReader,
-} from "./observability.js";
+} from "./observability";
 
 const DAY_MS = 86_400_000;
 const END = 1_770_000_000_000;

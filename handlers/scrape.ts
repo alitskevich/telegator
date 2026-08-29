@@ -2,14 +2,14 @@ import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { systemClock } from "../lib/clock.js";
-import { createSourceRepo } from "../lib/db/sources.js";
-import { createLogger, stdoutSink } from "../lib/logging/logger.js";
-import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch.js";
-import { runScrape, type ScrapeSummary } from "../lib/pipeline/scrape/index.js";
-import { createSqsQueueProducer } from "../lib/queues/sqs.js";
-import { createHttpFetcher } from "../lib/telegram/http.js";
-import { ENV_VARS, requireEnv } from "./env.js";
+import { systemClock } from "../lib/clock";
+import { createSourceRepo } from "../lib/db/sources";
+import { createLogger, stdoutSink } from "../lib/logging/logger";
+import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch";
+import { runScrape, type ScrapeSummary } from "../lib/pipeline/scrape/index";
+import { createSqsQueueProducer } from "../lib/queues/sqs";
+import { createHttpFetcher } from "../lib/telegram/http";
+import { ENV_VARS, requireEnv } from "./env";
 
 /**
  * The `telegator-scrape` entry point (§7.5 L649, EventBridge `rate(30 minutes)`).

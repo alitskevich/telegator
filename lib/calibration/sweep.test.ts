@@ -9,7 +9,7 @@ import {
   THRESHOLD_MAX_BP,
   THRESHOLD_MIN_BP,
   thresholds,
-} from "./sweep.js";
+} from "./sweep";
 
 /** A labelled pair, with the similarity a test wants it to have. */
 const pair = (a: string, b: string, label: "same" | "different", similarity: number) => ({

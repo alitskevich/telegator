@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { SOURCE_STATUS_OK, SourceConfigInput, SourceCursorUpdate, SourceSchema } from "./source.js";
+import { SOURCE_STATUS_OK, SourceConfigInput, SourceCursorUpdate, SourceSchema } from "./source";
 
 const seedRecord = {
   id: "yigal_levin",

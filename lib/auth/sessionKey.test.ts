@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { SESSION_KEY_BYTES } from "./config.js";
-import { createSessionKeyReader } from "./sessionKey.js";
+import { SESSION_KEY_BYTES } from "./config";
+import { createSessionKeyReader } from "./sessionKey";
 
 const ARN = "arn:aws:secretsmanager:eu-central-1:000000000000:secret:telegator/session-key";
 const SECRET = Buffer.alloc(SESSION_KEY_BYTES, 9).toString("base64");

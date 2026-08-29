@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import type { MemberBlock } from "../../domain/message.js";
-import { MEMBER_RENDER_LIMIT, MemberBlockSchema } from "../../domain/message.js";
-import { renderMember, renderMembers } from "./render.js";
+import type { MemberBlock } from "../../domain/message";
+import { MEMBER_RENDER_LIMIT, MemberBlockSchema } from "../../domain/message";
+import { renderMember, renderMembers } from "./render";
 
 /**
  * Built through `MemberBlockSchema.parse` rather than an object literal: the

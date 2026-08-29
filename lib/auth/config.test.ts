@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { AUTH_ENV_VARS, readAuthConfig, sessionKeyFromSecret } from "./config.js";
+import { AUTH_ENV_VARS, readAuthConfig, sessionKeyFromSecret } from "./config";
 
 const KEY_BYTES = 32;
 const complete = {

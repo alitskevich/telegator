@@ -1,6 +1,6 @@
 import type { AdminGetUserCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { describe, expect, test } from "vitest";
-import { cognitoUserStatusReader } from "./userStatus.js";
+import { cognitoUserStatusReader } from "./userStatus";
 
 const SUB = "e4f1a2b3-0000-4000-8000-000000000001";
 const POOL = "eu-central-1_abc123";

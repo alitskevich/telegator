@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import type { NewsItem } from "../../lib/ai/newsItemSchema.js";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports.js";
-import { DIMENSIONS } from "../../lib/dedup/constants.js";
-import { SCRAPE_HEADERS } from "../../lib/pipeline/scrape/index.js";
-import { manualClock } from "../fakes/clock.js";
+import type { NewsItem } from "../../lib/ai/newsItemSchema";
+import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
+import { DIMENSIONS } from "../../lib/dedup/constants";
+import { SCRAPE_HEADERS } from "../../lib/pipeline/scrape/index";
+import { manualClock } from "../fakes/clock";
 
-import { fakeMessageRepo, fakeSourceRepo } from "../fakes/db.js";
-import { fakeBot, fakeFetcher } from "../fakes/telegram.js";
-import { telegramFixture } from "../fixtures/telegram/index.js";
-import { runPipeline } from "./harness.js";
+import { fakeMessageRepo, fakeSourceRepo } from "../fakes/db";
+import { fakeBot, fakeFetcher } from "../fakes/telegram";
+import { telegramFixture } from "../fixtures/telegram/index";
+import { runPipeline } from "./harness";
 
 /**
  * E2E-1 (§11.2 L848) — "A seeded source with three fresh posts produces three

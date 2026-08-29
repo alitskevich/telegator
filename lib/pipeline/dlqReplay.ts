@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { Logger } from "../logging/logger.js";
-import type { QueueDrainer, QueueMessage, QueueProducer } from "../queues/ports.js";
+import type { Logger } from "../logging/logger";
+import type { QueueDrainer, QueueMessage, QueueProducer } from "../queues/ports";
 
 /**
  * §3.5 L357–361 — the DLQ replay handler.

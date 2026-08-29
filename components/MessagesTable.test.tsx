@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import type { MemberRow } from "../lib/dashboard/records.js";
-import type { MessageListItem } from "../lib/domain/message.js";
-import { MessagesTable } from "./MessagesTable.js";
+import type { MemberRow } from "../lib/dashboard/records";
+import type { MessageListItem } from "../lib/domain/message";
+import { MessagesTable } from "./MessagesTable";
 
 const row = (n: number, extra: Partial<MessageListItem> = {}): MessageListItem => ({
   id: `example/${n}`,

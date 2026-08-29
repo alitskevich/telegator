@@ -1,16 +1,16 @@
-import type { EmbeddingProvider } from "../../ai/ports.js";
-import type { Clock } from "../../clock.js";
-import type { MessageRepo } from "../../db/ports.js";
-import { type DedupDeps, type DedupWrite, dedupBatch } from "../../dedup/dedupBatch.js";
-import type { AnalyzedItem } from "../../domain/item.js";
-import type { Logger } from "../../logging/logger.js";
-import type { MetricSink } from "../../metrics/ports.js";
+import type { EmbeddingProvider } from "../../ai/ports";
+import type { Clock } from "../../clock";
+import type { MessageRepo } from "../../db/ports";
+import { type DedupDeps, type DedupWrite, dedupBatch } from "../../dedup/dedupBatch";
+import type { AnalyzedItem } from "../../domain/item";
+import type { Logger } from "../../logging/logger";
+import type { MetricSink } from "../../metrics/ports";
 import {
   AggregateQueuePayloadSchema,
   publishQueueMessage,
   type QueueProducer,
   SQS_MAX_BATCH_ENTRIES,
-} from "../../queues/ports.js";
+} from "../../queues/ports";
 
 /**
  * Stage 3 — the §3.3 aggregate consumer (L256–308).

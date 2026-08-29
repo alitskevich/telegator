@@ -7,8 +7,8 @@ import {
   type MemberRow,
   type RecordActionDeps,
   upsertRecord as upsertRecordCore,
-} from "../lib/dashboard/records.js";
-import { authContext, messages, sources } from "./context.js";
+} from "../lib/dashboard/records";
+import { authContext, messages, sources } from "./context";
 
 /**
  * §8.4 L749-751. Thin wrappers: every rule — the `editor` check, the writable

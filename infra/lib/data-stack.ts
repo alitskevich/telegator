@@ -1,7 +1,7 @@
 import { RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
 import { AttributeType, BillingMode, ProjectionType, Table } from "aws-cdk-lib/aws-dynamodb";
 import type { Construct } from "constructs";
-import type { TelegatorConfig } from "./config.js";
+import type { TelegatorConfig } from "./config";
 
 /**
  * §9.1 L800 — two DynamoDB tables with their GSIs, PITR on `messages`.

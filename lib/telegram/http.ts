@@ -23,8 +23,8 @@
  * token out of CloudWatch.
  */
 
-import type { HttpPost, HttpPostResponse } from "./bot.js";
-import type { HttpFetcher } from "./ports.js";
+import type { HttpPost, HttpPostResponse } from "./bot";
+import type { HttpFetcher } from "./ports";
 
 /**
  * §7.5 L649 gives `scrape` a 300 s budget and §3.1 L193 spends it on up to ten

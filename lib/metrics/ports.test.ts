@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { recordingMetrics } from "../../test/fakes/metrics.js";
-import { METRIC_NAMES, METRIC_NAMESPACE } from "./ports.js";
+import { recordingMetrics } from "../../test/fakes/metrics";
+import { METRIC_NAMES, METRIC_NAMESPACE } from "./ports";
 
 describe("the metric catalogue", () => {
   test("is the twelve names §7.7 L684-693 lists", () => {

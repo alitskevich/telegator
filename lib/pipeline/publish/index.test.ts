@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { fixedClock } from "../../../test/fakes/clock.js";
-import { fakeMessageRepo } from "../../../test/fakes/db.js";
-import { recordingSink } from "../../../test/fakes/logging.js";
-import { recordingMetrics } from "../../../test/fakes/metrics.js";
-import { fakeBot } from "../../../test/fakes/telegram.js";
-import type { MessageRepo } from "../../db/ports.js";
-import { type Message, MessageSchema } from "../../domain/message.js";
-import { createLogger } from "../../logging/logger.js";
-import { type PublishDeps, runPublish } from "./index.js";
+import { fixedClock } from "../../../test/fakes/clock";
+import { fakeMessageRepo } from "../../../test/fakes/db";
+import { recordingSink } from "../../../test/fakes/logging";
+import { recordingMetrics } from "../../../test/fakes/metrics";
+import { fakeBot } from "../../../test/fakes/telegram";
+import type { MessageRepo } from "../../db/ports";
+import { type Message, MessageSchema } from "../../domain/message";
+import { createLogger } from "../../logging/logger";
+import { type PublishDeps, runPublish } from "./index";
 
 const NOW = 1_772_458_034_502;
 

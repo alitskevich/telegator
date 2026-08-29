@@ -6,8 +6,8 @@ import type {
   TokenEndpoint,
   TokenSet,
   UserStatusReader,
-} from "../../lib/auth/ports.js";
-import { IdTokenClaimsSchema } from "../../lib/auth/ports.js";
+} from "../../lib/auth/ports";
+import { IdTokenClaimsSchema } from "../../lib/auth/ports";
 
 /** An in-memory cookie store that also records the options each cookie was set with. */
 export class FakeCookieJar implements CookieJar {

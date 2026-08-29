@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
-import { SYSTEM_PROMPT } from "./prompt.js";
+import { SYSTEM_PROMPT } from "./prompt";
 
 /** Lifts the fenced block that follows the "**System prompt**" paragraph in §5.2. */
 function systemPromptFromSpec(): string {

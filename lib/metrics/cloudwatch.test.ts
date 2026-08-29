@@ -4,16 +4,16 @@ import type {
   PutMetricDataCommandOutput,
 } from "@aws-sdk/client-cloudwatch";
 import { describe, expect, test } from "vitest";
-import { recordingSink } from "../../test/fakes/logging.js";
-import { createLogger } from "../logging/logger.js";
+import { recordingSink } from "../../test/fakes/logging";
+import { createLogger } from "../logging/logger";
 import {
   type CloudWatchMetricsClient,
   createCloudWatchMetrics,
   MAX_METRIC_DATA_PER_PUT,
   METRIC_DIMENSION_NAMES,
   withMetricFlush,
-} from "./cloudwatch.js";
-import { METRIC_NAMESPACE } from "./ports.js";
+} from "./cloudwatch";
+import { METRIC_NAMESPACE } from "./ports";
 
 const OK: PutMetricDataCommandOutput = { $metadata: {} };
 

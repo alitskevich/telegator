@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { ENV_VARS } from "../handlers/env.js";
-import { createSourceRepo } from "../lib/db/sources.js";
-import { parseReseedArgs } from "../lib/seed/args.js";
-import { parseCursorFile, planCursorReseed } from "../lib/seed/cursors.js";
+import { ENV_VARS } from "../handlers/env";
+import { createSourceRepo } from "../lib/db/sources";
+import { parseReseedArgs } from "../lib/seed/args";
+import { parseCursorFile, planCursorReseed } from "../lib/seed/cursors";
 
 /**
  * §9.5 step 5 (L831) — re-seed `lastItemId` so AWS resumes where Firebase

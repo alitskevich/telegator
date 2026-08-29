@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { CHUNK_MARKER, telegramFixture, telegramFixtureNames } from "./index.js";
+import { CHUNK_MARKER, telegramFixture, telegramFixtureNames } from "./index";
 
 /**
  * These fixtures were built from markup observed on a live `t.me/s/` page, not

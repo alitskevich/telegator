@@ -1,12 +1,12 @@
 import { afterAll, describe, expect, test, vi } from "vitest";
-import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir.js";
+import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
 /**
  * A private CDK output directory per App.
  *
  * `NodejsFunction` stages its bundle on disk during synth, so parallel vitest
  * workers sharing one cdk.out race over the staging directory.
  */
-import { createApp } from "./app.js";
+import { createApp } from "./app";
 
 // Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
 afterAll(removeIsolatedOutdirs);

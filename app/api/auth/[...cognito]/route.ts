@@ -1,11 +1,11 @@
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { cookies } from "next/headers";
-import { httpTokenEndpoint, jwksIdTokenVerifier } from "../../../../lib/auth/cognito.js";
-import { readAuthConfig } from "../../../../lib/auth/config.js";
-import type { CookieJar, CookieOptions } from "../../../../lib/auth/ports.js";
-import { handleAuthRequest } from "../../../../lib/auth/routes.js";
-import { createSessionKeyReader } from "../../../../lib/auth/sessionKey.js";
-import { systemClock } from "../../../../lib/clock.js";
+import { httpTokenEndpoint, jwksIdTokenVerifier } from "../../../../lib/auth/cognito";
+import { readAuthConfig } from "../../../../lib/auth/config";
+import type { CookieJar, CookieOptions } from "../../../../lib/auth/ports";
+import { handleAuthRequest } from "../../../../lib/auth/routes";
+import { createSessionKeyReader } from "../../../../lib/auth/sessionKey";
+import { systemClock } from "../../../../lib/clock";
 
 /**
  * §8.2 L722. A thin wrapper, exactly like the Lambda entry points in `handlers/`:

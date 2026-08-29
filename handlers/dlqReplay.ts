@@ -1,9 +1,9 @@
 import { SQSClient } from "@aws-sdk/client-sqs";
-import { createLogger, stdoutSink } from "../lib/logging/logger.js";
-import { type DlqReplaySummary, replayDlq } from "../lib/pipeline/dlqReplay.js";
-import { REPLAYABLE_QUEUES, type ReplayableQueue } from "../lib/queues/ports.js";
-import { createSqsQueueDrainer, createSqsQueueProducer } from "../lib/queues/sqs.js";
-import { ENV_VARS, requireEnv } from "./env.js";
+import { createLogger, stdoutSink } from "../lib/logging/logger";
+import { type DlqReplaySummary, replayDlq } from "../lib/pipeline/dlqReplay";
+import { REPLAYABLE_QUEUES, type ReplayableQueue } from "../lib/queues/ports";
+import { createSqsQueueDrainer, createSqsQueueProducer } from "../lib/queues/sqs";
+import { ENV_VARS, requireEnv } from "./env";
 
 export type { ReplayableQueue };
 /**

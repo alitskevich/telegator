@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { FakeCookieJar, FakeUserStatusReader } from "../../test/fakes/auth.js";
-import { manualClock } from "../../test/fakes/clock.js";
-import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db.js";
-import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "../auth/session.js";
-import type { Message } from "../domain/message.js";
-import type { Source } from "../domain/source.js";
+import { FakeCookieJar, FakeUserStatusReader } from "../../test/fakes/auth";
+import { manualClock } from "../../test/fakes/clock";
+import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db";
+import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "../auth/session";
+import type { Message } from "../domain/message";
+import type { Source } from "../domain/source";
 import {
   deleteRecords,
   loadMembers,
   MESSAGE_WRITABLE_FIELDS,
   SOURCE_WRITABLE_FIELDS,
   upsertRecord,
-} from "./records.js";
+} from "./records";
 
 const NOW = 1_770_000_000_000;
 const SUB = "e4f1a2b3-0000-4000-8000-000000000001";

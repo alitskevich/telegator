@@ -2,13 +2,13 @@ import { SecretValue, Stack, type StackProps } from "aws-cdk-lib";
 import { CfnApp } from "aws-cdk-lib/aws-amplify";
 import { Effect, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import type { Construct } from "constructs";
-import { DASHBOARD_ENV_VARS, ENV_VARS } from "../../handlers/env.js";
-import type { TelegatorAuthStack } from "./auth-stack.js";
-import type { TelegatorConfig } from "./config.js";
-import type { TelegatorDataStack } from "./data-stack.js";
-import { grantTableActions } from "./grants.js";
-import type { TelegatorPipelineStack } from "./pipeline-stack.js";
-import type { TelegatorQueueStack } from "./queue-stack.js";
+import { DASHBOARD_ENV_VARS, ENV_VARS } from "../../handlers/env";
+import type { TelegatorAuthStack } from "./auth-stack";
+import type { TelegatorConfig } from "./config";
+import type { TelegatorDataStack } from "./data-stack";
+import { grantTableActions } from "./grants";
+import type { TelegatorPipelineStack } from "./pipeline-stack";
+import type { TelegatorQueueStack } from "./queue-stack";
 
 /**
  * §9.1 L804 — the Amplify Hosting app, its environment config and the app's

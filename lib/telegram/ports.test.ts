@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { fakeBot, fakeFetcher } from "../../test/fakes/telegram.js";
-import { chatIdFor, TELEGRAM_CAPTION_LIMIT, TELEGRAM_MESSAGE_LIMIT } from "./ports.js";
+import { fakeBot, fakeFetcher } from "../../test/fakes/telegram";
+import { chatIdFor, TELEGRAM_CAPTION_LIMIT, TELEGRAM_MESSAGE_LIMIT } from "./ports";
 
 describe("chatIdFor", () => {
   /** §4.2 L379 — "Chat id is the target channel with a leading `@`." */

@@ -1,6 +1,6 @@
-import type { MemberBlock } from "../../domain/message.js";
-import { MEMBER_RENDER_LIMIT } from "../../domain/message.js";
-import { escapeHtml } from "./escape.js";
+import type { MemberBlock } from "../../domain/message";
+import { MEMBER_RENDER_LIMIT } from "../../domain/message";
+import { escapeHtml } from "./escape";
 
 /**
  * Stage 4's member renderer (§3.4 L318–321).

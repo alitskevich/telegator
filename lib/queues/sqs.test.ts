@@ -1,14 +1,14 @@
 import { SendMessageBatchCommand, type SendMessageBatchRequestEntry } from "@aws-sdk/client-sqs";
 import { beforeEach, describe, expect, test } from "vitest";
-import type { QueueMessage } from "./ports.js";
-import { SQS_MAX_BATCH_ENTRIES } from "./ports.js";
+import type { QueueMessage } from "./ports";
+import { SQS_MAX_BATCH_ENTRIES } from "./ports";
 import {
   createSqsQueueProducer,
   SQS_TRANSPORT_FAILURE_CODE,
   SQS_UNATTRIBUTED_FAILURE_CODE,
   type SqsBatchResponse,
   type SqsSendClient,
-} from "./sqs.js";
+} from "./sqs";
 
 const QUEUE_URL = "https://sqs.eu-central-1.amazonaws.com/000000000000/telegator-analyze";
 

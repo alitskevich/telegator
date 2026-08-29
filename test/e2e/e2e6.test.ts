@@ -1,16 +1,16 @@
 import { describe, expect, test, vi } from "vitest";
-import type { NewsItem } from "../../lib/ai/newsItemSchema.js";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports.js";
-import { DIMENSIONS } from "../../lib/dedup/constants.js";
-import type { AnalyzedItem, ScrapedItem } from "../../lib/domain/item.js";
-import { createLogger } from "../../lib/logging/logger.js";
-import { runAggregate } from "../../lib/pipeline/aggregate/index.js";
-import { runAnalyze } from "../../lib/pipeline/analyze/index.js";
-import { fixedClock } from "../fakes/clock.js";
-import { fakeMessageRepo } from "../fakes/db.js";
-import { recordingSink } from "../fakes/logging.js";
-import { recordingMetrics } from "../fakes/metrics.js";
-import { fakeQueueProducer } from "../fakes/queues.js";
+import type { NewsItem } from "../../lib/ai/newsItemSchema";
+import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
+import { DIMENSIONS } from "../../lib/dedup/constants";
+import type { AnalyzedItem, ScrapedItem } from "../../lib/domain/item";
+import { createLogger } from "../../lib/logging/logger";
+import { runAggregate } from "../../lib/pipeline/aggregate/index";
+import { runAnalyze } from "../../lib/pipeline/analyze/index";
+import { fixedClock } from "../fakes/clock";
+import { fakeMessageRepo } from "../fakes/db";
+import { recordingSink } from "../fakes/logging";
+import { recordingMetrics } from "../fakes/metrics";
+import { fakeQueueProducer } from "../fakes/queues";
 
 /**
  * E2E-6 (§11.2 L853) — "Killing the analyze consumer for 10 minutes and
@@ -162,7 +162,7 @@ describe("E2E-6 — a restarted consumer behaves like one that never stopped", (
     const warmResult = await runAnalyze(records(backlog, scraped), warm.deps);
 
     vi.resetModules();
-    const cold = await import("../../lib/pipeline/analyze/index.js");
+    const cold = await import("../../lib/pipeline/analyze/index");
     const coldWorld = analyzeDeps();
     const coldResult = await cold.runAnalyze(records(backlog, scraped), coldWorld.deps);
 
@@ -175,7 +175,7 @@ describe("E2E-6 — a restarted consumer behaves like one that never stopped", (
     const warmResult = await runAggregate(records(backlog, analyzedItem), warm.deps);
 
     vi.resetModules();
-    const cold = await import("../../lib/pipeline/aggregate/index.js");
+    const cold = await import("../../lib/pipeline/aggregate/index");
     const coldWorld = aggregateDeps();
     const coldResult = await cold.runAggregate(records(backlog, analyzedItem), coldWorld.deps);
 

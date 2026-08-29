@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { SourceSchema } from "../domain/source.js";
-import { seedSourcesFrom, toSeedSource } from "./sources.js";
+import { SourceSchema } from "../domain/source";
+import { seedSourcesFrom, toSeedSource } from "./sources";
 
 /** Shaped like a real row of `data-sources.json`, stat columns and all. */
 const exported = (extra: Record<string, unknown> = {}) => ({

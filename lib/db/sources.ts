@@ -5,10 +5,10 @@ import {
   ScanCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { type Source, type SourceCursor, SourceSchema } from "../domain/source.js";
-import type { DocumentSender } from "./messages.js";
-import { softDeleteCommand, updateAttributes } from "./patch.js";
-import type { SourceRepo } from "./ports.js";
+import { type Source, type SourceCursor, SourceSchema } from "../domain/source";
+import type { DocumentSender } from "./messages";
+import { softDeleteCommand, updateAttributes } from "./patch";
+import type { SourceRepo } from "./ports";
 
 /**
  * The DynamoDB adapter for `sources` (§2.1, §7.2 L587).

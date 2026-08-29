@@ -1,12 +1,7 @@
-import type {
-  CategoryLogReader,
-  MetricReader,
-  QueueDepth,
-  QueueDepthReader,
-} from "../aws/ports.js";
-import type { Clock } from "../clock.js";
-import type { MessageRepo } from "../db/ports.js";
-import type { MessageListItem } from "../domain/message.js";
+import type { CategoryLogReader, MetricReader, QueueDepth, QueueDepthReader } from "../aws/ports";
+import type { Clock } from "../clock";
+import type { MessageRepo } from "../db/ports";
+import type { MessageListItem } from "../domain/message";
 import {
   categoryChart,
   errorCount,
@@ -21,7 +16,7 @@ import {
   type SkippedItems,
   type Slice,
   statusChart,
-} from "./computations.js";
+} from "./computations";
 
 /**
  * Everything `app/page.tsx` renders (§8.3 L740), gathered in one place so the

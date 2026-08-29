@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
-import type { Source } from "../../domain/source.js";
-import { SOURCE_STATUS_OK, SourceSchema } from "../../domain/source.js";
+import type { Source } from "../../domain/source";
+import { SOURCE_STATUS_OK, SourceSchema } from "../../domain/source";
 import {
   HOT_THRESHOLD_COUNT,
   MAX_SOURCES_PER_RUN,
   selectSources,
   WARM_INTERVAL_MS,
-} from "./select.js";
+} from "./select";
 
 const MINUTE = 60_000;
 const NOW = 1_700_000_000_000;

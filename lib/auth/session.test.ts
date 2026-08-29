@@ -4,8 +4,8 @@ import {
   FakeIdTokenVerifier,
   FakeTokenEndpoint,
   FakeUserStatusReader,
-} from "../../test/fakes/auth.js";
-import { manualClock } from "../../test/fakes/clock.js";
+} from "../../test/fakes/auth";
+import { manualClock } from "../../test/fakes/clock";
 import {
   AuthorizationError,
   endSession,
@@ -16,7 +16,7 @@ import {
   sealSession,
   startSession,
   unsealSession,
-} from "./session.js";
+} from "./session";
 
 const SUB = "e4f1a2b3-0000-4000-8000-000000000001";
 const REDIRECT = "https://dash.example/api/auth/callback";

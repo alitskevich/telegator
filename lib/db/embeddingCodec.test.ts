@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { DIMENSIONS, EMBEDDING_BYTE_LENGTH } from "../dedup/constants.js";
-import { packEmbedding, unpackEmbedding } from "./embeddingCodec.js";
+import { DIMENSIONS, EMBEDDING_BYTE_LENGTH } from "../dedup/constants";
+import { packEmbedding, unpackEmbedding } from "./embeddingCodec";
 
 /** Builds a view whose byteOffset is 1, i.e. not a multiple of 4. */
 const misalign = (bytes: Uint8Array): Uint8Array => {

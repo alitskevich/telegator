@@ -2,14 +2,14 @@ import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { systemClock } from "../lib/clock.js";
-import { createMessageRepo } from "../lib/db/messages.js";
-import { createLogger, stdoutSink } from "../lib/logging/logger.js";
-import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch.js";
-import { type PublishResultSummary, runPublish } from "../lib/pipeline/publish/index.js";
-import { createTelegramBot } from "../lib/telegram/bot.js";
-import { createHttpPost } from "../lib/telegram/http.js";
-import { ENV_VARS, requireEnv } from "./env.js";
+import { systemClock } from "../lib/clock";
+import { createMessageRepo } from "../lib/db/messages";
+import { createLogger, stdoutSink } from "../lib/logging/logger";
+import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch";
+import { type PublishResultSummary, runPublish } from "../lib/pipeline/publish/index";
+import { createTelegramBot } from "../lib/telegram/bot";
+import { createHttpPost } from "../lib/telegram/http";
+import { ENV_VARS, requireEnv } from "./env";
 
 /**
  * The `telegator-publish` entry point (§7.5 L652, SQS FIFO, batch size 1).

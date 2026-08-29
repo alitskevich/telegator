@@ -1,13 +1,8 @@
-import type {
-  CategoryLogReader,
-  MetricReader,
-  QueueDepthReader,
-  TimeWindow,
-} from "../aws/ports.js";
-import type { Clock } from "../clock.js";
-import type { MessageRepo } from "../db/ports.js";
-import { MESSAGE_STATUSES, type MessageListItem } from "../domain/message.js";
-import { SKIP_REASONS, type SkipReason } from "../metrics/ports.js";
+import type { CategoryLogReader, MetricReader, QueueDepthReader, TimeWindow } from "../aws/ports";
+import type { Clock } from "../clock";
+import type { MessageRepo } from "../db/ports";
+import { MESSAGE_STATUSES, type MessageListItem } from "../domain/message";
+import { SKIP_REASONS, type SkipReason } from "../metrics/ports";
 
 /**
  * §8.5 L763-772 — one named function per card.

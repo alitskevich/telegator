@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { cosineSimilarity } from "./cosine.js";
+import { cosineSimilarity } from "./cosine";
 
 const dot = (a: readonly number[], b: readonly number[]): number =>
   a.reduce((sum, x, i) => sum + x * (b[i] ?? 0), 0);

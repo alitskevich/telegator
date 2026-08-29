@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { cosineSimilarity } from "./cosine.js";
-import { elementwiseMean } from "./vectors.js";
+import { cosineSimilarity } from "./cosine";
+import { elementwiseMean } from "./vectors";
 
 describe("elementwiseMean", () => {
   test("averages position by position", () => {

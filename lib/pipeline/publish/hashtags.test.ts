@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildHashtagLine, toHashtag } from "./hashtags.js";
+import { buildHashtagLine, toHashtag } from "./hashtags";
 
 /**
  * A fixed instant, so every expectation below can name the exact `date_`/`ts_`

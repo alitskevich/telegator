@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { PIE_CENTRE, PIE_PALETTE, PIE_RADIUS, sliceColor, toPieSlices } from "./pie.js";
+import { PIE_CENTRE, PIE_PALETTE, PIE_RADIUS, sliceColor, toPieSlices } from "./pie";
 
 const slice = (label: string, value: number) => ({ label, value });
 

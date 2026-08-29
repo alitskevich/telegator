@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import type { DocumentSender } from "./messages.js";
-import { createSourceRepo } from "./sources.js";
+import type { DocumentSender } from "./messages";
+import { createSourceRepo } from "./sources";
 
 const TABLE = "telegator-dev-sources";
 

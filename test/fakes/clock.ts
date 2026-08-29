@@ -1,4 +1,4 @@
-import type { Clock } from "../../lib/clock.js";
+import type { Clock } from "../../lib/clock";
 
 /** A clock stopped at one instant. */
 export function fixedClock(instant: number): Clock {

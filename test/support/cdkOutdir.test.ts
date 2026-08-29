@@ -1,7 +1,7 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { isolatedOutdir, pendingOutdirCount, removeIsolatedOutdirs } from "./cdkOutdir.js";
+import { isolatedOutdir, pendingOutdirCount, removeIsolatedOutdirs } from "./cdkOutdir";
 
 /**
  * The leak this replaces was invisible for ninety iterations, so the cleanup

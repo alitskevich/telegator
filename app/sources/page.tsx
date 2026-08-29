@@ -1,12 +1,12 @@
-import { authContext, sources } from "../../actions/context.js";
+import { authContext, sources } from "../../actions/context";
 import {
   deleteRecords as deleteRecordsAction,
   upsertRecord as upsertRecordAction,
-} from "../../actions/records.js";
-import { exportTable, runScraper } from "../../actions/triggers.js";
-import { SourcesTable } from "../../components/SourcesTable.js";
-import { hasRole } from "../../lib/auth/roles.js";
-import { requireRole } from "../../lib/auth/session.js";
+} from "../../actions/records";
+import { exportTable, runScraper } from "../../actions/triggers";
+import { SourcesTable } from "../../components/SourcesTable";
+import { hasRole } from "../../lib/auth/roles";
+import { requireRole } from "../../lib/auth/session";
 
 /**
  * §8.3 L741 — the Sources page.

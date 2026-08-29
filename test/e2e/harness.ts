@@ -1,16 +1,16 @@
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports.js";
-import type { Clock } from "../../lib/clock.js";
-import { createLogger } from "../../lib/logging/logger.js";
-import { runAggregate } from "../../lib/pipeline/aggregate/index.js";
-import { runAnalyze } from "../../lib/pipeline/analyze/index.js";
-import { runPublish } from "../../lib/pipeline/publish/index.js";
-import { runScrape } from "../../lib/pipeline/scrape/index.js";
-import type { QueueMessage } from "../../lib/queues/ports.js";
-import type { FakeMessageRepo, FakeSourceRepo } from "../fakes/db.js";
-import { recordingSink } from "../fakes/logging.js";
-import { recordingMetrics } from "../fakes/metrics.js";
-import { fakeQueueProducer } from "../fakes/queues.js";
-import type { FakeBot, FakeFetcher } from "../fakes/telegram.js";
+import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
+import type { Clock } from "../../lib/clock";
+import { createLogger } from "../../lib/logging/logger";
+import { runAggregate } from "../../lib/pipeline/aggregate/index";
+import { runAnalyze } from "../../lib/pipeline/analyze/index";
+import { runPublish } from "../../lib/pipeline/publish/index";
+import { runScrape } from "../../lib/pipeline/scrape/index";
+import type { QueueMessage } from "../../lib/queues/ports";
+import type { FakeMessageRepo, FakeSourceRepo } from "../fakes/db";
+import { recordingSink } from "../fakes/logging";
+import { recordingMetrics } from "../fakes/metrics";
+import { fakeQueueProducer } from "../fakes/queues";
+import type { FakeBot, FakeFetcher } from "../fakes/telegram";
 
 /**
  * §11.2's end-to-end harness: all four stages of §3.1–3.4 wired together over

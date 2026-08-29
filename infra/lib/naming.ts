@@ -1,4 +1,4 @@
-import type { Environment } from "./config.js";
+import type { Environment } from "./config";
 
 /**
  * §9.2 L810 — "Resource names are environment-prefixed" — without saying what

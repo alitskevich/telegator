@@ -14,15 +14,15 @@ import {
   type GetQueueAttributesCommandOutput,
   QueueAttributeName,
 } from "@aws-sdk/client-sqs";
-import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../logging/fields.js";
-import { METRIC_NAMESPACE, type MetricDimensionName, type MetricName } from "../metrics/ports.js";
+import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../logging/fields";
+import { METRIC_NAMESPACE, type MetricDimensionName, type MetricName } from "../metrics/ports";
 import type {
   CategoryCount,
   CategoryLogReader,
   MetricReader,
   QueueDepthReader,
   TimeWindow,
-} from "./ports.js";
+} from "./ports";
 
 /**
  * The AWS adapters behind §8.5's cards. Each takes a structural slice of its SDK

@@ -1,8 +1,8 @@
 import type { StartQueryCommand } from "@aws-sdk/client-cloudwatch-logs";
 import { describe, expect, test } from "vitest";
-import { logsInsightsCategoryReader } from "../lib/aws/observability.js";
-import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../lib/logging/fields.js";
-import { createLogger, type LogSink } from "../lib/logging/logger.js";
+import { logsInsightsCategoryReader } from "../lib/aws/observability";
+import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../lib/logging/fields";
+import { createLogger, type LogSink } from "../lib/logging/logger";
 
 /**
  * §8.5 L771's category chart spans two modules that never call each other: the

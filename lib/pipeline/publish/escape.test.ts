@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { escapeHtml } from "./escape.js";
+import { escapeHtml } from "./escape";
 
 describe("escapeHtml — §3.4's HTML parse mode", () => {
   test("escapes the four characters Telegram would otherwise parse", () => {

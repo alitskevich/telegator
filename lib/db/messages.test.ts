@@ -6,9 +6,9 @@ import type {
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { describe, expect, test } from "vitest";
-import { MessageSchema } from "../domain/message.js";
-import { packEmbedding } from "./embeddingCodec.js";
-import { createMessageRepo, type DocumentSender } from "./messages.js";
+import { MessageSchema } from "../domain/message";
+import { packEmbedding } from "./embeddingCodec";
+import { createMessageRepo, type DocumentSender } from "./messages";
 
 const TABLE = "telegator-dev-messages";
 

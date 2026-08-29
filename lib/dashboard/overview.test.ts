@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { manualClock } from "../../test/fakes/clock.js";
-import { fakeMessageRepo } from "../../test/fakes/db.js";
+import { manualClock } from "../../test/fakes/clock";
+import { fakeMessageRepo } from "../../test/fakes/db";
 import {
   FakeCategoryLogReader,
   FakeMetricReader,
   FakeQueueDepthReader,
-} from "../../test/fakes/observability.js";
-import type { Message } from "../domain/message.js";
-import { DAY_MS, WEEK_MS } from "./computations.js";
-import { loadOverview } from "./overview.js";
+} from "../../test/fakes/observability";
+import type { Message } from "../domain/message";
+import { DAY_MS, WEEK_MS } from "./computations";
+import { loadOverview } from "./overview";
 
 const NOW = 1_770_000_000_000;
 const clock = manualClock(NOW);

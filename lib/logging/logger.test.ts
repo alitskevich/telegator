@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { recordingSink } from "../../test/fakes/logging.js";
-import { createLogger } from "./logger.js";
+import { recordingSink } from "../../test/fakes/logging";
+import { createLogger } from "./logger";
 
 describe("createLogger", () => {
   test("writes one JSON object per call", () => {

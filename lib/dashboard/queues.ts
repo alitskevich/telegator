@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { type RequireRoleDeps, requireRole } from "../auth/session.js";
-import type { QueueDepthReader } from "../aws/ports.js";
-import type { DlqInspector, DlqMessage } from "../queues/inspect.js";
-import { REPLAYABLE_QUEUES, type ReplayableQueue } from "../queues/ports.js";
+import { type RequireRoleDeps, requireRole } from "../auth/session";
+import type { QueueDepthReader } from "../aws/ports";
+import type { DlqInspector, DlqMessage } from "../queues/inspect";
+import { REPLAYABLE_QUEUES, type ReplayableQueue } from "../queues/ports";
 
 /**
  * §8.2 L723 — "Queue depths + DLQ inspection/replay".

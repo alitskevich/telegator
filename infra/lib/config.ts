@@ -1,7 +1,7 @@
 import type { App } from "aws-cdk-lib";
-import { productionBlocker, readCalibrationRecord } from "../../lib/calibration/record.js";
-import { SETTLE_DELAY_SECONDS, SQS_MAX_DELAY_SECONDS } from "../../lib/dedup/constants.js";
-import { type NameOptions, resourceName } from "./naming.js";
+import { productionBlocker, readCalibrationRecord } from "../../lib/calibration/record";
+import { SETTLE_DELAY_SECONDS, SQS_MAX_DELAY_SECONDS } from "../../lib/dedup/constants";
+import { type NameOptions, resourceName } from "./naming";
 
 /**
  * Deploy-time configuration, read from CDK context.

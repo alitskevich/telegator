@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { createTelegramBot } from "./bot.js";
-import type { FetchInit, FetchLike } from "./http.js";
+import { createTelegramBot } from "./bot";
+import type { FetchInit, FetchLike } from "./http";
 import {
   BOT_API_TIMEOUT_MS,
   createHttpFetcher,
   createHttpPost,
   SCRAPE_FETCH_TIMEOUT_MS,
-} from "./http.js";
+} from "./http";
 
 interface Call {
   readonly url: string;

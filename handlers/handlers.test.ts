@@ -14,21 +14,21 @@ describe("Lambda entry points", () => {
    * the module unimportable in a test process at all.
    */
   test.each([
-    ["scrape", () => import("./scrape.js")],
-    ["analyze", () => import("./analyze.js")],
-    ["aggregate", () => import("./aggregate.js")],
-    ["publish", () => import("./publish.js")],
-    ["dlqReplay", () => import("./dlqReplay.js")],
+    ["scrape", () => import("./scrape")],
+    ["analyze", () => import("./analyze")],
+    ["aggregate", () => import("./aggregate")],
+    ["publish", () => import("./publish")],
+    ["dlqReplay", () => import("./dlqReplay")],
   ])("%s imports without any environment configured", async (_name, load) => {
     await expect(load()).resolves.toBeDefined();
   });
 
   test.each([
-    ["scrape", async () => (await import("./scrape.js")).handler],
-    ["analyze", async () => (await import("./analyze.js")).handler],
-    ["aggregate", async () => (await import("./aggregate.js")).handler],
-    ["publish", async () => (await import("./publish.js")).handler],
-    ["dlqReplay", async () => (await import("./dlqReplay.js")).handler],
+    ["scrape", async () => (await import("./scrape")).handler],
+    ["analyze", async () => (await import("./analyze")).handler],
+    ["aggregate", async () => (await import("./aggregate")).handler],
+    ["publish", async () => (await import("./publish")).handler],
+    ["dlqReplay", async () => (await import("./dlqReplay")).handler],
   ])("%s exports a handler function for the CDK entry point", async (_name, load) => {
     expect(typeof (await load())).toBe("function");
   });

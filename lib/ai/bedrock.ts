@@ -1,13 +1,13 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
-import { DIMENSIONS } from "../dedup/constants.js";
+import { DIMENSIONS } from "../dedup/constants";
 import {
   buildClassificationRequest,
   type ClassificationRequest,
   type ClassificationRequestOptions,
-} from "../pipeline/analyze/index.js";
-import { EMBEDDING_INPUT_TYPE, EMBEDDING_MAX_BATCH, EMBEDDING_MODEL_ID } from "./constants.js";
-import { type NewsItem, NewsItemSchema } from "./newsItemSchema.js";
-import type { Classifier, EmbeddingProvider } from "./ports.js";
+} from "../pipeline/analyze/index";
+import { EMBEDDING_INPUT_TYPE, EMBEDDING_MAX_BATCH, EMBEDDING_MODEL_ID } from "./constants";
+import { type NewsItem, NewsItemSchema } from "./newsItemSchema";
+import type { Classifier, EmbeddingProvider } from "./ports";
 
 /**
  * The Bedrock adapters (§5.1 L392 — "Decision: Amazon Bedrock").

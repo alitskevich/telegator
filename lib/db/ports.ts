@@ -5,8 +5,8 @@ import type {
   MessageListItem,
   MessageMergeAttributes,
   MessageStatus,
-} from "../domain/message.js";
-import type { Source, SourceCursor } from "../domain/source.js";
+} from "../domain/message";
+import type { Source, SourceCursor } from "../domain/source";
 
 /**
  * The two table boundaries, as interfaces.

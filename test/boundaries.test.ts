@@ -1,11 +1,11 @@
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { isolatedOutdir, removeIsolatedOutdirs } from "./support/cdkOutdir.js";
+import { isolatedOutdir, removeIsolatedOutdirs } from "./support/cdkOutdir";
 
 afterAll(removeIsolatedOutdirs);
 
-import { reachableFrom } from "./support/moduleGraph.js";
+import { reachableFrom } from "./support/moduleGraph";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 

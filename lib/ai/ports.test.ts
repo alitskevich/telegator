@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { stubClassifier, stubEmbedder, unitVectorAtAngle } from "../../test/fakes/ai.js";
-import { DIMENSIONS } from "../dedup/constants.js";
-import { cosineSimilarity } from "../dedup/cosine.js";
+import { stubClassifier, stubEmbedder, unitVectorAtAngle } from "../../test/fakes/ai";
+import { DIMENSIONS } from "../dedup/constants";
+import { cosineSimilarity } from "../dedup/cosine";
 
 const newsItem = {
   title: "Capital explosions reported",

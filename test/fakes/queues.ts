@@ -1,4 +1,4 @@
-import type { DlqInspector, DlqMessage } from "../../lib/queues/inspect.js";
+import type { DlqInspector, DlqMessage } from "../../lib/queues/inspect";
 import type {
   QueueDrainer,
   QueueMessage,
@@ -6,7 +6,7 @@ import type {
   ReceivedMessage,
   SendFailure,
   SendResult,
-} from "../../lib/queues/ports.js";
+} from "../../lib/queues/ports";
 
 export interface FakeQueueProducer extends QueueProducer {
   /** Every message handed to `send`, flattened across calls, in order. */

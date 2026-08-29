@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { FakeCookieJar, FakeIdTokenVerifier, FakeTokenEndpoint } from "../../test/fakes/auth.js";
-import { manualClock } from "../../test/fakes/clock.js";
-import { handleAuthRequest, OAUTH_STATE_COOKIE } from "./routes.js";
-import { newSessionKey, readSession, SESSION_COOKIE } from "./session.js";
+import { FakeCookieJar, FakeIdTokenVerifier, FakeTokenEndpoint } from "../../test/fakes/auth";
+import { manualClock } from "../../test/fakes/clock";
+import { handleAuthRequest, OAUTH_STATE_COOKIE } from "./routes";
+import { newSessionKey, readSession, SESSION_COOKIE } from "./session";
 
 const NOW = 1_770_000_000_000;
 const HOUR_MS = 3_600_000;

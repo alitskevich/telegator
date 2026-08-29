@@ -1,24 +1,24 @@
 import { describe, expect, test } from "vitest";
-import { fixedClock } from "../../../test/fakes/clock.js";
-import { type FakeSourceRepo, fakeSourceRepo } from "../../../test/fakes/db.js";
-import { recordingSink } from "../../../test/fakes/logging.js";
-import { type RecordingMetrics, recordingMetrics } from "../../../test/fakes/metrics.js";
-import { type FakeQueueProducer, fakeQueueProducer } from "../../../test/fakes/queues.js";
-import { type FakeFetcher, fakeFetcher } from "../../../test/fakes/telegram.js";
-import { CHUNK_MARKER, telegramFixture } from "../../../test/fixtures/telegram/index.js";
-import type { Source } from "../../domain/source.js";
-import { SOURCE_STATUS_OK, SourceSchema } from "../../domain/source.js";
-import { createLogger } from "../../logging/logger.js";
-import type { QueueMessage, QueueProducer, SendResult } from "../../queues/ports.js";
-import { SQS_MAX_BATCH_ENTRIES } from "../../queues/ports.js";
+import { fixedClock } from "../../../test/fakes/clock";
+import { type FakeSourceRepo, fakeSourceRepo } from "../../../test/fakes/db";
+import { recordingSink } from "../../../test/fakes/logging";
+import { type RecordingMetrics, recordingMetrics } from "../../../test/fakes/metrics";
+import { type FakeQueueProducer, fakeQueueProducer } from "../../../test/fakes/queues";
+import { type FakeFetcher, fakeFetcher } from "../../../test/fakes/telegram";
+import { CHUNK_MARKER, telegramFixture } from "../../../test/fixtures/telegram/index";
+import type { Source } from "../../domain/source";
+import { SOURCE_STATUS_OK, SourceSchema } from "../../domain/source";
+import { createLogger } from "../../logging/logger";
+import type { QueueMessage, QueueProducer, SendResult } from "../../queues/ports";
+import { SQS_MAX_BATCH_ENTRIES } from "../../queues/ports";
 import {
   runScrape,
   SCRAPE_ACCEPT_LANGUAGE,
   SCRAPE_HEADERS,
   SCRAPE_USER_AGENT,
   STALE_ZERO_YIELD_RUNS,
-} from "./index.js";
-import { COLD_INTERVAL_MS } from "./select.js";
+} from "./index";
+import { COLD_INTERVAL_MS } from "./select";
 
 const NOW = 1_700_000_000_000;
 const CHANNEL = "chan";

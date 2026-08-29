@@ -8,24 +8,24 @@ import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { cookies } from "next/headers";
-import { DASHBOARD_ENV_VARS, ENV_VARS } from "../handlers/env.js";
-import { readAuthConfig } from "../lib/auth/config.js";
-import type { CookieJar, CookieOptions } from "../lib/auth/ports.js";
-import type { RequireRoleDeps } from "../lib/auth/session.js";
-import { createSessionKeyReader } from "../lib/auth/sessionKey.js";
-import { cognitoUserStatusReader } from "../lib/auth/userStatus.js";
-import { lambdaInvoker } from "../lib/aws/lambda.js";
+import { DASHBOARD_ENV_VARS, ENV_VARS } from "../handlers/env";
+import { readAuthConfig } from "../lib/auth/config";
+import type { CookieJar, CookieOptions } from "../lib/auth/ports";
+import type { RequireRoleDeps } from "../lib/auth/session";
+import { createSessionKeyReader } from "../lib/auth/sessionKey";
+import { cognitoUserStatusReader } from "../lib/auth/userStatus";
+import { lambdaInvoker } from "../lib/aws/lambda";
 import {
   cloudWatchMetricReader,
   logsInsightsCategoryReader,
   sqsQueueDepthReader,
-} from "../lib/aws/observability.js";
-import { systemClock } from "../lib/clock.js";
-import { cachedCategoryLogReader, cachedMetricReader } from "../lib/dashboard/cache.js";
-import { createMessageRepo } from "../lib/db/messages.js";
-import { createSourceRepo } from "../lib/db/sources.js";
-import { createSqsDlqInspector } from "../lib/queues/inspect.js";
-import { createSqsQueueProducer } from "../lib/queues/sqs.js";
+} from "../lib/aws/observability";
+import { systemClock } from "../lib/clock";
+import { cachedCategoryLogReader, cachedMetricReader } from "../lib/dashboard/cache";
+import { createMessageRepo } from "../lib/db/messages";
+import { createSourceRepo } from "../lib/db/sources";
+import { createSqsDlqInspector } from "../lib/queues/inspect";
+import { createSqsQueueProducer } from "../lib/queues/sqs";
 
 /**
  * The one place a server action reaches for AWS.

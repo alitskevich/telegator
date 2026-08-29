@@ -1,4 +1,4 @@
-import type { MetricDimensions, MetricName, MetricSink } from "../../lib/metrics/ports.js";
+import type { MetricDimensions, MetricName, MetricSink } from "../../lib/metrics/ports";
 
 export interface MetricRecord {
   readonly name: MetricName;

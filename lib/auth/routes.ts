@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type { CookieOptions } from "./ports.js";
-import { endSession, SESSION_COOKIE, type StartSessionDeps, startSession } from "./session.js";
+import type { CookieOptions } from "./ports";
+import { endSession, SESSION_COOKIE, type StartSessionDeps, startSession } from "./session";
 
 /** Holds the OAuth `state` between the redirect out and the callback back. */
 export const OAUTH_STATE_COOKIE = "telegator_oauth_state";

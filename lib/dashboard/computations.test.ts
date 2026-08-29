@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { manualClock } from "../../test/fakes/clock.js";
-import { fakeMessageRepo } from "../../test/fakes/db.js";
+import { manualClock } from "../../test/fakes/clock";
+import { fakeMessageRepo } from "../../test/fakes/db";
 import {
   FakeCategoryLogReader,
   FakeMetricReader,
   FakeQueueDepthReader,
-} from "../../test/fakes/observability.js";
-import type { Message } from "../domain/message.js";
+} from "../../test/fakes/observability";
+import type { Message } from "../domain/message";
 import {
   categoryChart,
   DAY_MS,
@@ -21,7 +21,7 @@ import {
   recentMessages,
   statusChart,
   WEEK_MS,
-} from "./computations.js";
+} from "./computations";
 
 const NOW = 1_770_000_000_000;
 const clock = manualClock(NOW);

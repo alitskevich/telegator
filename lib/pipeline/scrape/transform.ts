@@ -1,8 +1,8 @@
-import type { DateKey } from "../../domain/date.js";
-import { formatItemId } from "../../domain/ids.js";
-import type { ItemKind, Link, ScrapedItem } from "../../domain/item.js";
-import { ScrapedItemSchema } from "../../domain/item.js";
-import type { Source } from "../../domain/source.js";
+import type { DateKey } from "../../domain/date";
+import { formatItemId } from "../../domain/ids";
+import type { ItemKind, Link, ScrapedItem } from "../../domain/item";
+import { ScrapedItemSchema } from "../../domain/item";
+import type { Source } from "../../domain/source";
 
 /**
  * §3.1 L212 — the per-post transform: a parsed post plus its source become one

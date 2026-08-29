@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { packEmbedding } from "../db/embeddingCodec.js";
-import { buildEmbeddingText } from "../dedup/embeddingText.js";
+import { packEmbedding } from "../db/embeddingCodec";
+import { buildEmbeddingText } from "../dedup/embeddingText";
 import {
   CURVE_HEADER,
   embeddingInputs,
@@ -9,8 +9,8 @@ import {
   parsePairsJsonl,
   scorePairs,
   toCurveCsv,
-} from "./formats.js";
-import { type CurveRow, selectThreshold, sweep } from "./sweep.js";
+} from "./formats";
+import { type CurveRow, selectThreshold, sweep } from "./sweep";
 
 const base64 = (vector: readonly number[]) => Buffer.from(packEmbedding(vector)).toString("base64");
 

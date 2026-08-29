@@ -1,19 +1,19 @@
-import type { Clock } from "../../clock.js";
-import type { SourceRepo } from "../../db/ports.js";
-import type { DateKey } from "../../domain/date.js";
-import { todayKey } from "../../domain/date.js";
-import type { ScrapedItem } from "../../domain/item.js";
-import type { Source, SourceCursor } from "../../domain/source.js";
-import { SOURCE_STATUS_OK } from "../../domain/source.js";
-import type { Logger } from "../../logging/logger.js";
-import type { MetricSink } from "../../metrics/ports.js";
-import type { QueueMessage, QueueProducer } from "../../queues/ports.js";
-import { analyzeQueueMessage, SQS_MAX_BATCH_ENTRIES } from "../../queues/ports.js";
-import type { ParsedPost } from "../../telegram/parse.js";
-import { parseTelegramPage } from "../../telegram/parse.js";
-import type { HttpFetcher } from "../../telegram/ports.js";
-import { selectSources } from "./select.js";
-import { transformPost } from "./transform.js";
+import type { Clock } from "../../clock";
+import type { SourceRepo } from "../../db/ports";
+import type { DateKey } from "../../domain/date";
+import { todayKey } from "../../domain/date";
+import type { ScrapedItem } from "../../domain/item";
+import type { Source, SourceCursor } from "../../domain/source";
+import { SOURCE_STATUS_OK } from "../../domain/source";
+import type { Logger } from "../../logging/logger";
+import type { MetricSink } from "../../metrics/ports";
+import type { QueueMessage, QueueProducer } from "../../queues/ports";
+import { analyzeQueueMessage, SQS_MAX_BATCH_ENTRIES } from "../../queues/ports";
+import type { ParsedPost } from "../../telegram/parse";
+import { parseTelegramPage } from "../../telegram/parse";
+import type { HttpFetcher } from "../../telegram/ports";
+import { selectSources } from "./select";
+import { transformPost } from "./transform";
 
 /**
  * Stage 1 — the §3.1 L183–216 scrape orchestrator.

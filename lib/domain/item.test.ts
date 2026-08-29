@@ -6,7 +6,7 @@ import {
   LinkSchema,
   ScrapedItemSchema,
   SUMMARY_MAX_LENGTH,
-} from "./item.js";
+} from "./item";
 
 const scraped = {
   id: "yigal_levin/12345",

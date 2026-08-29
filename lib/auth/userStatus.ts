@@ -2,7 +2,7 @@ import {
   AdminGetUserCommand,
   type AdminGetUserCommandOutput,
 } from "@aws-sdk/client-cognito-identity-provider";
-import type { UserStatusReader } from "./ports.js";
+import type { UserStatusReader } from "./ports";
 
 /**
  * The production `UserStatusReader` (R34).

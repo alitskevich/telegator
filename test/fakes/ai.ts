@@ -1,5 +1,5 @@
-import type { NewsItem } from "../../lib/ai/newsItemSchema.js";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports.js";
+import type { NewsItem } from "../../lib/ai/newsItemSchema";
+import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
 
 export interface StubClassifier extends Classifier {
   /** Bodies this classifier was asked about, in order. */

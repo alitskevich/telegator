@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { type RequireRoleDeps, requireRole } from "../auth/session.js";
-import type { LambdaInvoker } from "../aws/lambda.js";
-import type { MessageRepo, SourceRepo } from "../db/ports.js";
-import { ItemIdSchema } from "../domain/ids.js";
-import { MESSAGE_STATUSES } from "../domain/message.js";
-import { publishQueueMessage, type QueueProducer, REPLAYABLE_QUEUES } from "../queues/ports.js";
-import { MESSAGE_COLUMNS, SOURCE_COLUMNS } from "../ui/columns.js";
-import { toCsv } from "../ui/csv.js";
+import { type RequireRoleDeps, requireRole } from "../auth/session";
+import type { LambdaInvoker } from "../aws/lambda";
+import type { MessageRepo, SourceRepo } from "../db/ports";
+import { ItemIdSchema } from "../domain/ids";
+import { MESSAGE_STATUSES } from "../domain/message";
+import { publishQueueMessage, type QueueProducer, REPLAYABLE_QUEUES } from "../queues/ports";
+import { MESSAGE_COLUMNS, SOURCE_COLUMNS } from "../ui/columns";
+import { toCsv } from "../ui/csv";
 
 /**
  * §8.4 L752-755 — the three `admin` triggers and the `viewer` export.

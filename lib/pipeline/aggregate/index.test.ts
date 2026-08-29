@@ -1,20 +1,20 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { stubEmbedder, unitVectorAtAngle } from "../../../test/fakes/ai.js";
-import { advancingClock, fixedClock } from "../../../test/fakes/clock.js";
-import { type FakeMessageRepo, fakeMessageRepo } from "../../../test/fakes/db.js";
-import { recordingSink } from "../../../test/fakes/logging.js";
-import { type RecordingMetrics, recordingMetrics } from "../../../test/fakes/metrics.js";
-import { type FakeQueueProducer, fakeQueueProducer } from "../../../test/fakes/queues.js";
-import { packEmbedding, unpackEmbedding } from "../../db/embeddingCodec.js";
-import type { MessageRepo } from "../../db/ports.js";
-import { MAX_MEMBERS } from "../../dedup/constants.js";
-import { cosineSimilarity } from "../../dedup/cosine.js";
-import { buildEmbeddingText } from "../../dedup/embeddingText.js";
-import { type AnalyzedItem, AnalyzedItemSchema } from "../../domain/item.js";
-import { type MemberBlock, type Message, MessageSchema } from "../../domain/message.js";
-import { createLogger } from "../../logging/logger.js";
-import { PublishQueuePayloadSchema } from "../../queues/ports.js";
-import { type AggregateDeps, type AggregateRecord, runAggregate } from "./index.js";
+import { stubEmbedder, unitVectorAtAngle } from "../../../test/fakes/ai";
+import { advancingClock, fixedClock } from "../../../test/fakes/clock";
+import { type FakeMessageRepo, fakeMessageRepo } from "../../../test/fakes/db";
+import { recordingSink } from "../../../test/fakes/logging";
+import { type RecordingMetrics, recordingMetrics } from "../../../test/fakes/metrics";
+import { type FakeQueueProducer, fakeQueueProducer } from "../../../test/fakes/queues";
+import { packEmbedding, unpackEmbedding } from "../../db/embeddingCodec";
+import type { MessageRepo } from "../../db/ports";
+import { MAX_MEMBERS } from "../../dedup/constants";
+import { cosineSimilarity } from "../../dedup/cosine";
+import { buildEmbeddingText } from "../../dedup/embeddingText";
+import { type AnalyzedItem, AnalyzedItemSchema } from "../../domain/item";
+import { type MemberBlock, type Message, MessageSchema } from "../../domain/message";
+import { createLogger } from "../../logging/logger";
+import { PublishQueuePayloadSchema } from "../../queues/ports";
+import { type AggregateDeps, type AggregateRecord, runAggregate } from "./index";
 
 const DATE = "2026-08-29";
 /** A second date, which §3.3 L274's correctness rule keeps entirely separate. */

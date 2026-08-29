@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { FakeCookieJar, FakeUserStatusReader } from "../../test/fakes/auth.js";
-import { manualClock } from "../../test/fakes/clock.js";
-import { FakeQueueDepthReader } from "../../test/fakes/observability.js";
-import { FakeDlqInspector } from "../../test/fakes/queues.js";
-import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "../auth/session.js";
-import { inspectDlq, loadQueues } from "./queues.js";
+import { FakeCookieJar, FakeUserStatusReader } from "../../test/fakes/auth";
+import { manualClock } from "../../test/fakes/clock";
+import { FakeQueueDepthReader } from "../../test/fakes/observability";
+import { FakeDlqInspector } from "../../test/fakes/queues";
+import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "../auth/session";
+import { inspectDlq, loadQueues } from "./queues";
 
 const NOW = 1_770_000_000_000;
 const SUB = "e4f1a2b3-0000-4000-8000-000000000001";

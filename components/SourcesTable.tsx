@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SOURCE_WRITABLE_FIELDS } from "../lib/dashboard/records.js";
-import type { Source } from "../lib/domain/source.js";
-import { SOURCE_COLUMNS } from "../lib/ui/columns.js";
-import { filterByKeyword } from "../lib/ui/filter.js";
+import { SOURCE_WRITABLE_FIELDS } from "../lib/dashboard/records";
+import type { Source } from "../lib/domain/source";
+import { SOURCE_COLUMNS } from "../lib/ui/columns";
+import { filterByKeyword } from "../lib/ui/filter";
 
 /**
  * §8.3 L741 — "Table of id, status, tgChannel, category, `teaser`, lastCount,

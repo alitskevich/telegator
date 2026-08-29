@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { httpTokenEndpoint } from "./cognito.js";
+import { httpTokenEndpoint } from "./cognito";
 
 const config = {
   hostedUiDomain: "https://telegator.auth.eu-central-1.amazoncognito.com",

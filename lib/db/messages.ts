@@ -18,9 +18,9 @@ import {
   MessageListItemSchema,
   MessageSchema,
   type MessageStatus,
-} from "../domain/message.js";
-import { softDeleteCommand, updateAttributes } from "./patch.js";
-import type { MemberMerge, MessageRepo, PublishResult } from "./ports.js";
+} from "../domain/message";
+import { softDeleteCommand, updateAttributes } from "./patch";
+import type { MemberMerge, MessageRepo, PublishResult } from "./ports";
 
 /**
  * The DynamoDB adapter for `messages` (§2.3, §7.2 L588).

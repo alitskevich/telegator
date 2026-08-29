@@ -3,13 +3,8 @@ import {
   PutMetricDataCommand,
   type PutMetricDataCommandOutput,
 } from "@aws-sdk/client-cloudwatch";
-import type { Logger } from "../logging/logger.js";
-import {
-  METRIC_NAMESPACE,
-  type MetricDimensions,
-  type MetricName,
-  type MetricSink,
-} from "./ports.js";
+import type { Logger } from "../logging/logger";
+import { METRIC_NAMESPACE, type MetricDimensions, type MetricName, type MetricSink } from "./ports";
 
 /**
  * The CloudWatch adapter for `MetricSink` (§7.7 L681–693).

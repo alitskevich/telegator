@@ -1,14 +1,14 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { z } from "zod";
-import type { Clock } from "../clock.js";
+import type { Clock } from "../clock";
 import type {
   CookieJar,
   CookieOptions,
   IdTokenVerifier,
   TokenEndpoint,
   UserStatusReader,
-} from "./ports.js";
-import { hasRole, type Role } from "./roles.js";
+} from "./ports";
+import { hasRole, type Role } from "./roles";
 
 export const SESSION_COOKIE = "telegator_session";
 

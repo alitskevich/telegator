@@ -1,5 +1,5 @@
-import type { Slice } from "../lib/dashboard/computations.js";
-import { PIE_CENTRE, PIE_RADIUS, type PieSlice, toPieSlices } from "../lib/ui/pie.js";
+import type { Slice } from "../lib/dashboard/computations";
+import { PIE_CENTRE, PIE_RADIUS, type PieSlice, toPieSlices } from "../lib/ui/pie";
 
 /**
  * §8.5 L776 — the two pie charts, hand-built. "No charting library is needed for
