@@ -1,4 +1,5 @@
 import {
+  authContext,
   categoryLogs,
   dlqUrls,
   messages,
@@ -7,6 +8,7 @@ import {
   queueUrls,
 } from "../actions/context.js";
 import { Dashboard } from "../components/Dashboard.js";
+import { requireRole } from "../lib/auth/session.js";
 import { systemClock } from "../lib/clock.js";
 import { loadOverview } from "../lib/dashboard/overview.js";
 
@@ -23,6 +25,18 @@ import { loadOverview } from "../lib/dashboard/overview.js";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  /**
+   * §8.6 L783 gives `viewer` "Read all pages" — a grant to a role, not to the
+   * public, and §8.6 L790 allows no code path that skips authorisation. This
+   * page shipped without the check in item 5.11 and served live pipeline data
+   * to anyone: 24 h counters, DLQ depths, and the ten most recent messages with
+   * their titles and target channels.
+   *
+   * Before the load, not after: `loadOverview` reads DynamoDB, CloudWatch and
+   * SQS, and an unauthorised request should cost none of them.
+   */
+  await requireRole("viewer", await authContext());
+
   const overview = await loadOverview({
     metrics,
     queues: queueDepths,
