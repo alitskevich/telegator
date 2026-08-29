@@ -47,13 +47,27 @@ export class FakeMetricReader implements MetricReader {
 export class FakeQueueDepthReader implements QueueDepthReader {
   readonly asked: string[] = [];
   private readonly depths = new Map<string, QueueDepth>();
+  private readonly failures = new Map<string, Error>();
 
   set(queueUrl: string, depth: QueueDepth): void {
     this.depths.set(queueUrl, depth);
   }
 
+  /**
+   * A queue that cannot be read: deleted, throttled, or covered by a role the
+   * dashboard has lost. SQS answers `QueueDoesNotExist` for the first, which is
+   * what a half-deployed environment produces.
+   */
+  fail(queueUrl: string, error: Error = new Error("QueueDoesNotExist")): void {
+    this.failures.set(queueUrl, error);
+  }
+
   async depth(queueUrl: string): Promise<QueueDepth> {
     this.asked.push(queueUrl);
+
+    const failure = this.failures.get(queueUrl);
+    if (failure !== undefined) throw failure;
+
     return this.depths.get(queueUrl) ?? { available: 0, inFlight: 0 };
   }
 }

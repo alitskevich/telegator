@@ -11,6 +11,17 @@ import { PieChart } from "./PieChart";
  * what lets the layout be tested without AWS.
  */
 
+/**
+ * What a number that could not be read shows as.
+ *
+ * Never `0`. §8.5 L769's "Errors" card is the reason: zero dead letters is a
+ * claim that the pipeline is healthy, and an unreadable DLQ is not evidence for
+ * it. The same applies to a queue depth — an empty queue and a queue nobody
+ * could reach look identical at `0` and mean opposite things.
+ */
+const UNKNOWN = "\u2014";
+const UNKNOWN_NOTE = "unavailable";
+
 export function Dashboard({ overview }: { overview: Overview }) {
   const skipDetail = Object.entries(overview.skipped.byReason)
     .map(([reason, count]) => `${reason} ${count}`)
@@ -30,8 +41,10 @@ export function Dashboard({ overview }: { overview: Overview }) {
         <StatCard
           label="Errors"
           value={overview.errors}
-          note="dead letters"
-          alert={overview.errors > 0}
+          note={overview.errors === null ? UNKNOWN_NOTE : "dead letters"}
+          // `null > 0` is false, but saying so explicitly keeps an unknown
+          // count from ever being styled as either healthy or alarming.
+          alert={overview.errors !== null && overview.errors > 0}
         />
       </section>
 
@@ -69,14 +82,14 @@ function StatCard({
   alert = false,
 }: {
   label: string;
-  value: number;
+  value: number | null;
   note?: string;
   alert?: boolean;
 }) {
   return (
     <article className={alert ? "stat-card stat-card-alert" : "stat-card"}>
       <span className="stat-label">{label}</span>
-      <span className="stat-value">{value}</span>
+      <span className="stat-value">{value === null ? UNKNOWN : value}</span>
       {note === undefined || note === "" ? null : <span className="stat-note">{note}</span>}
     </article>
   );
@@ -86,11 +99,17 @@ function QueueTile({ entry }: { entry: QueueStripEntry }) {
   return (
     <article className="queue-tile">
       <span className="queue-name">{entry.label}</span>
-      <span className="queue-depth">{entry.depth}</span>
+      <span className="queue-depth">{entry.depth === null ? UNKNOWN : entry.depth}</span>
       {/* A non-empty DLQ is the one number here that means someone has to act,
-          so it is marked rather than shown as one more figure. */}
-      <span className={entry.dlqDepth > 0 ? "queue-dlq queue-dlq-alert" : "queue-dlq"}>
-        DLQ {entry.dlqDepth}
+          so it is marked rather than shown as one more figure. An unreadable one
+          is not marked: it is not evidence that anything needs doing, and
+          styling it as an alert would cry wolf every time SQS throttles. */}
+      <span
+        className={
+          entry.dlqDepth !== null && entry.dlqDepth > 0 ? "queue-dlq queue-dlq-alert" : "queue-dlq"
+        }
+      >
+        DLQ {entry.dlqDepth === null ? UNKNOWN : entry.dlqDepth}
       </span>
     </article>
   );

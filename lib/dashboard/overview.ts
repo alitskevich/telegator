@@ -12,6 +12,7 @@ import {
   last24Hours,
   messagesPublished,
   type PipelineQueueUrls,
+  readDepth,
   recentMessages,
   type SkippedItems,
   type Slice,
@@ -25,9 +26,13 @@ import {
 
 export interface QueueStripEntry {
   readonly label: string;
-  /** Available plus in-flight — both halves are work the pipeline still holds. */
-  readonly depth: number;
-  readonly dlqDepth: number;
+  /**
+   * Available plus in-flight — both halves are work the pipeline still holds.
+   * `null` where the queue could not be read, which is not the same fact as a
+   * depth of zero and must not render as one.
+   */
+  readonly depth: number | null;
+  readonly dlqDepth: number | null;
 }
 
 export interface Overview {
@@ -35,7 +40,8 @@ export interface Overview {
   readonly analyzed: number;
   readonly skipped: SkippedItems;
   readonly published: number;
-  readonly errors: number;
+  /** §8.5 L769. `null` when any DLQ went unread — see `errorCount`. */
+  readonly errors: number | null;
   readonly statusSlices: Slice[];
   readonly categorySlices: Slice[];
   readonly strip: QueueStripEntry[];
@@ -78,6 +84,10 @@ function readOnce(inner: QueueDepthReader): QueueDepthReader {
 
 const STAGES = ["analyze", "aggregate", "publish"] as const;
 
+/** Both halves of a depth, or `null` for a queue that did not answer. */
+const total = (depth: QueueDepth | null): number | null =>
+  depth === null ? null : depth.available + depth.inFlight;
+
 export async function loadOverview(deps: OverviewDeps): Promise<Overview> {
   const queues = readOnce(deps.queues);
   const day = last24Hours(deps.clock);
@@ -98,15 +108,11 @@ export async function loadOverview(deps: OverviewDeps): Promise<Overview> {
   const strip = await Promise.all(
     STAGES.map(async (stage) => {
       const [depth, dlq] = await Promise.all([
-        queues.depth(deps.queueUrls[stage]),
-        queues.depth(deps.dlqUrls[stage]),
+        readDepth(queues, deps.queueUrls[stage]),
+        readDepth(queues, deps.dlqUrls[stage]),
       ]);
 
-      return {
-        label: stage,
-        depth: depth.available + depth.inFlight,
-        dlqDepth: dlq.available + dlq.inFlight,
-      };
+      return { label: stage, depth: total(depth), dlqDepth: total(dlq) };
     }),
   );
 

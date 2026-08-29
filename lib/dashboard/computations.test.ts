@@ -204,3 +204,66 @@ describe("recent messages (§8.5 L772)", () => {
     expect((await recentMessages(repo)).map((m) => m.id)).toEqual(["example/2"]);
   });
 });
+
+/**
+ * A queue the dashboard cannot read.
+ *
+ * The console blanked entirely on `QueueDoesNotExist` from one SQS call — the
+ * 24 h counters and the recent-message list went with it, though neither reads
+ * SQS. `categoryChart` already argues the case for tolerating a single dead
+ * source; queue depth cannot copy it verbatim, because §8.5 L769 makes DLQ
+ * depth the "Errors" card and a zero there reads as a healthy pipeline.
+ */
+describe("an unreadable queue", () => {
+  const DLQS = ["dlq/analyze", "dlq/aggregate", "dlq/publish"];
+
+  test("makes the error count unknown rather than zero", async () => {
+    const queues = new FakeQueueDepthReader();
+    queues.set("dlq/analyze", { available: 2, inFlight: 1 });
+    queues.set("dlq/publish", { available: 3, inFlight: 0 });
+    queues.fail("dlq/aggregate");
+
+    expect(await errorCount(queues, DLQS)).toBeNull();
+  });
+
+  /**
+   * The dangerous case, and the reason this is `null` and not a partial sum:
+   * five dead letters plus one unreadable queue reported as "5" is a number an
+   * operator would act on, and it could be five or five hundred.
+   */
+  test("never reports a partial sum as the total", async () => {
+    const queues = new FakeQueueDepthReader();
+    queues.set("dlq/analyze", { available: 5, inFlight: 0 });
+    queues.fail("dlq/publish");
+
+    expect(await errorCount(queues, ["dlq/analyze", "dlq/publish"])).toBeNull();
+  });
+
+  test("still sums when every DLQ answers", async () => {
+    const queues = new FakeQueueDepthReader();
+    queues.set("dlq/analyze", { available: 2, inFlight: 1 });
+
+    expect(await errorCount(queues, ["dlq/analyze"])).toBe(3);
+  });
+
+  /**
+   * A pie slice has to be a number, and an unknown depth is not one. Dropping
+   * the slice keeps the chart honest about what it is drawn from; the queue
+   * strip is where the missing queue is named.
+   */
+  test("drops the chart slice for a queue that cannot be read", async () => {
+    const queues = new FakeQueueDepthReader();
+    queues.set("q/analyze", { available: 4, inFlight: 1 });
+    queues.set("q/publish", { available: 2, inFlight: 0 });
+    queues.fail("q/aggregate");
+
+    const slices = await statusChart(queues, fakeMessageRepo([]), {
+      analyze: "q/analyze",
+      aggregate: "q/aggregate",
+      publish: "q/publish",
+    });
+
+    expect(slices.map((slice) => slice.label)).not.toContain("aggregate");
+    expect(slices.find((slice) => slice.label === "analyze")?.value).toBe(5);
+  });
+});

@@ -139,3 +139,46 @@ describe("loadOverview — §8.3 L740 and §8.5", () => {
     expect(overview.scraped).toBe(412);
   });
 });
+
+/**
+ * The failure that took the console down: `QueueDoesNotExist` from one SQS
+ * call blanked the whole page, including the 24 h counters and the recent
+ * message list, neither of which reads SQS at all.
+ */
+describe("a queue the dashboard cannot read", () => {
+  test("does not blank the rest of the page", async () => {
+    metrics.set("ItemsScraped", 412);
+    queues.fail("q/aggregate");
+
+    const overview = await loadOverview(deps());
+
+    expect(overview.scraped).toBe(412);
+    expect(overview.recent).toHaveLength(3);
+  });
+
+  test("shows that one queue's depth as unknown, not as empty", async () => {
+    queues.set("q/analyze", { available: 4, inFlight: 0 });
+    queues.fail("q/aggregate");
+
+    const strip = await loadOverview(deps()).then((overview) => overview.strip);
+
+    expect(strip.find((entry) => entry.label === "analyze")?.depth).toBe(4);
+    expect(strip.find((entry) => entry.label === "aggregate")?.depth).toBeNull();
+  });
+
+  /** §8.5 L769's card. A zero here would read as "the pipeline is fine". */
+  test("makes the error count unknown when a DLQ cannot be read", async () => {
+    queues.fail("dlq/publish");
+
+    expect((await loadOverview(deps())).errors).toBeNull();
+  });
+
+  test("an unreadable DLQ is unknown in the strip too", async () => {
+    queues.fail("dlq/publish");
+
+    const strip = await loadOverview(deps()).then((overview) => overview.strip);
+
+    expect(strip.find((entry) => entry.label === "publish")?.dlqDepth).toBeNull();
+    expect(strip.find((entry) => entry.label === "analyze")?.dlqDepth).toBe(0);
+  });
+});

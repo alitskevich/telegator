@@ -129,3 +129,44 @@ describe("Dashboard — §8.3 L740", () => {
     expect(markup).toContain("&lt;img");
   });
 });
+
+/**
+ * §8.5 L769's "Errors" card is a claim about pipeline health, so the one thing
+ * it must never do is render an unread queue as `0`. The whole page used to
+ * throw instead; now the number arrives as `null` and has to look different
+ * from "none".
+ */
+describe("a number the dashboard could not read", () => {
+  /** Scoped to the card in question: zeros elsewhere on the page are real. */
+  const cardFor = (markup: string, label: string) =>
+    markup.split('<article class="stat-card').find((card) => card.includes(label)) ?? "";
+
+  test("the errors card says so instead of showing a count", () => {
+    const card = cardFor(render(overview({ errors: null })), "Errors");
+
+    expect(card).toContain("unavailable");
+    expect(card).not.toContain('class="stat-value">0<');
+  });
+
+  /** An unknown error count is not a healthy one, and not an alarming one either. */
+  test("an unknown error count raises no alert", () => {
+    expect(render(overview({ errors: null }))).not.toContain("stat-card-alert");
+  });
+
+  test("a known non-zero error count still alerts", () => {
+    expect(render(overview({ errors: 3 }))).toContain("stat-card-alert");
+  });
+
+  test("a queue whose depth is unknown is not drawn as empty", () => {
+    const markup = render(
+      overview({ strip: [{ label: "aggregate", depth: null, dlqDepth: null }] }),
+    );
+
+    const tile = markup.split('<article class="queue-tile">')[1] ?? "";
+
+    expect(tile).toContain("aggregate");
+    expect(tile).not.toContain(">0<");
+    // An unreadable DLQ is not a clean DLQ, so it must not be styled as one.
+    expect(tile).not.toContain("queue-dlq-alert");
+  });
+});

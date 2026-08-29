@@ -1,4 +1,10 @@
-import type { CategoryLogReader, MetricReader, QueueDepthReader, TimeWindow } from "../aws/ports";
+import type {
+  CategoryLogReader,
+  MetricReader,
+  QueueDepth,
+  QueueDepthReader,
+  TimeWindow,
+} from "../aws/ports";
 import type { Clock } from "../clock";
 import type { MessageRepo } from "../db/ports";
 import { MESSAGE_STATUSES, type MessageListItem } from "../domain/message";
@@ -73,6 +79,30 @@ export const messagesPublished = (messages: MessageRepo): Promise<number> =>
   messages.countByStatus("published");
 
 /**
+ * A depth read that answers `null` where it would have thrown.
+ *
+ * The reader itself keeps throwing. An adapter that swallowed its own errors
+ * would hide a deleted queue or a lost IAM grant from every caller — including
+ * the queues page of §8.2 L723, where the state of a specific queue is the
+ * thing an operator is looking at. This is only the *overview* deciding that
+ * one dead source is worth less than the seven cards that do not depend on it,
+ * which is the argument `categoryChart` already makes for Logs Insights.
+ *
+ * `null` and not `0`: §8.5 L769 makes DLQ depth the "Errors" card, and a zero
+ * there is a specific, load-bearing claim that the pipeline is healthy.
+ */
+export async function readDepth(
+  queues: QueueDepthReader,
+  queueUrl: string,
+): Promise<QueueDepth | null> {
+  try {
+    return await queues.depth(queueUrl);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * §8.5 L769 — "Sum of all DLQ depths", current.
  *
  * In-flight messages count: a message a replay is mid-way through is still a
@@ -82,9 +112,22 @@ export const messagesPublished = (messages: MessageRepo): Promise<number> =>
 export async function errorCount(
   queues: QueueDepthReader,
   dlqUrls: readonly string[],
-): Promise<number> {
-  const depths = await Promise.all(dlqUrls.map((url) => queues.depth(url)));
-  return depths.reduce((total, { available, inFlight }) => total + available + inFlight, 0);
+): Promise<number | null> {
+  const depths = await Promise.all(dlqUrls.map((url) => readDepth(queues, url)));
+
+  let total = 0;
+  for (const depth of depths) {
+    /**
+     * One unreadable DLQ makes the whole card unknown, rather than a sum of the
+     * queues that did answer. "5 dead letters" is a number an operator acts on;
+     * if one of three queues went unread it could equally be five hundred, and
+     * the card gives no hint which it was.
+     */
+    if (depth === null) return null;
+    total += depth.available + depth.inFlight;
+  }
+
+  return total;
 }
 
 export interface PipelineQueueUrls {
@@ -101,18 +144,25 @@ export async function statusChart(
 ): Promise<Slice[]> {
   const stages = ["analyze", "aggregate", "publish"] as const;
 
-  const depths = await Promise.all(stages.map((stage) => queues.depth(urls[stage])));
+  const depths = await Promise.all(stages.map((stage) => readDepth(queues, urls[stage])));
   const counts = await Promise.all(
     MESSAGE_STATUSES.map((status) => messages.countByStatus(status)),
   );
 
   return [
-    ...stages.map((stage, index) => ({
-      label: stage,
+    /**
+     * A slice is a number, and an unknown depth is not one — drawing it as zero
+     * would show an empty queue. The unreadable queue is dropped here and named
+     * in the queue strip instead, which is where per-queue detail belongs.
+     */
+    ...stages.flatMap((stage, index) => {
+      const depth = depths[index];
+      if (depth === null || depth === undefined) return [];
+
       // Both halves of the depth: work waiting and work in progress are equally
       // "in the pipeline", which is what this chart is showing.
-      value: (depths[index]?.available ?? 0) + (depths[index]?.inFlight ?? 0),
-    })),
+      return [{ label: stage, value: depth.available + depth.inFlight }];
+    }),
     ...MESSAGE_STATUSES.map((status, index) => ({ label: status, value: counts[index] ?? 0 })),
   ];
 }
