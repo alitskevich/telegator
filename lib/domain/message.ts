@@ -58,9 +58,16 @@ const messageFields = z.object({
   members: z.record(ItemIdSchema, MemberBlockSchema),
   /** Cached `size(members)`, so the dashboard need not read the map (§2.3 L145). */
   memberCount: z.number().int().nonnegative(),
-  /** Packed `Float32Array`, 1024 dims (§7.2 L590). Absent until aggregate embeds;
-   * §6 L508 guards against an empty one. */
-  embedding: z.instanceof(Uint8Array).optional(),
+  /**
+   * Packed `Float32Array`, 1024 dims (§7.2 L590). Absent until aggregate embeds;
+   * §6 L508 guards against an empty one.
+   *
+   * `z.custom` rather than `z.instanceof`: the latter infers the narrow
+   * `Uint8Array<ArrayBuffer>`, while a view handed back by the AWS SDK — or
+   * sliced out of a pooled Node Buffer — is `Uint8Array<ArrayBufferLike>` and
+   * would not type-check at the adapter boundary. The runtime check is the same.
+   */
+  embedding: z.custom<Uint8Array>((v) => v instanceof Uint8Array).optional(),
   date: DateKeySchema,
 
   // Copied or merged from member items (§2.3 L148).
@@ -116,3 +123,51 @@ export type Message = z.infer<typeof MessageSchema>;
 export const MessageListItemSchema = messageFields.omit({ members: true, embedding: true });
 
 export type MessageListItem = z.infer<typeof MessageListItemSchema>;
+
+/**
+ * The `date-index` projection (§7.2 L588/L598, R27) — the one query that needs
+ * vectors, and nothing more.
+ *
+ * §6 L515's Pass 2 reads its candidates from this index. Typing them without
+ * `members` is what stops R9's defect at the type level: §6 L525/L532 read
+ * `match.members`, which the real query never returns, so building a
+ * whole-record write from a candidate would erase every existing member. A
+ * merge must load the base record or write attribute-level (`mergeMember`).
+ */
+export const DedupCandidateSchema = messageFields.pick({
+  id: true,
+  date: true,
+  ts: true,
+  embedding: true,
+  deleted: true,
+});
+
+export type DedupCandidate = z.infer<typeof DedupCandidateSchema>;
+
+/**
+ * The scalar attributes an aggregate merge SETs alongside `members.{itemId}`.
+ *
+ * `tgId` and `tgAt` are deliberately absent: §6 L529 preserves `tgId` so the
+ * next publish is an edit (§2.3 L150), and R7 notes the §6 spread would
+ * silently drop `tgAt`. Publish owns both; a merge must touch neither.
+ */
+export const MessageMergeAttributesSchema = messageFields
+  .pick({
+    memberCount: true,
+    embedding: true,
+    date: true,
+    title: true,
+    category: true,
+    country: true,
+    location: true,
+    peoples: true,
+    tags: true,
+    image: true,
+    tgChannel: true,
+    status: true,
+    ts: true,
+  })
+  .partial()
+  .required({ memberCount: true, status: true, ts: true });
+
+export type MessageMergeAttributes = z.infer<typeof MessageMergeAttributesSchema>;
