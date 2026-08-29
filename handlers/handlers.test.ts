@@ -18,6 +18,7 @@ describe("Lambda entry points", () => {
     ["analyze", () => import("./analyze.js")],
     ["aggregate", () => import("./aggregate.js")],
     ["publish", () => import("./publish.js")],
+    ["dlqReplay", () => import("./dlqReplay.js")],
   ])("%s imports without any environment configured", async (_name, load) => {
     await expect(load()).resolves.toBeDefined();
   });
@@ -27,6 +28,7 @@ describe("Lambda entry points", () => {
     ["analyze", async () => (await import("./analyze.js")).handler],
     ["aggregate", async () => (await import("./aggregate.js")).handler],
     ["publish", async () => (await import("./publish.js")).handler],
+    ["dlqReplay", async () => (await import("./dlqReplay.js")).handler],
   ])("%s exports a handler function for the CDK entry point", async (_name, load) => {
     expect(typeof (await load())).toBe("function");
   });
@@ -35,7 +37,7 @@ describe("Lambda entry points", () => {
    * The boundary §8.2 L734 draws: a handler wires adapters to a stage and holds
    * no stage logic of its own.
    */
-  test.each(["scrape", "analyze", "aggregate", "publish"])(
+  test.each(["scrape", "analyze", "aggregate", "publish", "dlqReplay"])(
     "%s handler is a thin wrapper",
     async (name) => {
       const { readFileSync } = await import("node:fs");

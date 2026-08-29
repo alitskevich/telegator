@@ -54,6 +54,27 @@ export interface SendResult {
   readonly failed: readonly SendFailure[];
 }
 
+/** One message read off a queue, as §3.5's replay handler sees it. */
+export interface ReceivedMessage {
+  /** Required to delete the message once it has been replayed. */
+  readonly receiptHandle: string;
+  readonly body: string;
+  /** Present only for a FIFO queue. */
+  readonly messageGroupId?: string | undefined;
+}
+
+/**
+ * The receive/delete half of a queue, used only by §3.5's DLQ replay handler.
+ *
+ * Separate from `QueueProducer` because nothing else in the pipeline reads a
+ * queue directly — the stages are driven by Lambda event source mappings, so a
+ * general-purpose consumer port would be a surface nobody needs.
+ */
+export interface QueueDrainer {
+  receive(max: number): Promise<ReceivedMessage[]>;
+  delete(receiptHandle: string): Promise<void>;
+}
+
 export interface QueueProducer {
   /**
    * Sends a batch.

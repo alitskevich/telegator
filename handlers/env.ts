@@ -15,6 +15,10 @@ export const ENV_VARS = {
   analyzeQueueUrl: "TELEGATOR_ANALYZE_QUEUE_URL",
   aggregateQueueUrl: "TELEGATOR_AGGREGATE_QUEUE_URL",
   publishQueueUrl: "TELEGATOR_PUBLISH_QUEUE_URL",
+  // §7.3 L610 — "Each has a matching DLQ"; §3.5's replay handler drains them.
+  analyzeDlqUrl: "TELEGATOR_ANALYZE_DLQ_URL",
+  aggregateDlqUrl: "TELEGATOR_AGGREGATE_DLQ_URL",
+  publishDlqUrl: "TELEGATOR_PUBLISH_DLQ_URL",
   telegramSecretArn: "TELEGATOR_TELEGRAM_SECRET_ARN",
 } as const;
 

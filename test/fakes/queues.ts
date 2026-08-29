@@ -1,6 +1,8 @@
 import type {
+  QueueDrainer,
   QueueMessage,
   QueueProducer,
+  ReceivedMessage,
   SendFailure,
   SendResult,
 } from "../../lib/queues/ports.js";
@@ -54,6 +56,42 @@ export function fakeQueueProducer(options: FakeQueueOptions = {}): FakeQueueProd
       }
 
       return { successful, failed };
+    },
+  };
+}
+
+export interface FakeQueueDrainer extends QueueDrainer {
+  /** Receipt handles deleted, in order. */
+  readonly deleted: readonly string[];
+  readonly receiveCalls: number;
+}
+
+/**
+ * An in-memory DLQ.
+ *
+ * `receive` hands out messages and does not remove them — only `delete` does,
+ * mirroring SQS, where an un-deleted message reappears after its visibility
+ * timeout. That is what makes "a failed send leaves the message on the DLQ"
+ * observable rather than assumed.
+ */
+export function fakeQueueDrainer(messages: readonly ReceivedMessage[] = []): FakeQueueDrainer {
+  const remaining = [...messages];
+  const deleted: string[] = [];
+  let receiveCalls = 0;
+
+  return {
+    deleted,
+    get receiveCalls() {
+      return receiveCalls;
+    },
+    receive: async (max) => {
+      receiveCalls++;
+      return remaining.filter((m) => !deleted.includes(m.receiptHandle)).slice(0, max);
+    },
+    delete: async (receiptHandle) => {
+      deleted.push(receiptHandle);
+      const index = remaining.findIndex((m) => m.receiptHandle === receiptHandle);
+      if (index >= 0) remaining.splice(index, 1);
     },
   };
 }

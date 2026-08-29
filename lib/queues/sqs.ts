@@ -2,9 +2,21 @@ import type {
   BatchResultErrorEntry,
   SendMessageBatchRequestEntry,
   SendMessageBatchResultEntry,
+  Message as SqsMessage,
 } from "@aws-sdk/client-sqs";
-import { SendMessageBatchCommand } from "@aws-sdk/client-sqs";
-import type { QueueMessage, QueueProducer, SendFailure, SendResult } from "./ports.js";
+import {
+  DeleteMessageCommand,
+  ReceiveMessageCommand,
+  SendMessageBatchCommand,
+} from "@aws-sdk/client-sqs";
+import type {
+  QueueDrainer,
+  QueueMessage,
+  QueueProducer,
+  ReceivedMessage,
+  SendFailure,
+  SendResult,
+} from "./ports.js";
 import { SQS_MAX_BATCH_ENTRIES } from "./ports.js";
 
 /**
@@ -218,6 +230,63 @@ export function createSqsQueueProducer(options: SqsQueueProducerOptions): QueueP
       }
 
       return { successful, failed };
+    },
+  };
+}
+
+/** The receive/delete half of the client, used only by §3.5's replay handler. */
+export interface SqsDrainClient {
+  send(
+    command: ReceiveMessageCommand | DeleteMessageCommand,
+  ): Promise<{ Messages?: SqsMessage[] | undefined }>;
+}
+
+export interface SqsQueueDrainerOptions {
+  readonly client: SqsDrainClient;
+  /** The **dead-letter** queue's URL, not the source queue's. */
+  readonly queueUrl: string;
+}
+
+/** SQS caps a single receive at ten messages. */
+const MAX_RECEIVE = 10;
+
+/**
+ * §3.5's read side over `ReceiveMessage`/`DeleteMessage`.
+ *
+ * `MessageGroupId` is requested explicitly: it is a system attribute SQS omits
+ * unless asked for, and §3.3 L260 depends on the group surviving a replay.
+ */
+export function createSqsQueueDrainer(options: SqsQueueDrainerOptions): QueueDrainer {
+  const { client, queueUrl } = options;
+
+  return {
+    receive: async (max: number): Promise<ReceivedMessage[]> => {
+      const output = await client.send(
+        new ReceiveMessageCommand({
+          QueueUrl: queueUrl,
+          MaxNumberOfMessages: Math.min(max, MAX_RECEIVE),
+          MessageSystemAttributeNames: ["MessageGroupId"],
+        }),
+      );
+
+      return (output.Messages ?? []).flatMap((message) => {
+        // A message without a receipt handle cannot be deleted, so replaying it
+        // would loop forever on the same entry.
+        if (message.ReceiptHandle === undefined) return [];
+        return [
+          {
+            receiptHandle: message.ReceiptHandle,
+            body: message.Body ?? "",
+            messageGroupId: message.Attributes?.MessageGroupId,
+          },
+        ];
+      });
+    },
+
+    delete: async (receiptHandle: string): Promise<void> => {
+      await client.send(
+        new DeleteMessageCommand({ QueueUrl: queueUrl, ReceiptHandle: receiptHandle }),
+      );
     },
   };
 }
