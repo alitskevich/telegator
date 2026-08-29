@@ -36,6 +36,21 @@ export function fakeSourceRepo(initial: readonly Source[] = []): FakeSourceRepo 
       // UpdateItem with a SET for each named attribute.
       rows.set(id, { ...existing, ...cursor });
     },
+    patch: async (id: string, delta: Readonly<Record<string, unknown>>) => {
+      const existing = rows.get(id);
+      if (existing === undefined) throw new Error(`no such source: ${id}`);
+      writeCount++;
+      rows.set(id, { ...existing, ...delta } as Source);
+    },
+    softDelete: async (ids: readonly string[]) => {
+      for (const id of ids) {
+        const existing = rows.get(id);
+        if (existing !== undefined) {
+          writeCount++;
+          rows.set(id, { ...existing, deleted: true });
+        }
+      }
+    },
   };
 }
 
@@ -77,6 +92,21 @@ export function fakeMessageRepo(initial: readonly Message[] = []): FakeMessageRe
         .map((m) => MessageListItemSchema.parse(m));
 
       return limit === undefined ? listed : listed.slice(0, limit);
+    },
+    patch: async (id: string, delta: Readonly<Record<string, unknown>>): Promise<void> => {
+      const existing = rows.get(id);
+      if (existing === undefined) throw new Error(`no such message: ${id}`);
+      writeCount++;
+      rows.set(id, { ...existing, ...delta } as Message);
+    },
+    softDelete: async (ids: readonly string[]): Promise<void> => {
+      for (const id of ids) {
+        const existing = rows.get(id);
+        if (existing !== undefined) {
+          writeCount++;
+          rows.set(id, { ...existing, deleted: true });
+        }
+      }
     },
     countByStatus: async (status: MessageStatus): Promise<number> =>
       // Counts live rows only, matching R16's filter in the real adapter.

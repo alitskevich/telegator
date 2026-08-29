@@ -29,6 +29,10 @@ export interface SourceRepo {
    * operator's concurrent edit to `category` or `teaser`.
    */
   updateCursor(id: string, cursor: SourceCursor): Promise<void>;
+  /** §8.4 L749 — an operator edit, attribute-level. The caller validates the delta. */
+  patch(id: string, delta: Readonly<Record<string, unknown>>): Promise<void>;
+  /** §8.4 L751 — soft delete. The row survives; R16 hides it from reads. */
+  softDelete(ids: readonly string[]): Promise<void>;
 }
 
 /**
@@ -83,4 +87,8 @@ export interface MessageRepo {
    */
   mergeMember(merge: MemberMerge): Promise<void>;
   markPublished(result: PublishResult): Promise<void>;
+  /** §8.4 L749 — an operator edit, attribute-level. The caller validates the delta. */
+  patch(id: string, delta: Readonly<Record<string, unknown>>): Promise<void>;
+  /** §8.4 L751 — soft delete. The row survives; R16 hides it from reads. */
+  softDelete(ids: readonly string[]): Promise<void>;
 }

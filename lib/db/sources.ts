@@ -1,6 +1,7 @@
 import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { type Source, type SourceCursor, SourceSchema } from "../domain/source.js";
 import type { DocumentSender } from "./messages.js";
+import { softDeleteCommand, updateAttributes } from "./patch.js";
 import type { SourceRepo } from "./ports.js";
 
 /**
@@ -86,6 +87,20 @@ export function createSourceRepo(options: SourceRepoOptions): SourceRepo {
           ExpressionAttributeValues: values,
         }),
       );
+    },
+
+    /** §8.4 L749 — an operator edit. The action validates the delta first. */
+    patch: async (id: string, delta: Readonly<Record<string, unknown>>): Promise<void> => {
+      const command = updateAttributes(tableName, id, delta);
+      if (command === undefined) return;
+      await client.send(command);
+    },
+
+    /** §8.4 L751 — soft delete, one UpdateItem per id. */
+    softDelete: async (ids: readonly string[]): Promise<void> => {
+      for (const id of ids) {
+        await client.send(softDeleteCommand(tableName, id));
+      }
     },
   };
 }

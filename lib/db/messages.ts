@@ -17,6 +17,7 @@ import {
   MessageSchema,
   type MessageStatus,
 } from "../domain/message.js";
+import { softDeleteCommand, updateAttributes } from "./patch.js";
 import type { MemberMerge, MessageRepo, PublishResult } from "./ports.js";
 
 /**
@@ -218,6 +219,20 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
           },
         }),
       );
+    },
+
+    /** §8.4 L749 — an operator edit. The action validates the delta first. */
+    patch: async (id: string, delta: Readonly<Record<string, unknown>>): Promise<void> => {
+      const command = updateAttributes(tableName, id, delta);
+      if (command === undefined) return;
+      await client.send(command);
+    },
+
+    /** §8.4 L751 — soft delete, one UpdateItem per id. */
+    softDelete: async (ids: readonly string[]): Promise<void> => {
+      for (const id of ids) {
+        await client.send(softDeleteCommand(tableName, id));
+      }
     },
   };
 }
