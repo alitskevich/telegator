@@ -43,3 +43,14 @@ export const SQS_MAX_DELAY_SECONDS = 900;
 
 /** §7.2 L590 — 1024 × 4 = 4 KB as DynamoDB Binary, versus ~20 KB as a number list. */
 export const EMBEDDING_BYTE_LENGTH = DIMENSIONS * Float32Array.BYTES_PER_ELEMENT;
+
+/**
+ * R45 — a storage bound, not a signal filter.
+ *
+ * Chosen so it is not normally reached: §2.3 L171 caps a message at 20 members,
+ * and ~10 terms each is ~200. Capping in lexical order is deterministic, which
+ * AC-3.7 requires; capping by term frequency would discriminate better but is
+ * not implementable from a union list, because nothing stores per-term counts.
+ * Deferred until the cap is observed to bind.
+ */
+export const MATCH_KEY_CAP = 256;
