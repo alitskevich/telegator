@@ -69,6 +69,15 @@ export function buildMatchKey(fields: MatchKeyFields): MatchKey {
  *
  * Commutative and idempotent, which is what lets a replayed merge produce the
  * same bytes as the original (AC-3.7).
+ *
+ * It is **not associative once `MATCH_KEY_CAP` binds**: capping a union in
+ * lexical order discards the tail, so `union(union(a, b), c)` and
+ * `union(a, union(b, c))` can retain different terms and store different bytes
+ * when the intermediate result already exceeds the cap. Idempotence and
+ * commutativity are unaffected, and so is AC-3.7 — replay re-runs the SAME
+ * sequence of merges, not a re-associated one. The cap is sized (see
+ * `MATCH_KEY_CAP`) so it is not normally reached at all; if it is observed to
+ * bind, merge order becomes a thing to reason about.
  */
 export function unionMatchKeys(a: MatchKey, b: MatchKey): MatchKey {
   return {

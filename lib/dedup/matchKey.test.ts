@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { MATCH_KEY_CAP } from "./constants";
 import { buildMatchKey, matchKeyAttributes, matchKeyOf, unionMatchKeys } from "./matchKey";
 
 describe("buildMatchKey (R46)", () => {
@@ -24,7 +25,7 @@ describe("buildMatchKey (R46)", () => {
   });
 
   /** Regression: multiple separate whitespace runs must collapse. */
-  test("collapsesall whitespace runs, not just the first", () => {
+  test("collapses all whitespace runs, not just the first", () => {
     const withMultipleRuns = buildMatchKey({ peoples: "Ivan  Petrov  Jr" });
     const withSingleSpaces = buildMatchKey({ peoples: "Ivan Petrov Jr" });
 
@@ -57,6 +58,54 @@ describe("unionMatchKeys (R45)", () => {
     const b = buildMatchKey({ properNames: "Brest", title: "Beta Gamma" });
 
     expect(JSON.stringify(unionMatchKeys(a, b))).toBe(JSON.stringify(unionMatchKeys(b, a)));
+  });
+});
+
+/**
+ * Design §13 names "union cap determinism" as required, and nothing pinned it:
+ * the cap could be deleted, or moved ahead of the sort, with all tests green.
+ *
+ * The cap must apply **after** sorting, or the retained subset is whichever
+ * terms happened to arrive first — which makes the stored bytes a function of
+ * member arrival order and breaks AC-3.7's byte-identical replay. Terms are
+ * zero-padded so lexical order is the numeric one, and they are fed in
+ * DESCENDING order, so a slice taken before the sort would keep the opposite
+ * end of the range from the one a sorted cap keeps.
+ */
+describe("MATCH_KEY_CAP (R45)", () => {
+  const OVERFLOW = 44;
+  const term = (n: number) => `t${String(n).padStart(3, "0")}`;
+  const ascending = Array.from({ length: MATCH_KEY_CAP + OVERFLOW }, (_, i) => term(i));
+  const descending = [...ascending].reverse();
+
+  test("keeps exactly the lexicographically first MATCH_KEY_CAP terms", () => {
+    const key = buildMatchKey({ properNames: descending.join(",") });
+
+    expect(key.entities).toHaveLength(MATCH_KEY_CAP);
+    expect(key.entities[0]).toBe(term(0));
+    expect(key.entities.at(-1)).toBe(term(MATCH_KEY_CAP - 1));
+    expect(key.entities).not.toContain(term(MATCH_KEY_CAP));
+  });
+
+  test("the retained subset does not depend on the order the terms arrived in", () => {
+    const fromDescending = buildMatchKey({ properNames: descending.join(",") });
+    const fromAscending = buildMatchKey({ properNames: ascending.join(",") });
+
+    expect(JSON.stringify(fromDescending)).toBe(JSON.stringify(fromAscending));
+  });
+
+  /** The cap is a merge rule (design §5), so the union has to hold it too. */
+  test("a union past the cap keeps the same first MATCH_KEY_CAP terms either way", () => {
+    const half = Math.ceil(ascending.length / 2);
+    const a = buildMatchKey({ properNames: ascending.slice(0, half).join(",") });
+    const b = buildMatchKey({ properNames: descending.slice(0, half).join(",") });
+
+    const merged = unionMatchKeys(a, b);
+
+    expect(merged.entities).toHaveLength(MATCH_KEY_CAP);
+    expect(merged.entities[0]).toBe(term(0));
+    expect(merged.entities.at(-1)).toBe(term(MATCH_KEY_CAP - 1));
+    expect(JSON.stringify(merged)).toBe(JSON.stringify(unionMatchKeys(b, a)));
   });
 });
 
