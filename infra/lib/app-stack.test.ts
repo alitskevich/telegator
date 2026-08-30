@@ -47,6 +47,19 @@ function templateFor(context: Record<string, unknown> = {}): Template {
 const amplifyApp = (t: Template) =>
   Object.values(t.findResources("AWS::Amplify::App"))[0]?.Properties;
 
+const amplifyBranch = (t: Template) =>
+  Object.values(t.findResources("AWS::Amplify::Branch"))[0]?.Properties;
+
+/**
+ * The context a real deploy supplies. Both keys are required together —
+ * `repositoryConnection` returns nothing on either alone — so they travel as
+ * one object rather than as two arguments a test could half-apply.
+ */
+const CONNECTED = {
+  repository: "https://github.com/example/telegator",
+  githubTokenSecretName: "telegator-dev-github-token",
+} as const;
+
 const policyStatements = (t: Template) =>
   Object.values(t.findResources("AWS::IAM::Policy")).flatMap(
     (r) =>
@@ -372,6 +385,57 @@ describe("TelegatorAppStack", () => {
 
       expect(reads).toHaveLength(1);
       expect(reads[0]?.Resource).toBe(SESSION_SECRET_ARN);
+    });
+  });
+
+  /**
+   * R52. The branch, which is what Amplify actually builds and serves — see
+   * `addBranch` in the stack for why §9.1 L804 does not list it.
+   */
+  describe("the deployed branch", () => {
+    /**
+     * The property the whole infrastructure gate rests on: a synth with no
+     * context must stay credential-free and must not declare a branch Amplify
+     * has no repository to build from.
+     */
+    test("is absent until a repository is connected", () => {
+      templateFor().resourceCountIs("AWS::Amplify::Branch", 0);
+    });
+
+    test("is declared once the repository context is supplied", () => {
+      templateFor(CONNECTED).resourceCountIs("AWS::Amplify::Branch", 1);
+    });
+
+    /**
+     * An Amplify app's `Ref` is its ARN and the branch takes the bare id, so
+     * this asserts the resolved shape rather than merely that something is set:
+     * the ARN form deploys and then fails to build.
+     */
+    test("takes the app's id rather than its arn", () => {
+      expect(amplifyBranch(templateFor(CONNECTED))?.AppId).toEqual({
+        "Fn::GetAtt": [expect.stringContaining("DashboardApp"), "AppId"],
+      });
+    });
+
+    /**
+     * The `WEB_COMPUTE`/`WEB` mistake one level down: `Framework` is free text,
+     * so a value Amplify does not recognise is accepted and the branch builds
+     * as a static site, where every server action of §8.4 would 404.
+     */
+    test("builds Next.js server-side, so §8.4's server actions run", () => {
+      expect(amplifyBranch(templateFor(CONNECTED))?.Framework).toBe("Next.js - SSR");
+    });
+
+    test("defaults to the trunk and takes a branch from context", () => {
+      expect(amplifyBranch(templateFor(CONNECTED))?.BranchName).toBe("main");
+      expect(amplifyBranch(templateFor({ ...CONNECTED, branch: "release" }))?.BranchName).toBe(
+        "release",
+      );
+    });
+
+    test("marks the §9.2 L810 environment on the branch", () => {
+      expect(amplifyBranch(templateFor(CONNECTED))?.Stage).toBe("DEVELOPMENT");
+      expect(amplifyBranch(templateFor({ ...CONNECTED, env: "prod" }))?.Stage).toBe("PRODUCTION");
     });
   });
 

@@ -1,5 +1,5 @@
 import { SecretValue, Stack, type StackProps } from "aws-cdk-lib";
-import { CfnApp } from "aws-cdk-lib/aws-amplify";
+import { CfnApp, CfnBranch } from "aws-cdk-lib/aws-amplify";
 import { Effect, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import type { Construct } from "constructs";
 import { DASHBOARD_ENV_VARS, ENV_VARS } from "../../handlers/env";
@@ -34,6 +34,23 @@ export { DASHBOARD_ENV_VARS };
  * `infra/lib/auth-stack.ts` already registers as a callback URL.
  */
 const DEFAULT_APP_URL = "http://localhost:3000";
+
+/**
+ * The branch Amplify builds, when a repository is connected.
+ *
+ * Which branch is deployment configuration in exactly the sense the repository
+ * is, so it arrives the same way and defaults to the conventional trunk.
+ */
+const DEFAULT_BRANCH = "main";
+
+/**
+ * Amplify's own name for the Next.js server-side runtime.
+ *
+ * It is what selects the SSR build, and it is a free-text field: a value
+ * Amplify does not recognise is accepted and the branch silently builds as a
+ * static site, which is the `WEB_COMPUTE`/`WEB` mistake one level down.
+ */
+const NEXT_SSR_FRAMEWORK = "Next.js - SSR";
 
 export interface TelegatorAppStackProps extends StackProps {
   readonly config: TelegatorConfig;
@@ -101,7 +118,9 @@ export class TelegatorAppStack extends Stack {
       [DASHBOARD_ENV_VARS.analyzeLogGroup, pipeline.functions.analyze.logGroup.logGroupName],
     ].map(([name, value]) => ({ name: String(name), value: String(value) }));
 
-    new CfnApp(this, "DashboardApp", {
+    const connection = repositoryConnection(this);
+
+    const dashboard = new CfnApp(this, "DashboardApp", {
       name: config.name("dashboard"),
       // §9.3 L814 — only WEB_COMPUTE runs server-side. WEB would deploy a static
       // export, and every server action of §8.4 would 404.
@@ -118,7 +137,42 @@ export class TelegatorAppStack extends Stack {
        * `Secret.fromLookup`, which would make synth an authenticated call and
        * break the only infrastructure gate this build has.
        */
-      ...repositoryConnection(this),
+      ...connection,
+    });
+
+    this.addBranch(dashboard, config, connection);
+  }
+
+  /**
+   * R52. §9.1 L804 lists this stack's contents as "Amplify Hosting app, env
+   * config, app IAM role" — no branch. But §9.3 L814 chooses Amplify to *serve*
+   * the App Router, and an app on its own serves nothing: it holds
+   * configuration, and a branch is the thing Amplify builds and deploys. A
+   * stack that stopped at the app would satisfy §9.1 word for word and leave
+   * §9.3 unimplemented, so the branch is added here.
+   *
+   * It appears only when a repository does, for the reason
+   * `repositoryConnection` exists at all: Amplify has nothing to build a branch
+   * from without one, and a credential-free `cdk synth` must keep producing the
+   * template it produces today.
+   */
+  private addBranch(
+    dashboard: CfnApp,
+    config: TelegatorConfig,
+    connection: RepositoryConnection,
+  ): void {
+    if (connection.repository === undefined) return;
+
+    new CfnBranch(this, "DashboardBranch", {
+      // `attrAppId`, not `ref`: an Amplify app's Ref is its ARN, and the branch
+      // takes the bare id. The wrong one deploys and then fails to build.
+      appId: dashboard.attrAppId,
+      branchName: String(this.node.tryGetContext("branch") ?? DEFAULT_BRANCH),
+      framework: NEXT_SSR_FRAMEWORK,
+      // §9.5's cutover is a sequence of deliberate deploys, but the branch is
+      // the trunk: a merge is the intended trigger, so Amplify watches it.
+      enableAutoBuild: true,
+      stage: config.env === "prod" ? "PRODUCTION" : "DEVELOPMENT",
     });
   }
 
@@ -274,10 +328,12 @@ export class TelegatorAppStack extends Stack {
  * from a local synth — which keeps `cdk synth` runnable with no credentials and
  * no repository.
  */
-function repositoryConnection(stack: Stack): {
+interface RepositoryConnection {
   repository?: string;
   oauthToken?: string;
-} {
+}
+
+function repositoryConnection(stack: Stack): RepositoryConnection {
   const repository = stack.node.tryGetContext("repository");
   const tokenSecretName = stack.node.tryGetContext("githubTokenSecretName");
 
