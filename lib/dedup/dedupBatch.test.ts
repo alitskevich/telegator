@@ -354,7 +354,10 @@ describe("create branch (§6 L538-541)", () => {
 });
 
 describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
-  /** AC-3.1 (L300). */
+  /**
+   * AC-3.1 (L300), R47 — "cosine similarity 0.90" restated as a score at or
+   * above `MERGE_THRESHOLD`; the id is kept, the vocabulary is not.
+   */
   test("two near-identical items on the same date produce one message with two members", async () => {
     const result = await dedupBatch(twoNearIdenticalItems(), deps());
 
@@ -366,7 +369,10 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
     expect(write.message.id).toBe("src_a/1");
   });
 
-  /** AC-3.3 (L302). */
+  /**
+   * AC-3.3 (L302), R47 — "0.80" restated as a score at or below
+   * `DISTINCT_THRESHOLD`; the id is kept, the vocabulary is not.
+   */
   test("two unrelated items produce two messages", async () => {
     const result = await dedupBatch(twoUnrelatedItems(), deps());
 
@@ -442,9 +448,11 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
   });
 
   /**
-   * AC-3.6 (L305), R45 — §6 L533's elementwise mean has no analogue without a
+   * AC-3.6 (L305). R45 — §6 L533's elementwise mean has no analogue without a
    * vector; the union is what replaces it, and it must stay canonical (sorted,
-   * deduplicated) or AC-3.7's byte-identical replay is impossible.
+   * deduplicated) or AC-3.7's byte-identical replay is impossible. R47 —
+   * restates the criterion itself: "equals the element-wise mean of the two
+   * input vectors" becomes "equals the sorted union of the two match keys".
    */
   test("a merged message's key is the sorted, deduplicated union of the inputs", async () => {
     const a = item("chan_a/1", SAME_EVENT);
@@ -1055,6 +1063,14 @@ describe("member cap (§6 L525-526)", () => {
   });
 });
 
+/**
+ * R51 — AC-3.7's wording is unchanged ("replaying the identical item message
+ * produces a byte-identical message record"), but not how it holds. §3.3
+ * L285 makes it an emergent property of idempotent member writes; here a
+ * replayed item is caught by the `memberIds` short-circuit above (before any
+ * scoring runs) and merges into the exact record it already belongs to, so
+ * byte-identical replay is guaranteed rather than emergent.
+ */
 describe("replay idempotency (AC-3.7 L306, E2E-5 L852)", () => {
   /**
    * Run under an advancing clock, deliberately. R11: §6 L522 stamps

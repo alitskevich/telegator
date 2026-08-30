@@ -123,6 +123,13 @@ async function readBack(repo: FakeMessageRepo, id: string): Promise<Message> {
 }
 
 describe("§3.3 aggregate consumer", () => {
+  /**
+   * R47 — §3.3 L300 reads "two items at cosine similarity 0.90 with the same
+   * date produce one message with two `members` entries". Restated for a
+   * scoreless implementation: a pair scoring at or above `MERGE_THRESHOLD`
+   * (here, an identical `SAME_EVENT` key) merges the same way. The id is
+   * unchanged; only the threshold vocabulary is.
+   */
   test("AC-3.1 (L300): two matching items with the same date make one message, two members", async () => {
     const a = item("chan_a/1", SAME_EVENT);
     const b = item("chan_b/2", SAME_EVENT);
@@ -171,6 +178,13 @@ describe("§3.3 aggregate consumer", () => {
     });
   });
 
+  /**
+   * R51 — the wording is unchanged, but not the mechanism. Under §3.3 L285 a
+   * replayed item merges by idempotent member writes alone; here the second
+   * pass finds the item's own id already in the candidate's projected
+   * `memberIds` and merges on that short-circuit before any scoring runs, so
+   * byte-identical replay is guaranteed rather than emergent.
+   */
   test("AC-3.7 (L306): replaying the identical batch leaves members, memberCount and tags unchanged", async () => {
     const a = item("chan_a/1", { ...SAME_EVENT, tags: "war,kyiv" });
     const b = item("chan_b/2", { ...SAME_EVENT, tags: "war,drone" });
