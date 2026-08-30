@@ -10,8 +10,8 @@ import type { BandRow, LabelledKeyPair } from "./sweep";
  * `pairs.jsonl` — one hand-judged pair per line — is unchanged: the labelled
  * set is model-agnostic and did not move when the embedding step did.
  * `items.json` now carries the fields a match key is built from (§5.2's
- * English `title`/`peoples`/`properNames`/`tags`) rather than the fields
- * `buildEmbeddingText` concatenated — there is no embedding step left to feed
+ * English `title`/`peoples`/`properNames`/`tags`) rather than the fields the
+ * old embedding text concatenated — there is no embedding step left to feed
  * `summary`, `category` or `body` to. `embeddings.json` is gone entirely:
  * nothing produces it, because `sweepBands` scores the analyzed fields
  * directly.
@@ -156,8 +156,8 @@ export function toKeyPairs(
  * The labelled set's hash, recorded as `labelledSetHash` (R48).
  *
  * A threshold is a property of the exact set it was tuned on — the same
- * argument `buildEmbeddingText`'s comment made about the text it
- * concatenated, carried over unchanged to the fields a match key is built
+ * argument that applied when the score was a similarity threshold over
+ * embedded text, carried over unchanged to the fields a match key is built
  * from. Hashing both files rather than one: a `pairs.jsonl` unchanged against
  * an edited `items.json` (or vice versa) is still a different labelled set.
  */

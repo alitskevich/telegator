@@ -7,7 +7,6 @@ import type {
 } from "@aws-sdk/lib-dynamodb";
 import { describe, expect, test } from "vitest";
 import { MessageSchema } from "../domain/message";
-import { packEmbedding } from "./embeddingCodec";
 import { createMessageRepo, type DocumentSender } from "./messages";
 
 const TABLE = "telegator-dev-messages";
@@ -172,24 +171,6 @@ describe("createMessageRepo.mergeMember (R9)", () => {
     expect(serialised).not.toContain("tgAt");
   });
 
-  test("packs the embedding as bytes when one is supplied", async () => {
-    const s = stub();
-
-    await repoWith(s).mergeMember({
-      id: ITEM_ID,
-      members: { [ITEM_ID]: block },
-      attributes: {
-        memberCount: 1,
-        status: "topublish",
-        ts: 5,
-        embedding: packEmbedding([0.5, 0.25]),
-      },
-    });
-
-    const values = s.input()?.ExpressionAttributeValues as Record<string, unknown>;
-    expect(Object.values(values).some((v) => v instanceof Uint8Array)).toBe(true);
-  });
-
   /**
    * R44/R51 — the merge is attribute-level and generic over whatever
    * `MessageMergeAttributes` carries, so the match key and member ids need no
@@ -245,9 +226,7 @@ describe("createMessageRepo.queryByDate", () => {
   });
 
   test("returns candidates parsed to the date-index projection", async () => {
-    const s = stub([
-      { Items: [{ id: ITEM_ID, date: "2026-08-29", ts: 1, embedding: packEmbedding([1, 0]) }] },
-    ]);
+    const s = stub([{ Items: [{ id: ITEM_ID, date: "2026-08-29", ts: 1 }] }]);
 
     const [candidate] = await repoWith(s).queryByDate("2026-08-29");
 

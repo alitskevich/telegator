@@ -70,7 +70,7 @@ export interface PublishResult {
 export interface MessageRepo {
   /** §3.4 L316 and R9 — a base-table read, the only access that returns `members`. */
   get(id: string): Promise<Message | undefined>;
-  /** §6 L515 — `date-index`, projecting the embedding and nothing else that matters. */
+  /** §6 L515 — `date-index`, projecting the match key (R44) and nothing else that matters. */
   queryByDate(date: string): Promise<DedupCandidate[]>;
   /** §8.5 L772 — `status-index`, `ts` descending. */
   queryByStatus(status: MessageStatus, limit?: number): Promise<MessageListItem[]>;

@@ -1,7 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { stubClassifier, stubEmbedder, unitVectorAtAngle } from "../../test/fakes/ai";
-import { DIMENSIONS } from "../dedup/constants";
-import { cosineSimilarity } from "../dedup/cosine";
+import { stubClassifier } from "../../test/fakes/ai";
 
 const newsItem = {
   title: "Capital explosions reported",
@@ -42,53 +40,5 @@ describe("stubClassifier", () => {
     await classifier.classify("b");
 
     expect(classifier.calls).toEqual(["a", "b"]);
-  });
-});
-
-describe("unitVectorAtAngle", () => {
-  /**
-   * The construction the dedup tests depend on: in R^n, a = e1 and
-   * b = s*e1 + sqrt(1-s^2)*e2 gives cosine exactly s. Without it, a test for
-   * "two items at similarity 0.90" has no way to produce that similarity.
-   */
-  test.each([0.9, 0.85, 0.8, 0])("produces a vector at cosine %s from e1", (target) => {
-    const e1 = unitVectorAtAngle(1, DIMENSIONS);
-    const other = unitVectorAtAngle(target, DIMENSIONS);
-
-    expect(cosineSimilarity(e1, other)).toBeCloseTo(target, 12);
-  });
-
-  test("produces unit vectors of the requested dimension", () => {
-    const v = unitVectorAtAngle(0.9, DIMENSIONS);
-
-    expect(v).toHaveLength(DIMENSIONS);
-    expect(cosineSimilarity(v, v)).toBe(1);
-  });
-});
-
-describe("stubEmbedder", () => {
-  test("returns the scripted vector for each text, in order", async () => {
-    const embedder = stubEmbedder({ alpha: [1, 0], beta: [0, 1] });
-
-    await expect(embedder.embedBatch(["beta", "alpha"], 2)).resolves.toEqual([
-      [0, 1],
-      [1, 0],
-    ]);
-  });
-
-  test("throws for an unscripted text rather than returning a silent zero vector", async () => {
-    await expect(stubEmbedder({}).embedBatch(["missing"], 2)).rejects.toThrow();
-  });
-
-  test("records each batch it was asked to embed", async () => {
-    const embedder = stubEmbedder({ a: [1, 0] });
-
-    await embedder.embedBatch(["a"], 2);
-
-    expect(embedder.batches).toEqual([["a"]]);
-  });
-
-  test("embeds an empty batch to an empty result", async () => {
-    await expect(stubEmbedder({}).embedBatch([], DIMENSIONS)).resolves.toEqual([]);
   });
 });

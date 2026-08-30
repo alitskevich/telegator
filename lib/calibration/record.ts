@@ -25,8 +25,8 @@ import { DISTINCT_THRESHOLD, MERGE_THRESHOLD, SCORE_WEIGHTS } from "../dedup/con
  * `adjudicatorAccuracy` is new: it is measured separately, on band pairs
  * only, and is the one part of the harness that spends a model call.
  * `labelledSetHash` is new: a threshold is a property of the exact set it was
- * tuned on, the same argument `buildEmbeddingText`'s comment made about the
- * text it concatenated.
+ * tuned on, the same argument that applied when the score was a similarity
+ * threshold over embedded text.
  */
 
 /** Where the record lives, relative to the repository root. */

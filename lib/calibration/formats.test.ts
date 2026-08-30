@@ -47,8 +47,8 @@ describe("parsePairsJsonl", () => {
 describe("parseItems", () => {
   /**
    * R48 — the fields a match key is built from (§5.2's English fields), not
-   * the fields `buildEmbeddingText` concatenated. There is no embedding step
-   * left to feed `summary`, `category` or `body` to.
+   * the fields the old embedding text concatenated. There is no embedding
+   * step left to feed `summary`, `category` or `body` to.
    */
   test("reads the fields a match key is built from", () => {
     const items = parseItems([
@@ -156,9 +156,9 @@ describe("hashLabelledSet", () => {
 
   /**
    * A threshold is a property of the exact set it was tuned on — the same
-   * argument `buildEmbeddingText`'s comment made about the embedded text. If
-   * two different labelled sets hashed the same, that guarantee would be
-   * empty.
+   * argument that applied when the score was a similarity threshold over
+   * embedded text. If two different labelled sets hashed the same, that
+   * guarantee would be empty.
    */
   test("changes when either input changes", () => {
     const base = hashLabelledSet("pairs", "items");

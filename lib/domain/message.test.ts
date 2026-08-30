@@ -120,11 +120,11 @@ describe("MessageSchema (§2.3 L140-152)", () => {
     expect(MessageSchema.safeParse(rest).success).toBe(false);
   });
 
-  test("accepts a packed embedding as bytes, and tolerates its absence", () => {
-    const embedding = new Uint8Array(4096);
+  /** R43 — the embedding field is gone; an `embedding` key on the input is stripped. */
+  test("strips an embedding attribute a legacy row might still carry", () => {
+    const legacy = { ...message, embedding: new Uint8Array(4096) };
 
-    expect(MessageSchema.parse({ ...message, embedding }).embedding).toBe(embedding);
-    expect(MessageSchema.parse(message).embedding).toBeUndefined();
+    expect(MessageSchema.parse(legacy)).not.toHaveProperty("embedding");
   });
 
   test("treats tgId and tgAt as absent until publish writes them", () => {

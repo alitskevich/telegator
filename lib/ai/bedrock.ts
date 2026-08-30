@@ -1,25 +1,26 @@
-import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
-import { DIMENSIONS } from "../dedup/constants";
 import {
   buildClassificationRequest,
   type ClassificationRequest,
   type ClassificationRequestOptions,
 } from "../pipeline/analyze/index";
-import { EMBEDDING_INPUT_TYPE, EMBEDDING_MAX_BATCH, EMBEDDING_MODEL_ID } from "./constants";
 import { type NewsItem, NewsItemSchema } from "./newsItemSchema";
-import type { Classifier, EmbeddingProvider } from "./ports";
+import type { Classifier } from "./ports";
 
 /**
- * The Bedrock adapters (§5.1 L392 — "Decision: Amazon Bedrock").
+ * The Bedrock adapter (§5.1 L392 — "Decision: Amazon Bedrock").
  *
- * Two different clients, because §5 uses two different services: classification
- * goes through the Anthropic Messages API (§5.1 L394–396) and embeddings through
- * the raw Bedrock runtime (§5.3 L461). Both are injectable and both are built
- * lazily, so constructing an adapter never reaches for credentials — which is
- * what lets these modules be imported in a test process at all.
+ * Classification goes through the Anthropic Messages API (§5.1 L394–396). It is
+ * injectable and built lazily, so constructing an adapter never reaches for
+ * credentials — which is what lets this module be imported in a test process at
+ * all.
  *
  * R3: nothing here asserts or assumes anything about what a model returns. The
  * adapter's job is the request shape and the handling of bytes handed back.
+ *
+ * R43 — §5.3's embedding adapter (the raw Bedrock runtime, Cohere
+ * `embed-multilingual-v3`) is removed entirely; dedup no longer calls a model
+ * at all except for R46's adjudicator, which goes through the same Mantle API
+ * as classification.
  */
 
 /**
@@ -98,105 +99,6 @@ export function createBedrockClassifier(options: BedrockClassifierOptions = {}):
       // schema is the same class of event. Letting it through would put an
       // unvalidated category into the aggregate queue.
       return NewsItemSchema.parse(JSON.parse(extractText(response)));
-    },
-  };
-}
-
-/**
- * The slice of the Bedrock runtime client this adapter uses.
- *
- * Structural, like `ClassifierClient` above, and for the same reason: a test
- * supplies a plain object rather than constructing a real client. It also lets
- * the tests drop `aws-sdk-client-mock`, whose `mockClient()` signature is built
- * against an older `@smithy/types` than the installed SDK and does not
- * typecheck against it — and there is no newer release.
- */
-export interface BedrockInvokeResponse {
-  readonly body?: Uint8Array | undefined;
-}
-
-export interface BedrockInvoker {
-  send(command: InvokeModelCommand): Promise<BedrockInvokeResponse>;
-}
-
-export interface BedrockEmbeddingOptions {
-  readonly client?: BedrockInvoker;
-}
-
-function parseEmbeddings(payload: Uint8Array | undefined, expected: number): number[][] {
-  if (payload === undefined) throw new Error("bedrock returned no response body");
-
-  const decoded: unknown = JSON.parse(new TextDecoder().decode(payload));
-  if (typeof decoded !== "object" || decoded === null || !("embeddings" in decoded)) {
-    throw new Error("bedrock returned no embeddings field");
-  }
-
-  const { embeddings } = decoded as { embeddings: unknown };
-  if (!Array.isArray(embeddings)) throw new Error("bedrock returned a non-array embeddings field");
-
-  // §6 indexes `embeddings[idx]` against `batch[idx]`, so a short or misaligned
-  // response would silently attach the wrong vector to every subsequent item —
-  // a dedup fault with no error anywhere. Checked per chunk, before any of it is
-  // returned.
-  if (embeddings.length !== expected) {
-    throw new Error(`expected ${expected} embeddings, received ${embeddings.length}`);
-  }
-
-  return embeddings.map((vector) => {
-    if (!Array.isArray(vector) || vector.some((value) => typeof value !== "number")) {
-      throw new Error("bedrock returned a non-numeric embedding");
-    }
-    if (vector.length !== DIMENSIONS) {
-      throw new Error(`expected ${DIMENSIONS}-dimensional vectors, received ${vector.length}`);
-    }
-    return vector;
-  });
-}
-
-export function createBedrockEmbeddingProvider(
-  options: BedrockEmbeddingOptions = {},
-): EmbeddingProvider {
-  let client = options.client;
-
-  return {
-    embedBatch: async (texts: readonly string[], dimensions: number): Promise<number[][]> => {
-      // §5.3 L461 fixes the model at 1024 dimensions. Refusing any other width
-      // here rather than passing it along means a mismatch fails at the call
-      // site instead of producing vectors §5.3 L465 says "are not comparable at
-      // all" to the ones already stored.
-      if (dimensions !== DIMENSIONS) {
-        throw new Error(
-          `${EMBEDDING_MODEL_ID} embeds at ${DIMENSIONS} dimensions, not ${dimensions}`,
-        );
-      }
-
-      if (texts.length === 0) return [];
-
-      client ??= new BedrockRuntimeClient({});
-
-      const results: number[][] = [];
-      // §5.3 L467 — Cohere accepts up to 96 texts per call, and §6's batch of 10
-      // fits in one. Chunked anyway: the calibration harness of §11.3 embeds a
-      // labelled set far larger than a queue batch.
-      for (let start = 0; start < texts.length; start += EMBEDDING_MAX_BATCH) {
-        const chunk = texts.slice(start, start + EMBEDDING_MAX_BATCH);
-        const response = await client.send(
-          new InvokeModelCommand({
-            modelId: EMBEDDING_MODEL_ID,
-            contentType: "application/json",
-            accept: "application/json",
-            // `body` is a blob on InvokeModel, so it is encoded rather than passed
-            // as a string — the SDK would otherwise coerce it for us and the wire
-            // shape would depend on that coercion.
-            body: new TextEncoder().encode(
-              JSON.stringify({ texts: chunk, input_type: EMBEDDING_INPUT_TYPE }),
-            ),
-          }),
-        );
-        results.push(...parseEmbeddings(response.body, chunk.length));
-      }
-
-      return results;
     },
   };
 }

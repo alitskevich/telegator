@@ -1,13 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { DIMENSIONS } from "../dedup/constants";
-import {
-  CLASSIFIER_EFFORT,
-  CLASSIFIER_MAX_TOKENS,
-  CLASSIFIER_MODEL_ID,
-  EMBEDDING_INPUT_TYPE,
-  EMBEDDING_MAX_BATCH,
-  EMBEDDING_MODEL_ID,
-} from "./constants";
+import { CLASSIFIER_EFFORT, CLASSIFIER_MAX_TOKENS, CLASSIFIER_MODEL_ID } from "./constants";
 
 describe("the classification model (R2)", () => {
   /**
@@ -43,24 +35,5 @@ describe("the classification model (R2)", () => {
    */
   test("effort is the low value §5.2 L421 sets", () => {
     expect(CLASSIFIER_EFFORT).toBe("low");
-  });
-});
-
-describe("the embedding model (§5.3 L461)", () => {
-  test("is cohere embed-multilingual-v3, chosen for cross-lingual clustering", () => {
-    expect(EMBEDDING_MODEL_ID).toBe("cohere.embed-multilingual-v3");
-  });
-
-  test("uses the search_document input type", () => {
-    expect(EMBEDDING_INPUT_TYPE).toBe("search_document");
-  });
-
-  /** §5.3 L467 — Cohere accepts up to 96 texts per call; a 10-item batch fits. */
-  test("accepts up to 96 texts per call, comfortably above one aggregate batch", () => {
-    expect(EMBEDDING_MAX_BATCH).toBe(96);
-  });
-
-  test("embeds at the dimension count the dedup constants fix", () => {
-    expect(DIMENSIONS).toBe(1024);
   });
 });

@@ -183,7 +183,7 @@ describe("E2E-3 — R29's bound on §3.1 L210's safety net", () => {
     await sources.patch(SOURCE, { lastItemId: undefined });
     await runPipeline(rescrape());
 
-    // Same date, same embedding text, so §6 matches each duplicate to its own
+    // Same date, same match key, so §6 matches each duplicate to its own
     // earlier message and writes the member key it already has.
     expect(await messages.countByStatus("published")).toBe(3);
     expect(bot.calls.length).toBeGreaterThanOrEqual(sends);

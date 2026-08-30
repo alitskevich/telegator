@@ -58,16 +58,10 @@ const messageFields = z.object({
   members: z.record(ItemIdSchema, MemberBlockSchema),
   /** Cached `size(members)`, so the dashboard need not read the map (§2.3 L145). */
   memberCount: z.number().int().nonnegative(),
-  /**
-   * Packed `Float32Array`, 1024 dims (§7.2 L590). Absent until aggregate embeds;
-   * §6 L508 guards against an empty one.
-   *
-   * `z.custom` rather than `z.instanceof`: the latter infers the narrow
-   * `Uint8Array<ArrayBuffer>`, while a view handed back by the AWS SDK — or
-   * sliced out of a pooled Node Buffer — is `Uint8Array<ArrayBufferLike>` and
-   * would not type-check at the adapter boundary. The runtime check is the same.
-   */
-  embedding: z.custom<Uint8Array>((v) => v instanceof Uint8Array).optional(),
+  // R43 — §7.2 L590's 4 KB embedding Binary is gone; `keyEntities`/`keyTitle`/
+  // `keyTags` (R44) carry what dedup compares. Existing rows keep an orphan
+  // `embedding` attribute that nothing reads; §10 of the design accepts that
+  // rather than backfilling, because production has not launched.
   /**
    * R44 — §7.2 L590 stores a 1024-float embedding as 4 KB of Binary. With no
    * vector, the match key of R46 takes its place: three short string lists,
@@ -149,7 +143,7 @@ export type Message = z.infer<typeof MessageSchema>;
  * dashboard code cannot read an attribute the query did not return; §8.3 L742's
  * expandable member list is a lazy base-table read instead (R26).
  */
-export const MessageListItemSchema = messageFields.omit({ members: true, embedding: true });
+export const MessageListItemSchema = messageFields.omit({ members: true });
 
 export type MessageListItem = z.infer<typeof MessageListItemSchema>;
 
@@ -159,9 +153,9 @@ export type MessageListItem = z.infer<typeof MessageListItemSchema>;
  * §7.2 L598 called this "the one query that needs vectors". There are no
  * vectors now: R44 has `infra/lib/data-stack.ts` project the match key R46
  * scores on instead, and R51 adds `memberIds` for the replay short-circuit.
- * `embedding` stays in the type — a stored record still carries it in the base
- * table until Task 8 deletes it — but the projection this schema describes no
- * longer includes it, so a real candidate now reads it as `undefined`.
+ * R43 removes `embedding` from the type entirely — a stored record may still
+ * carry an orphan `embedding` attribute in the base table (see the comment on
+ * `keyEntities` above), but nothing in this codebase reads it any more.
  *
  * §6 L515's Pass 2 reads its candidates from this index. Typing them without
  * `members` is what stops R9's defect at the type level: §6 L525/L532 read
@@ -173,7 +167,6 @@ export const DedupCandidateSchema = messageFields.pick({
   id: true,
   date: true,
   ts: true,
-  embedding: true,
   keyEntities: true,
   keyTitle: true,
   keyTags: true,
@@ -193,7 +186,6 @@ export type DedupCandidate = z.infer<typeof DedupCandidateSchema>;
 export const MessageMergeAttributesSchema = messageFields
   .pick({
     memberCount: true,
-    embedding: true,
     keyEntities: true,
     keyTitle: true,
     keyTags: true,

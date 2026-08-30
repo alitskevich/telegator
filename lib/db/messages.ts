@@ -26,14 +26,14 @@ import type { MemberMerge, MessageRepo, PublishResult } from "./ports";
  * The DynamoDB adapter for `messages` (§2.3, §7.2 L588).
  *
  * `@aws-sdk/lib-dynamodb` rather than the low-level client: it marshals the
- * `members` map and the packed `embedding` binary without hand-written
- * attribute-value envelopes.
+ * `members` map without hand-written attribute-value envelopes.
  *
- * R44/R51 add `keyEntities`, `keyTitle`, `keyTags` and `memberIds` alongside
- * `embedding` — plain string arrays, so they need no marshalling of their own.
- * Both writers below (`putNew`'s whole record and `mergeMember`'s attribute
- * loop) are generic over whatever `Message` / `MessageMergeAttributes` carry,
- * so the new attributes reach DynamoDB with no adapter code specific to them.
+ * R44/R51 add `keyEntities`, `keyTitle`, `keyTags` and `memberIds` — R43
+ * removed the packed `embedding` binary these replaced — as plain string
+ * arrays, so they need no marshalling of their own. Both writers below
+ * (`putNew`'s whole record and `mergeMember`'s attribute loop) are generic
+ * over whatever `Message` / `MessageMergeAttributes` carry, so the new
+ * attributes reach DynamoDB with no adapter code specific to them.
  */
 
 type DocumentCommand = GetCommand | PutCommand | QueryCommand | ScanCommand | UpdateCommand;

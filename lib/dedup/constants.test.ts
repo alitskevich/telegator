@@ -1,28 +1,17 @@
 import { describe, expect, test } from "vitest";
 import { MEMBER_RENDER_LIMIT } from "../domain/message";
 import {
-  DIMENSIONS,
   DISTINCT_THRESHOLD,
-  EMBEDDING_BYTE_LENGTH,
   MAX_BATCH_SIZE,
   MAX_MEMBERS,
   MERGE_THRESHOLD,
   PUBLISH_RENDER_LIMIT,
   SCORE_WEIGHTS,
   SETTLE_DELAY_SECONDS,
-  SIMILARITY_THRESHOLD,
   SQS_MAX_DELAY_SECONDS,
 } from "./constants";
 
 describe("the §6 CONST block (L491-493)", () => {
-  test("SIMILARITY_THRESHOLD is 0.85", () => {
-    expect(SIMILARITY_THRESHOLD).toBe(0.85);
-  });
-
-  test("DIMENSIONS is 1024", () => {
-    expect(DIMENSIONS).toBe(1024);
-  });
-
   test("MAX_MEMBERS is 20", () => {
     expect(MAX_MEMBERS).toBe(20);
   });
@@ -46,14 +35,6 @@ describe("constants §6 references but does not declare", () => {
   test("the settle delay is within the SQS delay cap", () => {
     expect(SQS_MAX_DELAY_SECONDS).toBe(900);
     expect(SETTLE_DELAY_SECONDS).toBeLessThanOrEqual(SQS_MAX_DELAY_SECONDS);
-  });
-});
-
-describe("derived values, so the arithmetic is not repeated", () => {
-  /** §7.2 L590: 1024 × 4 = 4 KB as DynamoDB Binary, versus ~20 KB as a list. */
-  test("a packed embedding is DIMENSIONS x 4 bytes", () => {
-    expect(EMBEDDING_BYTE_LENGTH).toBe(4096);
-    expect(EMBEDDING_BYTE_LENGTH).toBe(DIMENSIONS * Float32Array.BYTES_PER_ELEMENT);
   });
 });
 

@@ -65,20 +65,6 @@ export const CLASSIFIER_MAX_TOKENS = 2000;
 export const CLASSIFIER_EFFORT = "low";
 
 /**
- * §5.3 L461. Chosen for content rather than preference: item bodies are Russian
- * and Ukrainian, summaries are Belarusian, and cross-lingual clustering is the
- * entire point of §3.3. Titan v2 is the alternative L463 records and rejects as
- * English-centric.
- */
-export const EMBEDDING_MODEL_ID = "cohere.embed-multilingual-v3";
-
-/** §5.3 L461. */
-export const EMBEDDING_INPUT_TYPE = "search_document";
-
-/** §5.3 L467 — Cohere accepts up to 96 texts per call; §6's 10-item batch fits in one. */
-export const EMBEDDING_MAX_BATCH = 96;
-
-/**
  * R46. Its own constant, defaulting to the classifier's tier, so the two tasks
  * can diverge later without reopening R2's §5.1-versus-§12.1 disagreement.
  */

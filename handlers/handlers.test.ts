@@ -47,7 +47,7 @@ describe("Lambda entry points", () => {
       // A stage's decisions live in lib/pipeline/; a handler that reimplemented
       // one would need these.
       expect(source).not.toMatch(/\bif \(.*status\b/);
-      expect(source).not.toContain("SIMILARITY_THRESHOLD");
+      expect(source).not.toContain("MERGE_THRESHOLD");
     },
   );
 });

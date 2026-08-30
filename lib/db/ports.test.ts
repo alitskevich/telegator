@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db";
-import { packEmbedding } from "./embeddingCodec";
 
 const source = {
   id: "yigal_levin",
@@ -22,7 +21,6 @@ const message = {
   status: "topublish" as const,
   members: { "yigal_levin/12345": block },
   memberCount: 1,
-  embedding: packEmbedding([1, 0]),
   keyEntities: [] as string[],
   keyTitle: [] as string[],
   keyTags: [] as string[],
@@ -91,17 +89,18 @@ describe("fakeMessageRepo", () => {
   });
 
   /**
-   * §7.2 L598: "Only `date-index` projects `embedding` ... Nothing projects
-   * `members`". Giving the candidate its own shape means §6's Pass 2 cannot read
-   * a member map that the real query would never have returned — the defect R9
-   * exists to prevent, where a whole-record write erases every existing member.
+   * §7.2 L598 (amended by R44): `date-index` projects the match key and
+   * `memberIds`, not `members`. Giving the candidate its own shape means §6's
+   * Pass 2 cannot read a member map that the real query would never have
+   * returned — the defect R9 exists to prevent, where a whole-record write
+   * erases every existing member.
    */
-  test("queryByDate returns candidates carrying an embedding but no members", async () => {
+  test("queryByDate returns candidates carrying the match key but no members", async () => {
     const repo = fakeMessageRepo([message]);
 
     const [candidate] = await repo.queryByDate("2026-08-29");
 
-    expect(candidate?.embedding).toBeDefined();
+    expect(candidate).toHaveProperty("keyEntities");
     expect(candidate).not.toHaveProperty("members");
     expect(candidate).not.toHaveProperty("title");
   });

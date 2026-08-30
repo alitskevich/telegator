@@ -21,12 +21,6 @@ export interface Classifier {
   classify(body: string): Promise<NewsItem>;
 }
 
-/** §5.3 — the whole batch embedded in a single call (§3.3 L268). */
-export interface EmbeddingProvider {
-  /** Returns one vector per input text, positionally aligned with `texts`. */
-  embedBatch(texts: readonly string[], dimensions: number): Promise<number[][]>;
-}
-
 /**
  * R46 — the band adjudicator's inputs.
  *
@@ -57,8 +51,11 @@ export interface AdjudicationPair {
  * only each item's highest-scoring candidate is ever ambiguous.
  *
  * Returns a map keyed by `AdjudicationPair.id`. Never an array: §6 indexed one
- * provider response positionally against its input, and `parseEmbeddings`
- * exists to catch what that cost.
+ * provider response positionally against its input, and a misaligned response
+ * silently attached the wrong result to the wrong item — the class of bug the
+ * removed embedding provider (R43) could only guard against by checking its
+ * response length before returning. A keyed map removes the bug rather than
+ * checking for it.
  */
 export interface Adjudicator {
   adjudicate(pairs: readonly AdjudicationPair[]): Promise<ReadonlyMap<string, boolean>>;
