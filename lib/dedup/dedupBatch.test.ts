@@ -747,6 +747,27 @@ describe("the band (R46)", () => {
   });
 
   /**
+   * The empty-set trap, at the stage rather than in `matchScore` alone: two
+   * items carrying no entities and no tags share nothing, so `J(EMPTY, EMPTY)`
+   * being 1 would score them 0.6 on the heaviest-weighted component and merge
+   * two unrelated sparse stories outright. The adjudicator says "same" here and
+   * is still never asked — the pair must land under `DISTINCT_THRESHOLD`, not
+   * in the band.
+   */
+  test("two items with no entities do not merge on their shared emptiness", async () => {
+    const adjudicator = fakeAdjudicator(() => true);
+    const batch = [
+      item("src_a/1", { title: "Alpha Beta" }),
+      item("src_b/2", { title: "Gamma Delta" }),
+    ];
+
+    const result = await dedupBatch(batch, deps({ adjudicator }));
+
+    expect(result.writes).toHaveLength(2);
+    expect(adjudicator.calls).toHaveLength(0);
+  });
+
+  /**
    * The two sides are described in the same terms — real `title`, `category`
    * and `location` on both, the canonical key for `entities` and `tags` on
    * both. An asymmetry here would make part of every verdict an artefact of
