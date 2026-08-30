@@ -697,7 +697,8 @@ git commit -m "feat(ai): add the band adjudicator port with id-keyed verdicts (R
 Additive: `embedding` stays and keeps working. Nothing is deleted until Task 8, so all four gates stay green throughout.
 
 **Files:**
-- Modify: `lib/domain/message.ts` (add fields to `messageFields`, `DedupCandidateSchema`, `MessageMergeAttributesSchema`)
+- Modify: `lib/domain/message.ts` (add fields to `messageFields`, `DedupCandidateSchema`, `MessageMergeAttributesSchema` — **plain zod arrays only; this file imports nothing from `lib/dedup`**)
+- Modify: `lib/dedup/matchKey.ts` (add `matchKeyOf` / `matchKeyAttributes`)
 - Modify: `lib/db/messages.ts` (persist the new attributes; locate sites with `grep -n "embedding" lib/db/messages.ts`)
 - Modify: `lib/domain/message.test.ts`, `lib/db/messages.test.ts`
 - Modify: `infra/lib/data-stack.ts:52` (`DEDUP_CANDIDATE_ATTRIBUTES`)
@@ -1228,9 +1229,13 @@ Expected: all pass. `tsc` is the gate that matters here — it is what proves no
 - [ ] **Step 4: Commit**
 
 ```bash
-git add -A
+git add lib/ai/ports.ts lib/ai/bedrock.ts lib/ai/bedrock.test.ts lib/ai/constants.ts   lib/ai/constants.test.ts lib/dedup/constants.ts lib/dedup/constants.test.ts   lib/domain/message.ts package.json
 git commit -m "refactor(dedup): remove the embedding machinery (R43)"
 ```
+
+**Never `git add -A` or `git add .` in this repo right now** — the working tree carries
+unrelated uncommitted work (`infra/lib/app-stack.ts`, `infra/lib/app-stack.test.ts`,
+`next-env.d.ts`) that is not yours to commit. `git rm` already staged the deletions.
 
 ---
 
