@@ -1,16 +1,20 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
-import { unpackEmbedding } from "../db/embeddingCodec";
-import { cosineSimilarity } from "../dedup/cosine";
-import { buildEmbeddingText } from "../dedup/embeddingText";
-import type { PairLabel, ScoredPair } from "./sweep";
+import type { MatchKeyFields } from "../dedup/matchKey";
+import type { BandRow, LabelledKeyPair } from "./sweep";
 
 /**
- * §11.3 step 5 — "Record the value, the curve and the labelled set in the
- * repository."
+ * §11.3 step 1/6's file formats, rewritten (R48 — see `sweep.ts` for what the
+ * harness itself became).
  *
- * Four files, and the shapes are here so the labelled set outlives the run that
- * produced it. A curve without its model, its dimensions and the text that was
- * embedded cannot be checked against the pipeline it was meant to calibrate.
+ * `pairs.jsonl` — one hand-judged pair per line — is unchanged: the labelled
+ * set is model-agnostic and did not move when the embedding step did.
+ * `items.json` now carries the fields a match key is built from (§5.2's
+ * English `title`/`peoples`/`properNames`/`tags`) rather than the fields
+ * `buildEmbeddingText` concatenated — there is no embedding step left to feed
+ * `summary`, `category` or `body` to. `embeddings.json` is gone entirely:
+ * nothing produces it, because `sweepBands` scores the analyzed fields
+ * directly.
  */
 
 /** `pairs.jsonl` — one hand-judged pair per line (§11.3 step 1). */
@@ -23,7 +27,7 @@ const LabelledPairSchema = z.object({
 export interface LabelledPair {
   readonly a: string;
   readonly b: string;
-  readonly label: PairLabel;
+  readonly label: "same" | "different";
 }
 
 export function parsePairsJsonl(text: string): LabelledPair[] {
@@ -45,19 +49,20 @@ export function parsePairsJsonl(text: string): LabelledPair[] {
 }
 
 /**
- * `items.json` — the fields §6 L495 embeds, and nothing else.
+ * `items.json` — the fields a match key is built from (§5.2 L443-453), and
+ * nothing else.
  *
- * Deliberately narrower than `AnalyzedItem`: a labelled set is assembled by hand
- * from existing data, and requiring every pipeline field would make it harder to
+ * Deliberately narrower than `AnalyzedItem`, for the same reason
+ * `MatchKeyFields` is structural: a labelled set is assembled by hand from
+ * existing data, and requiring every pipeline field would make it harder to
  * produce without making the calibration any more faithful.
  */
 const CalibrationItemSchema = z.object({
   id: z.string().min(1),
   title: z.string().optional(),
-  summary: z.string().optional(),
-  category: z.string().optional(),
+  peoples: z.string().optional(),
+  properNames: z.string().optional(),
   tags: z.string().optional(),
-  body: z.string().optional(),
 });
 
 export type CalibrationItem = z.infer<typeof CalibrationItemSchema>;
@@ -67,8 +72,8 @@ export function parseItems(raw: unknown): Record<string, CalibrationItem> {
   const byId: Record<string, CalibrationItem> = {};
 
   for (const item of items) {
-    // A duplicate id would silently drop one of the two, and the pair that
-    // referenced it would be scored against the wrong text.
+    // A duplicate id would silently drop one of the two, and any pair that
+    // referenced it would be scored against the wrong fields.
     if (item.id in byId) throw new Error(`items.json contains ${item.id} twice`);
     byId[item.id] = item;
   }
@@ -77,106 +82,63 @@ export function parseItems(raw: unknown): Record<string, CalibrationItem> {
 }
 
 /**
- * The text to embed for each item, from §2.11's builder.
+ * Join labelled pairs to the match-key fields `sweepBands` needs.
  *
- * Shared with the aggregate stage on purpose. §11.3's premise is that a
- * threshold belongs to a specific embedding space, and it belongs just as much
- * to the text that was embedded — calibrating on a different concatenation than
- * §6 L495 uses produces a number that does not transfer, and nothing downstream
- * would ever reveal it.
+ * `CalibrationItem` is a superset of `MatchKeyFields` — it carries `id` too —
+ * so each side is passed through as-is rather than rebuilt field by field.
  */
-export function embeddingInputs(items: Record<string, CalibrationItem>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(items).map(([id, item]) => [id, buildEmbeddingText(item)]),
-  );
-}
-
-/** `embeddings.json` — base64 packed vectors, with the model that produced them. */
-const EmbeddingsFileSchema = z.object({
-  model: z.string().min(1),
-  dims: z.number().int().positive(),
-  inputType: z.string().min(1),
-  vectors: z.record(z.string(), z.string()),
-});
-
-export interface Embeddings {
-  readonly model: string;
-  readonly dims: number;
-  readonly inputType: string;
-  readonly vectors: Record<string, number[]>;
-}
-
-export function parseEmbeddings(raw: unknown): Embeddings {
-  const file = EmbeddingsFileSchema.parse(raw);
-  const vectors: Record<string, number[]> = {};
-
-  for (const [id, encoded] of Object.entries(file.vectors)) {
-    const vector = unpackEmbedding(Buffer.from(encoded, "base64"));
-
-    // A vector of the wrong width means the file and the model it claims
-    // disagree, and every similarity computed from it would be meaningless.
-    if (vector.length !== file.dims) {
-      throw new Error(
-        `embeddings.json: ${id} has ${vector.length} dimensions, expected ${file.dims}`,
-      );
-    }
-
-    vectors[id] = vector;
-  }
-
-  return { model: file.model, dims: file.dims, inputType: file.inputType, vectors };
-}
-
-/**
- * Attach a cosine similarity to each labelled pair.
- *
- * A missing embedding throws rather than scoring zero: a zero would be counted
- * as a confident non-match at every threshold, dragging recall down and making
- * the sweep recommend a lower threshold than the data supports.
- */
-export function scorePairs(
+export function toKeyPairs(
   pairs: readonly LabelledPair[],
-  vectors: Readonly<Record<string, readonly number[]>>,
-): ScoredPair[] {
+  items: Readonly<Record<string, CalibrationItem>>,
+): LabelledKeyPair[] {
   return pairs.map((pair) => {
-    const a = vectors[pair.a];
-    const b = vectors[pair.b];
+    const fields: MatchKeyFields | undefined = items[pair.a];
+    const other: MatchKeyFields | undefined = items[pair.b];
 
-    if (a === undefined) throw new Error(`no embedding for ${pair.a}`);
-    if (b === undefined) throw new Error(`no embedding for ${pair.b}`);
+    // Throws rather than dropping the pair: a silently dropped pair would
+    // shrink the labelled set below §11.3 step 1's floor without telling
+    // anyone.
+    if (fields === undefined) throw new Error(`pairs.jsonl references unknown item ${pair.a}`);
+    if (other === undefined) throw new Error(`pairs.jsonl references unknown item ${pair.b}`);
 
-    return { ...pair, similarity: cosineSimilarity([...a], [...b]) };
+    return { fields, other, same: pair.label === "same" };
   });
 }
 
-/** `curve.csv` — §11.3 step 5's record of the sweep. */
-export const CURVE_HEADER = "threshold,tp,fp,fn,tn,precision,recall";
+/**
+ * The labelled set's hash, recorded as `labelledSetHash` (R48).
+ *
+ * A threshold is a property of the exact set it was tuned on — the same
+ * argument `buildEmbeddingText`'s comment made about the text it
+ * concatenated, carried over unchanged to the fields a match key is built
+ * from. Hashing both files rather than one: a `pairs.jsonl` unchanged against
+ * an edited `items.json` (or vice versa) is still a different labelled set.
+ */
+export function hashLabelledSet(pairsJsonl: string, itemsJson: string): string {
+  const digest = createHash("sha256")
+    .update(pairsJsonl, "utf8")
+    .update(itemsJson, "utf8")
+    .digest("hex");
+  return `sha256:${digest}`;
+}
 
-export function toCurveCsv(
-  rows: readonly {
-    threshold: number;
-    tp: number;
-    fp: number;
-    fn: number;
-    tn: number;
-    precision: number | null;
-    recall: number;
-  }[],
-): string {
+/** `curve.csv` — §11.3 step 6's record of the sweep. */
+export const CURVE_HEADER =
+  "distinctThreshold,mergeThreshold,autoMergePrecision,autoSplitRecall,bandFraction";
+
+export function toCurveCsv(rows: readonly BandRow[]): string {
   return [
     CURVE_HEADER,
     ...rows.map((row) =>
       [
-        row.threshold,
-        row.tp,
-        row.fp,
-        row.fn,
-        row.tn,
-        // Empty, not 0 and not "null". Zero reads as "no correct merges out of
-        // many", when in fact there were no merges at all — different findings,
-        // and only one is a reason to lower the threshold.
-        row.precision ?? "",
-        row.recall,
+        row.distinctThreshold,
+        row.mergeThreshold,
+        // Empty, not 0 and not "null". Zero reads as "every merge was wrong",
+        // when in fact there were no merges at all — different findings, and
+        // only one is a reason to raise the merge threshold.
+        row.autoMergePrecision ?? "",
+        row.autoSplitRecall,
+        row.bandFraction,
       ].join(","),
     ),
   ].join("\n");

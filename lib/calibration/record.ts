@@ -1,34 +1,65 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
-import { EMBEDDING_MODEL_ID } from "../ai/constants";
-import { SIMILARITY_THRESHOLD } from "../dedup/constants";
+import { DISTINCT_THRESHOLD, MERGE_THRESHOLD, SCORE_WEIGHTS } from "../dedup/constants";
 
 /**
- * §11.3 step 5's record — "Record the value, the curve and the labelled set in
- * the repository" — and §11.3's closing rule: "Until this is done the pipeline
- * must not publish to production channels."
+ * §11.3 step 6's record, rewritten (R48 — §11.3, replacing the design's
+ * original steps 2-5; see `lib/calibration/sweep.ts` for what the sweep
+ * itself became) — and §11.3's closing rule, unchanged: "Until this is done
+ * the pipeline must not publish to production channels."
  *
- * That rule was a sentence. This makes it a file: the recalibration is complete
- * exactly when a record exists that names the model it was measured against and
- * the threshold it chose, and that threshold is the one §6 actually uses.
+ * That rule was a sentence. This makes it a file: the recalibration is
+ * complete exactly when a record exists that names the band and the weights
+ * it was measured against, and both are the ones §6 actually uses.
+ *
+ * What changed from the embedding era: `model`, `dims` and `inputType` are
+ * gone — there is no embedding model left to name (R43). The single
+ * `threshold` is gone too, replaced by `mergeThreshold` and
+ * `distinctThreshold` (R46) — a record naming one number could not describe
+ * the band `classify` actually applies. `weights` is new: R46's score is
+ * weighted, so a threshold pair recorded against one weighting carries no
+ * guarantee against another, for the same reason the embedding-era record
+ * distrusted a threshold ported to a different embedding model.
+ * `autoMergePrecision`, `autoSplitRecall` and `bandFraction` replace the old
+ * `precision`/`recall` pair with design §9's three-way objective.
+ * `adjudicatorAccuracy` is new: it is measured separately, on band pairs
+ * only, and is the one part of the harness that spends a model call.
+ * `labelledSetHash` is new: a threshold is a property of the exact set it was
+ * tuned on, the same argument `buildEmbeddingText`'s comment made about the
+ * text it concatenated.
  */
 
 /** Where the record lives, relative to the repository root. */
 export const CALIBRATION_RECORD_PATH = "calibration/record.json";
 
-export const CalibrationRecordSchema = z.object({
-  /** §11.3 L859 — "thresholds are properties of a specific embedding model". */
-  model: z.string().min(1),
-  dims: z.number().int().positive(),
-  inputType: z.string().min(1),
-  /** The value §11.3 step 4 chose. */
-  threshold: z.number().min(0).max(1),
-  precision: z.number().min(0).max(1),
-  recall: z.number().min(0).max(1),
-  /** §11.3 step 1 — "at least 100 hand-judged item pairs". */
-  pairs: z.number().int().nonnegative(),
-  recordedAt: z.string().min(1),
+const ScoreWeightsSchema = z.object({
+  entities: z.number().min(0),
+  titleTokens: z.number().min(0),
+  tags: z.number().min(0),
 });
+
+export const CalibrationRecordSchema = z
+  .object({
+    /** The values §11.3 step 4 (rewritten) chose. */
+    mergeThreshold: z.number().min(0).max(1),
+    distinctThreshold: z.number().min(0).max(1),
+    weights: ScoreWeightsSchema,
+    autoMergePrecision: z.number().min(0).max(1),
+    autoSplitRecall: z.number().min(0).max(1),
+    bandFraction: z.number().min(0).max(1),
+    adjudicatorAccuracy: z.number().min(0).max(1),
+    labelledSetHash: z.string().min(1),
+    /** §11.3 step 1 — "at least 100 hand-judged item pairs". */
+    pairs: z.number().int().nonnegative(),
+    recordedAt: z.string().min(1),
+  })
+  // Enforced by the schema itself, not merely assumed by a caller: a record
+  // with the band inverted describes a configuration `classify` cannot
+  // produce, and would make every downstream reader guess which bound is
+  // which.
+  .refine((record) => record.distinctThreshold <= record.mergeThreshold, {
+    message: "distinctThreshold must not exceed mergeThreshold",
+  });
 
 export type CalibrationRecord = z.infer<typeof CalibrationRecordSchema>;
 
@@ -43,9 +74,9 @@ const readFromDisk: ReadFile = (path) => readFileSync(path, "utf8");
  * The recorded calibration, or `null` when there is none.
  *
  * Absent is the expected state today and is not an error — the recalibration
- * needs a labelled set and a real embedding model, neither of which exists here.
- * A malformed record IS an error: it means someone recorded something and it
- * cannot be read, which must not be mistaken for having recorded nothing.
+ * needs a labelled set this repo does not have yet. A malformed record IS an
+ * error: it means someone recorded something and it cannot be read, which
+ * must not be mistaken for having recorded nothing.
  */
 export function readCalibrationRecord(
   path: string = CALIBRATION_RECORD_PATH,
@@ -62,31 +93,43 @@ export function readCalibrationRecord(
 }
 
 /**
- * Why the pipeline may not publish to production channels yet, or `null` when it
- * may.
+ * Why the pipeline may not publish to production channels yet, or `null` when
+ * it may.
  *
- * A reason string rather than a boolean, because every one of these is something
- * an operator has to act on and "false" tells them nothing about which.
+ * A reason string rather than a boolean, because every one of these is
+ * something an operator has to act on and "false" tells them nothing about
+ * which.
  */
 export function productionBlocker(record: CalibrationRecord | null): string | null {
   if (record === null) {
     return `no ${CALIBRATION_RECORD_PATH}: §11.3's recalibration has not been done`;
   }
 
-  if (record.model !== EMBEDDING_MODEL_ID) {
-    // §11.3 L859 — a threshold measured against another model carries no
-    // guarantee in this one, which is the entire reason the section exists.
-    return `calibrated against ${record.model}, but the pipeline embeds with ${EMBEDDING_MODEL_ID}`;
-  }
-
   if (record.pairs < MIN_LABELLED_PAIRS) {
     return `calibrated on ${record.pairs} pairs, fewer than §11.3's ${MIN_LABELLED_PAIRS}`;
   }
 
-  if (record.threshold !== SIMILARITY_THRESHOLD) {
-    // The recalibration was done and its answer was not applied, which is worse
-    // than not having done it: the curve says one thing and §6 does another.
-    return `recorded threshold ${record.threshold} is not the ${SIMILARITY_THRESHOLD} §6 uses`;
+  if (
+    record.distinctThreshold !== DISTINCT_THRESHOLD ||
+    record.mergeThreshold !== MERGE_THRESHOLD
+  ) {
+    // The sweep was run and its answer was never applied, which is worse than
+    // not having done it: the record says one thing and §6's constants say
+    // another.
+    return (
+      `recorded thresholds (distinct ${record.distinctThreshold}, merge ${record.mergeThreshold}) ` +
+      `are not the (distinct ${DISTINCT_THRESHOLD}, merge ${MERGE_THRESHOLD}) §6 uses`
+    );
+  }
+
+  if (
+    record.weights.entities !== SCORE_WEIGHTS.entities ||
+    record.weights.titleTokens !== SCORE_WEIGHTS.titleTokens ||
+    record.weights.tags !== SCORE_WEIGHTS.tags
+  ) {
+    // The same failure mode as a mismatched threshold: a weight candidate was
+    // measured and a different one shipped.
+    return `recorded weights (${JSON.stringify(record.weights)}) are not the (${JSON.stringify(SCORE_WEIGHTS)}) §6 uses`;
   }
 
   return null;

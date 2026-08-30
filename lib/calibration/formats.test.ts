@@ -1,26 +1,15 @@
 import { describe, expect, test } from "vitest";
-import { packEmbedding } from "../db/embeddingCodec";
-import { buildEmbeddingText } from "../dedup/embeddingText";
+import { DISTINCT_THRESHOLD, MERGE_THRESHOLD } from "../dedup/constants";
 import {
   CURVE_HEADER,
-  embeddingInputs,
-  parseEmbeddings,
+  hashLabelledSet,
   parseItems,
   parsePairsJsonl,
-  scorePairs,
   toCurveCsv,
+  toKeyPairs,
 } from "./formats";
-import { type CurveRow, selectThreshold, sweep } from "./sweep";
-
-const base64 = (vector: readonly number[]) => Buffer.from(packEmbedding(vector)).toString("base64");
-
-/** Dims are taken from the vectors, so a fixture cannot contradict itself. */
-const embeddingsFile = (vectors: Record<string, readonly number[]>) => ({
-  model: "cohere.embed-multilingual-v3",
-  dims: Object.values(vectors)[0]?.length ?? 0,
-  inputType: "search_document",
-  vectors: Object.fromEntries(Object.entries(vectors).map(([id, v]) => [id, base64(v)])),
-});
+import type { BandRow } from "./sweep";
+import { sweepBands } from "./sweep";
 
 describe("parsePairsJsonl", () => {
   test("reads one labelled pair per line", () => {
@@ -39,7 +28,7 @@ describe("parsePairsJsonl", () => {
     expect(parsePairsJsonl('\n{"a":"x/1","b":"y/2","label":"same"}\n\n')).toHaveLength(1);
   });
 
-  /** A mistyped label is a pair silently excluded from the curve. */
+  /** A mistyped label is a pair silently excluded from the sweep. */
   test("rejects an unknown label, naming the line", () => {
     expect(() => parsePairsJsonl('{"a":"x/1","b":"y/2","label":"maybe"}')).toThrow(/line 1/);
   });
@@ -56,12 +45,22 @@ describe("parsePairsJsonl", () => {
 });
 
 describe("parseItems", () => {
-  test("reads the fields the embedding text is built from", () => {
+  /**
+   * R48 — the fields a match key is built from (§5.2's English fields), not
+   * the fields `buildEmbeddingText` concatenated. There is no embedding step
+   * left to feed `summary`, `category` or `body` to.
+   */
+  test("reads the fields a match key is built from", () => {
     const items = parseItems([
-      { id: "x/1", title: "T", summary: "S", category: "politics", tags: "a,b", body: "B" },
+      { id: "x/1", title: "T", peoples: "A, B", properNames: "C", tags: "t1, t2" },
     ]);
 
-    expect(items["x/1"]).toMatchObject({ title: "T", summary: "S", category: "politics" });
+    expect(items["x/1"]).toMatchObject({
+      title: "T",
+      peoples: "A, B",
+      properNames: "C",
+      tags: "t1, t2",
+    });
   });
 
   test("rejects an item with no id", () => {
@@ -73,178 +72,155 @@ describe("parseItems", () => {
   });
 });
 
-describe("embeddingInputs", () => {
-  /**
-   * §11.3's whole premise is that a threshold belongs to a specific embedding
-   * space. It belongs just as much to the text that was embedded: calibrating on
-   * a different concatenation than §6 L495 uses produces a number that does not
-   * transfer, and nothing downstream would ever reveal it.
-   */
-  test("uses the same concatenation the aggregate stage embeds", () => {
-    const item = { id: "x/1", title: "T", summary: "S", category: "c", tags: "t", body: "B" };
+describe("toKeyPairs", () => {
+  const items = parseItems([
+    { id: "x/1", title: "Minsk Factory Fire", properNames: "Minsk" },
+    { id: "x/2", title: "Minsk Factory Blaze", properNames: "Minsk" },
+    { id: "x/3", title: "Cup Final", properNames: "Wembley" },
+  ]);
 
-    expect(embeddingInputs(parseItems([item]))["x/1"]).toBe(buildEmbeddingText(item));
-  });
-
-  test("one input per item", () => {
-    const inputs = embeddingInputs(
-      parseItems([
-        { id: "x/1", title: "A" },
-        { id: "x/2", title: "B" },
-      ]),
-    );
-
-    expect(Object.keys(inputs)).toEqual(["x/1", "x/2"]);
-  });
-});
-
-describe("parseEmbeddings", () => {
-  test("unpacks the base64 vectors", () => {
-    const parsed = parseEmbeddings(embeddingsFile({ "x/1": [1, 0, 0] }));
-
-    expect(parsed.vectors["x/1"]).toEqual([1, 0, 0]);
-  });
-
-  /**
-   * Recorded, because §11.3 says a threshold is a property of a specific model.
-   * A curve that does not say which model produced it cannot be checked against
-   * the one the pipeline runs.
-   */
-  test("carries the model, dimensions and input type", () => {
-    const parsed = parseEmbeddings(embeddingsFile({ "x/1": [1] }));
-
-    expect(parsed).toMatchObject({
-      model: "cohere.embed-multilingual-v3",
-      dims: 1,
-      inputType: "search_document",
-    });
-  });
-
-  test("rejects a file with no model recorded", () => {
-    const file = { ...embeddingsFile({ "x/1": [1] }), model: undefined };
-
-    expect(() => parseEmbeddings(file)).toThrow(/model/);
-  });
-
-  /** A vector of the wrong width means the file and the model disagree. */
-  test("rejects a vector whose length is not dims", () => {
-    const file = { ...embeddingsFile({ "x/1": [1, 0, 0] }), dims: 4 };
-
-    expect(() => parseEmbeddings(file)).toThrow(/x\/1/);
-  });
-});
-
-describe("scorePairs", () => {
-  const vectors = { "x/1": [1, 0], "x/2": [1, 0], "x/3": [0, 1] };
-
-  test("scores each pair by cosine similarity", () => {
-    const scored = scorePairs(
+  test("joins each pair to its items' match-key fields and a same/different flag", () => {
+    const pairs = toKeyPairs(
       [
         { a: "x/1", b: "x/2", label: "same" },
         { a: "x/1", b: "x/3", label: "different" },
       ],
-      vectors,
+      items,
     );
 
-    expect(scored[0]?.similarity).toBeCloseTo(1);
-    expect(scored[1]?.similarity).toBeCloseTo(0);
+    expect(pairs).toEqual([
+      { fields: items["x/1"], other: items["x/2"], same: true },
+      { fields: items["x/1"], other: items["x/3"], same: false },
+    ]);
   });
 
   /**
-   * Loudly, because a pair whose embedding is missing would otherwise score 0
-   * and be counted as a confident non-match — dragging recall down and making
-   * the sweep recommend a lower threshold than the data supports.
+   * Throws rather than dropping the pair. A silently dropped pair would shrink
+   * the labelled set below what §11.3 step 1 requires without telling anyone.
    */
-  test("rejects a pair with no embedding, naming the item", () => {
-    expect(() => scorePairs([{ a: "x/1", b: "x/9", label: "same" }], vectors)).toThrow(/x\/9/);
+  test("throws naming a referenced item that is missing, on either side", () => {
+    expect(() => toKeyPairs([{ a: "x/1", b: "x/9", label: "same" }], items)).toThrow(/x\/9/);
+    expect(() => toKeyPairs([{ a: "x/9", b: "x/1", label: "same" }], items)).toThrow(/x\/9/);
+  });
+});
+
+describe("hashLabelledSet", () => {
+  test("is deterministic: the same inputs hash the same", () => {
+    expect(hashLabelledSet("pairs", "items")).toBe(hashLabelledSet("pairs", "items"));
+  });
+
+  /**
+   * A threshold is a property of the exact set it was tuned on — the same
+   * argument `buildEmbeddingText`'s comment made about the embedded text. If
+   * two different labelled sets hashed the same, that guarantee would be
+   * empty.
+   */
+  test("changes when either input changes", () => {
+    const base = hashLabelledSet("pairs", "items");
+
+    expect(hashLabelledSet("pairs2", "items")).not.toBe(base);
+    expect(hashLabelledSet("pairs", "items2")).not.toBe(base);
+  });
+
+  test("is prefixed so a reader can tell which digest it is", () => {
+    expect(hashLabelledSet("pairs", "items")).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 });
 
 describe("toCurveCsv", () => {
-  const row = (threshold: number, precision: number | null): CurveRow => ({
-    threshold,
-    tp: 1,
-    fp: 2,
-    fn: 3,
-    tn: 4,
-    precision,
-    recall: 0.25,
+  const row = (
+    distinctThreshold: number,
+    mergeThreshold: number,
+    autoMergePrecision: number | null,
+  ): BandRow => ({
+    distinctThreshold,
+    mergeThreshold,
+    autoMergePrecision,
+    autoSplitRecall: 0.5,
+    bandFraction: 0.25,
   });
 
-  test("writes the header §11.3 step 5 records", () => {
+  test("writes the header §11.3 step 6 records", () => {
     expect(toCurveCsv([]).split("\n")[0]).toBe(CURVE_HEADER);
-    expect(CURVE_HEADER).toBe("threshold,tp,fp,fn,tn,precision,recall");
+    expect(CURVE_HEADER).toBe(
+      "distinctThreshold,mergeThreshold,autoMergePrecision,autoSplitRecall,bandFraction",
+    );
   });
 
   test("writes one line per row", () => {
-    expect(toCurveCsv([row(0.7, 0.5), row(0.71, 0.5)]).split("\n")).toHaveLength(3);
+    expect(toCurveCsv([row(0.3, 0.7, 0.9), row(0.35, 0.72, 0.95)]).split("\n")).toHaveLength(3);
   });
 
   test("a row carries its cells in header order", () => {
-    expect(toCurveCsv([row(0.85, 0.5)]).split("\n")[1]).toBe("0.85,1,2,3,4,0.5,0.25");
+    expect(toCurveCsv([row(0.35, 0.72, 0.9)]).split("\n")[1]).toBe("0.35,0.72,0.9,0.5,0.25");
   });
 
   /**
-   * An empty cell, not 0 and not "null". Zero would read as "no correct merges
-   * out of many", when in fact there were no merges at all — the two are
-   * different findings and only one of them is a reason to lower the threshold.
+   * An empty cell, not 0 and not "null". Zero would read as "every merge was
+   * wrong", when in fact there were no merges at all — different findings, and
+   * only one of them is a reason to raise the merge threshold.
    */
-  test("an absent precision is an empty cell", () => {
-    expect(toCurveCsv([row(0.95, null)]).split("\n")[1]).toBe("0.95,1,2,3,4,,0.25");
-  });
-
-  test("the threshold is written as the exact basis point", () => {
-    expect(
-      toCurveCsv([row(0.7, 1)])
-        .split("\n")[1]
-        ?.startsWith("0.7,"),
-    ).toBe(true);
+  test("an absent auto-merge precision is an empty cell", () => {
+    expect(toCurveCsv([row(0.35, 0.95, null)]).split("\n")[1]).toBe("0.35,0.95,,0.5,0.25");
   });
 });
 
-describe("the harness end to end", () => {
+describe("the harness end to end (R48)", () => {
   /**
    * Each part is unit-tested above; this is the only assertion that the parts
-   * fit together — files in, a curve and a recommendation out. §11.3 step 5 asks
-   * for exactly these artefacts.
+   * fit together — files in, a curve and a row satisfying both error floors
+   * out, with zero model calls anywhere in the path.
    */
-  test("files in, a curve and a chosen threshold out", () => {
+  test("files in, a curve and a viable band out", () => {
     const items = parseItems([
-      { id: "x/1", title: "Explosion downtown", summary: "S1", category: "politics" },
-      { id: "x/2", title: "Blast in city centre", summary: "S2", category: "politics" },
-      { id: "x/3", title: "Cup final", summary: "S3", category: "sports" },
+      {
+        id: "x/1",
+        title: "Minsk Factory Fire",
+        properNames: "Minsk, Belaruskali",
+        tags: "fire, industry",
+      },
+      {
+        id: "x/2",
+        title: "Minsk Factory Blaze",
+        properNames: "Minsk, Belaruskali",
+        tags: "fire, safety",
+      },
+      { id: "x/3", title: "Cup Final Result", properNames: "Wembley", tags: "sports" },
     ]);
 
-    expect(Object.keys(embeddingInputs(items))).toHaveLength(3);
-
-    const { vectors } = parseEmbeddings(
-      embeddingsFile({
-        // x/1 and x/2 near each other; x/3 orthogonal to both.
-        "x/1": [1, 0],
-        "x/2": [0.99, Math.sqrt(1 - 0.99 ** 2)],
-        "x/3": [0, 1],
-      }),
-    );
-
-    const scored = scorePairs(
+    const pairs = toKeyPairs(
       [
         { a: "x/1", b: "x/2", label: "same" },
         { a: "x/1", b: "x/3", label: "different" },
         { a: "x/2", b: "x/3", label: "different" },
       ],
-      vectors,
+      items,
     );
 
-    const rows = sweep(scored);
-    expect(rows).toHaveLength(26);
+    const rows = sweepBands(pairs, { step: 0.01 });
+    const productionRow = rows.find(
+      (candidate) =>
+        candidate.distinctThreshold === DISTINCT_THRESHOLD &&
+        candidate.mergeThreshold === MERGE_THRESHOLD,
+    );
 
-    const chosen = selectThreshold(rows);
-    // Perfect separation: the highest threshold still recalling the same pair.
-    expect(chosen?.precision).toBe(1);
-    expect(chosen?.recall).toBe(1);
+    // The pair actually judged the same scores well above 0.72 (shared
+    // entities and half the title tokens); both different pairs share nothing
+    // and score 0. §6's provisional band separates them perfectly.
+    expect(productionRow).toMatchObject({
+      autoMergePrecision: 1,
+      autoSplitRecall: 1,
+      bandFraction: 0,
+    });
 
     const csv = toCurveCsv(rows);
-    expect(csv.split("\n")).toHaveLength(27);
     expect(csv.split("\n")[0]).toBe(CURVE_HEADER);
+    expect(csv.split("\n")).toHaveLength(rows.length + 1);
+
+    const hash = hashLabelledSet(
+      ['{"a":"x/1","b":"x/2","label":"same"}'].join("\n"),
+      JSON.stringify(items),
+    );
+    expect(hash).toMatch(/^sha256:/);
   });
 });

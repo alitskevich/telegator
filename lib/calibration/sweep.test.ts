@@ -1,252 +1,148 @@
 import { describe, expect, test } from "vitest";
-import {
-  confusionAt,
-  MIN_RECALL,
-  precisionOf,
-  recallOf,
-  selectThreshold,
-  sweep,
-  THRESHOLD_MAX_BP,
-  THRESHOLD_MIN_BP,
-  thresholds,
-} from "./sweep";
+import type { MatchKeyFields } from "../dedup/matchKey";
+import { type LabelledKeyPair, sweepBands } from "./sweep";
 
-/** A labelled pair, with the similarity a test wants it to have. */
-const pair = (a: string, b: string, label: "same" | "different", similarity: number) => ({
-  a,
-  b,
-  label,
-  similarity,
+/**
+ * A labelled pair of match-key fields.
+ *
+ * `title` and `tags` are deliberately disjoint on every fixture pair below so
+ * only `properNames` (the entity component, weighted 0.6) drives the score —
+ * that makes the resulting `matchScore` an exact, hand-checkable fraction
+ * instead of a three-term sum a test would have to trust blindly.
+ */
+const pair = (properNamesA: string, properNamesB: string, same: boolean): LabelledKeyPair => ({
+  fields: { title: "Alpha Beta", properNames: properNamesA, tags: "fire" },
+  other: { title: "Gamma Delta", properNames: properNamesB, tags: "flood" },
+  same,
 });
 
-const scored = (pairs: ReturnType<typeof pair>[]) =>
-  pairs.map(({ a, b, label, similarity }) => ({ a, b, label, similarity }));
+/** Reused by the two brief-mandated tests below; renamed from the embedding-era builder. */
+function labelledPairs(): LabelledKeyPair[] {
+  return [
+    pair("Minsk", "Minsk", true), // entities Jaccard 1 -> score 0.6
+    pair("Minsk, Brest", "Minsk", true), // entities Jaccard 0.5 -> score 0.3
+    pair("Minsk", "Brest", false), // entities Jaccard 0 -> score 0
+    pair("Minsk, Brest", "Brest", false), // entities Jaccard 0.5 -> score 0.3
+  ];
+}
 
-describe("thresholds — §11.3 step 3", () => {
-  test("sweeps 0.70 to 0.95 in 0.01 steps", () => {
-    const values = thresholds();
+describe("sweepBands — §11.3 steps 2-4, rewritten (R48)", () => {
+  // Brief's Step 1 fixtures, verbatim.
+  test("sweeps both thresholds and never proposes distinct above merge (R48)", () => {
+    const rows = sweepBands(labelledPairs(), { step: 0.05 });
 
-    expect(values).toHaveLength(26);
-    expect(values[0]).toBe(0.7);
-    expect(values.at(-1)).toBe(0.95);
-  });
-
-  /**
-   * Generated from integers, and this is not fussiness. `0.70 + 15 * 0.01` is
-   * 0.8500000000000001 in IEEE 754 — so a float basis puts a value in the curve
-   * that is not 0.85, and 0.85 is the row §6's current threshold sits on and the
-   * one an operator will read first.
-   */
-  test("are exact, not accumulated floats", () => {
-    expect(thresholds()).toContain(0.85);
-    expect(thresholds()).not.toContain(0.8500000000000001);
-  });
-
-  test("every value is a whole basis point", () => {
-    for (const value of thresholds()) {
-      expect(Number.isInteger(Math.round(value * 100))).toBe(true);
-      expect(Math.abs(value * 100 - Math.round(value * 100))).toBeLessThan(1e-9);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.distinctThreshold).toBeLessThanOrEqual(row.mergeThreshold);
     }
   });
 
-  test("the bounds are the spec's", () => {
-    expect(THRESHOLD_MIN_BP).toBe(70);
-    expect(THRESHOLD_MAX_BP).toBe(95);
-  });
-});
+  test("reports band fraction, which is the model-call cost (R48)", () => {
+    const [row] = sweepBands(labelledPairs(), { step: 0.5 });
 
-describe("confusionAt", () => {
-  /** §6 L511/L518 merge on `>=`, so a pair exactly at the threshold is a merge. */
-  test("a pair exactly at the threshold counts as merged", () => {
-    const table = confusionAt(0.85, scored([pair("a", "b", "same", 0.85)]));
-
-    expect(table).toEqual({ tp: 1, fp: 0, fn: 0, tn: 0 });
+    expect(row?.bandFraction).toBeGreaterThanOrEqual(0);
+    expect(row?.bandFraction).toBeLessThanOrEqual(1);
   });
 
-  test("a same pair below the threshold is a false negative", () => {
-    expect(confusionAt(0.85, scored([pair("a", "b", "same", 0.84)]))).toEqual({
-      tp: 0,
-      fp: 0,
-      fn: 1,
-      tn: 0,
-    });
+  /**
+   * Zero model calls. Nothing async, nothing awaited, nothing that could reach
+   * the network — the whole point of dropping the embedding step is that this
+   * sweep belongs in the offline test suite.
+   */
+  test("runs synchronously against fields alone, never a promise", () => {
+    const result = sweepBands(labelledPairs(), { step: 0.5 });
+
+    expect(result).not.toBeInstanceOf(Promise);
   });
 
-  test("a different pair at or above the threshold is a false positive", () => {
-    expect(confusionAt(0.85, scored([pair("a", "b", "different", 0.9)]))).toEqual({
-      tp: 0,
-      fp: 1,
-      fn: 0,
-      tn: 0,
-    });
-  });
-
-  test("a different pair below the threshold is a true negative", () => {
-    expect(confusionAt(0.85, scored([pair("a", "b", "different", 0.5)]))).toEqual({
-      tp: 0,
-      fp: 0,
-      fn: 0,
-      tn: 1,
-    });
-  });
-
-  test("a hand-computed table", () => {
-    const table = confusionAt(
-      0.8,
-      scored([
-        pair("a", "b", "same", 0.95),
-        pair("c", "d", "same", 0.81),
-        pair("e", "f", "same", 0.4),
-        pair("g", "h", "different", 0.88),
-        pair("i", "j", "different", 0.2),
-        pair("k", "l", "different", 0.1),
-      ]),
+  /**
+   * Hand-computed, the way the embedding-era `confusionAt` test was: with the
+   * fixture above, `entities` Jaccard values are 1, 0.5, 0, 0.5 -> scores
+   * 0.6, 0.3, 0, 0.3 (title and tags always disjoint, contributing 0). At
+   * distinct=0.3 / merge=0.6: pair 1 (score 0.6, same) merges; pair 2
+   * (score 0.3, same) auto-splits WRONGLY (it is same, so it does not count
+   * toward auto-split recall, only toward what an operator would call a false
+   * split); pairs 3 and 4 (score 0 and 0.3, different) both auto-split
+   * correctly. No pair lands in the band.
+   */
+  test("buckets a hand-computed table correctly at one grid point", () => {
+    const rows = sweepBands(labelledPairs(), { step: 0.1 });
+    const row = rows.find(
+      (candidate) => candidate.distinctThreshold === 0.3 && candidate.mergeThreshold === 0.6,
     );
 
-    expect(table).toEqual({ tp: 2, fp: 1, fn: 1, tn: 2 });
+    expect(row).toEqual({
+      distinctThreshold: 0.3,
+      mergeThreshold: 0.6,
+      autoMergePrecision: 1, // 1 merged, and it was genuinely same
+      autoSplitRecall: 1, // both different pairs auto-split
+      bandFraction: 0,
+    });
   });
 
-  /**
-   * §6 compares an item against a candidate without regard to order, so (a,b)
-   * and (b,a) are one observation. Counting both would double every cell and
-   * silently halve the weight of any pair labelled only once.
-   */
-  test("pairs are unordered, so a mirrored duplicate is one observation", () => {
-    const table = confusionAt(
-      0.85,
-      scored([pair("a", "b", "same", 0.9), pair("b", "a", "same", 0.9)]),
+  /** A wider band point: two pairs (scores 0.3, 0.3) neither merge nor split. */
+  test("scores strictly between the two thresholds land in the band", () => {
+    const rows = sweepBands(labelledPairs(), { step: 0.1 });
+    const row = rows.find(
+      (candidate) => candidate.distinctThreshold === 0.2 && candidate.mergeThreshold === 0.5,
     );
 
-    expect(table).toEqual({ tp: 1, fp: 0, fn: 0, tn: 0 });
-  });
-
-  test("a pair with itself is rejected", () => {
-    expect(() => confusionAt(0.85, scored([pair("a", "a", "same", 1)]))).toThrow(/itself/);
-  });
-
-  /** Two labels for one pair is a labelling error, not a tie to resolve silently. */
-  test("contradictory labels for one pair are rejected", () => {
-    expect(() =>
-      confusionAt(0.85, scored([pair("a", "b", "same", 0.9), pair("b", "a", "different", 0.9)])),
-    ).toThrow(/conflict/i);
-  });
-});
-
-describe("precisionOf", () => {
-  test("is TP over TP plus FP", () => {
-    expect(precisionOf({ tp: 3, fp: 1, fn: 0, tn: 0 })).toBe(0.75);
+    expect(row).toEqual({
+      distinctThreshold: 0.2,
+      mergeThreshold: 0.5,
+      autoMergePrecision: 1, // only pair 1 (score 0.6, same) merges
+      autoSplitRecall: 0.5, // only pair 3 (score 0) auto-splits; pair 4 (0.3) bands
+      bandFraction: 0.5, // pairs 2 and 4 (score 0.3 each) band
+    });
   });
 
   /**
-   * `null`, not 1.0. A threshold that merges nothing has made no false merges,
-   * so scoring it 1.0 makes "maximise precision" select 0.95 at zero recall —
-   * the harness would recommend switching the pipeline off.
+   * `null`, not some default. A merge region that caught nothing has made no
+   * false merges, so scoring it a number at all would let a maximiser read "no
+   * evidence" as "perfect precision".
    */
-  test("is null when nothing merged", () => {
-    expect(precisionOf({ tp: 0, fp: 0, fn: 5, tn: 5 })).toBeNull();
-  });
-});
+  test("auto-merge precision is null when nothing merged", () => {
+    const rows = sweepBands(labelledPairs(), { step: 1 });
+    const row = rows.find(
+      (candidate) => candidate.distinctThreshold === 0 && candidate.mergeThreshold === 1,
+    );
 
-describe("recallOf", () => {
-  test("is TP over TP plus FN", () => {
-    expect(recallOf({ tp: 3, fp: 0, fn: 1, tn: 0 })).toBe(0.75);
+    expect(row?.autoMergePrecision).toBeNull();
   });
 
   /**
-   * Loudly, because a labelled set with no `same` pairs cannot calibrate
-   * anything: every threshold would score identically and the harness would
-   * report a confident answer drawn from nothing.
+   * Loudly, for the same reason the embedding-era `recallOf` threw on a
+   * same-only set: without any different-story pairs, auto-split recall is
+   * undefined at every grid point and the sweep would report a confident
+   * number drawn from nothing.
    */
-  test("throws when no same pairs were labelled", () => {
-    expect(() => recallOf({ tp: 0, fp: 2, fn: 0, tn: 3 })).toThrow(/same/i);
-  });
-});
+  test("throws when the labelled set contains no different-story pairs", () => {
+    const onlySame: LabelledKeyPair[] = [pair("Minsk", "Minsk", true)];
 
-describe("sweep", () => {
-  const pairs = scored([
-    pair("a", "b", "same", 0.95),
-    pair("c", "d", "same", 0.88),
-    pair("e", "f", "same", 0.72),
-    pair("g", "h", "different", 0.9),
-    pair("i", "j", "different", 0.71),
-    pair("k", "l", "different", 0.3),
-  ]);
-
-  test("produces one row per threshold", () => {
-    expect(sweep(pairs)).toHaveLength(26);
+    expect(() => sweepBands(onlySame, { step: 0.5 })).toThrow(/different/i);
   });
 
-  test("rows are ordered from the lowest threshold up", () => {
-    const rows = sweep(pairs);
-
-    expect(rows[0]?.threshold).toBe(0.7);
-    expect(rows.at(-1)?.threshold).toBe(0.95);
-  });
-
-  test("a row carries its whole table", () => {
-    const row = sweep(pairs).find((entry) => entry.threshold === 0.9);
-
-    expect(row).toMatchObject({ threshold: 0.9, tp: 1, fp: 1, fn: 2, tn: 2 });
-    expect(row?.precision).toBe(0.5);
-    expect(row?.recall).toBeCloseTo(1 / 3);
-  });
-
-  test("recall never increases as the threshold rises", () => {
-    const recalls = sweep(pairs).map((row) => row.recall);
-
-    for (const [index, value] of recalls.entries()) {
-      if (index === 0) continue;
-      expect(value).toBeLessThanOrEqual(recalls[index - 1] ?? 1);
-    }
-  });
-});
-
-describe("selectThreshold — §11.3 step 4", () => {
-  const row = (threshold: number, precision: number | null, recall: number) => ({
-    threshold,
-    tp: 0,
-    fp: 0,
-    fn: 0,
-    tn: 0,
-    precision,
-    recall,
-  });
-
-  test("maximises precision subject to recall >= 0.80", () => {
-    const chosen = selectThreshold([row(0.7, 0.5, 1), row(0.8, 0.9, 0.85), row(0.9, 0.99, 0.4)]);
-
-    expect(chosen?.threshold).toBe(0.8);
-  });
-
-  test("the recall floor is the spec's", () => {
-    expect(MIN_RECALL).toBe(0.8);
-  });
-
-  test("recall exactly at the floor qualifies", () => {
-    expect(selectThreshold([row(0.8, 0.9, 0.8)])?.threshold).toBe(0.8);
+  test("rejects a non-positive step rather than looping forever", () => {
+    expect(() => sweepBands(labelledPairs(), { step: 0 })).toThrow(/step/);
+    expect(() => sweepBands(labelledPairs(), { step: -0.1 })).toThrow(/step/);
   });
 
   /**
-   * §11.3 step 4 — "**False merges are worse than false splits** — a wrong merge
-   * publishes two unrelated stories as one." A tie is therefore broken upward:
-   * the stricter threshold makes fewer merges.
+   * A coarse grid of hand-reasoned weight candidates (design §9), not a
+   * continuous sweep — but `sweepBands` still has to accept whichever
+   * candidate is being evaluated, or comparing candidates would require
+   * rebuilding the harness for each one.
    */
-  test("a tie is broken toward the higher threshold", () => {
-    const chosen = selectThreshold([row(0.78, 0.9, 0.9), row(0.86, 0.9, 0.85)]);
+  test("accepts a weight candidate other than the production default", () => {
+    const fields: MatchKeyFields = { title: "Alpha Beta", tags: "fire" };
+    const other: MatchKeyFields = { title: "Gamma Delta", tags: "flood" };
+    const differentPairs: LabelledKeyPair[] = [...labelledPairs(), { fields, other, same: false }];
 
-    expect(chosen?.threshold).toBe(0.86);
-  });
+    const withTagsIgnored = sweepBands(differentPairs, {
+      step: 0.5,
+      weights: { entities: 1, titleTokens: 0, tags: 0 },
+    });
 
-  test("a row with no precision is not selectable", () => {
-    expect(selectThreshold([row(0.95, null, 0.9)])).toBeNull();
-  });
-
-  /**
-   * Null rather than a best-effort answer. §11.3 forbids production until this
-   * is done, so "no threshold reaches 80% recall" is a result an operator must
-   * see, not one the harness should paper over by relaxing its own floor.
-   */
-  test("returns null when nothing meets the recall floor", () => {
-    expect(selectThreshold([row(0.7, 0.9, 0.5), row(0.8, 0.95, 0.4)])).toBeNull();
+    expect(withTagsIgnored.length).toBeGreaterThan(0);
   });
 });
