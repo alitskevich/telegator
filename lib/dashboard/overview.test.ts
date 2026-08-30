@@ -26,6 +26,10 @@ const message = (n: number, status: Message["status"] = "published"): Message =>
   tgChannel: "@target",
   memberCount: 1,
   members: {},
+  keyEntities: [],
+  keyTitle: [],
+  keyTags: [],
+  memberIds: [],
 });
 
 let metrics: FakeMetricReader;

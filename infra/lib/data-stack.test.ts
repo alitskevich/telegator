@@ -1,5 +1,5 @@
 import { App } from "aws-cdk-lib";
-import { Template } from "aws-cdk-lib/assertions";
+import { Match, Template } from "aws-cdk-lib/assertions";
 import { afterAll, describe, expect, test } from "vitest";
 
 /**
@@ -127,12 +127,37 @@ describe("TelegatorDataStack", () => {
       }
     });
 
-    /** §7.2 L598 — "Only `date-index` projects `embedding`, because it is the one query that needs vectors." */
-    test("date-index projects the embedding, and not members", () => {
+    /**
+     * R44 — §7.2 L598 called this "the one query that needs vectors". There are
+     * no vectors now: the projection carries the match key R46 scores on and
+     * `memberIds` instead, and still excludes `members`.
+     */
+    test("date-index no longer projects the embedding, and still excludes members", () => {
       const projection = index(templateFor(), "date-index")?.Projection;
 
-      expect(projection?.NonKeyAttributes).toContain("embedding");
+      expect(projection?.NonKeyAttributes).not.toContain("embedding");
       expect(projection?.NonKeyAttributes).not.toContain("members");
+    });
+
+    /** R44/R51 — the four attributes `matchKeyOf`/`memberIds` need, verbatim. */
+    test("date-index projects the match key and member ids, not the embedding (R44)", () => {
+      const template = templateFor();
+
+      template.hasResourceProperties("AWS::DynamoDB::Table", {
+        GlobalSecondaryIndexes: Match.arrayWith([
+          Match.objectLike({
+            IndexName: "date-index",
+            Projection: Match.objectLike({
+              NonKeyAttributes: Match.arrayWith([
+                "keyEntities",
+                "keyTitle",
+                "keyTags",
+                "memberIds",
+              ]),
+            }),
+          }),
+        ]),
+      });
     });
 
     /** §9.1 L800 and §11.4 L877 — the only §11.4 row verifiable without a deployment. */

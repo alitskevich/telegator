@@ -68,6 +68,35 @@ const messageFields = z.object({
    * would not type-check at the adapter boundary. The runtime check is the same.
    */
   embedding: z.custom<Uint8Array>((v) => v instanceof Uint8Array).optional(),
+  /**
+   * R44 — §7.2 L590 stores a 1024-float embedding as 4 KB of Binary. With no
+   * vector, the match key of R46 takes its place: three short string lists,
+   * a few hundred bytes, and readable in the console.
+   *
+   * Defaulted rather than optional so a record written before R44 parses as an
+   * empty key. An empty key scores 0 against everything (`jaccard` defines
+   * empty-versus-empty as 0), so such a record simply never matches and ages
+   * out of `date-index` — which is the whole of the migration story.
+   *
+   * Plain string arrays rather than `MatchKey` (`lib/dedup/matchKey.ts`):
+   * `lib/dedup` already imports from `lib/domain`, and importing `MatchKey`
+   * back here would make that a package-level cycle. `matchKeyOf` /
+   * `matchKeyAttributes` do the conversion at the boundary instead.
+   */
+  keyEntities: z.array(z.string()).default([]),
+  keyTitle: z.array(z.string()).default([]),
+  keyTags: z.array(z.string()).default([]),
+  /**
+   * R51 — the ids already in `members`, projected so AC-3.7's replay check
+   * costs nothing.
+   *
+   * An item that CREATED a message is addressable as `loadMessage(item.id)`,
+   * because §3.3's create branch sets `id` = item id. An item that MERGED is
+   * not: its id lives only inside another message's `members` map, and R9
+   * records that `date-index` projects no `members`. Without this attribute the
+   * short-circuit would need a base-table read per candidate.
+   */
+  memberIds: z.array(z.string()).default([]),
   date: DateKeySchema,
 
   // Copied or merged from member items (§2.3 L148).
@@ -125,8 +154,14 @@ export const MessageListItemSchema = messageFields.omit({ members: true, embeddi
 export type MessageListItem = z.infer<typeof MessageListItemSchema>;
 
 /**
- * The `date-index` projection (§7.2 L588/L598, R27) — the one query that needs
- * vectors, and nothing more.
+ * The `date-index` projection (§7.2 L588/L598, R27, amended by R44/R51).
+ *
+ * §7.2 L598 called this "the one query that needs vectors". There are no
+ * vectors now: R44 has `infra/lib/data-stack.ts` project the match key R46
+ * scores on instead, and R51 adds `memberIds` for the replay short-circuit.
+ * `embedding` stays in the type — a stored record still carries it in the base
+ * table until Task 8 deletes it — but the projection this schema describes no
+ * longer includes it, so a real candidate now reads it as `undefined`.
  *
  * §6 L515's Pass 2 reads its candidates from this index. Typing them without
  * `members` is what stops R9's defect at the type level: §6 L525/L532 read
@@ -139,6 +174,10 @@ export const DedupCandidateSchema = messageFields.pick({
   date: true,
   ts: true,
   embedding: true,
+  keyEntities: true,
+  keyTitle: true,
+  keyTags: true,
+  memberIds: true,
   deleted: true,
 });
 
@@ -155,6 +194,10 @@ export const MessageMergeAttributesSchema = messageFields
   .pick({
     memberCount: true,
     embedding: true,
+    keyEntities: true,
+    keyTitle: true,
+    keyTags: true,
+    memberIds: true,
     date: true,
     title: true,
     category: true,

@@ -37,6 +37,10 @@ const message = (n: number): Message => ({
   tgChannel: "@target",
   memberCount: 1,
   members: {},
+  keyEntities: [],
+  keyTitle: [],
+  keyTags: [],
+  memberIds: [],
 });
 
 let jar: FakeCookieJar;

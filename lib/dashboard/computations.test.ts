@@ -37,6 +37,10 @@ const message = (n: number, status: Message["status"], ts: number): Message => (
   tgChannel: "@example",
   memberCount: 1,
   members: {},
+  keyEntities: [],
+  keyTitle: [],
+  keyTags: [],
+  memberIds: [],
 });
 
 describe("windows", () => {

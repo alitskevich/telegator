@@ -34,6 +34,10 @@ const message = (n: number, extra: Partial<Message> = {}): Message => ({
   tgChannel: "@target",
   memberCount: 1,
   members: {},
+  keyEntities: [],
+  keyTitle: [],
+  keyTags: [],
+  memberIds: [],
   ...extra,
 });
 

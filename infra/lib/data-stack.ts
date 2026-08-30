@@ -44,12 +44,20 @@ const MESSAGE_LIST_ATTRIBUTES = [
 ] as const;
 
 /**
- * The `date-index` projection (§7.2 L598, R27) — "the one query that needs
- * vectors", and nothing else. §6 L515's Pass 2 scores candidates on the
- * embedding alone; everything the merge needs beyond that comes from the
- * base-table read of R9.
+ * The `date-index` projection (§7.2 L598, R27, amended by R44/R51).
+ *
+ * §7.2 L598 calls this "the one query that needs vectors". There are no
+ * vectors now: it needs the match key R46 scores on, plus the member ids
+ * R51's replay short-circuit checks. Everything the merge needs beyond that
+ * still comes from the base-table read of R9.
  */
-const DEDUP_CANDIDATE_ATTRIBUTES = ["embedding", "deleted"] as const;
+const DEDUP_CANDIDATE_ATTRIBUTES = [
+  "keyEntities",
+  "keyTitle",
+  "keyTags",
+  "memberIds",
+  "deleted",
+] as const;
 
 /**
  * `Table`, not `TableV2`, is deliberate. `TableV2` synthesises as

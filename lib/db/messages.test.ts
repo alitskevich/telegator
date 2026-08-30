@@ -189,6 +189,40 @@ describe("createMessageRepo.mergeMember (R9)", () => {
     const values = s.input()?.ExpressionAttributeValues as Record<string, unknown>;
     expect(Object.values(values).some((v) => v instanceof Uint8Array)).toBe(true);
   });
+
+  /**
+   * R44/R51 — the merge is attribute-level and generic over whatever
+   * `MessageMergeAttributes` carries, so the match key and member ids need no
+   * adapter code of their own; this pins that they actually reach the write.
+   */
+  test("writes the match key and member ids when supplied (R44, R51)", async () => {
+    const s = stub();
+
+    await repoWith(s).mergeMember({
+      id: ITEM_ID,
+      members: { [ITEM_ID]: block },
+      attributes: {
+        memberCount: 1,
+        status: "topublish",
+        ts: 5,
+        keyEntities: ["minsk"],
+        keyTitle: ["fire"],
+        keyTags: ["safety"],
+        memberIds: [ITEM_ID],
+      },
+    });
+
+    const names = s.input()?.ExpressionAttributeNames as Record<string, string>;
+    const values = s.input()?.ExpressionAttributeValues as Record<string, unknown>;
+
+    for (const attribute of ["keyEntities", "keyTitle", "keyTags", "memberIds"]) {
+      expect(Object.values(names)).toContain(attribute);
+    }
+    expect(Object.values(values)).toContainEqual(["minsk"]);
+    expect(Object.values(values)).toContainEqual(["fire"]);
+    expect(Object.values(values)).toContainEqual(["safety"]);
+    expect(Object.values(values)).toContainEqual([ITEM_ID]);
+  });
 });
 
 describe("createMessageRepo.queryByDate", () => {
@@ -220,6 +254,44 @@ describe("createMessageRepo.queryByDate", () => {
     expect(candidate?.id).toBe(ITEM_ID);
     expect(candidate).not.toHaveProperty("members");
   });
+
+  /** R44/R51 — the match key and member ids a real `date-index` row now carries. */
+  test("returns the match key and member ids on a candidate that carries them", async () => {
+    const s = stub([
+      {
+        Items: [
+          {
+            id: ITEM_ID,
+            date: "2026-08-29",
+            ts: 1,
+            keyEntities: ["minsk"],
+            keyTitle: ["fire"],
+            keyTags: ["safety"],
+            memberIds: [ITEM_ID],
+          },
+        ],
+      },
+    ]);
+
+    const [candidate] = await repoWith(s).queryByDate("2026-08-29");
+
+    expect(candidate?.keyEntities).toEqual(["minsk"]);
+    expect(candidate?.keyTitle).toEqual(["fire"]);
+    expect(candidate?.keyTags).toEqual(["safety"]);
+    expect(candidate?.memberIds).toEqual([ITEM_ID]);
+  });
+
+  /** R44 — a record written before this change parses as an empty key. */
+  test("a legacy candidate with no match key parses as an empty one", async () => {
+    const s = stub([{ Items: [{ id: ITEM_ID, date: "2026-08-29", ts: 1 }] }]);
+
+    const [candidate] = await repoWith(s).queryByDate("2026-08-29");
+
+    expect(candidate?.keyEntities).toEqual([]);
+    expect(candidate?.keyTitle).toEqual([]);
+    expect(candidate?.keyTags).toEqual([]);
+    expect(candidate?.memberIds).toEqual([]);
+  });
 });
 
 describe("createMessageRepo.queryByStatus", () => {
@@ -249,6 +321,31 @@ describe("createMessageRepo writes", () => {
 
     expect(s.input()?.TableName).toBe(TABLE);
     expect(s.input()?.Item).toMatchObject({ id: ITEM_ID });
+  });
+
+  /**
+   * R44/R51 — `putNew` writes `Item: message` verbatim (§6 L539's create
+   * branch), so the match key and member ids need no adapter code either; this
+   * pins that a create carrying them actually writes them.
+   */
+  test("putNew carries the match key and member ids when the message has them", async () => {
+    const s = stub();
+    const withKey = MessageSchema.parse({
+      ...baseMessage,
+      keyEntities: ["minsk"],
+      keyTitle: ["fire"],
+      keyTags: ["safety"],
+      memberIds: [ITEM_ID],
+    });
+
+    await repoWith(s).putNew(withKey);
+
+    expect(s.input()?.Item).toMatchObject({
+      keyEntities: ["minsk"],
+      keyTitle: ["fire"],
+      keyTags: ["safety"],
+      memberIds: [ITEM_ID],
+    });
   });
 
   test("markPublished records the status, Telegram id and timestamps", async () => {

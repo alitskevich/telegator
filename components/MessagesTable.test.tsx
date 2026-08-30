@@ -14,6 +14,10 @@ const row = (n: number, extra: Partial<MessageListItem> = {}): MessageListItem =
   ts: 1_770_000_000_000 - n,
   tgChannel: "@target",
   memberCount: 0,
+  keyEntities: [],
+  keyTitle: [],
+  keyTags: [],
+  memberIds: [],
   ...extra,
 });
 

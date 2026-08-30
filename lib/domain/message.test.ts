@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
+import { buildMatchKey, matchKeyAttributes, matchKeyOf } from "../dedup/matchKey";
 import {
   DEFAULT_TG_CHANNEL,
+  DedupCandidateSchema,
   MEMBER_RENDER_LIMIT,
   MESSAGE_STATUSES,
   MemberBlockSchema,
@@ -159,6 +161,54 @@ describe("MessageSchema (§2.3 L140-152)", () => {
 
   test("exports the render limit §3.4 L318 applies", () => {
     expect(MEMBER_RENDER_LIMIT).toBe(12);
+  });
+});
+
+describe("the match key attributes (R44, R51)", () => {
+  test("a candidate carries its key and its member ids", () => {
+    const candidate = DedupCandidateSchema.parse({
+      id: "src/1",
+      date: "2026-08-30",
+      ts: 1,
+      keyEntities: ["minsk"],
+      keyTitle: ["fire"],
+      keyTags: ["safety"],
+      memberIds: ["src/1", "src/2"],
+    });
+
+    expect(matchKeyOf(candidate)).toEqual({
+      entities: ["minsk"],
+      titleTokens: ["fire"],
+      tags: ["safety"],
+    });
+    expect(candidate.memberIds).toEqual(["src/1", "src/2"]);
+  });
+
+  /**
+   * The whole of R44's migration story: an empty key scores 0 against
+   * everything (`jaccard` defines empty-versus-empty as 0), so a record
+   * written before this change simply never matches and ages out.
+   */
+  test("a record written before R44 reads as an empty key, so it can never match", () => {
+    const legacy = DedupCandidateSchema.parse({ id: "src/1", date: "2026-08-30", ts: 1 });
+
+    expect(matchKeyOf(legacy)).toEqual({ entities: [], titleTokens: [], tags: [] });
+    expect(legacy.memberIds).toEqual([]);
+  });
+
+  test("round-trips a built key without reordering it", () => {
+    const key = buildMatchKey({ properNames: "Minsk, Gomel", title: "Factory Fire" });
+
+    expect(
+      matchKeyOf(
+        DedupCandidateSchema.parse({
+          id: "src/1",
+          date: "2026-08-30",
+          ts: 1,
+          ...matchKeyAttributes(key),
+        }),
+      ),
+    ).toEqual(key);
   });
 });
 

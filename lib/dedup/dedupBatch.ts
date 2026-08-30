@@ -339,6 +339,24 @@ function toWrite(state: Pending, ts: number): DedupWrite {
   const shared = {
     memberCount,
     embedding: packEmbedding(state.embedding),
+    /**
+     * R44 — `Pending` does not track a match key yet: this task only adds the
+     * storage for one, and Task 5 is what computes it from the batch's items
+     * and unions it across a merge (§6 L488–553's rewrite). Writing `[]` here
+     * is indistinguishable from a legacy record with no key at all — an empty
+     * key that cannot match anything — so it is a safe placeholder rather than
+     * a behaviour change.
+     */
+    keyEntities: [] as string[],
+    keyTitle: [] as string[],
+    keyTags: [] as string[],
+    /**
+     * R51 — unlike the match key, this needs no new algorithm: `state.members`
+     * is already the message's complete, up-to-date member map on both the
+     * create and the merge branch below, so its keys are `memberIds` by
+     * construction. Kept in lockstep with `members` for exactly that reason.
+     */
+    memberIds: Object.keys(state.members),
     date: state.date,
     title: state.title,
     category: state.category,
