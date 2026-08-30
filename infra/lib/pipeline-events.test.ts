@@ -218,7 +218,13 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     }
   });
 
-  test("aggregate may create a Mantle inference", () => {
+  test("analyze may create a Mantle inference on the project", () => {
+    expect(bedrockFor(templateFor(), "telegator-dev-analyze")).toContain(
+      `project/${MANTLE_PROJECT_ID}`,
+    );
+  });
+
+  test("aggregate may create a Mantle inference on the project", () => {
     expect(bedrockFor(templateFor(), "telegator-dev-aggregate")).toContain(
       `project/${MANTLE_PROJECT_ID}`,
     );
