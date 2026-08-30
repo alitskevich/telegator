@@ -1,7 +1,7 @@
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { afterAll, describe, expect, test, vi } from "vitest";
-import { CLASSIFIER_MODEL_ID, EMBEDDING_MODEL_ID, MANTLE_PROJECT_ID } from "../../lib/ai/constants";
+import { MANTLE_PROJECT_ID } from "../../lib/ai/constants";
 import { METRIC_NAMESPACE } from "../../lib/metrics/ports";
 import { cdkContext } from "../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
@@ -195,45 +195,33 @@ describe("IAM (§7.6 L668-673, R24)", () => {
       ),
     );
 
-  test("grants Bedrock to exactly two functions, each on a named resource", () => {
-    const bedrock = policyStatements(templateFor()).filter((s) =>
-      [s.Action]
-        .flat()
-        .map(String)
-        .some((action) => BEDROCK_ACTIONS.includes(action)),
+  /**
+   * R49 — aggregate embedded through `bedrock-runtime`, so §7.6 L670's
+   * `bedrock:InvokeModel` was correct for it while R42 was fixing analyze's.
+   * With embeddings gone (R43) both stages call the Mantle API, so one grant
+   * covers the stack and `bedrock:InvokeModel` appears nowhere.
+   */
+  test("grants bedrock-mantle:CreateInference to exactly two functions, and InvokeModel to none", () => {
+    const statements = policyStatements(templateFor());
+
+    const mantle = statements.filter((s) =>
+      [s.Action].flat().map(String).includes("bedrock-mantle:CreateInference"),
+    );
+    const invoke = statements.filter((s) =>
+      [s.Action].flat().map(String).includes("bedrock:InvokeModel"),
     );
 
-    expect(bedrock).toHaveLength(2);
-    for (const statement of bedrock) {
+    expect(mantle).toHaveLength(2);
+    expect(invoke).toHaveLength(0);
+    for (const statement of mantle) {
       expect(statement.Resource).not.toBe("*");
     }
   });
 
-  /**
-   * R42 — analyze classifies through the Mantle API, so it gets a project and
-   * no foundation model at all. §7.6 L669 says `bedrock:InvokeModel` on the
-   * Claude model ARN; §5.1 L395–396 mandates `AnthropicBedrockMantle`, which
-   * signs for `bedrock-mantle` and never calls `InvokeModel`. Dev held the
-   * spec's statement and every classification still failed 403.
-   *
-   * `foundation-model` is asserted absent rather than the classifier id: the id
-   * is not what was wrong. A grant naming the right model on the wrong API is
-   * exactly the defect this replaces, and it reads as correct.
-   */
-  test("analyze may create a Mantle inference, and invoke no model directly", () => {
-    const grants = bedrockFor(templateFor(), "telegator-dev-analyze");
-
-    expect(grants).toContain(`project/${MANTLE_PROJECT_ID}`);
-    expect(grants).not.toContain("foundation-model");
-    expect(grants).not.toContain(EMBEDDING_MODEL_ID);
-  });
-
-  /** §7.6 L670 — aggregate embeds, so it gets the Cohere model and nothing else. */
-  test("aggregate may invoke the embedding model, and not the classifier model", () => {
-    const models = bedrockFor(templateFor(), "telegator-dev-aggregate");
-
-    expect(models).toContain(EMBEDDING_MODEL_ID);
-    expect(models).not.toContain(CLASSIFIER_MODEL_ID);
+  test("aggregate may create a Mantle inference", () => {
+    expect(bedrockFor(templateFor(), "telegator-dev-aggregate")).toContain(
+      `project/${MANTLE_PROJECT_ID}`,
+    );
   });
 
   /** §7.6 grants Bedrock to those two stages only; scrape and publish call no model. */
