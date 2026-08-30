@@ -75,6 +75,29 @@ describe("CalibrationRecordSchema (R48)", () => {
   });
 
   /**
+   * The case the test above does NOT establish on its own: it throws because
+   * the new required fields are missing, so a non-strict schema would have
+   * passed it just the same. This one supplies every new field and keeps the
+   * old ones beside them — the shape a half-edited record actually has. Only a
+   * strict schema rejects it, and rejecting it is the point: a record carrying
+   * a stale `threshold` next to a band has not been reconciled by anyone.
+   */
+  test("rejects a record that carries the old fields alongside the new ones", () => {
+    expect(() =>
+      CalibrationRecordSchema.parse(
+        record({
+          model: "cohere.embed-multilingual-v3",
+          dims: 1024,
+          inputType: "search_document",
+          threshold: 0.85,
+          precision: 1,
+          recall: 0.86,
+        }),
+      ),
+    ).toThrow();
+  });
+
+  /**
    * `distinctThreshold <= mergeThreshold` is enforced by the schema itself, not
    * merely assumed by callers — a record with the band inverted describes a
    * pipeline configuration `classify` cannot produce.

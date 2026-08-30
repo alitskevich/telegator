@@ -75,16 +75,52 @@ export interface BandRow {
 }
 
 /**
+ * The tolerance for recognising a step as a whole number of basis points.
+ *
+ * `0.05 * 100` is `5.000000000000001` in binary floating point, so an exact
+ * integer test would reject the most ordinary step there is.
+ */
+const BP_EPSILON = 1e-9;
+
+/**
  * The `(distinct, merge)` candidates to sweep, generated from integers.
  *
  * Not `min + i * step`: that accumulates float error the way §11.3's original
  * `0.70 + 15 * 0.01` did, landing off the exact value an operator is looking
  * for. A basis-point integer walk keeps every candidate exact.
+ *
+ * Two steps are refused rather than silently mangled, because both produce a
+ * grid that is not the one the caller asked for, and a threshold read off the
+ * wrong grid is recorded in `calibration/record.json` as if it were measured:
+ *
+ *  - a step finer than one basis point (0.005, say) used to `Math.round` to
+ *    0.01 and sweep a grid ten times coarser than requested, reporting rows
+ *    labelled with thresholds the caller never asked about;
+ *  - a step that does not divide the [0, 1] range (0.03, say) walks
+ *    0.00 … 0.99 and never evaluates 1.00, so the endpoint §11.3's original
+ *    1-D sweep always included is quietly missing.
  */
 function candidateThresholds(step: number): number[] {
-  const stepBp = Math.round(step * BASIS_POINTS);
+  const scaled = step * BASIS_POINTS;
+  const stepBp = Math.round(scaled);
+
+  if (!Number.isFinite(step)) {
+    throw new Error(`sweepBands: step must be positive, received ${step}`);
+  }
+  // Before the positivity test, so a positive step too fine to represent is
+  // told what is wrong with it rather than called non-positive.
+  if (Math.abs(scaled - stepBp) > BP_EPSILON) {
+    throw new Error(
+      `sweepBands: step must be a whole number of basis points (a multiple of ${1 / BASIS_POINTS}), received ${step}`,
+    );
+  }
   if (stepBp <= 0) {
     throw new Error(`sweepBands: step must be positive, received ${step}`);
+  }
+  if (SWEEP_MAX_BP % stepBp !== 0) {
+    throw new Error(
+      `sweepBands: step ${step} does not divide the [${SWEEP_MIN_BP / BASIS_POINTS}, ${SWEEP_MAX_BP / BASIS_POINTS}] range, so the sweep would never evaluate ${SWEEP_MAX_BP / BASIS_POINTS}`,
+    );
   }
 
   const values: number[] = [];

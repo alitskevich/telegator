@@ -128,6 +128,36 @@ describe("sweepBands — §11.3 steps 2-4, rewritten (R48)", () => {
   });
 
   /**
+   * A sub-basis-point step used to `Math.round` its way to 0.01 and sweep a
+   * grid ten times coarser than the one asked for — every row then labelled
+   * with a threshold the caller never requested, on its way into
+   * `calibration/record.json` as a measured value.
+   */
+  test("rejects a step finer than one basis point rather than rounding it up", () => {
+    expect(() => sweepBands(labelledPairs(), { step: 0.005 })).toThrow(/basis point/i);
+    expect(() => sweepBands(labelledPairs(), { step: 0.001 })).toThrow(/basis point/i);
+  });
+
+  /**
+   * 0.03 walks 0.00 … 0.99 and never evaluates 1.00, silently dropping the
+   * endpoint §11.3's original 1-D sweep always included.
+   */
+  test("rejects a step that does not divide the range, so 1.00 is never skipped", () => {
+    expect(() => sweepBands(labelledPairs(), { step: 0.03 })).toThrow(/divide/i);
+    expect(() => sweepBands(labelledPairs(), { step: 0.07 })).toThrow(/divide/i);
+  });
+
+  /** The steps an operator actually reaches for still work, float error and all. */
+  test("accepts the ordinary steps, and every grid includes both endpoints", () => {
+    for (const step of [0.01, 0.02, 0.04, 0.05, 0.1, 0.2, 0.25, 0.5, 1]) {
+      const rows = sweepBands(labelledPairs(), { step });
+
+      expect(rows.some((row) => row.distinctThreshold === 0)).toBe(true);
+      expect(rows.some((row) => row.mergeThreshold === 1)).toBe(true);
+    }
+  });
+
+  /**
    * A coarse grid of hand-reasoned weight candidates (design §9), not a
    * continuous sweep — but `sweepBands` still has to accept whichever
    * candidate is being evaluated, or comparing candidates would require

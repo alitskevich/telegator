@@ -32,14 +32,25 @@ import { DISTINCT_THRESHOLD, MERGE_THRESHOLD, SCORE_WEIGHTS } from "../dedup/con
 /** Where the record lives, relative to the repository root. */
 export const CALIBRATION_RECORD_PATH = "calibration/record.json";
 
-const ScoreWeightsSchema = z.object({
+/** Strict for the same reason the record below is: an unknown weight is not a weight. */
+const ScoreWeightsSchema = z.strictObject({
   entities: z.number().min(0),
   titleTokens: z.number().min(0),
   tags: z.number().min(0),
 });
 
+/**
+ * **Strict.** A calibration record is written once, by hand, and read by the
+ * production gate; an unrecognised key in one is a record that was edited from
+ * the embedding-era shape rather than rewritten, or one produced by a harness
+ * this schema does not know about. Either way the honest answer is to refuse it
+ * — a non-strict schema would accept a file carrying BOTH shapes, and
+ * `productionBlocker` would then clear a gate on fields sitting beside a stale
+ * `threshold`/`precision`/`recall` that nobody had reconciled. Nothing reads an
+ * extra key, so nothing loses by this.
+ */
 export const CalibrationRecordSchema = z
-  .object({
+  .strictObject({
     /** The values §11.3 step 4 (rewritten) chose. */
     mergeThreshold: z.number().min(0).max(1),
     distinctThreshold: z.number().min(0).max(1),
