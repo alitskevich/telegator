@@ -99,6 +99,18 @@ interface ScoredLabel {
   readonly score: number;
 }
 
+/**
+ * **Known limitation — this measures item-key versus item-key.**
+ *
+ * `dedupBatch` scores an item against a MESSAGE's key, which is the union of up
+ * to `MAX_MEMBERS` member keys. Jaccard's denominator grows with every merge,
+ * so a real duplicate scores lower against an already-merged story than against
+ * any single member of it, and the thresholds swept here are therefore fitted
+ * to the easier of the two distributions. This harness structurally cannot see
+ * the effect: a `LabelledKeyPair` is two items and there is no union key
+ * anywhere in it. Design §9 records what the labelled set needs in order to
+ * measure it — item-versus-merged-key pairs, not only item-versus-item.
+ */
 function scoreOnce(pairs: readonly LabelledKeyPair[], weights: ScoreWeights | undefined) {
   return pairs.map(
     (pair): ScoredLabel => ({

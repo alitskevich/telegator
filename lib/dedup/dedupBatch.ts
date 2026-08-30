@@ -333,6 +333,21 @@ export async function dedupBatch(
       continue;
     }
 
+    /**
+     * What is scored here is the item's key against a MESSAGE's key, and a
+     * message's key is the union accumulated over its members (up to
+     * `MAX_MEMBERS`). `lib/calibration/sweep.ts` scores item-key against
+     * item-key, so the sweep measures a different distribution from this one.
+     *
+     * The direction is known: Jaccard's denominator grows with every absorbed
+     * member, so a genuine duplicate scores progressively lower against a story
+     * that has already absorbed several — at three or four members a true match
+     * can fall under `DISTINCT_THRESHOLD` and auto-split. The elementwise-mean
+     * embedding this replaced had no such decay, because averaging does not
+     * grow the space. Recorded as a known limitation in design §9; not
+     * corrected here, because correcting it is a change to the rule rather than
+     * to its calibration.
+     */
     let best: Best | undefined;
     const better = (candidate: Best) => {
       // §6 L510 records any improvement, with no threshold test.

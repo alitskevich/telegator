@@ -254,6 +254,42 @@ continues to refuse until `calibration/record.json` exists.
 `lib/calibration/record.ts`'s schema grows to carry the fields above. Nothing
 about the gate is relaxed.
 
+### Known limitation: the sweep measures a different distribution from runtime
+
+`lib/calibration/sweep.ts` scores one item's key against another item's key.
+`lib/dedup/dedupBatch.ts` scores an item's key against a **message's** key, and
+a message's key is the union accumulated over its members — up to
+`MAX_MEMBERS` = 20 of them.
+
+Those are not the same distribution, and the direction of the difference is
+known. Jaccard's denominator is `|a u b|`, which grows with every absorbed
+member while the numerator only counts what this one item shares. So a genuine
+duplicate scores progressively lower against a story that has already absorbed
+several members: at three or four members a true match can drop below
+`DISTINCT_THRESHOLD` and be auto-split into a second message, which is the
+duplicate the whole stage exists to prevent. The elementwise-mean embedding this
+replaced had no such decay — averaging vectors does not grow the space they live
+in, so a merged story's centroid stayed as close to a new member as any single
+member was.
+
+The sweep **structurally cannot** detect this: a `LabelledKeyPair` is two items
+and there is no union key anywhere in the harness. Thresholds fitted here are
+therefore fitted to the easier of the two distributions, and the merge threshold
+that looks right at one member may be too high at four.
+
+This is recorded, not fixed. Correcting it means changing the rule — a
+containment or coverage measure in place of symmetric Jaccard against the union,
+or scoring against members individually — and that is a design decision, not a
+calibration one.
+
+**What a future recalibration needs.** The labelled set should carry
+item-versus-merged-key pairs as well as item-versus-item: for a same-story
+group of three or more, a pair of (a held-out member, the union key of the
+rest), at a couple of group sizes. Only with those in the set can a sweep
+measure the decay at all, and only then can the recorded thresholds claim to
+describe what `dedupBatch` actually does. Until then, the recorded
+`autoSplitRecall` should be read as an upper bound on the multi-member case.
+
 ## 10. Migration
 
 None *for the data*. Existing dev rows keep a dead `embedding` and have no match
