@@ -136,14 +136,29 @@ export const MessageSchema = messageFields.refine(
 export type Message = z.infer<typeof MessageSchema>;
 
 /**
- * The `status-index` projection (§7.2 L598, R27).
+ * The `status-index` projection (§7.2 L598, R27, amended by R44/R51).
  *
  * §7.2 excludes `embedding` and `members` — the two large attributes — and says
  * "Nothing projects `members`". Giving the projection its own type means
  * dashboard code cannot read an attribute the query did not return; §8.3 L742's
  * expandable member list is a lazy base-table read instead (R26).
+ *
+ * The four match-key attributes are omitted for exactly the reason `embedding`
+ * was: `MESSAGE_LIST_ATTRIBUTES` in `infra/lib/data-stack.ts` does not project
+ * them, so the real query never returns them. They are `.default([])` fields,
+ * so leaving them in the type would advertise four attributes that always parse
+ * as `[]` in production while the in-memory fake — which parses whole base
+ * records — would hand a dashboard caller populated ones. That divergence is
+ * the defect: a test would agree with a page that is empty in production. R43
+ * deleted `embedding` and its omission went with it; these replace it.
  */
-export const MessageListItemSchema = messageFields.omit({ members: true });
+export const MessageListItemSchema = messageFields.omit({
+  members: true,
+  keyEntities: true,
+  keyTitle: true,
+  keyTags: true,
+  memberIds: true,
+});
 
 export type MessageListItem = z.infer<typeof MessageListItemSchema>;
 

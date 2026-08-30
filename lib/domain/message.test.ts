@@ -233,4 +233,28 @@ describe("MessageListItemSchema (the status-index projection, R27)", () => {
 
     expect(MessageListItemSchema.safeParse(projected).success).toBe(true);
   });
+
+  /**
+   * `status-index` projects `MESSAGE_LIST_ATTRIBUTES` (`infra/lib/data-stack.ts`)
+   * and none of the four match-key attributes is in it. They default to `[]`,
+   * so a type that still carried them would read as four empty lists in
+   * production while this suite's whole-record fake handed back populated ones
+   * — a page that disagrees with its own tests. Parsing a record that HAS them
+   * is the case that matters: the schema must strip, not merely default.
+   */
+  test("drops the four match-key attributes the status-index does not project", () => {
+    const { members: _m, ...projected } = message;
+    const parsed = MessageListItemSchema.parse({
+      ...projected,
+      keyEntities: ["minsk"],
+      keyTitle: ["fire"],
+      keyTags: ["safety"],
+      memberIds: ["src/1"],
+    });
+
+    expect(parsed).not.toHaveProperty("keyEntities");
+    expect(parsed).not.toHaveProperty("keyTitle");
+    expect(parsed).not.toHaveProperty("keyTags");
+    expect(parsed).not.toHaveProperty("memberIds");
+  });
 });
