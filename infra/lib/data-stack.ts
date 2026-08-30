@@ -50,6 +50,25 @@ const MESSAGE_LIST_ATTRIBUTES = [
  * vectors now: it needs the match key R46 scores on, plus the member ids
  * R51's replay short-circuit checks. Everything the merge needs beyond that
  * still comes from the base-table read of R9.
+ *
+ * **Deploying this change to an environment that already has `date-index` may
+ * need two deploys.** These attributes replace `["embedding", "deleted"]`, and
+ * DynamoDB's `UpdateTable` cannot alter an existing GSI's projection at all:
+ * CloudFormation accepts only a narrow set of GSI updates (and only one index
+ * created or deleted per stack update). `cdk diff` renders this as an in-place
+ * modification of the index and gives no warning, because the diff is computed
+ * from the template alone and cannot know what the service will accept at apply
+ * time. If the update is rejected, there is no fallback: `tableName` is fixed
+ * by `config.name()` and `removalPolicy` is RETAIN, so a replacement of the
+ * table would fail on the existing name rather than silently recreate it.
+ *
+ * The sequence, if it is needed, is: deploy once with the `date-index` block
+ * below removed, wait for the index to finish deleting, then deploy again with
+ * it restored and this projection in place. That is an operational decision —
+ * it drops dedup candidate lookups for the duration — so it is documented here
+ * and in §10 of `docs/superpowers/specs/2026-08-30-dedup-without-embeddings-design.md`
+ * rather than encoded. A brand-new environment creates the index once and is
+ * unaffected.
  */
 const DEDUP_CANDIDATE_ATTRIBUTES = [
   "keyEntities",

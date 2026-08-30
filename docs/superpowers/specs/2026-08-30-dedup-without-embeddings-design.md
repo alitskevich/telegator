@@ -256,9 +256,37 @@ about the gate is relaxed.
 
 ## 10. Migration
 
-None. Existing dev rows keep a dead `embedding` and have no match key, so they
-score 0 and never match — at most a day of duplicates against pre-change
-messages, after which they age out of `date-index`. Production has not launched.
+None *for the data*. Existing dev rows keep a dead `embedding` and have no match
+key, so they score 0 and never match — at most a day of duplicates against
+pre-change messages, after which they age out of `date-index`. Production has
+not launched.
+
+**The GSI projection is a different matter, and may need two deploys.**
+`date-index` changes its `INCLUDE` projection from `["embedding", "deleted"]` to
+the four match-key attributes plus `deleted`. DynamoDB's `UpdateTable` cannot
+modify an existing GSI's projection: CloudFormation supports only a narrow set
+of GSI updates, and only one index created or deleted per stack update. So on
+any environment where `date-index` already exists, this change may be rejected
+at apply time.
+
+`cdk diff` will **not** warn about this. It renders the change as an in-place
+modification of the index, because a diff is computed from the template and
+cannot predict what the service accepts. Nor is there a fallback: `tableName` is
+fixed and `removalPolicy` is RETAIN, so a table replacement would fail outright
+on the existing name.
+
+If the single deploy is rejected, the sequence is:
+
+1. Deploy with the `date-index` definition removed, and wait for the index to
+   finish deleting.
+2. Deploy again with `date-index` restored and the new projection in place, and
+   wait for it to backfill.
+
+Between the two, `aggregate` has no candidate query, so every item creates its
+own message and same-story items in that window are not deduplicated. Choosing
+when to spend that window is an operator's call, not something to encode; it is
+recorded here so it is met before an outage rather than during one. A brand-new
+environment creates the index once with the new projection and is unaffected.
 
 ## 11. Spec reconciliations
 
