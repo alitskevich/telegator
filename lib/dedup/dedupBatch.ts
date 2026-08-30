@@ -633,8 +633,9 @@ function toWrite(state: Pending, ts: number): DedupWrite {
     /**
      * R45 — the three projections §7.2 L598 scores on, written from the union
      * `absorb` maintained. `embedding` is not written at all: nothing computes
-     * one any more, and a stored record's orphan bytes are left for Task 8's
-     * deletion rather than overwritten with a stale value.
+     * one any more, and R43 removed it from the schema — a stored record's
+     * orphan bytes are simply never touched again, rather than overwritten
+     * with a stale value.
      */
     ...matchKeyAttributes(state.key),
     /**
