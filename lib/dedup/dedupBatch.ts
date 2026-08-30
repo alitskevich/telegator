@@ -1,6 +1,5 @@
-import type { EmbeddingProvider } from "../ai/ports";
+import type { AdjudicationFields, AdjudicationPair, Adjudicator } from "../ai/ports";
 import type { Clock } from "../clock";
-import { packEmbedding, unpackEmbedding } from "../db/embeddingCodec";
 import type { MemberMerge } from "../db/ports";
 import { sourceIdOf } from "../domain/ids";
 import type { AnalyzedItem } from "../domain/item";
@@ -12,11 +11,17 @@ import {
   type MessageMergeAttributes,
 } from "../domain/message";
 import { mergeTags } from "../domain/tags";
+import type { Logger } from "../logging/logger";
 import type { MetricSink } from "../metrics/ports";
-import { DIMENSIONS, MAX_MEMBERS, SIMILARITY_THRESHOLD } from "./constants";
-import { cosineSimilarity } from "./cosine";
-import { buildEmbeddingText } from "./embeddingText";
-import { elementwiseMean } from "./vectors";
+import { MAX_MEMBERS } from "./constants";
+import {
+  buildMatchKey,
+  type MatchKey,
+  matchKeyAttributes,
+  matchKeyOf,
+  unionMatchKeys,
+} from "./matchKey";
+import { type Band, classify, matchScore } from "./score";
 
 /**
  * The normative deduplication algorithm of §6 (L488–553).
@@ -25,7 +30,7 @@ import { elementwiseMean } from "./vectors";
  * to the caller, and keeping them out is what makes the whole of §6 testable
  * with no AWS at all.
  *
- * Four recorded reconciliations are implemented here rather than transcribed:
+ * Eight recorded reconciliations are implemented here rather than transcribed:
  *
  *  - **R7** — §6 builds records as `{...item, …}`, which would write `body`,
  *    `kind`, `importance`, `properNames` and `forwardedFrom`, none of them in
@@ -42,10 +47,30 @@ import { elementwiseMean } from "./vectors";
  *  - **R11** — §6 L522 stamps `ts: now()` unconditionally, which makes AC-3.7's
  *    byte-identical replay impossible. An existing member keeps its original
  *    `ts`.
+ *  - **R45** — §6 L533 merges two messages by taking the elementwise mean of
+ *    their embeddings. With no vector there is nothing to average, so a merged
+ *    message's match key is `unionMatchKeys` of the two: it keeps every
+ *    discriminating term either side contributed, and — unlike a mean — it is
+ *    commutative and idempotent, which is what lets a replayed merge write the
+ *    same bytes as the original.
+ *  - **R46** — §6 L495–497 embeds the batch and L508/L518 compare cosines
+ *    against a single threshold. Both are replaced: the key is built in-process
+ *    (no provider call at all on the common path), the comparison is
+ *    `matchScore`, and one threshold becomes a band. Above `merge` and below
+ *    `distinct` are decided here; the strip between them is the only thing a
+ *    model ever sees, in **one** call for the whole batch.
+ *  - **R51** — §6 has no replay path: a replayed item is re-scored, and §3.3
+ *    L285's "the newest item's descriptive fields overwrite" means the message
+ *    it belongs to may no longer resemble it. `memberIds` (§7.2's projection)
+ *    settles it by identity instead, before anything is scored.
  */
 
 export interface DedupDeps {
-  readonly embeddings: EmbeddingProvider;
+  /**
+   * R46 — resolves the ambiguous band. Called at most once per batch, and not
+   * at all when nothing falls in the band.
+   */
+  readonly adjudicator: Adjudicator;
   /** §6 L515 — the `date-index` query. */
   loadCandidatesByDate(date: string): Promise<DedupCandidate[]>;
   /** R9 — the base-table read that supplies the members a candidate lacks. */
@@ -53,10 +78,18 @@ export interface DedupDeps {
   readonly clock: Clock;
   readonly metrics: MetricSink;
   /**
-   * §11.3 L864 requires the threshold to be recalibrated against Cohere before
-   * production. Injected so that is a configuration change, not a code edit.
+   * R46 — an adjudication failure is swallowed here, because splitting is the
+   * safe outcome and failing the batch would strand every unambiguous item in
+   * it. The metric records that it happened; this records *why*.
    */
-  readonly similarityThreshold?: number;
+  readonly logger: Logger;
+  /**
+   * §11.3 L864 requires the decision boundary to be recalibrated before
+   * production — against Cohere as written, against the labelled set as R48
+   * rewrites it. Injected, exactly as `similarityThreshold` was, so that
+   * recalibration stays a configuration change rather than a code edit (R46).
+   */
+  readonly band?: Band;
 }
 
 export type DedupWrite =
@@ -76,7 +109,8 @@ interface Pending {
   readonly id: string;
   readonly date: string;
   readonly isNew: boolean;
-  embedding: number[];
+  /** R45 — the union of every member's key; what Pass 1 scores against. */
+  key: MatchKey;
   members: Record<string, MemberBlock>;
   /** The members *this batch* wrote — the ones a merge must SET. */
   addedMembers: Record<string, MemberBlock>;
@@ -106,6 +140,25 @@ interface Pending {
   tgChannel: string;
 }
 
+/** An item whose best candidate fell in the band, held until the verdicts arrive. */
+interface Deferred {
+  readonly pairId: string;
+  readonly item: AnalyzedItem;
+  readonly key: MatchKey;
+  readonly candidateId: string;
+}
+
+/** The best-scoring candidate found for one item, across both passes. */
+interface Best {
+  readonly id: string;
+  readonly score: number;
+  readonly key: MatchKey;
+  readonly date: string;
+  /** Known for a message this batch touched; never for a `date-index` row (R44). */
+  readonly category: string | undefined;
+  readonly location: string | undefined;
+}
+
 export async function dedupBatch(
   batch: readonly AnalyzedItem[],
   deps: DedupDeps,
@@ -114,10 +167,9 @@ export async function dedupBatch(
     return { writes: [], toPublish: [], candidateCount: 0 };
   }
 
-  const threshold = deps.similarityThreshold ?? SIMILARITY_THRESHOLD;
-
-  // §6 L495–497 — one text per item, one provider call for the batch.
-  const vectors = await deps.embeddings.embedBatch(batch.map(buildEmbeddingText), DIMENSIONS);
+  // R46 — §6 L495–497's single `embedBatch` call, replaced by a pure build.
+  // Nothing here awaits a model: a batch with no ambiguous pair never calls one.
+  const keyed = batch.map((item) => ({ item, key: buildMatchKey(item) }));
 
   const pending = new Map<string, Pending>();
   const toPublish: string[] = [];
@@ -128,48 +180,22 @@ export async function dedupBatch(
   const candidatesByDate = new Map<string, DedupCandidate[]>();
   let candidateCount = 0;
 
-  for (const [index, item] of batch.entries()) {
-    const vec = vectors[index];
-    if (vec === undefined) {
-      throw new Error(`embedding provider returned no vector for item ${item.id}`);
-    }
+  const candidatesFor = async (date: string): Promise<DedupCandidate[]> => {
+    const cached = candidatesByDate.get(date);
+    if (cached !== undefined) return cached;
 
-    // Pass 1 — messages touched earlier in this batch (§6 L505–511).
-    let best: Pending | undefined;
-    let bestScore = 0;
-    for (const candidate of pending.values()) {
-      if (candidate.embedding.length === 0 || candidate.date !== item.date) continue;
-      const score = cosineSimilarity(vec, candidate.embedding);
-      // L510 records any improvement, with no threshold test.
-      if (score > bestScore) {
-        bestScore = score;
-        best = candidate;
-      }
-    }
-    let matchId = best !== undefined && bestScore >= threshold ? best.id : undefined;
+    const candidates = await deps.loadCandidatesByDate(date);
+    candidatesByDate.set(date, candidates);
+    candidateCount += candidates.length;
+    return candidates;
+  };
 
-    // Pass 2 — stored messages on the same date (§6 L513–519).
-    if (matchId === undefined && item.date !== "") {
-      let candidates = candidatesByDate.get(item.date);
-      if (candidates === undefined) {
-        candidates = await deps.loadCandidatesByDate(item.date);
-        candidatesByDate.set(item.date, candidates);
-        candidateCount += candidates.length;
-      }
-
-      for (const candidate of candidates) {
-        // R10 — the batch already holds a fresher copy of this message.
-        if (pending.has(candidate.id)) continue;
-        if (candidate.embedding === undefined || candidate.embedding.byteLength === 0) continue;
-
-        const score = cosineSimilarity(vec, unpackEmbedding(candidate.embedding));
-        if (score >= threshold && score > bestScore) {
-          bestScore = score;
-          matchId = candidate.id;
-        }
-      }
-    }
-
+  /**
+   * §6 L521–544 — the create/merge tail, shared by the items decided on sight
+   * and the ones decided by the model. Factored out for exactly that reason: a
+   * second copy is how the two paths would drift on R11 or the member cap.
+   */
+  const absorb = async (item: AnalyzedItem, key: MatchKey, matchId: string | undefined) => {
     const state =
       matchId === undefined ? undefined : (pending.get(matchId) ?? (await load(matchId, deps)));
 
@@ -179,11 +205,11 @@ export async function dedupBatch(
 
     if (state !== undefined) {
       // §6 L525–526 — the cap rejects only a *new* key, so a replay of an item
-      // already present still merges. `continue` drops the item outright: no
+      // already present still merges. Returning drops the item outright: no
       // message is created for it and nothing is enqueued.
       if (Object.keys(state.members).length >= MAX_MEMBERS && !(item.id in state.members)) {
         deps.metrics.count("MemberCapReached", 1);
-        continue;
+        return;
       }
     }
 
@@ -202,7 +228,7 @@ export async function dedupBatch(
             id: item.id,
             date: item.date,
             isNew: true,
-            embedding: vec,
+            key,
             members: { [item.id]: block },
             addedMembers: { [item.id]: block },
             origin: undefined,
@@ -217,7 +243,8 @@ export async function dedupBatch(
           }
         : {
             ...state,
-            embedding: elementwiseMean(state.embedding, vec),
+            // R45 — the union, where §6 L533 took the elementwise mean.
+            key: unionMatchKeys(state.key, key),
             members: { ...state.members, [item.id]: block },
             addedMembers: { ...state.addedMembers, [item.id]: block },
             // §6 L532 — item side first, so a replay is a fixed point.
@@ -237,6 +264,113 @@ export async function dedupBatch(
 
     pending.set(next.id, next);
     if (!toPublish.includes(next.id)) toPublish.push(next.id);
+  };
+
+  const deferred: Deferred[] = [];
+  const pairs: AdjudicationPair[] = [];
+
+  for (const { item, key } of keyed) {
+    /**
+     * R51, AC-3.7 — the replay short-circuit, ahead of every comparison.
+     *
+     * An item already listed in a same-date message's `memberIds` belongs to
+     * that message by identity, whatever it would now score: §3.3 L285 lets
+     * later members overwrite the descriptive fields, so a replayed item can
+     * have drifted well away from the key it helped build. Re-scoring it is how
+     * a DLQ drain splits a story that was already published and posts it twice.
+     *
+     * R10's "skip a candidate this batch already touched" deliberately does not
+     * apply here: when the candidate is in `pending`, `absorb` resolves against
+     * that fresher copy, which is the right answer rather than a stale one.
+     */
+    const replayed =
+      item.date === ""
+        ? undefined
+        : (await candidatesFor(item.date)).find((candidate) =>
+            candidate.memberIds.includes(item.id),
+          );
+
+    if (replayed !== undefined) {
+      await absorb(item, key, replayed.id);
+      continue;
+    }
+
+    let best: Best | undefined;
+    const better = (candidate: Best) => {
+      // §6 L510 records any improvement, with no threshold test.
+      if (best === undefined || candidate.score > best.score) best = candidate;
+    };
+
+    // Pass 1 — messages touched earlier in this batch (§6 L505–511).
+    for (const candidate of pending.values()) {
+      if (candidate.date !== item.date) continue;
+      better({
+        id: candidate.id,
+        score: matchScore(key, candidate.key),
+        key: candidate.key,
+        date: candidate.date,
+        category: candidate.category,
+        location: candidate.location,
+      });
+    }
+
+    /**
+     * Pass 2 — stored messages on the same date (§6 L513–519).
+     *
+     * §6 L513 runs this only when Pass 1 found no match; both passes run here
+     * and the single highest score across them wins (R46). §6's structure
+     * relies on one threshold making "matched" a yes/no answer, which a band
+     * does not: an item's best candidate has to be settled before it can be
+     * classified at all, and stopping at Pass 1 would send one pair to the
+     * model while a closer one went unexamined. Taking the maximum can only
+     * select a candidate at least as close as §6's would have been.
+     */
+    if (item.date !== "") {
+      for (const candidate of await candidatesFor(item.date)) {
+        // R10 — the batch already holds a fresher copy of this message.
+        if (pending.has(candidate.id)) continue;
+        const stored = matchKeyOf(candidate);
+        better({
+          id: candidate.id,
+          score: matchScore(key, stored),
+          key: stored,
+          date: candidate.date,
+          category: undefined,
+          location: undefined,
+        });
+      }
+    }
+
+    if (best === undefined) {
+      await absorb(item, key, undefined);
+      continue;
+    }
+
+    const verdict = classify(best.score, deps.band);
+    if (verdict === "adjudicate") {
+      const pairId = `${item.id}->${best.id}`;
+      deferred.push({ pairId, item, key, candidateId: best.id });
+      // At most one pair per item: only the highest-scoring candidate is ever
+      // the one this item might belong to.
+      pairs.push({
+        id: pairId,
+        item: fieldsOf(key, item.date, item.category, item.location),
+        candidate: fieldsOf(best.key, best.date, best.category, best.location),
+      });
+      continue;
+    }
+
+    await absorb(item, key, verdict === "merge" ? best.id : undefined);
+  }
+
+  const verdicts = await adjudicate(pairs, deps);
+
+  for (const entry of deferred) {
+    await absorb(
+      entry.item,
+      entry.key,
+      verdicts.get(entry.pairId) === true ? entry.candidateId : undefined,
+    );
   }
 
   deps.metrics.count("DedupCandidateCount", candidateCount);
@@ -260,6 +394,67 @@ export async function dedupBatch(
   };
 }
 
+/**
+ * R46 — one call for the batch, and a failure that splits.
+ *
+ * §11.3 L868: "False merges are worse than false splits." A false merge fuses
+ * two unrelated stories into one live Telegram post that then keeps editing
+ * itself with the other story's text; a false split is a second post. So a
+ * throw, a timeout or a refusal returns no verdicts at all and every pending
+ * pair falls through to `distinct` — never to `merge`, and never to a thrown
+ * batch, which would strand the items that were never ambiguous.
+ */
+async function adjudicate(
+  pairs: readonly AdjudicationPair[],
+  deps: DedupDeps,
+): Promise<ReadonlyMap<string, boolean>> {
+  if (pairs.length === 0) return new Map();
+
+  try {
+    const verdicts = await deps.adjudicator.adjudicate(pairs);
+    deps.metrics.count("DedupAdjudicated", pairs.length);
+    return verdicts;
+  } catch (error) {
+    deps.logger.error("dedup adjudication failed; splitting every ambiguous pair", {
+      pairs: pairs.length,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    deps.metrics.count("DedupAdjudicationFailed", 1);
+    return new Map();
+  }
+}
+
+/**
+ * R46 — what crosses the model boundary, built from the match key on **both**
+ * sides.
+ *
+ * A `date-index` candidate carries no `title`: §7.2 L598's projection is the
+ * key and `memberIds` (R44/R51) and nothing else. Describing the item from
+ * `item.title` while describing the candidate from its key would hand the model
+ * two differently-shaped accounts of the same kind of thing, and make part of
+ * every verdict an artefact of which side happened to be stored. Symmetry costs
+ * the title's word order, which §5.2 L443's three-word title barely carries.
+ *
+ * `category` and `location` are context where they are known — an item always,
+ * a stored candidate never — which is why `AdjudicationFields` declares both
+ * optional.
+ */
+function fieldsOf(
+  key: MatchKey,
+  date: string,
+  category: string | undefined,
+  location: string | undefined,
+): AdjudicationFields {
+  return {
+    title: key.titleTokens.join(" "),
+    entities: key.entities,
+    tags: key.tags,
+    category,
+    location,
+    date,
+  };
+}
+
 /** R9 — a `date-index` candidate carries no members, so read the base record. */
 async function load(id: string, deps: DedupDeps): Promise<Pending | undefined> {
   const message = await deps.loadMessage(id);
@@ -270,7 +465,7 @@ async function load(id: string, deps: DedupDeps): Promise<Pending | undefined> {
     date: message.date,
     isNew: false,
     origin: publishedContentOf(message),
-    embedding: message.embedding === undefined ? [] : unpackEmbedding(message.embedding),
+    key: matchKeyOf(message),
     members: message.members,
     addedMembers: {},
     tags: message.tags ?? "",
@@ -288,9 +483,10 @@ async function load(id: string, deps: DedupDeps): Promise<Pending | undefined> {
  * The fields §3.4 actually renders: the member blocks carry the text, the rest
  * carry the header and the hashtag line.
  *
- * `embedding` is deliberately absent. §6 L559's centroid drift changes it on
- * every replay and no reader ever sees it, so including it would make every
- * merge look like a change and the comparison pointless.
+ * The match key is deliberately absent, for the reason `embedding` was before
+ * it (R43/R45): it changes on every merge, no reader ever sees it, and
+ * including it would make every merge look like a change and the comparison
+ * pointless.
  */
 interface PublishedContent {
   readonly members: string;
@@ -338,23 +534,19 @@ function toWrite(state: Pending, ts: number): DedupWrite {
 
   const shared = {
     memberCount,
-    embedding: packEmbedding(state.embedding),
     /**
-     * R44 — `Pending` does not track a match key yet: this task only adds the
-     * storage for one, and Task 5 is what computes it from the batch's items
-     * and unions it across a merge (§6 L488–553's rewrite). Writing `[]` here
-     * is indistinguishable from a legacy record with no key at all — an empty
-     * key that cannot match anything — so it is a safe placeholder rather than
-     * a behaviour change.
+     * R45 — the three projections §7.2 L598 scores on, written from the union
+     * `absorb` maintained. `embedding` is not written at all: nothing computes
+     * one any more, and a stored record's orphan bytes are left for Task 8's
+     * deletion rather than overwritten with a stale value.
      */
-    keyEntities: [] as string[],
-    keyTitle: [] as string[],
-    keyTags: [] as string[],
+    ...matchKeyAttributes(state.key),
     /**
-     * R51 — unlike the match key, this needs no new algorithm: `state.members`
-     * is already the message's complete, up-to-date member map on both the
-     * create and the merge branch below, so its keys are `memberIds` by
-     * construction. Kept in lockstep with `members` for exactly that reason.
+     * R51 — unlike the match key, this needs no algorithm: `state.members` is
+     * already the message's complete, up-to-date member map on both the create
+     * and the merge branch below, so its keys are `memberIds` by construction.
+     * Kept in lockstep with `members` for exactly that reason, which is what
+     * makes the replay short-circuit above correct rather than merely fast.
      */
     memberIds: Object.keys(state.members),
     date: state.date,

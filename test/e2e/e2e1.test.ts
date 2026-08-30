@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
-import { DIMENSIONS } from "../../lib/dedup/constants";
+import type { Classifier } from "../../lib/ai/ports";
 import { SCRAPE_HEADERS } from "../../lib/pipeline/scrape/index";
+import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
 
 import { fakeMessageRepo, fakeSourceRepo } from "../fakes/db";
@@ -52,37 +52,8 @@ function recordingClassifier(): Classifier & { readonly calls: string[] } {
   };
 }
 
-/**
- * Assigns each distinct text its own basis vector, so any two items score a
- * cosine of 0 and §6 merges none of them. E2E-1 counts what one traversal
- * produces; merging would make "three analyze messages" untestable downstream,
- * and E2E-2 is the criterion that exercises a merge on purpose.
- *
- * Local rather than a change to `stubEmbedder`, whose strictness — an unscripted
- * text throws — is what keeps the stage tests honest.
- */
-function orthogonalEmbedder(): EmbeddingProvider & { readonly batches: string[][] } {
-  const batches: string[][] = [];
-  const assigned = new Map<string, number[]>();
-
-  return {
-    batches,
-    embedBatch: async (texts) => {
-      batches.push([...texts]);
-      return texts.map((text) => {
-        const existing = assigned.get(text);
-        if (existing !== undefined) return existing;
-
-        const vector = new Array<number>(DIMENSIONS).fill(0);
-        vector[assigned.size % DIMENSIONS] = 1;
-        assigned.set(text, vector);
-        return vector;
-      });
-    },
-  };
-}
-
 let world: Parameters<typeof runPipeline>[0];
+let adjudicator: ReturnType<typeof fakeAdjudicator>;
 let messages: ReturnType<typeof fakeMessageRepo>;
 let sources: ReturnType<typeof fakeSourceRepo>;
 let bot: ReturnType<typeof fakeBot>;
@@ -102,12 +73,18 @@ beforeEach(() => {
     },
   ]);
   bot = fakeBot();
+  // The three stories share only their tags, which R46 weights at 0.15 — well
+  // below DISTINCT_THRESHOLD, so §6 merges none of them and none of them is
+  // ambiguous enough to reach the model. E2E-1 counts what one traversal
+  // produces; merging would make "three analyze messages" untestable
+  // downstream, and E2E-2 is the criterion that exercises a merge on purpose.
+  adjudicator = fakeAdjudicator(() => true);
 
   world = {
     fetcher: fakeFetcher({ [URL]: telegramFixture("multiPost") }),
     sources,
     classifier: recordingClassifier(),
-    embeddings: orthogonalEmbedder(),
+    adjudicator,
     messages,
     bot,
     clock: manualClock(NOW),
@@ -120,6 +97,13 @@ describe("E2E-1 (§11.2 L848)", () => {
 
     expect(run.analyzeMessages).toHaveLength(3);
     expect(run.analyzeMessages.map((m) => JSON.parse(m.body).id)).toEqual(POST_IDS);
+  });
+
+  /** The three sit below the band, so the plumbing above never called a model. */
+  test("decides all three without an adjudication call", async () => {
+    await runPipeline(world);
+
+    expect(adjudicator.calls).toEqual([]);
   });
 
   test("and at least one message record", async () => {

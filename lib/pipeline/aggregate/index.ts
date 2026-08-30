@@ -1,7 +1,8 @@
-import type { EmbeddingProvider } from "../../ai/ports";
+import type { Adjudicator } from "../../ai/ports";
 import type { Clock } from "../../clock";
 import type { MessageRepo } from "../../db/ports";
 import { type DedupDeps, type DedupWrite, dedupBatch } from "../../dedup/dedupBatch";
+import type { Band } from "../../dedup/score";
 import type { AnalyzedItem } from "../../domain/item";
 import type { Logger } from "../../logging/logger";
 import type { MetricSink } from "../../metrics/ports";
@@ -21,16 +22,21 @@ import {
  * is the four steps §6 L547–552 leave to the caller: parse the queue payloads,
  * apply the writes, enqueue the touched ids, and report which SQS records failed.
  *
- * **Metrics.** Every §7.7 aggregate counter — `MessagesCreated`,
- * `MessagesMerged`, `MemberCapReached` and `DedupCandidateCount` — is emitted by
- * `dedupBatch` through the sink this stage hands it. There is nothing left for
- * this module to emit, and emitting any of them again would double-count a
- * number §7.7 L679 makes the pipeline's system of record.
+ * **Metrics.** Every aggregate counter — §7.7's `MessagesCreated`,
+ * `MessagesMerged`, `MemberCapReached` and `DedupCandidateCount`, and R50's
+ * `DedupAdjudicated` and `DedupAdjudicationFailed` — is emitted by `dedupBatch`
+ * through the sink this stage hands it. There is nothing left for this module to
+ * emit, and emitting any of them again would double-count a number §7.7 L679
+ * makes the pipeline's system of record.
  */
 
 export interface AggregateDeps {
-  /** §3.3 L268 — one `embedBatch` call for the whole batch, at `DIMENSIONS`. */
-  readonly embeddings: EmbeddingProvider;
+  /**
+   * R46 — §3.3 L268's single `embedBatch` call for the batch, replaced by at
+   * most one adjudication call for the batch: only the pairs `lib/dedup`'s band
+   * cannot decide reach a model at all.
+   */
+  readonly adjudicator: Adjudicator;
   readonly messages: MessageRepo;
   /** §7.3 L608 — the publish FIFO queue. */
   readonly queue: QueueProducer;
@@ -38,11 +44,11 @@ export interface AggregateDeps {
   readonly metrics: MetricSink;
   readonly logger: Logger;
   /**
-   * §11.3 L864 requires the threshold to be recalibrated against Cohere before
+   * §11.3 L864 requires the decision boundary to be recalibrated before
    * production. Passed straight through to `dedupBatch`, so that recalibration
-   * is a configuration change rather than a code edit.
+   * is a configuration change rather than a code edit (R46).
    */
-  readonly similarityThreshold?: number;
+  readonly band?: Band;
 }
 
 /**
@@ -106,9 +112,10 @@ export async function runAggregate(
   try {
     result = await dedupBatch(batch, dedupDeps(deps));
   } catch (error) {
-    // The embedding call and the candidate query are batch-wide, so a failure
-    // here says nothing about which item is at fault: every parsed record is
-    // reported so SQS redelivers the whole batch (§7.3 L620).
+    // The candidate query is batch-wide, so a failure here says nothing about
+    // which item is at fault: every parsed record is reported so SQS redelivers
+    // the whole batch (§7.3 L620). An adjudication failure is NOT one of these —
+    // §11.3 L868 makes it split rather than throw, inside `dedupBatch`.
     deps.logger.error("aggregate dedup failed", { error: describeError(error) });
     failRecordsFor(recordsByItemId.keys());
     return { batchItemFailures: toFailures(failed) };
@@ -194,12 +201,13 @@ async function enqueuePublish(
 /** Builds §6's dependencies from the stage's: L515's query is `queryByDate`, R9's read is `get`. */
 function dedupDeps(deps: AggregateDeps): DedupDeps {
   return {
-    embeddings: deps.embeddings,
+    adjudicator: deps.adjudicator,
     loadCandidatesByDate: (date) => deps.messages.queryByDate(date),
     loadMessage: (id) => deps.messages.get(id),
     clock: deps.clock,
     metrics: deps.metrics,
-    similarityThreshold: deps.similarityThreshold,
+    logger: deps.logger,
+    band: deps.band,
   };
 }
 

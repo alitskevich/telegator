@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
-import { unpackEmbedding } from "../../lib/db/embeddingCodec";
-import { DIMENSIONS } from "../../lib/dedup/constants";
-import { cosineSimilarity } from "../../lib/dedup/cosine";
+import type { Adjudicator, Classifier } from "../../lib/ai/ports";
 import type { Message } from "../../lib/domain/message";
 import type { Source } from "../../lib/domain/source";
 import { createLogger } from "../../lib/logging/logger";
 import { runAggregate } from "../../lib/pipeline/aggregate/index";
-import { unitVectorAtAngle } from "../fakes/ai";
+import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
 import { fakeMessageRepo, fakeSourceRepo } from "../fakes/db";
 import { recordingSink } from "../fakes/logging";
@@ -22,14 +19,14 @@ import { runPipeline } from "./harness";
  * E2E-5 (§11.2 L852) — "**Replaying the entire aggregate DLQ leaves the messages
  * table byte-identical.** This is the master idempotency test."
  *
- * "Byte-identical" is narrowed, and the narrowing is the spec's own. §6 L522
- * stamps `ts: now()` on every write, so a replay under a real clock cannot leave
- * that byte unchanged; and §6 L559 concedes that replaying an item into a
- * multi-member message "shifts the centroid slightly toward that member ...
- * bounded and harmless". What must be identical is everything the pipeline and
- * the dashboard read: the member set and each member's own `ts` (R11), the
- * count, the status, the published ids, and — for a message with one member —
- * the embedding exactly, since the mean of a vector with itself is that vector.
+ * "Byte-identical" is narrowed, and the narrowing is the spec's own — but less
+ * than it was. §6 L522 stamps `ts: now()` on every write, so a replay under a
+ * real clock cannot leave that byte unchanged. §6 L559's second concession is
+ * gone: it applied to the centroid, and R45 replaced the centroid with
+ * `unionMatchKeys`, which is idempotent, so the match key of a *merged* message
+ * survives a replay exactly too. What must be identical is everything the
+ * pipeline and the dashboard read: the member set and each member's own `ts`
+ * (R11), the count, the status, the published ids, and the match key.
  *
  * The clock ADVANCES between the runs. Freezing it would make the `ts` claim
  * vacuous: a stamp that cannot change looks idempotent whether it is or not.
@@ -51,73 +48,52 @@ const source = (id: string): Source => ({
   lastNonZeroCount: 0,
 });
 
-const newsItem = (title: string): NewsItem => ({
+const newsItem = (title: string, properNames: string, tags: string): NewsItem => ({
   title,
   summary: `Змест: ${title}.`,
   country: "BY",
   location: "Minsk",
   category: "politics",
   importance: "high",
-  tags: "politics,minsk",
+  properNames,
+  tags,
 });
 
+/** The two entity sets that make the scenario: two reports of one event, and a third story. */
+const EVENT = "Minsk, Kastrycnickaja";
+const ELSEWHERE = "Brest, Kobryn";
+
 /**
- * A distinct title per item, so the three produce three distinct embedding
- * texts. Deriving the title from the body would give all three the same one —
- * they come from the same fixture — and every item would embed identically and
- * merge into a single message, which is not the scenario this criterion needs.
+ * A distinct title per item, so the three are three records rather than one —
+ * but the first two name the same place, which puts them at 0.83 and merges
+ * them, while the third names another and stays alone at 0.13. A replay must
+ * exercise both the single-member message and the merged one.
  *
  * Call-counting is safe here because aggregate never classifies: the replay
- * re-embeds, and the embedder is keyed by text rather than by call order.
+ * re-reads the payloads analyze already produced.
  */
 function distinctClassifier(): Classifier {
   let seen = 0;
   return {
     classify: async () => {
       seen += 1;
-      return newsItem(`Story ${seen}`);
+      return seen <= 2
+        ? newsItem(`Story ${seen}`, EVENT, "politics,minsk")
+        : newsItem(`Story ${seen}`, ELSEWHERE, "politics,brest");
     },
-  };
-}
-
-/**
- * `source_a` and `source_b` land at 0.9 — above §6's threshold, so they merge
- * into one two-member message. `source_c` is orthogonal to both and stays alone.
- * A replay must therefore exercise both the exact case and the drifting one.
- */
-function scriptedEmbedder(): EmbeddingProvider {
-  const assigned = new Map<string, number[]>();
-  const script = [unitVectorAtAngle(1, DIMENSIONS), unitVectorAtAngle(0.9, DIMENSIONS)];
-
-  return {
-    embedBatch: async (texts) =>
-      texts.map((text) => {
-        const existing = assigned.get(text);
-        if (existing !== undefined) return existing;
-
-        const index = assigned.size;
-        const vector =
-          script[index] ??
-          (() => {
-            const orthogonal = new Array<number>(DIMENSIONS).fill(0);
-            orthogonal[DIMENSIONS - 1 - index] = 1;
-            return orthogonal;
-          })();
-
-        assigned.set(text, vector);
-        return vector;
-      }),
   };
 }
 
 let messages: ReturnType<typeof fakeMessageRepo>;
 let clock: ReturnType<typeof manualClock>;
-let embeddings: EmbeddingProvider;
+let adjudicator: Adjudicator;
 
 beforeEach(() => {
   messages = fakeMessageRepo();
   clock = manualClock(NOW);
-  embeddings = scriptedEmbedder();
+  // Refuses every band pair: the merge below is the score's doing, and a replay
+  // that reached the model would be a replay that could decide differently.
+  adjudicator = fakeAdjudicator(() => false);
 });
 
 const ids = [...MERGING, ALONE];
@@ -133,7 +109,7 @@ async function runThenReplay() {
     ),
     sources: fakeSourceRepo(ids.map(source)),
     classifier: distinctClassifier(),
-    embeddings,
+    adjudicator,
     messages,
     bot: fakeBot(),
     clock,
@@ -150,7 +126,7 @@ async function runThenReplay() {
       body: message.body,
     })),
     {
-      embeddings,
+      adjudicator,
       messages,
       queue: publishQueue,
       clock,
@@ -275,33 +251,26 @@ describe("E2E-5 (§11.2 L852)", () => {
   });
 
   /**
-   * The mean of a vector with itself is that vector, so a message with one
-   * member is exactly idempotent — §6 L559's own argument, asserted.
+   * R45 — `unionMatchKeys` is idempotent, so the field §6 L559 conceded would
+   * drift now does not. Asserted for the merged message specifically: that is
+   * the case the centroid could not hold, and a key that drifted would stop a
+   * message matching its own members on the next pass.
    */
-  test("a single-member message's embedding is exactly unchanged", async () => {
+  test("the match key is byte-identical, for the merged message as well as the lone one", async () => {
     const { before, after } = await runThenReplay();
 
-    const lone = (records: Message[]) => records.find((message) => message.memberCount === 1);
+    const keys = (records: Message[]) =>
+      records.map(({ memberCount, keyEntities, keyTitle, keyTags, memberIds }) => ({
+        memberCount,
+        keyEntities,
+        keyTitle,
+        keyTags,
+        memberIds,
+      }));
 
-    expect(lone(after)?.embedding).toEqual(lone(before)?.embedding);
-  });
-
-  /**
-   * §6 L559 concedes the multi-member case drifts: "replaying into a
-   * multi-member message shifts the centroid slightly toward that member ...
-   * bounded and harmless". Bounded is the claim worth testing — a drift that
-   * dropped the centroid below §6's own threshold would stop the message
-   * matching its own members on the next pass.
-   */
-  test("a merged message's centroid drifts, but stays close to itself", async () => {
-    const { before, after } = await runThenReplay();
-
-    const merged = (records: Message[]) => records.find((message) => message.memberCount === 2);
-
-    const from = unpackEmbedding(merged(before)?.embedding ?? new Uint8Array());
-    const to = unpackEmbedding(merged(after)?.embedding ?? new Uint8Array());
-
-    expect(cosineSimilarity(from, to)).toBeGreaterThan(0.99);
+    expect(JSON.stringify(keys(after))).toBe(JSON.stringify(keys(before)));
+    // And the scenario really does contain a merged message to have proved it on.
+    expect(after.map((message) => message.memberCount).sort()).toEqual([1, 2]);
   });
 
   /**

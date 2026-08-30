@@ -2,7 +2,8 @@
 export const METRIC_NAMESPACE = "Telegator";
 
 /**
- * The complete counter set of §7.7 L684–693, in table order.
+ * The complete counter set of §7.7 L684–693, in table order, followed by R50's
+ * two additions.
  *
  * §7.7 L679 makes this list load-bearing rather than decorative: with no items
  * table, CloudWatch is the pipeline's system of record for volume, so a metric
@@ -22,6 +23,18 @@ export const METRIC_NAMES = [
   "MemberCapReached", // aggregate
   "TelegramApiErrors", // publish,   dim Method
   "SourceStale", // scrape,    dim Source
+
+  /**
+   * R50 — §7.7 L684–693's table lists neither of these, because §6 had no model
+   * call to count. R46's band is both a cost centre (one Bedrock request per
+   * aggregate invocation that has an ambiguous pair) and a silent failure mode:
+   * an adjudication that throws splits rather than merging, which looks exactly
+   * like correct behaviour from the outside. §7.7 L679 makes CloudWatch the
+   * system of record for volume, so a number nobody emits is a number nobody
+   * can recover afterwards.
+   */
+  "DedupAdjudicated", // aggregate, R50 — band pairs sent to the model
+  "DedupAdjudicationFailed", // aggregate, R50 — failed calls, which split (§11.3 L868)
 ] as const;
 
 export type MetricName = (typeof METRIC_NAMES)[number];

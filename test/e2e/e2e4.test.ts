@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
-import { DIMENSIONS } from "../../lib/dedup/constants";
+import type { Adjudicator, Classifier } from "../../lib/ai/ports";
 import type { Source } from "../../lib/domain/source";
 import type { EditMessageTextArgs } from "../../lib/telegram/ports";
-import { unitVectorAtAngle } from "../fakes/ai";
+import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
 import { fakeMessageRepo, fakeSourceRepo } from "../fakes/db";
 import { fakeBot, fakeFetcher } from "../fakes/telegram";
@@ -38,6 +37,12 @@ const source = (id: string): Source => ({
   lastNonZeroCount: 0,
 });
 
+/**
+ * Both reports name the same place and people, so R46 scores the pair at 0.83
+ * — above `MERGE_THRESHOLD` — whatever their titles are. That is what makes the
+ * second run a merge into the already-published message rather than a second
+ * post, which is the whole of this criterion.
+ */
 const newsItem = (title: string, summary: string): NewsItem => ({
   title,
   summary,
@@ -45,6 +50,7 @@ const newsItem = (title: string, summary: string): NewsItem => ({
   location: "Minsk",
   category: "politics",
   importance: "high",
+  properNames: "Minsk, Kastrycnickaja",
   tags: "politics,minsk",
 });
 
@@ -62,29 +68,12 @@ function twoStoryClassifier(): Classifier {
   };
 }
 
-/** The second distinct text sits at 0.9 from the first — above §6's 0.85. */
-function mergingEmbedder(): EmbeddingProvider {
-  const assigned = new Map<string, number[]>();
-
-  return {
-    embedBatch: async (texts) =>
-      texts.map((text) => {
-        const existing = assigned.get(text);
-        if (existing !== undefined) return existing;
-
-        const vector = unitVectorAtAngle(assigned.size === 0 ? 1 : 0.9, DIMENSIONS);
-        assigned.set(text, vector);
-        return vector;
-      }),
-  };
-}
-
 let messages: ReturnType<typeof fakeMessageRepo>;
 let sources: ReturnType<typeof fakeSourceRepo>;
 let bot: ReturnType<typeof fakeBot>;
 let clock: ReturnType<typeof manualClock>;
 let classifier: Classifier;
-let embeddings: EmbeddingProvider;
+let adjudicator: Adjudicator;
 
 beforeEach(() => {
   messages = fakeMessageRepo();
@@ -92,7 +81,8 @@ beforeEach(() => {
   bot = fakeBot();
   clock = manualClock(NOW);
   classifier = twoStoryClassifier();
-  embeddings = mergingEmbedder();
+  // Refuses everything it is asked, so the merge below can only be the score's.
+  adjudicator = fakeAdjudicator(() => false);
 });
 
 /**
@@ -108,7 +98,7 @@ const world = () => ({
   }),
   sources,
   classifier,
-  embeddings,
+  adjudicator,
   messages,
   bot,
   clock,

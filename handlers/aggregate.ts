@@ -2,7 +2,7 @@ import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { createBedrockEmbeddingProvider } from "../lib/ai/bedrock";
+import { createBedrockAdjudicator } from "../lib/ai/adjudicator";
 import { systemClock } from "../lib/clock";
 import { createMessageRepo } from "../lib/db/messages";
 import { createLogger, stdoutSink } from "../lib/logging/logger";
@@ -29,7 +29,7 @@ let cached: ReturnType<typeof buildDeps> | undefined;
 
 function buildDeps() {
   return {
-    embeddings: createBedrockEmbeddingProvider(),
+    adjudicator: createBedrockAdjudicator(),
     messages: createMessageRepo({
       client: DynamoDBDocumentClient.from(new DynamoDBClient({})),
       tableName: requireEnv(ENV_VARS.messagesTable),

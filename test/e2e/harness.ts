@@ -1,5 +1,6 @@
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
+import type { Adjudicator, Classifier } from "../../lib/ai/ports";
 import type { Clock } from "../../lib/clock";
+import type { Band } from "../../lib/dedup/score";
 import { createLogger } from "../../lib/logging/logger";
 import { runAggregate } from "../../lib/pipeline/aggregate/index";
 import { runAnalyze } from "../../lib/pipeline/analyze/index";
@@ -28,11 +29,12 @@ export interface PipelineWorld {
   readonly fetcher: FakeFetcher;
   readonly sources: FakeSourceRepo;
   readonly classifier: Classifier;
-  readonly embeddings: EmbeddingProvider;
+  /** R46 — resolves §6's ambiguous band; §5.3's embedder is gone. */
+  readonly adjudicator: Adjudicator;
   readonly messages: FakeMessageRepo;
   readonly bot: FakeBot;
   readonly clock: Clock;
-  readonly similarityThreshold?: number;
+  readonly band?: Band;
 }
 
 export interface PipelineRun {
@@ -94,15 +96,13 @@ export async function runPipeline(world: PipelineWorld): Promise<PipelineRun> {
   });
 
   await runAggregate(asRecords(aggregateQueue.sent, "aggregate"), {
-    embeddings: world.embeddings,
+    adjudicator: world.adjudicator,
     messages: world.messages,
     queue: publishQueue,
     clock: world.clock,
     metrics,
     logger,
-    ...(world.similarityThreshold === undefined
-      ? {}
-      : { similarityThreshold: world.similarityThreshold }),
+    ...(world.band === undefined ? {} : { band: world.band }),
   });
 
   await runPublish(asRecords(publishQueue.sent, "publish"), {

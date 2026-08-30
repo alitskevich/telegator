@@ -1,15 +1,13 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { stubEmbedder, unitVectorAtAngle } from "../../../test/fakes/ai";
+import { fakeAdjudicator } from "../../../test/fakes/ai";
 import { advancingClock, fixedClock } from "../../../test/fakes/clock";
 import { type FakeMessageRepo, fakeMessageRepo } from "../../../test/fakes/db";
 import { recordingSink } from "../../../test/fakes/logging";
 import { type RecordingMetrics, recordingMetrics } from "../../../test/fakes/metrics";
 import { type FakeQueueProducer, fakeQueueProducer } from "../../../test/fakes/queues";
-import { packEmbedding, unpackEmbedding } from "../../db/embeddingCodec";
 import type { MessageRepo } from "../../db/ports";
 import { MAX_MEMBERS } from "../../dedup/constants";
-import { cosineSimilarity } from "../../dedup/cosine";
-import { buildEmbeddingText } from "../../dedup/embeddingText";
+import { buildMatchKey, type MatchKeyFields, matchKeyAttributes } from "../../dedup/matchKey";
 import { type AnalyzedItem, AnalyzedItemSchema } from "../../domain/item";
 import { type MemberBlock, type Message, MessageSchema } from "../../domain/message";
 import { createLogger } from "../../logging/logger";
@@ -42,10 +40,20 @@ function sqsRecord(payload: AnalyzedItem): AggregateRecord {
   return { messageId: `sqs-${payload.id}`, body: JSON.stringify(payload) };
 }
 
-/** Scripts one vector per item, keyed by the text §6 L495 actually embeds. */
-function embedderFor(pairs: readonly (readonly [AnalyzedItem, number[]])[]) {
-  return stubEmbedder(Object.fromEntries(pairs.map(([i, v]) => [buildEmbeddingText(i), v])));
-}
+/**
+ * Two reports of one event (R46). Identical entities and tags put any pair built
+ * from this at 0.75 before the titles contribute, which is above
+ * `MERGE_THRESHOLD` — so a test that varies a descriptive field varies that
+ * field and not the verdict.
+ */
+const SAME_EVENT = {
+  title: "Minsk Factory Fire",
+  properNames: "Minsk, Belaruskali",
+  tags: "fire,safety",
+} as const;
+
+/** The three stored projections a record carrying `fields`' key would have (R44). */
+const keyOf = (fields: MatchKeyFields) => matchKeyAttributes(buildMatchKey(fields));
 
 function storedMessage(over: Partial<Message> & Pick<Message, "id">): Message {
   const members: Record<string, MemberBlock> = over.members ?? {
@@ -58,6 +66,9 @@ function storedMessage(over: Partial<Message> & Pick<Message, "id">): Message {
     date: DATE,
     tgChannel: "telegator_news",
     ts: 1,
+    // R51 — the stage's own writer derives this from `members`, so a fixture
+    // that set the two independently could pass a test production would fail.
+    memberIds: Object.keys(members),
     ...over,
     members,
     memberCount: Object.keys(members).length,
@@ -79,8 +90,7 @@ beforeEach(() => {
 });
 
 function harness(
-  over: Partial<AggregateDeps> &
-    Pick<AggregateDeps, "embeddings"> & { readonly stored?: readonly Message[] },
+  over: Partial<AggregateDeps> & { readonly stored?: readonly Message[] } = {},
 ): Harness {
   const repo = fakeMessageRepo(over.stored ?? []);
   const queue = fakeQueueProducer();
@@ -92,6 +102,9 @@ function harness(
     metrics,
     lines: sink.lines,
     deps: {
+      // Refuses every band pair unless a test says otherwise, so nothing merges
+      // through the model by accident.
+      adjudicator: fakeAdjudicator(() => false),
       messages: repo,
       queue,
       clock: fixedClock(1000),
@@ -110,15 +123,10 @@ async function readBack(repo: FakeMessageRepo, id: string): Promise<Message> {
 }
 
 describe("§3.3 aggregate consumer", () => {
-  test("AC-3.1 (L300): two items at 0.90 with the same date make one message, two members", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2");
-    const h = harness({
-      embeddings: embedderFor([
-        [a, unitVectorAtAngle(1, 2)],
-        [b, unitVectorAtAngle(0.9, 2)],
-      ]),
-    });
+  test("AC-3.1 (L300): two matching items with the same date make one message, two members", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", SAME_EVENT);
+    const h = harness();
 
     const result = await runAggregate([sqsRecord(a), sqsRecord(b)], h.deps);
 
@@ -134,19 +142,16 @@ describe("§3.3 aggregate consumer", () => {
 
   test("denormalization (§1.3 L48, §2.3): each member block carries summary, links, channel and ts", async () => {
     const a = item("chan_a/1", {
+      ...SAME_EVENT,
       summary: "Выбухі ў горадзе",
       links: [{ id: 1, href: "https://example.test/a" }],
     });
     const b = item("chan_b/2", {
+      ...SAME_EVENT,
       summary: "Другі допіс",
       links: [{ id: 2, href: "https://b.test" }],
     });
-    const h = harness({
-      embeddings: embedderFor([
-        [a, unitVectorAtAngle(1, 2)],
-        [b, unitVectorAtAngle(0.9, 2)],
-      ]),
-    });
+    const h = harness();
 
     await runAggregate([sqsRecord(a), sqsRecord(b)], h.deps);
 
@@ -167,15 +172,11 @@ describe("§3.3 aggregate consumer", () => {
   });
 
   test("AC-3.7 (L306): replaying the identical batch leaves members, memberCount and tags unchanged", async () => {
-    const a = item("chan_a/1", { tags: "war,kyiv" });
-    const b = item("chan_b/2", { tags: "war,drone" });
-    const embeddings = embedderFor([
-      [a, unitVectorAtAngle(1, 2)],
-      [b, unitVectorAtAngle(0.9, 2)],
-    ]);
+    const a = item("chan_a/1", { ...SAME_EVENT, tags: "war,kyiv" });
+    const b = item("chan_b/2", { ...SAME_EVENT, tags: "war,drone" });
     // An advancing clock, not a fixed one: freezing time would let a stage that
     // rewrites every member block still look idempotent (test/fakes/clock.ts).
-    const h = harness({ embeddings, clock: advancingClock(1000) });
+    const h = harness({ clock: advancingClock(1000) });
     const records = [sqsRecord(a), sqsRecord(b)];
 
     await runAggregate(records, h.deps);
@@ -188,11 +189,15 @@ describe("§3.3 aggregate consumer", () => {
     expect(second.memberCount).toBe(first.memberCount);
     expect(second.memberCount).toBe(2);
     expect(second.tags).toBe(first.tags);
-    // §6 L559 — the embedding is the one field a replay may move, and only
-    // slightly. Compared by cosine because the float32 round trip is lossy.
-    const before = unpackEmbedding(first.embedding ?? new Uint8Array());
-    const after = unpackEmbedding(second.embedding ?? new Uint8Array());
-    expect(cosineSimilarity(before, after)).toBeGreaterThan(0.99);
+    /**
+     * R45 — §6 L559 conceded the embedding drifts on every replay, "bounded and
+     * harmless". `unionMatchKeys` is idempotent, so its replacement does not
+     * drift at all: exact equality, not a cosine within a tolerance.
+     */
+    expect(second.keyEntities).toEqual(first.keyEntities);
+    expect(second.keyTitle).toEqual(first.keyTitle);
+    expect(second.keyTags).toEqual(first.keyTags);
+    expect(second.memberIds).toEqual(first.memberIds);
   });
 
   test("AC-3.4 (L303): merging into a published message sets topublish and keeps tgId", async () => {
@@ -201,13 +206,10 @@ describe("§3.3 aggregate consumer", () => {
       status: "published",
       tgId: "4242",
       tgAt: 900,
-      embedding: packEmbedding(unitVectorAtAngle(1, 2)),
+      ...keyOf(SAME_EVENT),
     });
-    const b = item("chan_b/2");
-    const h = harness({
-      stored: [stored],
-      embeddings: embedderFor([[b, unitVectorAtAngle(0.9, 2)]]),
-    });
+    const b = item("chan_b/2", SAME_EVENT);
+    const h = harness({ stored: [stored] });
 
     const result = await runAggregate([sqsRecord(b)], h.deps);
 
@@ -220,8 +222,8 @@ describe("§3.3 aggregate consumer", () => {
   });
 
   test("AC-3.5 (L304): items matched within one batch merge without an intervening write", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2");
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", SAME_EVENT);
     const base = fakeMessageRepo([]);
     // Sampled at every read, so a stage that wrote item a before comparing item
     // b against it would be caught by a non-zero sample.
@@ -243,13 +245,7 @@ describe("§3.3 aggregate consumer", () => {
       softDelete: (ids) => base.softDelete(ids),
       markPublished: (published) => base.markPublished(published),
     };
-    const h = harness({
-      messages: observing,
-      embeddings: embedderFor([
-        [a, unitVectorAtAngle(1, 2)],
-        [b, unitVectorAtAngle(0.9, 2)],
-      ]),
-    });
+    const h = harness({ messages: observing });
 
     await runAggregate([sqsRecord(a), sqsRecord(b)], h.deps);
 
@@ -270,13 +266,10 @@ describe("§3.3 aggregate consumer", () => {
     const stored = storedMessage({
       id: "chan_full/1",
       members,
-      embedding: packEmbedding(unitVectorAtAngle(1, 2)),
+      ...keyOf(SAME_EVENT),
     });
-    const late = item("chan_late/9");
-    const h = harness({
-      stored: [stored],
-      embeddings: embedderFor([[late, unitVectorAtAngle(0.9, 2)]]),
-    });
+    const late = item("chan_late/9", SAME_EVENT);
+    const h = harness({ stored: [stored] });
 
     const result = await runAggregate([sqsRecord(late)], h.deps);
 
@@ -293,14 +286,9 @@ describe("§3.3 aggregate consumer", () => {
   });
 
   test("every touched id is enqueued with group and dedup ids equal to the message id (L292-293)", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { date: OTHER_DATE });
-    const h = harness({
-      embeddings: embedderFor([
-        [a, unitVectorAtAngle(1, 2)],
-        [b, unitVectorAtAngle(1, 2)],
-      ]),
-    });
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", { ...SAME_EVENT, date: OTHER_DATE });
+    const h = harness();
 
     await runAggregate([sqsRecord(a), sqsRecord(b)], h.deps);
 
@@ -327,7 +315,7 @@ describe("§3.3 aggregate consumer", () => {
 
   test("a malformed record body is one batch item failure, not a thrown batch (§7.3 L620)", async () => {
     const good = item("chan_a/1");
-    const h = harness({ embeddings: embedderFor([[good, unitVectorAtAngle(1, 2)]]) });
+    const h = harness();
     const bad: AggregateRecord = { messageId: "sqs-bad", body: "{not json" };
     const invalid: AggregateRecord = {
       messageId: "sqs-invalid",
@@ -346,15 +334,10 @@ describe("§3.3 aggregate consumer", () => {
     expect(h.lines.some((line) => line.includes("sqs-bad"))).toBe(true);
   });
 
-  test("emits no metric dedupBatch already emits — the four §7.7 aggregate counters, once each", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2");
-    const h = harness({
-      embeddings: embedderFor([
-        [a, unitVectorAtAngle(1, 2)],
-        [b, unitVectorAtAngle(0.9, 2)],
-      ]),
-    });
+  test("emits no metric dedupBatch already emits — the aggregate counters, once each", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", SAME_EVENT);
+    const h = harness();
 
     await runAggregate([sqsRecord(a), sqsRecord(b)], h.deps);
 
@@ -372,9 +355,9 @@ describe("§3.3 aggregate consumer", () => {
   });
 
   test("a failed write reports its contributing records and enqueues nothing for them", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2");
-    const c = item("chan_c/3", { date: OTHER_DATE });
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", SAME_EVENT);
+    const c = item("chan_c/3", { ...SAME_EVENT, date: OTHER_DATE });
     const base = fakeMessageRepo([]);
     const failing: MessageRepo = {
       get: (id) => base.get(id),
@@ -390,14 +373,7 @@ describe("§3.3 aggregate consumer", () => {
       softDelete: (ids) => base.softDelete(ids),
       markPublished: (published) => base.markPublished(published),
     };
-    const h = harness({
-      messages: failing,
-      embeddings: embedderFor([
-        [a, unitVectorAtAngle(1, 2)],
-        [b, unitVectorAtAngle(0.9, 2)],
-        [c, unitVectorAtAngle(1, 2)],
-      ]),
-    });
+    const h = harness({ messages: failing });
 
     const result = await runAggregate([sqsRecord(a), sqsRecord(b), sqsRecord(c)], h.deps);
 
@@ -412,10 +388,7 @@ describe("§3.3 aggregate consumer", () => {
 
   test("a failed publish enqueue reports its contributing records", async () => {
     const a = item("chan_a/1");
-    const h = harness({
-      embeddings: embedderFor([[a, unitVectorAtAngle(1, 2)]]),
-      queue: fakeQueueProducer({ failIndices: [0] }),
-    });
+    const h = harness({ queue: fakeQueueProducer({ failIndices: [0] }) });
 
     const result = await runAggregate([sqsRecord(a)], h.deps);
 
@@ -424,32 +397,31 @@ describe("§3.3 aggregate consumer", () => {
     expect((await readBack(h.repo, "chan_a/1")).memberCount).toBe(1);
   });
 
-  test("an empty batch makes no provider call, no write and no send", async () => {
-    const embeddings = stubEmbedder({});
-    const h = harness({ embeddings });
+  test("an empty batch makes no model call, no write and no send", async () => {
+    const adjudicator = fakeAdjudicator(() => true);
+    const h = harness({ adjudicator });
 
     const result = await runAggregate([], h.deps);
 
     expect(result.batchItemFailures).toEqual([]);
-    expect(embeddings.batches).toEqual([]);
+    expect(adjudicator.calls).toEqual([]);
     expect(h.repo.writeCount).toBe(0);
     expect(h.queue.sendCalls).toBe(0);
   });
 
-  test("§11.3 L864: the similarity threshold is configurable, not compiled in", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2");
-    const pairs = [
-      [a, unitVectorAtAngle(1, 2)],
-      [b, unitVectorAtAngle(0.9, 2)],
-    ] as const;
+  /** §11.3 L864, as rewritten by R48 — two thresholds now, still injected. */
+  test("§11.3 L864: the band is configurable, not compiled in", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", SAME_EVENT);
+    const records = [sqsRecord(a), sqsRecord(b)];
 
-    const strict = harness({ embeddings: embedderFor(pairs), similarityThreshold: 0.95 });
-    await runAggregate([sqsRecord(a), sqsRecord(b)], strict.deps);
+    // A band no score can reach splits a pair that scores 1.0 on the default.
+    const strict = harness({ band: { merge: 1.5, distinct: 1.4 } });
+    await runAggregate(records, strict.deps);
     expect(strict.repo.writeCount).toBe(2);
 
-    const loose = harness({ embeddings: embedderFor(pairs), similarityThreshold: 0.5 });
-    await runAggregate([sqsRecord(a), sqsRecord(b)], loose.deps);
+    const loose = harness({ band: { merge: 0, distinct: -1 } });
+    await runAggregate(records, loose.deps);
     expect(loose.repo.writeCount).toBe(1);
   });
 });

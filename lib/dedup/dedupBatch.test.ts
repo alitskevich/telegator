@@ -1,17 +1,39 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { stubEmbedder, unitVectorAtAngle } from "../../test/fakes/ai";
+import { failingAdjudicator, fakeAdjudicator } from "../../test/fakes/ai";
 import { advancingClock, fixedClock } from "../../test/fakes/clock";
 import { fakeMessageRepo } from "../../test/fakes/db";
+import { recordingSink } from "../../test/fakes/logging";
 import { recordingMetrics } from "../../test/fakes/metrics";
-import { packEmbedding, unpackEmbedding } from "../db/embeddingCodec";
 import { type AnalyzedItem, AnalyzedItemSchema } from "../domain/item";
 import { type MemberBlock, type Message, MessageSchema } from "../domain/message";
-import { DIMENSIONS, MAX_MEMBERS, SIMILARITY_THRESHOLD } from "./constants";
-import { cosineSimilarity } from "./cosine";
+import { createLogger } from "../logging/logger";
+import { DISTINCT_THRESHOLD, MAX_MEMBERS, MERGE_THRESHOLD } from "./constants";
 import { type DedupDeps, dedupBatch } from "./dedupBatch";
-import { buildEmbeddingText } from "./embeddingText";
+import { buildMatchKey, type MatchKeyFields, matchKeyAttributes } from "./matchKey";
+import { matchScore } from "./score";
 
 const DATE = "2026-08-29";
+
+/**
+ * Two reports of one event.
+ *
+ * Identical entities and tags put any pair built from this at 0.75 before the
+ * titles contribute anything — above `MERGE_THRESHOLD` whatever they are — so a
+ * test that varies a descriptive field is varying that field and not the
+ * verdict.
+ */
+const SAME_EVENT = {
+  title: "Minsk Factory Fire",
+  properNames: "Minsk, Belaruskali",
+  tags: "fire,safety",
+} as const;
+
+/** Disjoint from `SAME_EVENT` in all three components, so the pair scores 0. */
+const OTHER_EVENT = {
+  title: "Brest Border Queue",
+  properNames: "Brest",
+  tags: "transport",
+} as const;
 
 function item(id: string, overrides: Partial<AnalyzedItem> = {}): AnalyzedItem {
   return AnalyzedItemSchema.parse({
@@ -30,10 +52,8 @@ function item(id: string, overrides: Partial<AnalyzedItem> = {}): AnalyzedItem {
   });
 }
 
-/** Scripts one vector per item, keyed by the text §6 L495 actually embeds. */
-function embedderFor(pairs: readonly (readonly [AnalyzedItem, number[]])[]) {
-  return stubEmbedder(Object.fromEntries(pairs.map(([i, v]) => [buildEmbeddingText(i), v])));
-}
+/** The three stored projections a record carrying `fields`' key would have (R44). */
+const keyOf = (fields: MatchKeyFields) => matchKeyAttributes(buildMatchKey(fields));
 
 function storedMessage(over: Partial<Message> & Pick<Message, "id">): Message {
   const members: Record<string, MemberBlock> = over.members ?? {
@@ -46,6 +66,10 @@ function storedMessage(over: Partial<Message> & Pick<Message, "id">): Message {
     date: DATE,
     tgChannel: "telegator_news",
     ts: 1,
+    // R51 — `toWrite` derives `memberIds` from `members`, so a fixture that set
+    // the two independently could pass a test the real writer would fail. A
+    // caller that wants them out of step says so explicitly.
+    memberIds: Object.keys(members),
     ...over,
     members,
     memberCount: Object.keys(members).length,
@@ -53,14 +77,14 @@ function storedMessage(over: Partial<Message> & Pick<Message, "id">): Message {
 }
 
 /**
- * A stored message whose single member is exactly what `item(id)` would produce,
- * so re-processing that item is a true replay — R11 preserves the `ts`, and the
- * block compares equal.
+ * A stored message whose single member — and whose match key — are exactly what
+ * `source` would have produced, so re-processing it is a true replay: R51's
+ * short-circuit finds it by `memberIds` and R11 preserves the block's `ts`.
  */
 function replayable(source: AnalyzedItem, over: Partial<Message> = {}): Message {
   return storedMessage({
     id: source.id,
-    embedding: packEmbedding(unitVectorAtAngle(1, DIMENSIONS)),
+    ...keyOf(source),
     title: source.title,
     category: source.category,
     country: source.country,
@@ -78,61 +102,145 @@ function replayable(source: AnalyzedItem, over: Partial<Message> = {}): Message 
   });
 }
 
-const replayDeps = (stored: readonly Message[], items: readonly AnalyzedItem[]) => {
-  const repo = fakeMessageRepo(stored);
-  return {
-    loadCandidatesByDate: repo.queryByDate,
-    loadMessage: repo.get,
-    clock: fixedClock(9000),
-    metrics,
-    embeddings: embedderFor(items.map((i) => [i, unitVectorAtAngle(1, DIMENSIONS)])),
-  } satisfies DedupDeps;
-};
-
 let metrics: ReturnType<typeof recordingMetrics>;
+let sink: ReturnType<typeof recordingSink>;
 
 beforeEach(() => {
   metrics = recordingMetrics();
+  sink = recordingSink();
 });
 
-function deps(over: Partial<DedupDeps> & Pick<DedupDeps, "embeddings">): DedupDeps {
+function deps(over: Partial<DedupDeps> = {}): DedupDeps {
   const repo = fakeMessageRepo([]);
   return {
+    // Refuses every band pair by default, so no test can merge through the
+    // model without saying that is what it is testing.
+    adjudicator: fakeAdjudicator(() => false),
     loadCandidatesByDate: repo.queryByDate,
     loadMessage: repo.get,
     clock: fixedClock(1000),
     metrics,
+    logger: createLogger(sink),
     ...over,
   };
 }
 
-function repoDeps(
-  stored: readonly Message[],
-  over: Partial<DedupDeps> & Pick<DedupDeps, "embeddings">,
-) {
+function repoDeps(stored: readonly Message[], over: Partial<DedupDeps> = {}) {
   const repo = fakeMessageRepo(stored);
   return {
     repo,
-    deps: {
-      loadCandidatesByDate: repo.queryByDate,
-      loadMessage: repo.get,
-      clock: fixedClock(1000),
-      metrics,
-      ...over,
-    } as DedupDeps,
+    deps: deps({ loadCandidatesByDate: repo.queryByDate, loadMessage: repo.get, ...over }),
   };
 }
 
+function scoreOf(a: MatchKeyFields, b: MatchKeyFields): number {
+  return matchScore(buildMatchKey(a), buildMatchKey(b));
+}
+
+/** `items[i]` against `items[j]`, without the index gymnastics in every caller. */
+function pairScore(items: readonly AnalyzedItem[], left: number, right: number): number {
+  const a = items[left];
+  const b = items[right];
+  if (a === undefined || b === undefined) throw new Error("fixture is shorter than the test needs");
+  return scoreOf(a, b);
+}
+
+// ---------------------------------------------------------------------------
+// Band fixtures (R46). Each one's score is chosen against SCORE_WEIGHTS, not
+// picked, and `the fixtures sit where the band tests assume` below is what
+// stops a weight or threshold change turning a band test into a merge test that
+// passes for the wrong reason.
+// ---------------------------------------------------------------------------
+
+/** Score 1: identical entities, title and tags. */
+const twoNearIdenticalItems = () => [item("src_a/1", SAME_EVENT), item("src_b/2", SAME_EVENT)];
+
+/** Score 0: no shared term in any component. */
+const twoUnrelatedItems = () => [item("src_a/1", SAME_EVENT), item("src_b/2", OTHER_EVENT)];
+
+/**
+ * Mid-band, and the arithmetic is the point: entities share two of three
+ * (0.6 x 2/3 = 0.400), titles one token of three (0.25 x 1/3 = 0.083) and tags
+ * one of three (0.15 x 1/3 = 0.050) — 0.533, between `DISTINCT_THRESHOLD` and
+ * `MERGE_THRESHOLD`.
+ */
+const AMBIGUOUS = [
+  { title: "Alpha Beta", properNames: "Minsk, Belaruskali", tags: "fire,safety" },
+  { title: "Alpha Gamma", properNames: "Minsk, Belaruskali, Naftan", tags: "fire,industry" },
+  { title: "Alpha Delta", properNames: "Minsk, Belaruskali, Grodno", tags: "fire,transport" },
+] as const;
+
+const twoAmbiguousItems = () => [item("src_a/1", AMBIGUOUS[0]), item("src_b/2", AMBIGUOUS[1])];
+
+/**
+ * Both later items sit in the band against the first, and neither is resolved
+ * before the other is scored — so the batch owes exactly two verdicts, and a
+ * per-pair implementation would make two calls for them.
+ */
+const threeAmbiguousItems = () => [...twoAmbiguousItems(), item("src_c/3", AMBIGUOUS[2])];
+
+/**
+ * `src_c/3` sits in the band against **both** messages ahead of it — 0.533
+ * against `src_a/1` and 0.433 against `src_b/2` — while those two score 0.150
+ * against each other and stay apart. Only the higher of `src_c/3`'s two pairs
+ * may ever reach the model.
+ */
+const oneItemTwoCandidates = () => [
+  item("src_a/1", { title: "Alpha Beta", properNames: "Minsk, Belaruskali", tags: "fire,safety" }),
+  item("src_b/2", {
+    title: "Gamma Delta",
+    properNames: "Brest, Naftan, Minsk",
+    tags: "transport,border",
+  }),
+  item("src_c/3", {
+    title: "Alpha Gamma",
+    properNames: "Minsk, Belaruskali, Brest",
+    tags: "fire,transport",
+  }),
+];
+
+describe("the band fixtures", () => {
+  /**
+   * Guards the fixtures themselves. If a weight or a threshold moves, that fails
+   * loudly here rather than silently turning every band test below into a merge
+   * test — or a split test — that passes for the wrong reason.
+   */
+  test("the fixtures sit where the band tests assume", () => {
+    expect(pairScore(twoNearIdenticalItems(), 0, 1)).toBeGreaterThanOrEqual(MERGE_THRESHOLD);
+    expect(pairScore(twoUnrelatedItems(), 0, 1)).toBeLessThanOrEqual(DISTINCT_THRESHOLD);
+
+    expect(pairScore(twoAmbiguousItems(), 0, 1)).toBeGreaterThan(DISTINCT_THRESHOLD);
+    expect(pairScore(twoAmbiguousItems(), 0, 1)).toBeLessThan(MERGE_THRESHOLD);
+
+    // The third item is in the band against the first, which is the only
+    // candidate it can see while the second is still awaiting a verdict.
+    expect(pairScore(threeAmbiguousItems(), 0, 2)).toBeGreaterThan(DISTINCT_THRESHOLD);
+    expect(pairScore(threeAmbiguousItems(), 0, 2)).toBeLessThan(MERGE_THRESHOLD);
+  });
+
+  test("the two-candidate fixture really offers two, ranked", () => {
+    const items = oneItemTwoCandidates();
+
+    expect(pairScore(items, 0, 1)).toBeLessThanOrEqual(DISTINCT_THRESHOLD);
+
+    for (const candidate of [0, 1]) {
+      expect(pairScore(items, candidate, 2)).toBeGreaterThan(DISTINCT_THRESHOLD);
+      expect(pairScore(items, candidate, 2)).toBeLessThan(MERGE_THRESHOLD);
+    }
+    expect(pairScore(items, 0, 2)).toBeGreaterThan(pairScore(items, 1, 2));
+  });
+});
+
 describe("empty batch", () => {
-  test("makes no provider call, no query and no write", async () => {
-    const embeddings = stubEmbedder({});
-    const { repo, deps: d } = repoDeps([], { embeddings });
+  test("makes no model call, no query and no write", async () => {
+    const adjudicator = fakeAdjudicator(() => true);
+    const { repo, deps: d } = repoDeps([], { adjudicator });
 
     const result = await dedupBatch([], d);
 
     expect(result.writes).toEqual([]);
     expect(result.toPublish).toEqual([]);
-    expect(embeddings.batches).toEqual([]);
+    expect(adjudicator.calls).toEqual([]);
     expect(repo.writeCount).toBe(0);
   });
 });
@@ -140,7 +248,7 @@ describe("empty batch", () => {
 describe("create branch (§6 L538-541)", () => {
   test("a single item becomes one message keyed by its own id", async () => {
     const a = item("chan_a/1");
-    const result = await dedupBatch([a], deps({ embeddings: embedderFor([[a, [1, 0]]]) }));
+    const result = await dedupBatch([a], deps());
 
     expect(result.writes).toHaveLength(1);
     const write = result.writes[0];
@@ -157,7 +265,7 @@ describe("create branch (§6 L538-541)", () => {
 
   test("the member block carries what publish needs to render it (§1.3 L48)", async () => {
     const a = item("chan_a/1", { summary: "Выбухі", links: [{ id: 1, href: "https://x.test" }] });
-    const result = await dedupBatch([a], deps({ embeddings: embedderFor([[a, [1, 0]]]) }));
+    const result = await dedupBatch([a], deps());
 
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
@@ -170,37 +278,42 @@ describe("create branch (§6 L538-541)", () => {
   });
 
   test("defaults tgChannel to telegator_news, and keeps an explicit one", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { tgChannel: "other_news", body: "unrelated" });
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, [1, 0]],
-          [b, [0, 1]],
-        ]),
-      }),
-    );
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", { ...OTHER_EVENT, tgChannel: "other_news" });
+    const result = await dedupBatch([a, b], deps());
 
     const channels = result.writes.map((w) => (w.kind === "create" ? w.message.tgChannel : ""));
     expect(channels).toEqual(["telegator_news", "other_news"]);
   });
 
-  test("stores the item's own vector as the embedding", async () => {
-    const a = item("chan_a/1");
-    const vec = unitVectorAtAngle(1, DIMENSIONS);
-    const result = await dedupBatch([a], deps({ embeddings: embedderFor([[a, vec]]) }));
+  /** R45 — the key the scorer will read back on the next batch (§7.2 L598). */
+  test("stores the item's own match key, and no embedding", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const result = await dedupBatch([a], deps());
 
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
-    expect(
-      cosineSimilarity(unpackEmbedding(write.message.embedding ?? new Uint8Array()), vec),
-    ).toBeCloseTo(1, 6);
+    expect(write.message.keyEntities).toEqual(["belaruskali", "minsk"]);
+    expect(write.message.keyTitle).toEqual(["factory", "fire", "minsk"]);
+    expect(write.message.keyTags).toEqual(["fire", "safety"]);
+    expect(write.message).not.toHaveProperty("embedding");
+  });
+
+  /** R51 — projected so the replay short-circuit costs no base-table read. */
+  test("stores memberIds alongside the members they are derived from", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", SAME_EVENT);
+    const result = await dedupBatch([a, b], deps());
+
+    const write = result.writes[0];
+    if (write?.kind !== "create") throw new Error("expected a create");
+    expect(write.message.memberIds).toEqual(Object.keys(write.message.members));
+    expect(write.message.memberIds).toEqual(["chan_a/1", "chan_b/2"]);
   });
 
   test("R7: item-only fields never reach the record", async () => {
-    const a = item("chan_a/1");
-    const result = await dedupBatch([a], deps({ embeddings: embedderFor([[a, [1, 0]]]) }));
+    const a = item("chan_a/1", SAME_EVENT);
+    const result = await dedupBatch([a], deps());
 
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
@@ -211,10 +324,7 @@ describe("create branch (§6 L538-541)", () => {
 
   test("R8: every created record carries ts, the sort key on both GSIs", async () => {
     const a = item("chan_a/1");
-    const result = await dedupBatch(
-      [a],
-      deps({ embeddings: embedderFor([[a, [1, 0]]]), clock: fixedClock(9999) }),
-    );
+    const result = await dedupBatch([a], deps({ clock: fixedClock(9999) }));
 
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
@@ -224,92 +334,50 @@ describe("create branch (§6 L538-541)", () => {
 
 describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
   /** AC-3.1 (L300). */
-  test("two items at 0.90 on the same date produce one message with two members", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body" });
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, unitVectorAtAngle(1, DIMENSIONS)],
-          [b, unitVectorAtAngle(0.9, DIMENSIONS)],
-        ]),
-      }),
-    );
+  test("two near-identical items on the same date produce one message with two members", async () => {
+    const result = await dedupBatch(twoNearIdenticalItems(), deps());
 
     expect(result.writes).toHaveLength(1);
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
-    expect(Object.keys(write.message.members).sort()).toEqual(["chan_a/1", "chan_b/2"]);
+    expect(Object.keys(write.message.members).sort()).toEqual(["src_a/1", "src_b/2"]);
     expect(write.message.memberCount).toBe(2);
-    expect(write.message.id).toBe("chan_a/1");
+    expect(write.message.id).toBe("src_a/1");
   });
 
   /** AC-3.3 (L302). */
-  test("two items at 0.80 produce two messages", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body" });
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, unitVectorAtAngle(1, DIMENSIONS)],
-          [b, unitVectorAtAngle(0.8, DIMENSIONS)],
-        ]),
-      }),
-    );
+  test("two unrelated items produce two messages", async () => {
+    const result = await dedupBatch(twoUnrelatedItems(), deps());
 
     expect(result.writes).toHaveLength(2);
-    expect([...result.toPublish].sort()).toEqual(["chan_a/1", "chan_b/2"]);
+    expect([...result.toPublish].sort()).toEqual(["src_a/1", "src_b/2"]);
   });
 
   /** AC-3.2 (L301) — §3.3 L276 calls the date filter a correctness rule, not an optimisation. */
-  test("two items at 0.90 with different dates produce two messages", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body", date: "2026-08-30" });
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, unitVectorAtAngle(1, DIMENSIONS)],
-          [b, unitVectorAtAngle(0.9, DIMENSIONS)],
-        ]),
-      }),
-    );
+  test("two near-identical items with different dates produce two messages", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", { ...SAME_EVENT, date: "2026-08-30" });
+
+    const result = await dedupBatch([a, b], deps());
 
     expect(result.writes).toHaveLength(2);
   });
 
   /** AC-3.5 (L304) — matched "without an intervening write". */
   test("the whole batch produces its writes only at the end", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body" });
-    const { repo, deps: d } = repoDeps([], {
-      embeddings: embedderFor([
-        [a, unitVectorAtAngle(1, DIMENSIONS)],
-        [b, unitVectorAtAngle(0.9, DIMENSIONS)],
-      ]),
-    });
+    const { repo, deps: d } = repoDeps([]);
 
-    await dedupBatch([a, b], d);
+    await dedupBatch(twoNearIdenticalItems(), d);
 
     expect(repo.writeCount).toBe(0);
   });
 
   test("picks the strongest of several in-batch candidates", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "b body" });
-    const c = item("chan_c/3", { body: "c body" });
-    const result = await dedupBatch(
-      [a, b, c],
-      deps({
-        embeddings: embedderFor([
-          [a, unitVectorAtAngle(1, DIMENSIONS)],
-          [b, unitVectorAtAngle(0.2, DIMENSIONS)],
-          [c, unitVectorAtAngle(0.95, DIMENSIONS)],
-        ]),
-      }),
-    );
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", OTHER_EVENT);
+    const c = item("chan_c/3", SAME_EVENT);
+
+    const result = await dedupBatch([a, b, c], deps());
 
     const merged = result.writes.find((w) => w.kind === "create" && w.message.id === "chan_a/1");
     if (merged?.kind !== "create") throw new Error("expected chan_a/1");
@@ -318,17 +386,10 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
 
   /** §3.3 L285 — title, category, country, location, peoples overwritten by the newest item. */
   test("the newest item's descriptive fields overwrite", async () => {
-    const a = item("chan_a/1", { title: "first", location: "Kyiv" });
-    const b = item("chan_b/2", { body: "second", title: "second", location: "Lviv" });
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, unitVectorAtAngle(1, DIMENSIONS)],
-          [b, unitVectorAtAngle(0.99, DIMENSIONS)],
-        ]),
-      }),
-    );
+    const a = item("chan_a/1", { ...SAME_EVENT, title: "first", location: "Kyiv" });
+    const b = item("chan_b/2", { ...SAME_EVENT, title: "second", location: "Lviv" });
+
+    const result = await dedupBatch([a, b], deps());
 
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
@@ -337,17 +398,10 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
   });
 
   test("tags are merged, not replaced (§6 L532)", async () => {
-    const a = item("chan_a/1", { tags: "war,politics" });
-    const b = item("chan_b/2", { body: "second", tags: "politics,drones" });
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, unitVectorAtAngle(1, DIMENSIONS)],
-          [b, unitVectorAtAngle(0.99, DIMENSIONS)],
-        ]),
-      }),
-    );
+    const a = item("chan_a/1", { ...SAME_EVENT, tags: "war,politics" });
+    const b = item("chan_b/2", { ...SAME_EVENT, tags: "politics,drones" });
+
+    const result = await dedupBatch([a, b], deps());
 
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
@@ -356,57 +410,46 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
 
   /** R30 — §6 L530 uses `??`, which preserves an empty-string image. */
   test("image keeps the existing value, including an empty string", async () => {
-    const a = item("chan_a/1", { image: "" });
-    const b = item("chan_b/2", { body: "second", image: "https://img.test/b.jpg" });
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, unitVectorAtAngle(1, DIMENSIONS)],
-          [b, unitVectorAtAngle(0.99, DIMENSIONS)],
-        ]),
-      }),
-    );
+    const a = item("chan_a/1", { ...SAME_EVENT, image: "" });
+    const b = item("chan_b/2", { ...SAME_EVENT, image: "https://img.test/b.jpg" });
+
+    const result = await dedupBatch([a, b], deps());
 
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
     expect(write.message.image).toBe("");
   });
 
-  /** AC-3.6 (L305), and R6's pairwise mean. */
-  test("the merged embedding is the elementwise mean of the two vectors", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second" });
-    const va = unitVectorAtAngle(1, DIMENSIONS);
-    const vb = unitVectorAtAngle(0.9, DIMENSIONS);
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, va],
-          [b, vb],
-        ]),
-      }),
-    );
+  /**
+   * AC-3.6 (L305), R45 — §6 L533's elementwise mean has no analogue without a
+   * vector; the union is what replaces it, and it must stay canonical (sorted,
+   * deduplicated) or AC-3.7's byte-identical replay is impossible.
+   */
+  test("a merged message's key is the sorted, deduplicated union of the inputs", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", {
+      ...SAME_EVENT,
+      properNames: "Minsk, Belaruskali, Naftan",
+      tags: "fire,safety,industry",
+    });
+
+    const result = await dedupBatch([a, b], deps());
 
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
-    const stored = unpackEmbedding(write.message.embedding ?? new Uint8Array());
-    expect(stored[0]).toBeCloseTo(((va[0] as number) + (vb[0] as number)) / 2, 6);
-    expect(stored[1]).toBeCloseTo(((va[1] as number) + (vb[1] as number)) / 2, 6);
+    expect(write.message.keyEntities).toEqual(["belaruskali", "minsk", "naftan"]);
+    expect(write.message.keyTags).toEqual(["fire", "industry", "safety"]);
+    for (const list of [write.message.keyEntities, write.message.keyTitle, write.message.keyTags]) {
+      expect(list).toEqual([...new Set(list)].sort());
+    }
   });
 });
 
 describe("Pass 2 — stored messages (§6 L513-519)", () => {
   test("merges into a stored message on the same date", async () => {
-    const a = item("chan_a/1");
-    const stored = storedMessage({
-      id: "chan_z/9",
-      embedding: packEmbedding(unitVectorAtAngle(1, DIMENSIONS)),
-    });
-    const { deps: d } = repoDeps([stored], {
-      embeddings: embedderFor([[a, unitVectorAtAngle(0.95, DIMENSIONS)]]),
-    });
+    const a = item("chan_a/1", SAME_EVENT);
+    const stored = storedMessage({ id: "chan_z/9", ...keyOf(SAME_EVENT) });
+    const { deps: d } = repoDeps([stored]);
 
     const result = await dedupBatch([a], d);
 
@@ -418,19 +461,30 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
   });
 
   /**
+   * R44 — a record written before the match key existed parses as an empty one,
+   * and `jaccard` defines empty-versus-empty as 0, so it never matches anything
+   * and ages out of `date-index`. That is the whole of the migration story, and
+   * it is only true if nothing special-cases the empty key into a match.
+   */
+  test("a stored record with no match key never matches", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const stored = storedMessage({ id: "chan_z/9" });
+    const { deps: d } = repoDeps([stored]);
+
+    const result = await dedupBatch([a], d);
+
+    expect(result.writes[0]?.kind).toBe("create");
+  });
+
+  /**
    * R9. §7.2 L598 says nothing projects `members`, so a whole-record write built
    * from a date-index candidate would erase every member already stored. The
    * merge is attribute-level and the pre-existing member survives.
    */
   test("R9: merging into a stored message preserves its existing members", async () => {
-    const a = item("chan_a/1");
-    const stored = storedMessage({
-      id: "chan_z/9",
-      embedding: packEmbedding(unitVectorAtAngle(1, DIMENSIONS)),
-    });
-    const { repo, deps: d } = repoDeps([stored], {
-      embeddings: embedderFor([[a, unitVectorAtAngle(0.95, DIMENSIONS)]]),
-    });
+    const a = item("chan_a/1", SAME_EVENT);
+    const stored = storedMessage({ id: "chan_z/9", ...keyOf(SAME_EVENT) });
+    const { repo, deps: d } = repoDeps([stored]);
 
     const result = await dedupBatch([a], d);
     const write = result.writes[0];
@@ -440,21 +494,22 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
     const after = await repo.get("chan_z/9");
     expect(Object.keys(after?.members ?? {}).sort()).toEqual(["chan_a/1", "chan_z/9"]);
     expect(after?.memberCount).toBe(2);
+    // R51 — the projection and the map stay in step across a merge, or the next
+    // batch's short-circuit misses a member this one added.
+    expect(after?.memberIds.sort()).toEqual(["chan_a/1", "chan_z/9"]);
   });
 
   /** AC-3.4 (L303), E2E-4 (L851). */
   test("merging into a published message resets it to topublish and keeps tgId", async () => {
-    const a = item("chan_a/1");
+    const a = item("chan_a/1", SAME_EVENT);
     const stored = storedMessage({
       id: "chan_z/9",
       status: "published",
       tgId: "4711",
       tgAt: 500,
-      embedding: packEmbedding(unitVectorAtAngle(1, DIMENSIONS)),
+      ...keyOf(SAME_EVENT),
     });
-    const { repo, deps: d } = repoDeps([stored], {
-      embeddings: embedderFor([[a, unitVectorAtAngle(0.95, DIMENSIONS)]]),
-    });
+    const { repo, deps: d } = repoDeps([stored]);
 
     const result = await dedupBatch([a], d);
     const write = result.writes[0];
@@ -468,16 +523,10 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
     expect(after?.tgAt).toBe(500);
   });
 
-  test("a stored message on a different date is never queried", async () => {
-    const a = item("chan_a/1");
-    const stored = storedMessage({
-      id: "chan_z/9",
-      date: "2026-08-30",
-      embedding: packEmbedding(unitVectorAtAngle(1, DIMENSIONS)),
-    });
-    const { deps: d } = repoDeps([stored], {
-      embeddings: embedderFor([[a, unitVectorAtAngle(1, DIMENSIONS)]]),
-    });
+  test("a stored message on a different date is never a candidate", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const stored = storedMessage({ id: "chan_z/9", date: "2026-08-30", ...keyOf(SAME_EVENT) });
+    const { deps: d } = repoDeps([stored]);
 
     const result = await dedupBatch([a], d);
 
@@ -485,24 +534,15 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
   });
 
   /**
-   * R10. Item A merges into stored M, so pending holds a fresher M. Item B
-   * scores below threshold against that fresher copy but above it against the
-   * still-stale stored copy. A literal transcription re-reads M from the table
-   * and overwrites the batch's own work, destroying A's member.
+   * R10. Item A merges into stored M, so pending holds a fresher M. A literal
+   * transcription re-reads M from the table for item B and overwrites the
+   * batch's own work, destroying A's member.
    */
   test("R10: Pass 2 skips a candidate already touched in this batch", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body" });
-    const stored = storedMessage({
-      id: "chan_z/9",
-      embedding: packEmbedding(unitVectorAtAngle(1, DIMENSIONS)),
-    });
-    const { repo, deps: d } = repoDeps([stored], {
-      embeddings: embedderFor([
-        [a, unitVectorAtAngle(0.99, DIMENSIONS)],
-        [b, unitVectorAtAngle(0.9, DIMENSIONS)],
-      ]),
-    });
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", SAME_EVENT);
+    const stored = storedMessage({ id: "chan_z/9", ...keyOf(SAME_EVENT) });
+    const { repo, deps: d } = repoDeps([stored]);
 
     const result = await dedupBatch([a, b], d);
     for (const write of result.writes) {
@@ -514,22 +554,35 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
     expect(Object.keys(after?.members ?? {}).sort()).toEqual(["chan_a/1", "chan_b/2", "chan_z/9"]);
   });
 
+  /**
+   * R46 — §6 L513 runs Pass 2 only when Pass 1 found no match, which reads as a
+   * yes/no answer a band does not give. Both passes run here and the single
+   * highest score wins, so the stored candidates are examined even when an
+   * in-batch one is already merge-worthy — `candidateCount` is what says they
+   * were — and the closer of the two is the one the item joins.
+   */
+  test("a merge-worthy in-batch candidate survives an unrelated stored record", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", SAME_EVENT);
+    const stored = storedMessage({ id: "chan_z/9", ...keyOf(OTHER_EVENT) });
+    const { deps: d } = repoDeps([stored]);
+
+    expect(scoreOf(a, b)).toBeGreaterThan(scoreOf(b, OTHER_EVENT));
+
+    const result = await dedupBatch([a, b], d);
+
+    expect(result.candidateCount).toBe(1);
+    expect(result.writes).toHaveLength(1);
+    const write = result.writes[0];
+    if (write?.kind !== "create") throw new Error("expected a create");
+    expect(Object.keys(write.message.members).sort()).toEqual(["chan_a/1", "chan_b/2"]);
+  });
+
   /** §7.2 L600 — emitted per aggregate run, alarmed above 500. */
   test("emits DedupCandidateCount for the candidates it examined", async () => {
     const a = item("chan_a/1");
-    const stored = [
-      storedMessage({
-        id: "chan_z/9",
-        embedding: packEmbedding(unitVectorAtAngle(0.1, DIMENSIONS)),
-      }),
-      storedMessage({
-        id: "chan_y/8",
-        embedding: packEmbedding(unitVectorAtAngle(0.2, DIMENSIONS)),
-      }),
-    ];
-    const { deps: d } = repoDeps(stored, {
-      embeddings: embedderFor([[a, unitVectorAtAngle(1, DIMENSIONS)]]),
-    });
+    const stored = [storedMessage({ id: "chan_z/9" }), storedMessage({ id: "chan_y/8" })];
+    const { deps: d } = repoDeps(stored);
 
     const result = await dedupBatch([a], d);
 
@@ -538,15 +591,10 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
   });
 
   test("queries each date once, not once per item", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body" });
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", OTHER_EVENT);
     let queries = 0;
-    const { deps: d } = repoDeps([], {
-      embeddings: embedderFor([
-        [a, unitVectorAtAngle(1, DIMENSIONS)],
-        [b, unitVectorAtAngle(0.1, DIMENSIONS)],
-      ]),
-    });
+    const { deps: d } = repoDeps([]);
     const counting: DedupDeps = {
       ...d,
       loadCandidatesByDate: async (date) => {
@@ -561,91 +609,181 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
   });
 });
 
-describe("threshold boundary (§6 L511, L518)", () => {
-  test("a pair at exactly the threshold merges, because >= is inclusive", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body" });
-    const va = unitVectorAtAngle(1, DIMENSIONS);
-    const vb = unitVectorAtAngle(0.9, DIMENSIONS);
-    const exact = cosineSimilarity(va, vb);
+describe("the band (R46)", () => {
+  test("auto-merges above the merge threshold without calling the model", async () => {
+    const adjudicator = fakeAdjudicator(() => false);
+    const result = await dedupBatch(twoNearIdenticalItems(), deps({ adjudicator }));
 
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, va],
-          [b, vb],
-        ]),
-        similarityThreshold: exact,
-      }),
-    );
-
+    expect(adjudicator.calls).toHaveLength(0);
     expect(result.writes).toHaveLength(1);
   });
 
-  test("the next representable value above the score does not merge", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body" });
-    const va = unitVectorAtAngle(1, DIMENSIONS);
-    const vb = unitVectorAtAngle(0.9, DIMENSIONS);
-    const justAbove = cosineSimilarity(va, vb) + Number.EPSILON;
+  test("auto-splits below the distinct threshold without calling the model", async () => {
+    const adjudicator = fakeAdjudicator(() => true);
+    const result = await dedupBatch(twoUnrelatedItems(), deps({ adjudicator }));
 
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, va],
-          [b, vb],
-        ]),
-        similarityThreshold: justAbove,
-      }),
-    );
-
-    expect(result.writes).toHaveLength(2);
-  });
-
-  test("defaults to the §6 L491 threshold when none is injected", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body" });
-    const result = await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, unitVectorAtAngle(1, DIMENSIONS)],
-          [b, unitVectorAtAngle(SIMILARITY_THRESHOLD - 0.01, DIMENSIONS)],
-        ]),
-      }),
-    );
-
+    expect(adjudicator.calls).toHaveLength(0);
     expect(result.writes).toHaveLength(2);
   });
 
   /**
-   * §6 L510 sets bestScore on any improvement, with no threshold test, and L518
-   * then requires `s > bestScore`. A sub-threshold Pass-1 score therefore looks
-   * like a floor on Pass 2. It provably is not — Pass 2 only runs when no match
-   * was found, which means bestScore < threshold, and Pass 2 requires
-   * s >= threshold. This pins the equivalence so a future edit cannot make the
-   * carry-over live.
+   * No `band` is injected here or in the two tests below, so `classify`'s own
+   * default is what puts these items in the band. Swap `MERGE_THRESHOLD` and
+   * `DISTINCT_THRESHOLD` in that default and a 0.533 pair classifies as `merge`
+   * instead — no call is made and this fails.
    */
-  test("a sub-threshold Pass-1 best does not block a qualifying Pass-2 candidate", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body" });
+  test("adjudicates the band in ONE call for the whole batch", async () => {
+    const adjudicator = fakeAdjudicator(() => true);
+    await dedupBatch(threeAmbiguousItems(), deps({ adjudicator }));
+
+    expect(adjudicator.calls).toHaveLength(1);
+    expect(adjudicator.calls[0]?.map((pair) => pair.id)).toEqual([
+      "src_b/2->src_a/1",
+      "src_c/3->src_a/1",
+    ]);
+  });
+
+  test("sends at most one pair per item — its highest-scoring candidate", async () => {
+    const adjudicator = fakeAdjudicator(() => false);
+    await dedupBatch(oneItemTwoCandidates(), deps({ adjudicator }));
+
+    expect(adjudicator.calls).toHaveLength(1);
+    expect(adjudicator.calls[0]?.map((pair) => pair.id)).toEqual(["src_c/3->src_a/1"]);
+  });
+
+  test("a 'same' verdict merges and a 'different' verdict splits", async () => {
+    const merged = await dedupBatch(
+      twoAmbiguousItems(),
+      deps({ adjudicator: fakeAdjudicator(() => true) }),
+    );
+    const split = await dedupBatch(
+      twoAmbiguousItems(),
+      deps({ adjudicator: fakeAdjudicator(() => false) }),
+    );
+
+    expect(merged.writes).toHaveLength(1);
+    expect(split.writes).toHaveLength(2);
+  });
+
+  /** The pair the model is asked about describes both sides in the same terms. */
+  test("each pair carries both sides' key, not one side's raw fields", async () => {
+    const adjudicator = fakeAdjudicator(() => false);
+    await dedupBatch(twoAmbiguousItems(), deps({ adjudicator }));
+
+    const pair = adjudicator.calls[0]?.[0];
+    expect(pair?.item.entities).toEqual(["belaruskali", "minsk", "naftan"]);
+    expect(pair?.candidate.entities).toEqual(["belaruskali", "minsk"]);
+    expect(pair?.item.title).toBe("alpha gamma");
+    expect(pair?.candidate.title).toBe("alpha beta");
+    expect(pair?.item.date).toBe(DATE);
+    expect(pair?.candidate.date).toBe(DATE);
+  });
+
+  /** R50 — the band is a cost centre, so its volume is a counted number. */
+  test("counts the pairs it sent", async () => {
+    await dedupBatch(threeAmbiguousItems(), deps({ adjudicator: fakeAdjudicator(() => true) }));
+
+    expect(metrics.get("DedupAdjudicated")).toBe(2);
+    expect(metrics.get("DedupAdjudicationFailed")).toBe(0);
+  });
+
+  /** §11.3 L868 — "False merges are worse than false splits." */
+  test("a failing adjudication splits rather than merging", async () => {
+    const result = await dedupBatch(
+      twoAmbiguousItems(),
+      deps({ adjudicator: failingAdjudicator() }),
+    );
+
+    expect(result.writes).toHaveLength(2);
+    expect(metrics.get("DedupAdjudicationFailed")).toBe(1);
+    expect(metrics.get("DedupAdjudicated")).toBe(0);
+  });
+
+  /**
+   * And it is a handled failure, not a thrown batch: the unambiguous items in a
+   * batch must still be written, or one flaky model call dead-letters ten posts.
+   */
+  test("a failing adjudication still writes the items that were never ambiguous", async () => {
+    const batch = [...twoAmbiguousItems(), item("chan_z/9", OTHER_EVENT)];
+
+    const result = await dedupBatch(batch, deps({ adjudicator: failingAdjudicator() }));
+
+    expect(
+      result.writes.map((w) => (w.kind === "create" ? w.message.id : w.merge.id)).sort(),
+    ).toEqual(["chan_z/9", "src_a/1", "src_b/2"]);
+    expect(sink.lines.map((line) => JSON.parse(line).level)).toContain("error");
+  });
+
+  /**
+   * §11.3's recalibration is a configuration change, not a code edit — the
+   * rationale `similarityThreshold` carried, kept for the band.
+   */
+  test("an injected band overrides the default in both directions", async () => {
+    const strict = await dedupBatch(
+      twoNearIdenticalItems(),
+      deps({ band: { merge: 1.5, distinct: 1.4 }, adjudicator: fakeAdjudicator(() => false) }),
+    );
+    const loose = await dedupBatch(
+      twoUnrelatedItems(),
+      deps({ band: { merge: 0, distinct: -1 }, adjudicator: fakeAdjudicator(() => false) }),
+    );
+
+    expect(strict.writes).toHaveLength(2);
+    expect(loose.writes).toHaveLength(1);
+  });
+});
+
+describe("the replay short-circuit (R51, AC-3.7)", () => {
+  /**
+   * The stored record's key is `OTHER_EVENT` and the item's is `SAME_EVENT`, so
+   * the pair scores 0. Only identity can merge them, which is the point: §3.3
+   * L285 lets later members overwrite the descriptive fields, so a replayed item
+   * can have drifted right out of the key it helped build.
+   */
+  test("an item already in a candidate's memberIds merges there with no scoring", async () => {
+    const adjudicator = fakeAdjudicator(() => false);
     const stored = storedMessage({
       id: "chan_z/9",
-      embedding: packEmbedding(unitVectorAtAngle(1, DIMENSIONS)),
+      ...keyOf(OTHER_EVENT),
+      members: {
+        "chan_z/9": { summary: "first", links: [], channel: "chan_z", ts: 1 },
+        "chan_a/1": { summary: "second", links: [], channel: "chan_a", ts: 2 },
+      },
     });
-    const { deps: d } = repoDeps([stored], {
-      embeddings: embedderFor([
-        [a, unitVectorAtAngle(0.1, DIMENSIONS)],
-        [b, unitVectorAtAngle(0.95, DIMENSIONS)],
-      ]),
+    const { deps: d } = repoDeps([stored], { adjudicator });
+
+    const result = await dedupBatch([item("chan_a/1", SAME_EVENT)], d);
+
+    expect(adjudicator.calls).toHaveLength(0);
+    expect(result.writes).toHaveLength(1);
+    const write = result.writes[0];
+    if (write?.kind !== "merge") throw new Error("expected a merge");
+    expect(write.merge.id).toBe("chan_z/9");
+    expect(metrics.get("MessagesCreated")).toBe(0);
+  });
+
+  /** Without the projection there is nothing to short-circuit on. */
+  test("a candidate whose memberIds do not list the item is scored as usual", async () => {
+    const stored = storedMessage({ id: "chan_z/9", ...keyOf(OTHER_EVENT), memberIds: [] });
+    const { deps: d } = repoDeps([stored]);
+
+    const result = await dedupBatch([item("chan_a/1", SAME_EVENT)], d);
+
+    expect(result.writes[0]?.kind).toBe("create");
+  });
+
+  /** A member of *yesterday's* message is not a member of today's story. */
+  test("the short-circuit is still confined to the item's own date", async () => {
+    const stored = storedMessage({
+      id: "chan_z/9",
+      date: "2026-08-30",
+      memberIds: ["chan_z/9", "chan_a/1"],
     });
+    const { deps: d } = repoDeps([stored]);
 
-    const result = await dedupBatch([a, b], d);
+    const result = await dedupBatch([item("chan_a/1")], d);
 
-    const merge = result.writes.find((w) => w.kind === "merge");
-    expect(merge).toBeDefined();
+    expect(result.writes[0]?.kind).toBe("create");
   });
 });
 
@@ -660,15 +798,13 @@ describe("member cap (§6 L525-526)", () => {
 
   /** AC-3.8 (L307). */
   test("a 21st member is dropped entirely and memberCount stays at 20", async () => {
-    const a = item("chan_a/1");
+    const a = item("chan_a/1", SAME_EVENT);
     const stored = storedMessage({
       id: "chan_full/1",
       members: fullMembers(),
-      embedding: packEmbedding(unitVectorAtAngle(1, DIMENSIONS)),
+      ...keyOf(SAME_EVENT),
     });
-    const { deps: d } = repoDeps([stored], {
-      embeddings: embedderFor([[a, unitVectorAtAngle(0.99, DIMENSIONS)]]),
-    });
+    const { deps: d } = repoDeps([stored]);
 
     const result = await dedupBatch([a], d);
 
@@ -679,16 +815,13 @@ describe("member cap (§6 L525-526)", () => {
 
   /** §6 L525's carve-out: `and item.id not in match.members`. */
   test("replaying an item already in a full map still merges", async () => {
-    const members = fullMembers();
-    const a = item("chan_full/1");
+    const a = item("chan_full/1", SAME_EVENT);
     const stored = storedMessage({
       id: "chan_full/1",
-      members,
-      embedding: packEmbedding(unitVectorAtAngle(1, DIMENSIONS)),
+      members: fullMembers(),
+      ...keyOf(SAME_EVENT),
     });
-    const { deps: d } = repoDeps([stored], {
-      embeddings: embedderFor([[a, unitVectorAtAngle(0.99, DIMENSIONS)]]),
-    });
+    const { deps: d } = repoDeps([stored]);
 
     const result = await dedupBatch([a], d);
 
@@ -709,10 +842,8 @@ describe("replay idempotency (AC-3.7 L306, E2E-5 L852)", () => {
    * preserved rather than rewritten.
    */
   test("replaying an item preserves its member block, ts included", async () => {
-    const a = item("chan_a/1");
-    const vec = unitVectorAtAngle(1, DIMENSIONS);
-    const clock = advancingClock(1000, 500);
-    const { repo, deps: d } = repoDeps([], { embeddings: embedderFor([[a, vec]]), clock });
+    const a = item("chan_a/1", SAME_EVENT);
+    const { repo, deps: d } = repoDeps([], { clock: advancingClock(1000, 500) });
 
     const first = await dedupBatch([a], d);
     if (first.writes[0]?.kind !== "create") throw new Error("expected a create");
@@ -729,24 +860,32 @@ describe("replay idempotency (AC-3.7 L306, E2E-5 L852)", () => {
     expect(after?.tags).toBe(before?.tags);
   });
 
-  /** §6 L559 — "the mean of a vector with itself is that vector". */
-  test("replaying a sole member leaves the embedding unchanged", async () => {
-    const a = item("chan_a/1");
-    const vec = unitVectorAtAngle(1, DIMENSIONS);
-    const clock = advancingClock(1000, 500);
-    const { repo, deps: d } = repoDeps([], { embeddings: embedderFor([[a, vec]]), clock });
+  /**
+   * R45 — `unionMatchKeys` is idempotent, which is what replaces §6 L559's
+   * "the mean of a vector with itself is that vector". Unlike the centroid it
+   * does not drift at all, so this holds for a multi-member message too.
+   */
+  test("replaying an item leaves the match key byte-identical", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const b = item("chan_b/2", { ...SAME_EVENT, properNames: "Minsk, Belaruskali, Naftan" });
+    const { repo, deps: d } = repoDeps([], { clock: advancingClock(1000, 500) });
 
-    const first = await dedupBatch([a], d);
+    const first = await dedupBatch([a, b], d);
     if (first.writes[0]?.kind !== "create") throw new Error("expected a create");
     await repo.putNew(first.writes[0].message);
-    const before = unpackEmbedding((await repo.get("chan_a/1"))?.embedding ?? new Uint8Array());
+    const before = await repo.get("chan_a/1");
 
-    const second = await dedupBatch([a], d);
-    if (second.writes[0]?.kind !== "merge") throw new Error("expected a merge");
-    await repo.mergeMember(second.writes[0].merge);
-    const after = unpackEmbedding((await repo.get("chan_a/1"))?.embedding ?? new Uint8Array());
+    const second = await dedupBatch([a, b], d);
+    for (const write of second.writes) {
+      if (write.kind !== "merge") throw new Error("expected merges only");
+      await repo.mergeMember(write.merge);
+    }
+    const after = await repo.get("chan_a/1");
 
-    expect(cosineSimilarity(before, after)).toBe(1);
+    expect(JSON.stringify([after?.keyEntities, after?.keyTitle, after?.keyTags])).toBe(
+      JSON.stringify([before?.keyEntities, before?.keyTitle, before?.keyTags]),
+    );
+    expect(after?.memberIds).toEqual(before?.memberIds);
   });
 
   /**
@@ -763,9 +902,8 @@ describe("replay idempotency (AC-3.7 L306, E2E-5 L852)", () => {
    * call per message.
    */
   test("a replay enqueues nothing, rather than relying on SQS's 5-minute window", async () => {
-    const a = item("chan_a/1");
-    const vec = unitVectorAtAngle(1, DIMENSIONS);
-    const { repo, deps: d } = repoDeps([], { embeddings: embedderFor([[a, vec]]) });
+    const a = item("chan_a/1", SAME_EVENT);
+    const { repo, deps: d } = repoDeps([]);
 
     const first = await dedupBatch([a], d);
     if (first.writes[0]?.kind !== "create") throw new Error("expected a create");
@@ -779,17 +917,7 @@ describe("replay idempotency (AC-3.7 L306, E2E-5 L852)", () => {
 
 describe("metrics", () => {
   test("counts creates and merges separately (§7.7 L689)", async () => {
-    const a = item("chan_a/1");
-    const b = item("chan_b/2", { body: "second body" });
-    await dedupBatch(
-      [a, b],
-      deps({
-        embeddings: embedderFor([
-          [a, unitVectorAtAngle(1, DIMENSIONS)],
-          [b, unitVectorAtAngle(0.99, DIMENSIONS)],
-        ]),
-      }),
-    );
+    await dedupBatch(twoNearIdenticalItems(), deps());
 
     expect(metrics.get("MessagesCreated")).toBe(1);
     expect(metrics.get("MessagesMerged")).toBe(1);
@@ -805,10 +933,11 @@ describe("a merge that changes nothing does not re-publish (R39)", () => {
    * the live post with identical text.
    */
   test("a replayed member leaves the status alone", async () => {
-    const replayed = item("chan_a/1");
+    const replayed = item("chan_a/1", SAME_EVENT);
     const existing = replayable(replayed, { status: "published" });
+    const { deps: d } = repoDeps([existing]);
 
-    const result = await dedupBatch([replayed], replayDeps([existing], [replayed]));
+    const result = await dedupBatch([replayed], d);
 
     const [write] = result.writes;
     expect(write?.kind).toBe("merge");
@@ -816,10 +945,11 @@ describe("a merge that changes nothing does not re-publish (R39)", () => {
   });
 
   test("and is not enqueued for publishing", async () => {
-    const replayed = item("chan_a/1");
+    const replayed = item("chan_a/1", SAME_EVENT);
     const existing = replayable(replayed, { status: "published" });
+    const { deps: d } = repoDeps([existing]);
 
-    const result = await dedupBatch([replayed], replayDeps([existing], [replayed]));
+    const result = await dedupBatch([replayed], d);
 
     expect(result.toPublish).toEqual([]);
   });
@@ -830,11 +960,12 @@ describe("a merge that changes nothing does not re-publish (R39)", () => {
    * the new member.
    */
   test("a merge that adds a member still republishes", async () => {
-    const first = item("chan_a/1");
-    const second = item("chan_b/2");
+    const first = item("chan_a/1", SAME_EVENT);
+    const second = item("chan_b/2", SAME_EVENT);
     const existing = replayable(first, { status: "published" });
+    const { deps: d } = repoDeps([existing]);
 
-    const result = await dedupBatch([second], replayDeps([existing], [second]));
+    const result = await dedupBatch([second], d);
 
     const [write] = result.writes;
     expect(write?.kind === "merge" ? write.merge.attributes.status : undefined).toBe("topublish");
@@ -846,11 +977,12 @@ describe("a merge that changes nothing does not re-publish (R39)", () => {
    * member block differs and the live message must be corrected.
    */
   test("a replayed item whose content changed does republish", async () => {
-    const original = item("chan_a/1");
+    const original = item("chan_a/1", SAME_EVENT);
     const existing = replayable(original, { status: "published" });
-    const edited = item("chan_a/1", { summary: "summary chan_a/1 (updated)" });
+    const edited = item("chan_a/1", { ...SAME_EVENT, summary: "summary chan_a/1 (updated)" });
+    const { deps: d } = repoDeps([existing]);
 
-    const result = await dedupBatch([edited], replayDeps([existing], [edited]));
+    const result = await dedupBatch([edited], d);
 
     const [write] = result.writes;
     expect(write?.kind === "merge" ? write.merge.attributes.status : undefined).toBe("topublish");

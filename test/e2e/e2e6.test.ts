@@ -1,11 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
-import { DIMENSIONS } from "../../lib/dedup/constants";
+import type { Classifier } from "../../lib/ai/ports";
 import type { AnalyzedItem, ScrapedItem } from "../../lib/domain/item";
 import { createLogger } from "../../lib/logging/logger";
 import { runAggregate } from "../../lib/pipeline/aggregate/index";
 import { runAnalyze } from "../../lib/pipeline/analyze/index";
+import { fakeAdjudicator } from "../fakes/ai";
 import { fixedClock } from "../fakes/clock";
 import { fakeMessageRepo } from "../fakes/db";
 import { recordingSink } from "../fakes/logging";
@@ -75,21 +75,6 @@ const records = (ids: readonly string[], payload: (id: string) => unknown) =>
 
 const classifier = (): Classifier => ({ classify: async (body) => newsItem(body.slice(8)) });
 
-const embedder = (): EmbeddingProvider => {
-  const assigned = new Map<string, number[]>();
-  return {
-    embedBatch: async (texts) =>
-      texts.map((text) => {
-        const existing = assigned.get(text);
-        if (existing !== undefined) return existing;
-        const vector = new Array<number>(DIMENSIONS).fill(0);
-        vector[assigned.size % DIMENSIONS] = 1;
-        assigned.set(text, vector);
-        return vector;
-      }),
-  };
-};
-
 /** A fresh world per invocation — nothing but the module is shared. */
 const analyzeDeps = () => {
   const queue = fakeQueueProducer();
@@ -111,7 +96,7 @@ const aggregateDeps = () => {
     queue,
     messages,
     deps: {
-      embeddings: embedder(),
+      adjudicator: fakeAdjudicator(() => false),
       messages,
       queue,
       clock: fixedClock(CLOCK),

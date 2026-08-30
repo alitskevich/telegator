@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
-import { DIMENSIONS, SIMILARITY_THRESHOLD } from "../../lib/dedup/constants";
+import type { Classifier } from "../../lib/ai/ports";
 import type { Source } from "../../lib/domain/source";
-import { unitVectorAtAngle } from "../fakes/ai";
+import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
 import { fakeMessageRepo, fakeSourceRepo } from "../fakes/db";
 import { fakeBot, fakeFetcher } from "../fakes/telegram";
@@ -14,16 +13,16 @@ import { runPipeline } from "./harness";
  * E2E-2 (§11.2 L849) — "Two near-identical posts from different sources on the
  * same date produce **one** message with two members."
  *
- * What this can and cannot prove. "Near-identical" is a *semantic* claim, and no
- * stub embedder can make it: the vectors here are chosen to sit at a given
- * cosine, not derived from the text. So this proves the plumbing — that two
- * items above §6's threshold become one message with two members and one
- * Telegram send — while whether real Cohere embeddings of genuinely similar
- * posts clear 0.85 is §11.3's recalibration, which is blocked without a model.
+ * What this can and cannot prove. "Near-identical" is a *semantic* claim, and
+ * the classifier here is a stub: it asserts that two posts name the same people
+ * and places, it does not discover it. So this proves the plumbing — that two
+ * items above R46's `MERGE_THRESHOLD` become one message with two members and
+ * one Telegram send — while whether real classifications of genuinely similar
+ * posts clear it is §11.3's recalibration (R48), which needs the labelled set.
  *
  * The control test below is what stops that being a hollow claim: the same two
- * posts *below* the threshold produce two messages and two sends, so the merge
- * is caused by the similarity and not by anything the harness does.
+ * posts naming *different* entities produce two messages and two sends, so the
+ * merge is caused by the comparison and not by anything the harness does.
  */
 
 const NOW = Date.UTC(2026, 7, 29, 12, 0, 0);
@@ -43,60 +42,51 @@ const source = (id: string): Source => ({
   lastNonZeroCount: 0,
 });
 
-const newsItem = (title: string): NewsItem => ({
+const newsItem = (title: string, properNames: string): NewsItem => ({
   title,
   summary: "Кароткі змест той самай падзеі.",
   country: "BY",
   location: "Minsk",
   category: "politics",
   importance: "high",
+  properNames,
   tags: "politics,minsk",
 });
 
-/** Distinct titles, so the two items are not literally the same record. */
-function twoStoryClassifier(): Classifier {
+/** The entities the two reports agree on when they are the same event. */
+const EVENT = "Minsk, Kastrycnickaja";
+/** And the ones the second names when it is a different one. */
+const ELSEWHERE = "Brest, Kobryn";
+
+/**
+ * Distinct titles either way, so the two items are never literally the same
+ * record: what changes between the two worlds is `properNames`, which §5.2
+ * L452 makes the classifier emit and R46 weights at 0.6 — the single field
+ * that decides whether these are one story or two.
+ */
+function twoStoryClassifier(sameEvent: boolean): Classifier {
   let seen = 0;
   return {
     classify: async () => {
       seen += 1;
-      return newsItem(seen === 1 ? "Explosion downtown" : "Blast in city centre");
+      return seen === 1
+        ? newsItem("Explosion downtown", EVENT)
+        : newsItem("Blast in city centre", sameEvent ? EVENT : ELSEWHERE);
     },
-  };
-}
-
-/**
- * The first distinct text sits on e1; the second at exactly `similarity` from
- * it. Chosen rather than computed — see the note above.
- */
-function embedderAtSimilarity(similarity: number): EmbeddingProvider {
-  const assigned = new Map<string, number[]>();
-
-  return {
-    embedBatch: async (texts) =>
-      texts.map((text) => {
-        const existing = assigned.get(text);
-        if (existing !== undefined) return existing;
-
-        const vector =
-          assigned.size === 0
-            ? unitVectorAtAngle(1, DIMENSIONS)
-            : unitVectorAtAngle(similarity, DIMENSIONS);
-        assigned.set(text, vector);
-        return vector;
-      }),
   };
 }
 
 let messages: ReturnType<typeof fakeMessageRepo>;
 let bot: ReturnType<typeof fakeBot>;
 
-const world = (similarity: number) => ({
+const world = (sameEvent: boolean) => ({
   fetcher: fakeFetcher(
     Object.fromEntries(SOURCES.map((id) => [`https://t.me/s/${id}`, telegramFixture("twoLinks")])),
   ),
   sources: fakeSourceRepo(SOURCES.map(source)),
-  classifier: twoStoryClassifier(),
-  embeddings: embedderAtSimilarity(similarity),
+  classifier: twoStoryClassifier(sameEvent),
+  // Refuses every band pair, so neither outcome below can be the model's doing.
+  adjudicator: fakeAdjudicator(() => false),
   messages,
   bot,
   clock: manualClock(NOW),
@@ -107,8 +97,8 @@ beforeEach(() => {
   bot = fakeBot();
 });
 
-describe("E2E-2 (§11.2 L849) — above the threshold", () => {
-  const ABOVE = 0.9;
+describe("E2E-2 (§11.2 L849) — the same event", () => {
+  const ABOVE = true;
 
   test("two different sources each contribute one item", async () => {
     const run = await runPipeline(world(ABOVE));
@@ -159,13 +149,13 @@ describe("E2E-2 (§11.2 L849) — above the threshold", () => {
   });
 });
 
-describe("E2E-2 control — below the threshold", () => {
+describe("E2E-2 control — a different event", () => {
   /**
-   * The same two posts, the same plumbing, one number changed. Without this the
+   * The same two posts, the same plumbing, one field changed. Without this the
    * merge above could be an artefact of the harness rather than a consequence
    * of §6's comparison.
    */
-  const BELOW = SIMILARITY_THRESHOLD - 0.1;
+  const BELOW = false;
 
   test("they produce two messages and two sends", async () => {
     const run = await runPipeline(world(BELOW));

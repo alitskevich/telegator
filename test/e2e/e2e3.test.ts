@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
-import { DIMENSIONS } from "../../lib/dedup/constants";
+import type { Adjudicator, Classifier } from "../../lib/ai/ports";
 import type { Source } from "../../lib/domain/source";
+import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
 import { fakeMessageRepo, fakeSourceRepo } from "../fakes/db";
 import { fakeBot, fakeFetcher } from "../fakes/telegram";
@@ -45,55 +45,42 @@ const source = (over: Partial<Source> = {}): Source => ({
   ...over,
 });
 
-const newsItem = (title: string): NewsItem => ({
+const newsItem = (title: string, properNames: string): NewsItem => ({
   title,
   summary: "Кароткі змест падзеі.",
   country: "BY",
   location: "Minsk",
   category: "politics",
   importance: "high",
+  properNames,
   tags: "politics,minsk",
 });
 
-/** Same body in, same classification out — a re-scrape must look identical. */
-const stableClassifier = (): Classifier => ({
-  classify: async (body) => newsItem(`Story ${body.slice(0, 12)}`),
-});
-
 /**
- * One vector per distinct text. A re-scraped post yields the same embedding
- * text, so it scores 1.0 against its own earlier copy — which is the condition
- * §3.1 L210's "the `members` map absorbs anything that slips past" depends on.
+ * Same body in, same classification out — a re-scrape must look identical, and
+ * R46's key is a pure function of the classification, so an identical
+ * classification is an identical key (AC-3.7).
+ *
+ * The entities are derived from the body too, so three different posts name
+ * three different things and none of them merges: E2E-3 is about the cursor
+ * suppressing a re-scrape, not about deduplication picking up the slack.
  */
-function textEmbedder(): EmbeddingProvider {
-  const assigned = new Map<string, number[]>();
-
-  return {
-    embedBatch: async (texts) =>
-      texts.map((text) => {
-        const existing = assigned.get(text);
-        if (existing !== undefined) return existing;
-
-        const vector = new Array<number>(DIMENSIONS).fill(0);
-        vector[assigned.size % DIMENSIONS] = 1;
-        assigned.set(text, vector);
-        return vector;
-      }),
-  };
-}
+const stableClassifier = (): Classifier => ({
+  classify: async (body) => newsItem(`Story ${body.slice(0, 12)}`, body.slice(0, 20)),
+});
 
 let messages: ReturnType<typeof fakeMessageRepo>;
 let sources: ReturnType<typeof fakeSourceRepo>;
 let bot: ReturnType<typeof fakeBot>;
 let clock: ReturnType<typeof manualClock>;
-let embeddings: EmbeddingProvider;
+let adjudicator: Adjudicator;
 
 beforeEach(() => {
   messages = fakeMessageRepo();
   sources = fakeSourceRepo([source()]);
   bot = fakeBot();
   clock = manualClock(NOW);
-  embeddings = textEmbedder();
+  adjudicator = fakeAdjudicator(() => false);
 });
 
 /**
@@ -108,7 +95,7 @@ const world = () => ({
   }),
   sources,
   classifier: stableClassifier(),
-  embeddings,
+  adjudicator,
   messages,
   bot,
   clock,

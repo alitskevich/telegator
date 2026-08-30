@@ -3,7 +3,7 @@ import { recordingMetrics } from "../../test/fakes/metrics";
 import { METRIC_NAMES, METRIC_NAMESPACE } from "./ports";
 
 describe("the metric catalogue", () => {
-  test("is the twelve names §7.7 L684-693 lists", () => {
+  test("is the twelve names §7.7 L684-693 lists, then R50's two", () => {
     expect([...METRIC_NAMES]).toEqual([
       "ItemsScraped",
       "ItemsDropped",
@@ -17,7 +17,19 @@ describe("the metric catalogue", () => {
       "MemberCapReached",
       "TelegramApiErrors",
       "SourceStale",
+      "DedupAdjudicated",
+      "DedupAdjudicationFailed",
     ]);
+  });
+
+  /**
+   * R50 — §7.7's table predates R46's band, so these two are the plan's own.
+   * Named separately from the list above so the reason survives a future
+   * reordering of it.
+   */
+  test("counts adjudication volume and failure (R50)", () => {
+    expect(METRIC_NAMES).toContain("DedupAdjudicated");
+    expect(METRIC_NAMES).toContain("DedupAdjudicationFailed");
   });
 
   test("publishes under the namespace §7.7 L681 names", () => {
