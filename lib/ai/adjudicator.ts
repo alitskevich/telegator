@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ADJUDICATOR_MAX_TOKENS, ADJUDICATOR_MODEL_ID } from "./constants";
+import { extractText } from "./messagesContent";
 import type { Adjudicator } from "./ports";
 
 /**
@@ -8,10 +9,11 @@ import type { Adjudicator } from "./ports";
  *
  * Built on the same shape as `createBedrockClassifier` in `lib/ai/bedrock.ts`:
  * a structural client interface, a lazily-imported `AnthropicBedrockMantle` so
- * constructing the adapter never resolves AWS credentials, and an `extractText`
- * helper over Messages content blocks. Kept in its own module rather than
+ * constructing the adapter never resolves AWS credentials, and the shared
+ * `extractText` over Messages content blocks. Kept in its own module rather than
  * folded into `bedrock.ts` because its contract — verdicts keyed by pair id,
- * never positional — is the one thing this task exists to get right.
+ * never positional — is the one thing this task exists to get right. The
+ * content-block reader itself is shared (`./messagesContent`), not copied.
  */
 
 const VerdictsSchema = z.object({
@@ -20,30 +22,6 @@ const VerdictsSchema = z.object({
 
 /** Sent as `output_config.format.schema`, generated rather than hand-written (§5.2 L423). */
 export const VERDICTS_SCHEMA = z.toJSONSchema(VerdictsSchema);
-
-/** A Messages response carries the model's JSON inside one or more text blocks. */
-function extractText(response: unknown): string {
-  if (typeof response !== "object" || response === null || !("content" in response)) {
-    throw new Error("adjudicator returned no Messages content block");
-  }
-  const { content } = response as { content: unknown };
-  if (!Array.isArray(content)) throw new Error("adjudicator returned a non-array content field");
-
-  const text = content
-    .filter(
-      (block): block is { type: string; text: string } =>
-        typeof block === "object" &&
-        block !== null &&
-        "type" in block &&
-        (block as { type: unknown }).type === "text" &&
-        typeof (block as { text: unknown }).text === "string",
-    )
-    .map((block) => block.text)
-    .join("");
-
-  if (text === "") throw new Error("adjudicator returned no text content");
-  return text;
-}
 
 /**
  * Verdicts must cover the requested ids exactly — no gaps, no strangers, no
@@ -54,7 +32,7 @@ export function parseVerdicts(
   response: unknown,
   expected: readonly string[],
 ): ReadonlyMap<string, boolean> {
-  const { verdicts } = VerdictsSchema.parse(JSON.parse(extractText(response)));
+  const { verdicts } = VerdictsSchema.parse(JSON.parse(extractText(response, "adjudicator")));
 
   const byId = new Map<string, boolean>();
   for (const verdict of verdicts) {

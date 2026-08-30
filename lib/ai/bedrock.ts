@@ -3,6 +3,7 @@ import {
   type ClassificationRequest,
   type ClassificationRequestOptions,
 } from "../pipeline/analyze/index";
+import { extractText } from "./messagesContent";
 import { type NewsItem, NewsItemSchema } from "./newsItemSchema";
 import type { Classifier } from "./ports";
 
@@ -41,36 +42,6 @@ export interface BedrockClassifierOptions {
   readonly effort?: ClassificationRequestOptions["effort"];
 }
 
-/** A Messages response carries the model's JSON inside one or more text blocks. */
-function extractText(response: unknown): string {
-  if (typeof response !== "object" || response === null || !("content" in response)) {
-    throw new Error("bedrock returned no Messages content block");
-  }
-
-  const { content } = response as { content: unknown };
-  if (!Array.isArray(content)) {
-    throw new Error("bedrock returned a non-array content field");
-  }
-
-  // Concatenated rather than "first block wins": a long structured output can be
-  // split across blocks, and taking only the first would truncate the JSON into
-  // a parse error that looks like a model fault.
-  const text = content
-    .filter(
-      (block): block is { type: string; text: string } =>
-        typeof block === "object" &&
-        block !== null &&
-        "type" in block &&
-        (block as { type: unknown }).type === "text" &&
-        typeof (block as { text: unknown }).text === "string",
-    )
-    .map((block) => block.text)
-    .join("");
-
-  if (text === "") throw new Error("bedrock returned no text content");
-  return text;
-}
-
 export function createBedrockClassifier(options: BedrockClassifierOptions = {}): Classifier {
   let client = options.client;
 
@@ -98,7 +69,7 @@ export function createBedrockClassifier(options: BedrockClassifierOptions = {}):
       // back through SQS retry to the DLQ, and a response that violates the
       // schema is the same class of event. Letting it through would put an
       // unvalidated category into the aggregate queue.
-      return NewsItemSchema.parse(JSON.parse(extractText(response)));
+      return NewsItemSchema.parse(JSON.parse(extractText(response, "bedrock")));
     },
   };
 }
