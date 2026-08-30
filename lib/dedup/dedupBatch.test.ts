@@ -4,6 +4,7 @@ import { advancingClock, fixedClock } from "../../test/fakes/clock";
 import { fakeMessageRepo } from "../../test/fakes/db";
 import { recordingSink } from "../../test/fakes/logging";
 import { recordingMetrics } from "../../test/fakes/metrics";
+import type { Adjudicator } from "../ai/ports";
 import { type AnalyzedItem, AnalyzedItemSchema } from "../domain/item";
 import { type MemberBlock, type Message, MessageSchema } from "../domain/message";
 import { createLogger } from "../logging/logger";
@@ -122,6 +123,26 @@ function deps(over: Partial<DedupDeps> = {}): DedupDeps {
     metrics,
     logger: createLogger(sink),
     ...over,
+  };
+}
+
+/**
+ * Wraps `loadMessage` to count base-table reads.
+ *
+ * R46 puts a read on the band path and only there, so "how many" is a claim
+ * tests have to be able to make.
+ */
+function countingReads(over: Partial<DedupDeps> & Pick<DedupDeps, "loadMessage">) {
+  const reads: string[] = [];
+  return {
+    reads,
+    deps: {
+      ...over,
+      loadMessage: async (id: string) => {
+        reads.push(id);
+        return over.loadMessage(id);
+      },
+    },
   };
 }
 
@@ -578,6 +599,58 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
     expect(Object.keys(write.message.members).sort()).toEqual(["chan_a/1", "chan_b/2"]);
   });
 
+  /**
+   * The divergence above, made observable — and it took a counterexample to
+   * find, so the shape of it is worth stating.
+   *
+   * `1 - matchScore` is a weighted Jaccard distance and obeys the triangle
+   * inequality, which makes a Pass-1 candidate that a stored one could outscore
+   * *unreachable* while every Pass-1 candidate was created by an earlier item
+   * in this batch: it would itself have been close enough to that stored record
+   * to merge into it or to be held for a verdict, and either way it would not
+   * be in `pending`.
+   *
+   * That argument does not cover a candidate `pending` holds because an earlier
+   * item MERGED INTO it. Here `chan_y/8` and `chan_z/9` are two stored messages
+   * on one date. `chan_a/1` merges into `chan_y/8` (1.00, against 0.80 for
+   * `chan_z/9`), which puts a stored record into `pending`. `chan_b/2` then
+   * scores 0.80 against it in Pass 1 — merge-worthy on its own — and 1.00
+   * against `chan_z/9` in Pass 2. §6 L513 stops at Pass 1 and merges `chan_b/2`
+   * into `chan_y/8`; taking the maximum puts it where it belongs.
+   *
+   * Without this test, an edit that returned to §6's structure would pass the
+   * entire suite.
+   */
+  test("a stored candidate pulled into the batch does not shadow a closer one", async () => {
+    const NARROW = { ...SAME_EVENT, properNames: "Minsk, Belaruskali" };
+    const WIDE = { ...SAME_EVENT, properNames: "Minsk, Belaruskali, Naftan" };
+
+    const near = storedMessage({ id: "chan_y/8", ...keyOf(NARROW) });
+    const far = storedMessage({ id: "chan_z/9", ...keyOf(WIDE) });
+    const a = item("chan_a/1", NARROW);
+    const b = item("chan_b/2", WIDE);
+
+    // The fixture, pinned: every Pass-1 score is merge-worthy, and the Pass-2
+    // one for `b` is strictly better.
+    expect(scoreOf(a, NARROW)).toBeGreaterThan(scoreOf(a, WIDE));
+    expect(scoreOf(b, NARROW)).toBeGreaterThanOrEqual(MERGE_THRESHOLD);
+    expect(scoreOf(b, WIDE)).toBeGreaterThan(scoreOf(b, NARROW));
+
+    const { deps: d } = repoDeps([near, far]);
+    const result = await dedupBatch([a, b], d);
+
+    const into = (id: string) => result.writes.find((w) => w.kind === "merge" && w.merge.id === id);
+
+    const toNear = into("chan_y/8");
+    const toFar = into("chan_z/9");
+    if (toNear?.kind !== "merge" || toFar?.kind !== "merge") {
+      throw new Error("expected a merge into each stored message");
+    }
+    expect(Object.keys(toNear.merge.members)).toEqual(["chan_a/1"]);
+    // The load-bearing one: §6 L513 would have put chan_b/2 here too.
+    expect(Object.keys(toFar.merge.members)).toEqual(["chan_b/2"]);
+  });
+
   /** §7.2 L600 — emitted per aggregate run, alarmed above 500. */
   test("emits DedupCandidateCount for the candidates it examined", async () => {
     const a = item("chan_a/1");
@@ -665,18 +738,167 @@ describe("the band (R46)", () => {
     expect(split.writes).toHaveLength(2);
   });
 
-  /** The pair the model is asked about describes both sides in the same terms. */
-  test("each pair carries both sides' key, not one side's raw fields", async () => {
+  /**
+   * The two sides are described in the same terms — real `title`, `category`
+   * and `location` on both, the canonical key for `entities` and `tags` on
+   * both. An asymmetry here would make part of every verdict an artefact of
+   * which side happened to be stored.
+   */
+  test("both sides of a pair are described the same way", async () => {
     const adjudicator = fakeAdjudicator(() => false);
     await dedupBatch(twoAmbiguousItems(), deps({ adjudicator }));
 
     const pair = adjudicator.calls[0]?.[0];
-    expect(pair?.item.entities).toEqual(["belaruskali", "minsk", "naftan"]);
+    expect(pair?.item).toEqual({
+      title: "Alpha Gamma",
+      entities: ["belaruskali", "minsk", "naftan"],
+      tags: ["fire", "industry"],
+      category: "geopolitics",
+      location: "Kyiv",
+      date: DATE,
+    });
+    expect(pair?.candidate).toEqual({
+      title: "Alpha Beta",
+      entities: ["belaruskali", "minsk"],
+      tags: ["fire", "safety"],
+      category: "geopolitics",
+      location: "Kyiv",
+      date: DATE,
+    });
+  });
+
+  /**
+   * §7.2 L598's projection carries the key and `memberIds` and nothing else, so
+   * a stored candidate's `title` costs a base-table read. Without it the model
+   * would receive exactly the three token sets `matchScore` has just failed to
+   * decide on — a tie broken with the data that produced it.
+   */
+  test("a stored band candidate is described from its base record, read once", async () => {
+    const [first, second] = twoAmbiguousItems();
+    if (first === undefined || second === undefined) throw new Error("fixture");
+    const stored = storedMessage({
+      id: "chan_z/9",
+      ...keyOf(first),
+      title: "Fire At The Potash Plant",
+      category: "industry",
+      location: "Salihorsk",
+    });
+    const adjudicator = fakeAdjudicator(() => false);
+    const repo = fakeMessageRepo([stored]);
+    const counting = countingReads({ loadMessage: repo.get });
+
+    await dedupBatch(
+      [second],
+      deps({ adjudicator, loadCandidatesByDate: repo.queryByDate, ...counting.deps }),
+    );
+
+    const pair = adjudicator.calls[0]?.[0];
+    expect(pair?.candidate.title).toBe("Fire At The Potash Plant");
+    expect(pair?.candidate.category).toBe("industry");
+    expect(pair?.candidate.location).toBe("Salihorsk");
+    // The key still supplies the canonical entity and tag sets.
     expect(pair?.candidate.entities).toEqual(["belaruskali", "minsk"]);
-    expect(pair?.item.title).toBe("alpha gamma");
-    expect(pair?.candidate.title).toBe("alpha beta");
-    expect(pair?.item.date).toBe(DATE);
-    expect(pair?.candidate.date).toBe(DATE);
+    // One read, not one per use: the merge branch would want the same record.
+    expect(counting.reads).toEqual(["chan_z/9"]);
+  });
+
+  /**
+   * §5.3's multilingual embedder existed to serve `summary` (Belarusian) and
+   * `body` (Russian or Ukrainian). Neither crosses this boundary, and the
+   * exhaustive key check is what keeps a later field from drifting across it.
+   */
+  test("no source text reaches the model", async () => {
+    const adjudicator = fakeAdjudicator(() => false);
+    await dedupBatch(twoAmbiguousItems(), deps({ adjudicator }));
+
+    const pair = adjudicator.calls[0]?.[0];
+    for (const side of [pair?.item, pair?.candidate]) {
+      expect(Object.keys(side ?? {}).sort()).toEqual([
+        "category",
+        "date",
+        "entities",
+        "location",
+        "tags",
+        "title",
+      ]);
+    }
+    expect(JSON.stringify(adjudicator.calls)).not.toContain("summary");
+    expect(JSON.stringify(adjudicator.calls)).not.toContain("body of");
+  });
+
+  /** The read is the band's alone: an auto verdict must cost nothing extra. */
+  test("neither auto verdict reads a base record", async () => {
+    const stored = storedMessage({ id: "chan_z/9", ...keyOf(OTHER_EVENT) });
+    const repo = fakeMessageRepo([stored]);
+    const counting = countingReads({ loadMessage: repo.get });
+
+    // One pair scores 1.00 (auto-merge, in batch) and both score 0.00 against
+    // the stored record (auto-split). Neither needs the base table.
+    await dedupBatch(
+      twoNearIdenticalItems(),
+      deps({ loadCandidatesByDate: repo.queryByDate, ...counting.deps }),
+    );
+
+    expect(counting.reads).toEqual([]);
+  });
+
+  /**
+   * A degraded verdict beats a failed batch — this path already splits when the
+   * model itself is unavailable, so it must not throw when the record is.
+   */
+  test.each([
+    ["a record that is gone", async () => undefined],
+    [
+      "a read that throws",
+      async () => {
+        throw new Error("ProvisionedThroughputExceededException");
+      },
+    ],
+  ])("%s still produces a pair, from the key", async (_name, loadMessage) => {
+    const [first, second] = twoAmbiguousItems();
+    if (first === undefined || second === undefined) throw new Error("fixture");
+    const stored = storedMessage({ id: "chan_z/9", ...keyOf(first), title: "Never Read" });
+    const repo = fakeMessageRepo([stored]);
+    const adjudicator = fakeAdjudicator(() => false);
+
+    const result = await dedupBatch(
+      [second],
+      deps({ adjudicator, loadCandidatesByDate: repo.queryByDate, loadMessage }),
+    );
+
+    // Falls back to the key-derived title — lowercased and alphabetised, which
+    // is exactly why it is a fallback and not the design.
+    expect(adjudicator.calls[0]?.[0]?.candidate.title).toBe("alpha beta");
+    expect(adjudicator.calls[0]?.[0]?.candidate.category).toBeUndefined();
+    expect(result.writes).toHaveLength(1);
+  });
+
+  /**
+   * A verdict map that answers some pairs and not others splits the ones it did
+   * not answer. `Adjudicator`'s own parser rejects a partial response, so this
+   * pins the defence behind it: `verdicts.get(id) === true`, never a truthiness
+   * test that would read `undefined` as a decision.
+   */
+  test("a partial verdict map merges only what it answered", async () => {
+    const answered: string[] = [];
+    const partial: Adjudicator = {
+      adjudicate: async (pairs) => {
+        const [only] = pairs;
+        if (only === undefined) return new Map();
+        answered.push(only.id);
+        return new Map([[only.id, true]]);
+      },
+    };
+
+    const result = await dedupBatch(threeAmbiguousItems(), deps({ adjudicator: partial }));
+
+    expect(answered).toEqual(["src_b/2->src_a/1"]);
+    // src_b/2 merged on its verdict; src_c/3 had none and split.
+    expect(result.writes).toHaveLength(2);
+    const merged = result.writes.find((w) => w.kind === "create" && w.message.id === "src_a/1");
+    if (merged?.kind !== "create") throw new Error("expected src_a/1");
+    expect(Object.keys(merged.message.members).sort()).toEqual(["src_a/1", "src_b/2"]);
+    expect(result.writes.some((w) => w.kind === "create" && w.message.id === "src_c/3")).toBe(true);
   });
 
   /** R50 — the band is a cost centre, so its volume is a counted number. */

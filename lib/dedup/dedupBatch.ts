@@ -57,8 +57,10 @@ import { type Band, classify, matchScore } from "./score";
  *    against a single threshold. Both are replaced: the key is built in-process
  *    (no provider call at all on the common path), the comparison is
  *    `matchScore`, and one threshold becomes a band. Above `merge` and below
- *    `distinct` are decided here; the strip between them is the only thing a
- *    model ever sees, in **one** call for the whole batch.
+ *    `distinct` are decided here from the `date-index` projection alone — no
+ *    model call, no base-table read; the strip between them is the only thing a
+ *    model ever sees, in **one** call for the whole batch, and the only thing
+ *    that costs a read to describe to it.
  *  - **R51** — §6 has no replay path: a replayed item is re-scored, and §3.3
  *    L285's "the newest item's descriptive fields overwrite" means the message
  *    it belongs to may no longer resemble it. `memberIds` (§7.2's projection)
@@ -73,7 +75,11 @@ export interface DedupDeps {
   readonly adjudicator: Adjudicator;
   /** §6 L515 — the `date-index` query. */
   loadCandidatesByDate(date: string): Promise<DedupCandidate[]>;
-  /** R9 — the base-table read that supplies the members a candidate lacks. */
+  /**
+   * R9 — the base-table read that supplies what a `date-index` candidate lacks:
+   * the `members` a merge needs, and (R46) the `title`, `category` and
+   * `location` a band pair describes the candidate with. Memoised per batch.
+   */
   loadMessage(id: string): Promise<Message | undefined>;
   readonly clock: Clock;
   readonly metrics: MetricSink;
@@ -145,16 +151,30 @@ interface Deferred {
   readonly pairId: string;
   readonly item: AnalyzedItem;
   readonly key: MatchKey;
-  readonly candidateId: string;
+  readonly candidate: Best;
 }
 
 /** The best-scoring candidate found for one item, across both passes. */
 interface Best {
   readonly id: string;
   readonly score: number;
+  /** Kept for the fallback in `bandFieldsOf`, when the base record cannot be read. */
   readonly key: MatchKey;
   readonly date: string;
-  /** Known for a message this batch touched; never for a `date-index` row (R44). */
+}
+
+/**
+ * Everything `fieldsOf` needs, from a `Pending` or a stored `Message` alike.
+ *
+ * `title`, `category` and `location` are `string | undefined` rather than
+ * optional properties so both shapes satisfy it: a `Message` declares them
+ * optional and a `Pending` declares them nullable, and reading either yields
+ * exactly this.
+ */
+interface Described {
+  readonly key: MatchKey;
+  readonly date: string;
+  readonly title: string | undefined;
   readonly category: string | undefined;
   readonly location: string | undefined;
 }
@@ -191,13 +211,32 @@ export async function dedupBatch(
   };
 
   /**
+   * R9's base-table read, memoised.
+   *
+   * Two callers now want the whole record rather than the `date-index`
+   * projection: the merge branch below, which has always needed `members`, and
+   * `bandFieldsOf`, which needs the descriptive fields §7.2 L598 does not
+   * project. Memoising keeps that at one `GetItem` per candidate per batch
+   * rather than one per caller. `absorb` never mutates the state it is given —
+   * it builds `next` by spreading — so handing the same one to both is safe.
+   */
+  const loadedById = new Map<string, Pending | undefined>();
+  const loadPending = async (id: string): Promise<Pending | undefined> => {
+    if (loadedById.has(id)) return loadedById.get(id);
+
+    const state = await load(id, deps);
+    loadedById.set(id, state);
+    return state;
+  };
+
+  /**
    * §6 L521–544 — the create/merge tail, shared by the items decided on sight
    * and the ones decided by the model. Factored out for exactly that reason: a
    * second copy is how the two paths would drift on R11 or the member cap.
    */
   const absorb = async (item: AnalyzedItem, key: MatchKey, matchId: string | undefined) => {
     const state =
-      matchId === undefined ? undefined : (pending.get(matchId) ?? (await load(matchId, deps)));
+      matchId === undefined ? undefined : (pending.get(matchId) ?? (await loadPending(matchId)));
 
     if (matchId !== undefined && state === undefined) {
       throw new Error(`matched message ${matchId} disappeared between query and read`);
@@ -267,7 +306,6 @@ export async function dedupBatch(
   };
 
   const deferred: Deferred[] = [];
-  const pairs: AdjudicationPair[] = [];
 
   for (const { item, key } of keyed) {
     /**
@@ -309,8 +347,6 @@ export async function dedupBatch(
         score: matchScore(key, candidate.key),
         key: candidate.key,
         date: candidate.date,
-        category: candidate.category,
-        location: candidate.location,
       });
     }
 
@@ -335,8 +371,6 @@ export async function dedupBatch(
           score: matchScore(key, stored),
           key: stored,
           date: candidate.date,
-          category: undefined,
-          location: undefined,
         });
       }
     }
@@ -348,28 +382,41 @@ export async function dedupBatch(
 
     const verdict = classify(best.score, deps.band);
     if (verdict === "adjudicate") {
-      const pairId = `${item.id}->${best.id}`;
-      deferred.push({ pairId, item, key, candidateId: best.id });
       // At most one pair per item: only the highest-scoring candidate is ever
-      // the one this item might belong to.
-      pairs.push({
-        id: pairId,
-        item: fieldsOf(key, item.date, item.category, item.location),
-        candidate: fieldsOf(best.key, best.date, best.category, best.location),
-      });
+      // the one this item might belong to. The pair itself is built after the
+      // loop, because describing the candidate needs a read.
+      deferred.push({ pairId: `${item.id}->${best.id}`, item, key, candidate: best });
       continue;
     }
 
     await absorb(item, key, verdict === "merge" ? best.id : undefined);
   }
 
+  const pairs: AdjudicationPair[] = [];
+  for (const entry of deferred) {
+    pairs.push({
+      id: entry.pairId,
+      item: fieldsOf({
+        key: entry.key,
+        date: entry.item.date,
+        title: entry.item.title,
+        category: entry.item.category,
+        location: entry.item.location,
+      }),
+      candidate: await bandFieldsOf(entry.candidate, pending, loadPending),
+    });
+  }
+
   const verdicts = await adjudicate(pairs, deps);
 
   for (const entry of deferred) {
+    // `=== true` rather than a truthiness test: a verdict map that answers some
+    // pairs and not others must split the ones it did not answer, exactly as a
+    // failed call does.
     await absorb(
       entry.item,
       entry.key,
-      verdicts.get(entry.pairId) === true ? entry.candidateId : undefined,
+      verdicts.get(entry.pairId) === true ? entry.candidate.id : undefined,
     );
   }
 
@@ -425,34 +472,83 @@ async function adjudicate(
 }
 
 /**
- * R46 — what crosses the model boundary, built from the match key on **both**
- * sides.
+ * R46 — what crosses the model boundary.
  *
- * A `date-index` candidate carries no `title`: §7.2 L598's projection is the
- * key and `memberIds` (R44/R51) and nothing else. Describing the item from
- * `item.title` while describing the candidate from its key would hand the model
- * two differently-shaped accounts of the same kind of thing, and make part of
- * every verdict an artefact of which side happened to be stored. Symmetry costs
- * the title's word order, which §5.2 L443's three-word title barely carries.
+ * `entities` and `tags` are the match key's, because that is the canonical form
+ * of §5.2 L451-453's comma-separated fields and both sides have one. `title`,
+ * `category` and `location` are the record's own, as written.
  *
- * `category` and `location` are context where they are known — an item always,
- * a stored candidate never — which is why `AdjudicationFields` declares both
- * optional.
+ * The key-derived title is a fallback for a record that has none — a pre-R44
+ * row, or one whose base read failed. It is a poor substitute: `titleTokens` is
+ * lowercased and alphabetised, so it carries no word order.
+ *
+ * `summary` and `body` are absent, and stay absent. §5.2 has already reduced
+ * the discriminating signal to English; sending Belarusian or Russian source
+ * text back to a model would make the call large, slow and language-dependent
+ * for no gain.
  */
-function fieldsOf(
-  key: MatchKey,
-  date: string,
-  category: string | undefined,
-  location: string | undefined,
-): AdjudicationFields {
+function fieldsOf(from: Described): AdjudicationFields {
   return {
-    title: key.titleTokens.join(" "),
-    entities: key.entities,
-    tags: key.tags,
-    category,
-    location,
-    date,
+    title: from.title ?? from.key.titleTokens.join(" "),
+    entities: from.key.entities,
+    tags: from.key.tags,
+    category: from.category,
+    location: from.location,
+    date: from.date,
   };
+}
+
+/**
+ * R46 — the candidate's side of a band pair, from the base table.
+ *
+ * §7.2 L598's `date-index` projection is the match key and `memberIds` (R44,
+ * R51) and nothing else, so a scored candidate has no `title`, `category` or
+ * `location`. Describing it from its key would hand the model exactly the three
+ * token sets `matchScore` has just used and failed to decide on — a tie broken
+ * with the data that produced the tie — and would leave the two sides of the
+ * pair differently shaped depending on which one happened to be stored, which
+ * is the artefact this whole boundary exists to avoid.
+ *
+ * One read per band pair, so at most one per item and ten per batch (§7.3
+ * L607's cap), and only here: `merge` and `distinct` are decided from the
+ * projection alone, with no model call and no base-table read. `loadPending` is
+ * memoised, so a candidate the merge branch also reads is read once.
+ *
+ * A record that cannot be read — missing, or a read that throws — falls back to
+ * the key-derived form rather than propagating. A degraded verdict beats a
+ * failed batch, and this path already splits when the model itself is
+ * unavailable. The failure is not swallowed for the *merge* branch: if the
+ * verdict comes back `same`, `absorb` reads the record again through the same
+ * memo and a genuine table failure still fails the batch there, where §7.3
+ * L620 wants it to.
+ */
+async function bandFieldsOf(
+  candidate: Best,
+  pending: ReadonlyMap<string, Pending>,
+  loadPending: (id: string) => Promise<Pending | undefined>,
+): Promise<AdjudicationFields> {
+  // A message this batch already touched is fresher than the table, and needs
+  // no read at all.
+  const described =
+    pending.get(candidate.id) ?? (await loadPending(candidate.id).catch(() => undefined));
+
+  if (described === undefined) {
+    return fieldsOf({
+      key: candidate.key,
+      date: candidate.date,
+      title: undefined,
+      category: undefined,
+      location: undefined,
+    });
+  }
+
+  return fieldsOf({
+    key: described.key,
+    date: described.date,
+    title: described.title,
+    category: described.category,
+    location: described.location,
+  });
 }
 
 /** R9 — a `date-index` candidate carries no members, so read the base record. */

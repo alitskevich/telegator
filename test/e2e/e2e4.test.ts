@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
 import type { Adjudicator, Classifier } from "../../lib/ai/ports";
+import { MERGE_THRESHOLD } from "../../lib/dedup/constants";
+import { buildMatchKey, type MatchKeyFields } from "../../lib/dedup/matchKey";
+import { matchScore } from "../../lib/dedup/score";
 import type { Source } from "../../lib/domain/source";
 import type { EditMessageTextArgs } from "../../lib/telegram/ports";
 import { fakeAdjudicator } from "../fakes/ai";
@@ -68,6 +71,15 @@ function twoStoryClassifier(): Classifier {
   };
 }
 
+/**
+ * R46's score for two classifications, so a fixture's *region* can be asserted
+ * rather than described in a comment. `matchScore` is what `dedupBatch` calls;
+ * a criterion that depends on a merge or a split has no business asserting the
+ * outcome without pinning the input that produces it.
+ */
+const scoreOf = (a: MatchKeyFields, b: MatchKeyFields) =>
+  matchScore(buildMatchKey(a), buildMatchKey(b));
+
 let messages: ReturnType<typeof fakeMessageRepo>;
 let sources: ReturnType<typeof fakeSourceRepo>;
 let bot: ReturnType<typeof fakeBot>;
@@ -116,6 +128,16 @@ async function publishThenMerge() {
   const second = await runPipeline(world());
   return { first, second };
 }
+
+describe("E2E-4 fixtures", () => {
+  /** The comment on `newsItem` claims 0.83; asserted here, not just claimed. */
+  test("the two runs' items are a merge, not a band pair", () => {
+    const [firstSummary, secondSummary] = SUMMARIES;
+    expect(
+      scoreOf(newsItem("Story 1", firstSummary ?? ""), newsItem("Story 2", secondSummary ?? "")),
+    ).toBeGreaterThanOrEqual(MERGE_THRESHOLD);
+  });
+});
 
 describe("E2E-4 (§11.2 L851)", () => {
   test("the first run publishes and stores a tgId", async () => {

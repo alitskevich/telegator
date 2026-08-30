@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
 import type { Classifier } from "../../lib/ai/ports";
+import { DISTINCT_THRESHOLD } from "../../lib/dedup/constants";
+import { buildMatchKey, type MatchKeyFields } from "../../lib/dedup/matchKey";
+import { matchScore } from "../../lib/dedup/score";
 import { SCRAPE_HEADERS } from "../../lib/pipeline/scrape/index";
 import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
@@ -52,6 +55,15 @@ function recordingClassifier(): Classifier & { readonly calls: string[] } {
   };
 }
 
+/**
+ * R46's score for two classifications, so a fixture's *region* can be asserted
+ * rather than described in a comment. `matchScore` is what `dedupBatch` calls;
+ * a criterion that depends on a merge or a split has no business asserting the
+ * outcome without pinning the input that produces it.
+ */
+const scoreOf = (a: MatchKeyFields, b: MatchKeyFields) =>
+  matchScore(buildMatchKey(a), buildMatchKey(b));
+
 let world: Parameters<typeof runPipeline>[0];
 let adjudicator: ReturnType<typeof fakeAdjudicator>;
 let messages: ReturnType<typeof fakeMessageRepo>;
@@ -89,6 +101,18 @@ beforeEach(() => {
     bot,
     clock: manualClock(NOW),
   };
+});
+
+describe("E2E-1 fixtures", () => {
+  /**
+   * "Three analyze messages" is only testable downstream while the three stay
+   * three. They share their tags and nothing else, which R46 weights at 0.15.
+   */
+  test("no two of the three stories reach even the band", () => {
+    expect(scoreOf(newsItem("Story 1"), newsItem("Story 2"))).toBeLessThanOrEqual(
+      DISTINCT_THRESHOLD,
+    );
+  });
 });
 
 describe("E2E-1 (§11.2 L848)", () => {

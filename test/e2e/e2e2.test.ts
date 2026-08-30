@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
 import type { Classifier } from "../../lib/ai/ports";
+import { DISTINCT_THRESHOLD, MERGE_THRESHOLD } from "../../lib/dedup/constants";
+import { buildMatchKey, type MatchKeyFields } from "../../lib/dedup/matchKey";
+import { matchScore } from "../../lib/dedup/score";
 import type { Source } from "../../lib/domain/source";
 import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
@@ -76,6 +79,15 @@ function twoStoryClassifier(sameEvent: boolean): Classifier {
   };
 }
 
+/**
+ * R46's score for two classifications, so a fixture's *region* can be asserted
+ * rather than described in a comment. `matchScore` is what `dedupBatch` calls;
+ * a criterion that depends on a merge or a split has no business asserting the
+ * outcome without pinning the input that produces it.
+ */
+const scoreOf = (a: MatchKeyFields, b: MatchKeyFields) =>
+  matchScore(buildMatchKey(a), buildMatchKey(b));
+
 let messages: ReturnType<typeof fakeMessageRepo>;
 let bot: ReturnType<typeof fakeBot>;
 
@@ -95,6 +107,25 @@ const world = (sameEvent: boolean) => ({
 beforeEach(() => {
   messages = fakeMessageRepo();
   bot = fakeBot();
+});
+
+/**
+ * The fixtures, guarded. Both criteria below assert an outcome that R46's band
+ * decides, and 0.75 against a `MERGE_THRESHOLD` of 0.72 is a margin of 0.03 —
+ * narrow enough that a weight change could flip it while every assertion below
+ * kept passing for the wrong reason.
+ */
+describe("E2E-2 fixtures", () => {
+  const first = newsItem("Explosion downtown", EVENT);
+
+  test("the two worlds sit on opposite sides of the band", () => {
+    expect(scoreOf(first, newsItem("Blast in city centre", EVENT))).toBeGreaterThanOrEqual(
+      MERGE_THRESHOLD,
+    );
+    expect(scoreOf(first, newsItem("Blast in city centre", ELSEWHERE))).toBeLessThanOrEqual(
+      DISTINCT_THRESHOLD,
+    );
+  });
 });
 
 describe("E2E-2 (§11.2 L849) — the same event", () => {

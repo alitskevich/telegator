@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
 import type { Adjudicator, Classifier } from "../../lib/ai/ports";
+import { DISTINCT_THRESHOLD, MERGE_THRESHOLD } from "../../lib/dedup/constants";
+import { buildMatchKey, type MatchKeyFields } from "../../lib/dedup/matchKey";
+import { matchScore } from "../../lib/dedup/score";
 import type { Message } from "../../lib/domain/message";
 import type { Source } from "../../lib/domain/source";
 import { createLogger } from "../../lib/logging/logger";
@@ -84,6 +87,15 @@ function distinctClassifier(): Classifier {
   };
 }
 
+/**
+ * R46's score for two classifications, so a fixture's *region* can be asserted
+ * rather than described in a comment. `matchScore` is what `dedupBatch` calls;
+ * a criterion that depends on a merge or a split has no business asserting the
+ * outcome without pinning the input that produces it.
+ */
+const scoreOf = (a: MatchKeyFields, b: MatchKeyFields) =>
+  matchScore(buildMatchKey(a), buildMatchKey(b));
+
 let messages: ReturnType<typeof fakeMessageRepo>;
 let clock: ReturnType<typeof manualClock>;
 let adjudicator: Adjudicator;
@@ -153,6 +165,23 @@ async function snapshot(): Promise<Message[]> {
     .filter((record): record is Message => record !== undefined)
     .sort((a, b) => a.id.localeCompare(b.id));
 }
+
+describe("E2E-5 fixtures", () => {
+  /**
+   * The scenario needs one merged message and one lone one, and the first
+   * assertion below reads that off `memberCount`. It would read the same if
+   * both pairs merged for a different reason, so the scores are pinned here.
+   */
+  test("the first two merge and the third stays apart", () => {
+    const one = newsItem("Story 1", EVENT, "politics,minsk");
+    const two = newsItem("Story 2", EVENT, "politics,minsk");
+    const three = newsItem("Story 3", ELSEWHERE, "politics,brest");
+
+    expect(scoreOf(one, two)).toBeGreaterThanOrEqual(MERGE_THRESHOLD);
+    expect(scoreOf(one, three)).toBeLessThanOrEqual(DISTINCT_THRESHOLD);
+    expect(scoreOf(two, three)).toBeLessThanOrEqual(DISTINCT_THRESHOLD);
+  });
+});
 
 describe("E2E-5 (§11.2 L852)", () => {
   test("the scenario has both a merged message and a lone one", async () => {
