@@ -54,3 +54,22 @@ export const EMBEDDING_BYTE_LENGTH = DIMENSIONS * Float32Array.BYTES_PER_ELEMENT
  * Deferred until the cap is observed to bind.
  */
 export const MATCH_KEY_CAP = 256;
+
+/**
+ * R46. **Provisional**, exactly as `SIMILARITY_THRESHOLD` was: §11.3 (as
+ * rewritten by R48) forbids publishing to production channels until these are
+ * swept against the labelled set, and `cdk synth -c env=prod` refuses until the
+ * result is recorded in `calibration/record.json`.
+ *
+ * Injected rather than read at the comparison site, so recalibration stays a
+ * configuration change rather than a code edit.
+ */
+export const MERGE_THRESHOLD = 0.72;
+export const DISTINCT_THRESHOLD = 0.35;
+
+/**
+ * R46. Fixed rather than swept: five continuous parameters fitted to §11.3's
+ * ~100 labelled pairs would overfit and produce a curve that means nothing.
+ * §11.3 sweeps the two thresholds and takes weights from a coarse grid.
+ */
+export const SCORE_WEIGHTS = { entities: 0.6, titleTokens: 0.25, tags: 0.15 } as const;
