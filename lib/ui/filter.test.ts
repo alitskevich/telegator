@@ -32,7 +32,7 @@ describe("filterByKeyword — §8.3 L744", () => {
   /**
    * "Visible columns" is the load-bearing half of L744. An operator who filters
    * a table to three columns and types a word expects the rows they can read to
-   * explain the match; matching a hidden `id` or `embedding` returns rows with
+   * explain the match; matching a hidden `id` or `tgId` returns rows with
    * no visible reason to be there.
    */
   test("a column that is not visible does not match", () => {

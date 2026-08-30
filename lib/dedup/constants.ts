@@ -33,6 +33,13 @@ export const SQS_MAX_DELAY_SECONDS = 900;
  * AC-3.7 requires; capping by term frequency would discriminate better but is
  * not implementable from a union list, because nothing stores per-term counts.
  * Deferred until the cap is observed to bind.
+ *
+ * 256, not 64. The design's R45 table row said "capped at 64" — a leftover from
+ * an earlier draft that its §5 supersedes at length, giving the ~200-term
+ * arithmetic above and rejecting 64 explicitly (64 would bind on an ordinary
+ * multi-member story, which turns a storage bound into a signal filter that
+ * silently discards discriminating terms). §5 is the reasoned text and it is
+ * what this constant follows; the table row is corrected to match.
  */
 export const MATCH_KEY_CAP = 256;
 

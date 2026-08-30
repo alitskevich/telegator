@@ -330,7 +330,7 @@ environment creates the index once with the new projection and is unaffected.
 | --- | --- | --- |
 | R43 | §5.3 | The embedding model is removed entirely; dedup no longer embeds. |
 | R44 | §7.2 L590, L598 | `embedding` Binary replaced by three String Lists plus `memberIds`; `date-index` projects those instead. |
-| R45 | §3.3 | Merge rule `embedding <- elementwise mean` becomes `key <- sorted union`, capped at 64. |
+| R45 | §3.3 | Merge rule `embedding <- elementwise mean` becomes `key <- sorted union`, capped at `MATCH_KEY_CAP` = 256 (see §5). |
 | R46 | §6 L495-497 | One embed call per batch becomes pure match-key construction; matching is weighted Jaccard with a two-threshold band. |
 | R47 | §3.3 AC-3.1, AC-3.3, AC-3.6 | Restated from cosine terms. Ids are preserved; wording is reconciled in the implementing comments. |
 | R48 | §11.3 | Recalibration rewritten: no embedding step, 2-D sweep, three-way objective, adjudicator accuracy. |

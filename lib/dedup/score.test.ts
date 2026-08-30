@@ -30,12 +30,21 @@ describe("matchScore (R46)", () => {
     expect(matchScore(a, b)).toBe(0);
   });
 
+  /**
+   * Three comparisons, not two: each partner shares exactly one component in
+   * full and neither of the others, so each score is that component's weight
+   * alone. Asserting only entities > tags left the middle term unpinned — the
+   * name claimed an ordering the test did not establish, and a weighting that
+   * put titleTokens above entities would have passed it.
+   */
   test("weights entities above title above tags", () => {
     const base = key({ title: "Alpha Beta", properNames: "Minsk", tags: "fire" });
     const sharedEntity = key({ title: "Gamma Delta", properNames: "Minsk", tags: "safety" });
+    const sharedTitle = key({ title: "Alpha Beta", properNames: "Brest", tags: "safety" });
     const sharedTag = key({ title: "Gamma Delta", properNames: "Brest", tags: "fire" });
 
-    expect(matchScore(base, sharedEntity)).toBeGreaterThan(matchScore(base, sharedTag));
+    expect(matchScore(base, sharedEntity)).toBeGreaterThan(matchScore(base, sharedTitle));
+    expect(matchScore(base, sharedTitle)).toBeGreaterThan(matchScore(base, sharedTag));
   });
 
   test("is symmetric, so candidate ordering cannot change a verdict", () => {

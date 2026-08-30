@@ -1,6 +1,11 @@
 /**
- * §5.1 L392 — "Decision: Amazon Bedrock." Classification uses Claude,
- * embeddings use Cohere, and IAM replaces API keys (§7.6 L664).
+ * §5.1 L392 — "Decision: Amazon Bedrock." Classification uses Claude, and IAM
+ * replaces API keys (§7.6 L664). R46's band adjudicator is the second Claude
+ * caller and goes through the same Mantle Messages API.
+ *
+ * §5.1 also names Cohere for §5.3's multilingual embeddings. R43 deleted the
+ * embedding stage entirely — dedup compares match keys, not vectors — so no
+ * constant here names an embedding model, and none should be added back.
  *
  * The alternative sketched at §5.1 L401–407 (Claude Platform on AWS) is not
  * built: L409 closes it with "This spec proceeds with Bedrock as decided; the
