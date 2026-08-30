@@ -34,7 +34,7 @@ export interface MatchKeyFields {
 
 /** Punctuation only; letters of any script survive, since `peoples` may not be ASCII. */
 const PUNCTUATION = /[^\p{L}\p{N}\s-]/gu;
-const WHITESPACE = /\s+/u;
+const WHITESPACE = /\s+/gu;
 
 function canonical(value: string): string {
   return value.toLowerCase().replace(PUNCTUATION, "").trim().replace(WHITESPACE, " ");
@@ -78,7 +78,11 @@ export function unionMatchKeys(a: MatchKey, b: MatchKey): MatchKey {
   };
 }
 
-/** R44 — the stored attributes, as the `MatchKey` the scorer consumes. */
+/**
+ * R44 — §7.2 L590–598 stores a dedup match as three projections for the
+ * `date-index` (L598). This function reads them back as a `MatchKey` for the
+ * scorer, structurally: the read path never builds a full payload.
+ */
 export function matchKeyOf(record: {
   readonly keyEntities: readonly string[];
   readonly keyTitle: readonly string[];

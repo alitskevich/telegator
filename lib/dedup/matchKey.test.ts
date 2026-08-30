@@ -23,6 +23,15 @@ describe("buildMatchKey (R46)", () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 
+  /** Regression: multiple separate whitespace runs must collapse. */
+  test("collapsesall whitespace runs, not just the first", () => {
+    const withMultipleRuns = buildMatchKey({ peoples: "Ivan  Petrov  Jr" });
+    const withSingleSpaces = buildMatchKey({ peoples: "Ivan Petrov Jr" });
+
+    expect(JSON.stringify(withMultipleRuns)).toBe(JSON.stringify(withSingleSpaces));
+    expect(withMultipleRuns.entities).toEqual(["ivan petrov jr"]);
+  });
+
   test("omits absent fields rather than emitting empty strings", () => {
     const key = buildMatchKey({ title: "Gomel Protest" });
 
@@ -52,6 +61,20 @@ describe("unionMatchKeys (R45)", () => {
 });
 
 describe("matchKeyOf (R44)", () => {
+  test("maps keyEntities to entities, keyTitle to titleTokens, keyTags to tags", () => {
+    const record = {
+      keyEntities: ["entity-a", "entity-b"],
+      keyTitle: ["title-x", "title-y"],
+      keyTags: ["tag-p", "tag-q"],
+    };
+
+    const key = matchKeyOf(record);
+
+    expect(key.entities).toEqual(["entity-a", "entity-b"]);
+    expect(key.titleTokens).toEqual(["title-x", "title-y"]);
+    expect(key.tags).toEqual(["tag-p", "tag-q"]);
+  });
+
   test("round-trips what matchKeyAttributes produces", () => {
     const record = {
       keyEntities: ["minsk", "gomel"],
@@ -67,6 +90,20 @@ describe("matchKeyOf (R44)", () => {
 });
 
 describe("matchKeyAttributes (R44)", () => {
+  test("maps entities to keyEntities, titleTokens to keyTitle, tags to keyTags", () => {
+    const key = {
+      entities: ["entity-a", "entity-b"],
+      titleTokens: ["title-x", "title-y"],
+      tags: ["tag-p", "tag-q"],
+    };
+
+    const attributes = matchKeyAttributes(key);
+
+    expect(attributes.keyEntities).toEqual(["entity-a", "entity-b"]);
+    expect(attributes.keyTitle).toEqual(["title-x", "title-y"]);
+    expect(attributes.keyTags).toEqual(["tag-p", "tag-q"]);
+  });
+
   test("round-trips what matchKeyOf produces", () => {
     const key = {
       entities: ["minsk", "gomel"],
