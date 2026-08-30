@@ -1,7 +1,7 @@
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { afterAll, describe, expect, test, vi } from "vitest";
-import { CLASSIFIER_MODEL_ID, EMBEDDING_MODEL_ID } from "../../lib/ai/constants";
+import { CLASSIFIER_MODEL_ID, EMBEDDING_MODEL_ID, MANTLE_PROJECT_ID } from "../../lib/ai/constants";
 import { METRIC_NAMESPACE } from "../../lib/metrics/ports";
 import { cdkContext } from "../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
@@ -177,16 +177,30 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     return byFunction;
   }
 
-  const modelsFor = (template: Template, functionName: string) =>
+  /**
+   * Both actions, because §5's two Bedrock calls do not share an API. Filtering
+   * on `bedrock:InvokeModel` alone is what let R42 ship: analyze's grant named
+   * an action its client never issues, and a test that only looked for that
+   * action saw a well-formed statement and passed.
+   */
+  const BEDROCK_ACTIONS = ["bedrock:InvokeModel", "bedrock-mantle:CreateInference"];
+
+  const bedrockFor = (template: Template, functionName: string) =>
     JSON.stringify(
       (statementsByFunction(template).get(functionName) ?? []).filter((statement) =>
-        [statement.Action].flat().map(String).includes("bedrock:InvokeModel"),
+        [statement.Action]
+          .flat()
+          .map(String)
+          .some((action) => BEDROCK_ACTIONS.includes(action)),
       ),
     );
 
-  test("grants bedrock:InvokeModel to exactly two functions, on a named model", () => {
+  test("grants Bedrock to exactly two functions, each on a named resource", () => {
     const bedrock = policyStatements(templateFor()).filter((s) =>
-      [s.Action].flat().map(String).includes("bedrock:InvokeModel"),
+      [s.Action]
+        .flat()
+        .map(String)
+        .some((action) => BEDROCK_ACTIONS.includes(action)),
     );
 
     expect(bedrock).toHaveLength(2);
@@ -196,22 +210,27 @@ describe("IAM (§7.6 L668-673, R24)", () => {
   });
 
   /**
-   * §7.6 L669 — analyze classifies, so it gets the Claude model and nothing
-   * else. The previous version of this test counted the statements and checked
-   * they were not `*`, which a swap of the two ARNs would have passed: analyze
-   * would then hold only an embedding model and every classification would fail
-   * at runtime with an access error naming a model nobody expected it to call.
+   * R42 — analyze classifies through the Mantle API, so it gets a project and
+   * no foundation model at all. §7.6 L669 says `bedrock:InvokeModel` on the
+   * Claude model ARN; §5.1 L395–396 mandates `AnthropicBedrockMantle`, which
+   * signs for `bedrock-mantle` and never calls `InvokeModel`. Dev held the
+   * spec's statement and every classification still failed 403.
+   *
+   * `foundation-model` is asserted absent rather than the classifier id: the id
+   * is not what was wrong. A grant naming the right model on the wrong API is
+   * exactly the defect this replaces, and it reads as correct.
    */
-  test("analyze may invoke the classifier model, and not the embedding model", () => {
-    const models = modelsFor(templateFor(), "telegator-dev-analyze");
+  test("analyze may create a Mantle inference, and invoke no model directly", () => {
+    const grants = bedrockFor(templateFor(), "telegator-dev-analyze");
 
-    expect(models).toContain(CLASSIFIER_MODEL_ID);
-    expect(models).not.toContain(EMBEDDING_MODEL_ID);
+    expect(grants).toContain(`project/${MANTLE_PROJECT_ID}`);
+    expect(grants).not.toContain("foundation-model");
+    expect(grants).not.toContain(EMBEDDING_MODEL_ID);
   });
 
   /** §7.6 L670 — aggregate embeds, so it gets the Cohere model and nothing else. */
   test("aggregate may invoke the embedding model, and not the classifier model", () => {
-    const models = modelsFor(templateFor(), "telegator-dev-aggregate");
+    const models = bedrockFor(templateFor(), "telegator-dev-aggregate");
 
     expect(models).toContain(EMBEDDING_MODEL_ID);
     expect(models).not.toContain(CLASSIFIER_MODEL_ID);
@@ -226,7 +245,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
       "telegator-dev-publish",
       "telegator-dev-dlq-replay",
     ]) {
-      expect(modelsFor(template, name)).toBe("[]");
+      expect(bedrockFor(template, name)).toBe("[]");
     }
   });
 

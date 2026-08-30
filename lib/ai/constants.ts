@@ -19,11 +19,35 @@
  * and which §12.1 omits only because it records a tier, not an id. §5.1 L411
  * writes this exact string.
  *
- * One constant, so the disagreement cannot be re-litigated in code, and so
- * §7.6 L669's `bedrock:InvokeModel` ARN is derived from the same value the
- * request uses rather than typed twice.
+ * One constant, so the disagreement cannot be re-litigated in code, and so the
+ * id the request carries is written once.
+ *
+ * R42 removed the second reader: §7.6 L669's `bedrock:InvokeModel` ARN used to
+ * be derived from this value, and analyze no longer holds that grant at all —
+ * see `MANTLE_PROJECT_ID`.
  */
 export const CLASSIFIER_MODEL_ID = "anthropic.claude-haiku-4-5";
+
+/**
+ * R42. §7.6 L669 grants analyze `bedrock:InvokeModel` on the Claude model ARN.
+ * That is not the API §5.1 L395-396 makes it call: `AnthropicBedrockMantle`
+ * SigV4-signs for the service `bedrock-mantle` and posts to
+ * `bedrock-mantle.{region}.api.aws/anthropic`, which authorizes
+ * `bedrock-mantle:CreateInference` on a *project* — the model id is carried in
+ * the request body, not in the resource. So the spec's statement is inert, and
+ * dev held it while every classification failed with
+ *
+ *   not authorized to perform: bedrock-mantle:CreateInference on resource:
+ *   arn:aws:bedrock-mantle:eu-central-1:...:project/default
+ *
+ * The reconciliation is a grant §7.6 does not describe, because the client §5.1
+ * mandates has no other one that works. `default` is not a choice this code
+ * makes: `BedrockMantleClientOptions` exposes no project field (verified
+ * against the installed `@anthropic-ai/bedrock-sdk` 0.33.3), so the endpoint
+ * resolves the account's default project and the ARN above is what the service
+ * itself named.
+ */
+export const MANTLE_PROJECT_ID = "default";
 
 /** §5.2 L420. */
 export const CLASSIFIER_MAX_TOKENS = 2000;

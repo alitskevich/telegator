@@ -15,7 +15,7 @@ import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import type { Construct } from "constructs";
 import { ENV_VARS } from "../../handlers/env";
-import { CLASSIFIER_MODEL_ID, EMBEDDING_MODEL_ID } from "../../lib/ai/constants";
+import { EMBEDDING_MODEL_ID, MANTLE_PROJECT_ID } from "../../lib/ai/constants";
 import { METRIC_NAMESPACE } from "../../lib/metrics/ports";
 import type { TelegatorConfig } from "./config";
 import type { TelegatorDataStack } from "./data-stack";
@@ -287,7 +287,7 @@ export class TelegatorPipelineStack extends Stack {
     // §7.6 L669.
     queues.analyze.grantConsumeMessages(analyze);
     queues.aggregate.grantSendMessages(analyze);
-    analyze.addToRolePolicy(invokeModel(CLASSIFIER_MODEL_ID));
+    analyze.addToRolePolicy(createInference());
 
     // §7.6 L670.
     queues.aggregate.grantConsumeMessages(aggregate);
@@ -469,15 +469,41 @@ export class TelegatorPipelineStack extends Stack {
 }
 
 /**
- * §7.6 L669–670 scope `bedrock:InvokeModel` to a model ARN. A foundation-model
- * ARN carries an empty account field, and the region stays a token so the stack
+ * §7.6 L670 scopes `bedrock:InvokeModel` to a model ARN. A foundation-model ARN
+ * carries an empty account field, and the region stays a token so the stack
  * remains environment-agnostic (a lookup would break the synth gate).
+ *
+ * R42 — L669 grants analyze the same statement, and analyze does not use it.
+ * Only aggregate's Cohere call reaches `bedrock-runtime`; see `createInference`.
  */
 function invokeModel(modelId: string): PolicyStatement {
   return new PolicyStatement({
     effect: Effect.ALLOW,
     actions: ["bedrock:InvokeModel"],
     resources: [`arn:${Aws.PARTITION}:bedrock:${Aws.REGION}::foundation-model/${modelId}`],
+  });
+}
+
+/**
+ * R42 — analyze's replacement for the `bedrock:InvokeModel` statement §7.6 L669
+ * describes. `AnthropicBedrockMantle` (§5.1 L395-396) signs for the
+ * `bedrock-mantle` service, which authorizes `CreateInference` on a project;
+ * the InvokeModel grant it held instead was for an API it never calls, so every
+ * classification 403'd against a role that looked correctly scoped.
+ *
+ * Unlike a foundation-model ARN this one is account-qualified, and the model is
+ * not in it: Mantle carries the id in the request body, so this statement
+ * cannot restrict which model analyze classifies with. `lib/ai/constants.ts`
+ * fixing `CLASSIFIER_MODEL_ID` is the only thing that does — recorded here
+ * because it is a real loss of least privilege against L669's intent.
+ */
+function createInference(): PolicyStatement {
+  return new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ["bedrock-mantle:CreateInference"],
+    resources: [
+      `arn:${Aws.PARTITION}:bedrock-mantle:${Aws.REGION}:${Aws.ACCOUNT_ID}:project/${MANTLE_PROJECT_ID}`,
+    ],
   });
 }
 
