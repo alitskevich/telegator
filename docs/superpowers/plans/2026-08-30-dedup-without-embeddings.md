@@ -140,7 +140,9 @@ export interface MatchKeyFields {
 
 /** Punctuation only; letters of any script survive, since `peoples` may not be ASCII. */
 const PUNCTUATION = /[^\p{L}\p{N}\s-]/gu;
-const WHITESPACE = /\s+/u;
+// `g` is load-bearing: a non-global regex replaces only the FIRST match, so
+// "Ivan  Petrov  Jr" would keep its second gap and break byte-identity.
+const WHITESPACE = /\s+/gu;
 
 function canonical(value: string): string {
   return value.toLowerCase().replace(PUNCTUATION, "").trim().replace(WHITESPACE, " ");
