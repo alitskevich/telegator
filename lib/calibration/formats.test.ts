@@ -102,6 +102,51 @@ describe("toKeyPairs", () => {
     expect(() => toKeyPairs([{ a: "x/1", b: "x/9", label: "same" }], items)).toThrow(/x\/9/);
     expect(() => toKeyPairs([{ a: "x/9", b: "x/1", label: "same" }], items)).toThrow(/x\/9/);
   });
+
+  /**
+   * A self-pair scores 1.0 against itself under `matchScore` and would inflate
+   * the auto-merge region's apparent precision — exactly the metric the
+   * three-way objective exists to protect. Ported from the embedding-era
+   * `distinctPairs`'s "pair with itself is rejected" guard.
+   */
+  test("a pair with itself is rejected", () => {
+    expect(() => toKeyPairs([{ a: "x/1", b: "x/1", label: "same" }], items)).toThrow(/itself/);
+  });
+
+  /**
+   * §6 compares without regard to order, so `(a,b)` and `(b,a)` are one
+   * observation. Counting both would double that pair's weight against every
+   * other pair in the set. Ported from `distinctPairs`.
+   */
+  test("a mirrored duplicate (a,b) / (b,a) is one observation, not two", () => {
+    const pairs = toKeyPairs(
+      [
+        { a: "x/1", b: "x/2", label: "same" },
+        { a: "x/2", b: "x/1", label: "same" },
+      ],
+      items,
+    );
+
+    expect(pairs).toHaveLength(1);
+  });
+
+  /**
+   * Two labels for one pair is a labelling error, not a tie to resolve
+   * silently — resolving it either way would decide the calibration on
+   * whichever line happened to come first in the file. Ported from
+   * `distinctPairs`.
+   */
+  test("contradictory labels for one pair are rejected", () => {
+    expect(() =>
+      toKeyPairs(
+        [
+          { a: "x/1", b: "x/2", label: "same" },
+          { a: "x/2", b: "x/1", label: "different" },
+        ],
+        items,
+      ),
+    ).toThrow(/conflict/i);
+  });
 });
 
 describe("hashLabelledSet", () => {

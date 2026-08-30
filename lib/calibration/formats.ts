@@ -82,6 +82,53 @@ export function parseItems(raw: unknown): Record<string, CalibrationItem> {
 }
 
 /**
+ * §6 compares an item against a candidate without regard to order, so `(a,b)`
+ * and `(b,a)` are one observation.
+ */
+const keyOf = (pair: LabelledPair) => [pair.a, pair.b].sort().join(" ");
+
+/**
+ * Collapse mirrored duplicates and reject what cannot be one pair, before the
+ * ids are erased into `fields`/`other`.
+ *
+ * Ported from the embedding-era `ScoredPair` harness's `distinctPairs` — the
+ * rewrite from id-keyed pairs to id-less `LabelledKeyPair`s dropped these
+ * guards by omission, not by decision, and they matter more here than they
+ * looked: the labelled set is what `autoMergePrecision`, `autoSplitRecall` and
+ * `bandFraction` are computed from, and those numbers are what
+ * `calibration/record.json` asks production to trust. A self-pair scores 1.0
+ * against itself and inflates the auto-merge region's apparent precision —
+ * exactly the metric the three-way objective is built to protect. A pair
+ * counted twice (once as `(a,b)`, once as `(b,a)`) silently doubles its
+ * weight against every other pair in the set. This has to run over
+ * `LabelledPair`, before `toKeyPairs` resolves ids to fields, because `a`/`b`
+ * are the only handle a duplicate or a self-pair can be recognised by.
+ */
+function distinctLabelledPairs(pairs: readonly LabelledPair[]): LabelledPair[] {
+  const seen = new Map<string, LabelledPair>();
+
+  for (const pair of pairs) {
+    if (pair.a === pair.b) throw new Error(`pairs.jsonl: ${pair.a} is paired with itself`);
+
+    const key = keyOf(pair);
+    const existing = seen.get(key);
+
+    if (existing === undefined) {
+      seen.set(key, pair);
+      continue;
+    }
+
+    // A pair labelled both ways is a labelling error. Picking one would decide
+    // the calibration on whichever line happened to come first in the file.
+    if (existing.label !== pair.label) {
+      throw new Error(`pairs.jsonl: conflicting labels for pair ${pair.a} / ${pair.b}`);
+    }
+  }
+
+  return [...seen.values()];
+}
+
+/**
  * Join labelled pairs to the match-key fields `sweepBands` needs.
  *
  * `CalibrationItem` is a superset of `MatchKeyFields` — it carries `id` too —
@@ -91,7 +138,7 @@ export function toKeyPairs(
   pairs: readonly LabelledPair[],
   items: Readonly<Record<string, CalibrationItem>>,
 ): LabelledKeyPair[] {
-  return pairs.map((pair) => {
+  return distinctLabelledPairs(pairs).map((pair) => {
     const fields: MatchKeyFields | undefined = items[pair.a];
     const other: MatchKeyFields | undefined = items[pair.b];
 
