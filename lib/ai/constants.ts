@@ -77,3 +77,12 @@ export const EMBEDDING_INPUT_TYPE = "search_document";
 
 /** §5.3 L467 — Cohere accepts up to 96 texts per call; §6's 10-item batch fits in one. */
 export const EMBEDDING_MAX_BATCH = 96;
+
+/**
+ * R46. Its own constant, defaulting to the classifier's tier, so the two tasks
+ * can diverge later without reopening R2's §5.1-versus-§12.1 disagreement.
+ */
+export const ADJUDICATOR_MODEL_ID = CLASSIFIER_MODEL_ID;
+
+/** R46 — a verdict list for at most 10 pairs is far smaller than a classification. */
+export const ADJUDICATOR_MAX_TOKENS = 1000;

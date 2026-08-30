@@ -1,5 +1,10 @@
 import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier, EmbeddingProvider } from "../../lib/ai/ports";
+import type {
+  AdjudicationPair,
+  Adjudicator,
+  Classifier,
+  EmbeddingProvider,
+} from "../../lib/ai/ports";
 
 export interface StubClassifier extends Classifier {
   /** Bodies this classifier was asked about, in order. */
@@ -75,6 +80,34 @@ export function stubEmbedder(vectors: Readonly<Record<string, number[]>>): StubE
         if (vector === undefined) throw new Error(`stubEmbedder has no vector for text: ${text}`);
         return vector;
       });
+    },
+  };
+}
+
+/**
+ * Decides by a caller-supplied predicate, and records what it was asked.
+ * `calls` is what lets a test assert the band produced ONE call for the batch
+ * rather than one per pair.
+ */
+export function fakeAdjudicator(
+  decide: (pair: AdjudicationPair) => boolean,
+): Adjudicator & { readonly calls: AdjudicationPair[][] } {
+  const calls: AdjudicationPair[][] = [];
+
+  return {
+    calls,
+    adjudicate: async (pairs) => {
+      calls.push([...pairs]);
+      return new Map(pairs.map((pair) => [pair.id, decide(pair)]));
+    },
+  };
+}
+
+/** Throws, to drive R46's "adjudication failure splits" path. */
+export function failingAdjudicator(message = "adjudicator unavailable"): Adjudicator {
+  return {
+    adjudicate: async () => {
+      throw new Error(message);
     },
   };
 }

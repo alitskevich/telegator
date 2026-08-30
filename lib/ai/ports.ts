@@ -26,3 +26,40 @@ export interface EmbeddingProvider {
   /** Returns one vector per input text, positionally aligned with `texts`. */
   embedBatch(texts: readonly string[], dimensions: number): Promise<number[][]>;
 }
+
+/**
+ * R46 — the band adjudicator's inputs.
+ *
+ * Only the English structured fields cross this boundary. `body` (Russian or
+ * Ukrainian) and `summary` (Belarusian) are deliberately excluded: §5.2 has
+ * already reduced the discriminating signal to one language, and sending source
+ * text back to a model would make the call large, slow and language-dependent
+ * for no gain.
+ */
+export interface AdjudicationFields {
+  readonly title: string;
+  readonly entities: readonly string[];
+  readonly tags: readonly string[];
+  readonly category: string | undefined;
+  readonly location: string | undefined;
+  readonly date: string;
+}
+
+export interface AdjudicationPair {
+  /** Caller-assigned and stable. Verdicts come back keyed by this, never positionally. */
+  readonly id: string;
+  readonly item: AdjudicationFields;
+  readonly candidate: AdjudicationFields;
+}
+
+/**
+ * One call per aggregate batch, carrying at most one pair per item, because
+ * only each item's highest-scoring candidate is ever ambiguous.
+ *
+ * Returns a map keyed by `AdjudicationPair.id`. Never an array: §6 indexed one
+ * provider response positionally against its input, and `parseEmbeddings`
+ * exists to catch what that cost.
+ */
+export interface Adjudicator {
+  adjudicate(pairs: readonly AdjudicationPair[]): Promise<ReadonlyMap<string, boolean>>;
+}
