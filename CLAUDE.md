@@ -24,7 +24,7 @@ suppression.
 ## How the code is arranged
 
 - `lib/` holds every rule. `handlers/` and `app/` are thin wrappers over it.
-- Every AWS, Telegram and Bedrock boundary is an interface in a `ports.ts` with
+- Every AWS, Telegram and OpenRouter boundary is an interface in a `ports.ts` with
   an in-memory fake in `test/fakes/`. **No test touches the network.**
 - Zod schemas are the source of truth; types come from `z.infer`.
 - `aws-sdk-client-mock` does not typecheck against the installed SDK. Inject a
@@ -66,6 +66,13 @@ Each of these is enforced by a test, and each was violated at least once.
   `handlers/` and `actions/`.
 - A source scan that names what it forbids will match itself. That has happened
   four times; exclude the file, or scan only shipped source.
+- **None of the four gates makes a model call**, and none can. `vitest` forbids
+  the network, and the other three never execute a request — so a base URL that
+  composes to the wrong path, an unrecognised auth header or an `output_config`
+  the tier rejects all pass every gate against an adapter that cannot classify a
+  single item. `npm run smoke:openrouter` covers that gap offline (real adapter,
+  real SDK, canned far end); add `-- --live` with `OPENROUTER_API_KEY` set for one
+  real call.
 - **None of the four gates runs a bundler.** `npx next build` is the only thing
   that compiles `app/`, and it needs §9.3's environment set, so it is not one of
   them. A change that breaks the dashboard at runtime — resolution, a client/

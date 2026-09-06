@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { ClassificationRequest } from "../pipeline/analyze/index";
 import { buildClassificationRequest } from "../pipeline/analyze/index";
-import { type ClassifierClient, createBedrockClassifier } from "./bedrock";
+import { type ClassifierClient, createOpenRouterClassifier } from "./openrouter";
 
 /**
- * Tests for the Bedrock classifier adapter (§5.1 L392).
+ * Tests for the OpenRouter classifier adapter (§5.1, as revised by R50).
  *
- * R3 — this build cannot reach Bedrock, so nothing here asserts anything about
- * what a model returns. Every test is about the *request shape* the adapter
- * puts on the wire and the *response handling* it applies to bytes handed back
- * to it. The Anthropic client is a hand-injected fake. No network involved.
+ * R3 — this build cannot reach a model provider, so nothing here asserts
+ * anything about what a model returns. Every test is about the *request shape*
+ * the adapter puts on the wire and the *response handling* it applies to bytes
+ * handed back to it. The Messages client is a hand-injected fake. No network
+ * involved.
  */
 
 /** A response that satisfies `NewsItemSchema`; `category` is from §5.4's enum. */
@@ -49,10 +50,10 @@ function fakeClassifierClient(
   };
 }
 
-describe("createBedrockClassifier", () => {
+describe("createOpenRouterClassifier", () => {
   it("sends exactly the request buildClassificationRequest produces", async () => {
     const fake = fakeClassifierClient(async () => textResponse(VALID_ITEM));
-    const classifier = createBedrockClassifier({ client: fake.client });
+    const classifier = createOpenRouterClassifier({ client: fake.client });
 
     await classifier.classify(ITEM_BODY);
 
@@ -61,7 +62,7 @@ describe("createBedrockClassifier", () => {
 
   it("passes the effort option through to the request builder (R3)", async () => {
     const fake = fakeClassifierClient(async () => textResponse(VALID_ITEM));
-    const classifier = createBedrockClassifier({ client: fake.client, effort: false });
+    const classifier = createOpenRouterClassifier({ client: fake.client, effort: false });
 
     await classifier.classify(ITEM_BODY);
 
@@ -71,7 +72,7 @@ describe("createBedrockClassifier", () => {
 
   it("parses a valid response with NewsItemSchema", async () => {
     const fake = fakeClassifierClient(async () => textResponse(VALID_ITEM));
-    const classifier = createBedrockClassifier({ client: fake.client });
+    const classifier = createOpenRouterClassifier({ client: fake.client });
 
     await expect(classifier.classify(ITEM_BODY)).resolves.toEqual(VALID_ITEM);
   });
@@ -85,7 +86,7 @@ describe("createBedrockClassifier", () => {
         { type: "text", text: json.slice(split) },
       ],
     }));
-    const classifier = createBedrockClassifier({ client: fake.client });
+    const classifier = createOpenRouterClassifier({ client: fake.client });
 
     await expect(classifier.classify(ITEM_BODY)).resolves.toEqual(VALID_ITEM);
   });
@@ -97,7 +98,7 @@ describe("createBedrockClassifier", () => {
         { type: "text", text: JSON.stringify(VALID_ITEM) },
       ],
     }));
-    const classifier = createBedrockClassifier({ client: fake.client });
+    const classifier = createOpenRouterClassifier({ client: fake.client });
 
     await expect(classifier.classify(ITEM_BODY)).resolves.toEqual(VALID_ITEM);
   });
@@ -106,7 +107,7 @@ describe("createBedrockClassifier", () => {
     const fake = fakeClassifierClient(async () =>
       textResponse({ ...VALID_ITEM, category: "not-a-real-category" }),
     );
-    const classifier = createBedrockClassifier({ client: fake.client });
+    const classifier = createOpenRouterClassifier({ client: fake.client });
 
     await expect(classifier.classify(ITEM_BODY)).rejects.toThrow();
   });
@@ -114,14 +115,14 @@ describe("createBedrockClassifier", () => {
   it("throws when a required field is missing", async () => {
     const { country: _dropped, ...withoutCountry } = VALID_ITEM;
     const fake = fakeClassifierClient(async () => textResponse(withoutCountry));
-    const classifier = createBedrockClassifier({ client: fake.client });
+    const classifier = createOpenRouterClassifier({ client: fake.client });
 
     await expect(classifier.classify(ITEM_BODY)).rejects.toThrow();
   });
 
   it("throws when the response envelope is not a Messages response", async () => {
     const fake = fakeClassifierClient(async () => ({ nonsense: true }));
-    const classifier = createBedrockClassifier({ client: fake.client });
+    const classifier = createOpenRouterClassifier({ client: fake.client });
 
     await expect(classifier.classify(ITEM_BODY)).rejects.toThrow();
   });
@@ -130,7 +131,7 @@ describe("createBedrockClassifier", () => {
     const fake = fakeClassifierClient(async () => ({
       content: [{ type: "text", text: "I'm sorry, I can't help with that." }],
     }));
-    const classifier = createBedrockClassifier({ client: fake.client });
+    const classifier = createOpenRouterClassifier({ client: fake.client });
 
     await expect(classifier.classify(ITEM_BODY)).rejects.toThrow();
   });
@@ -140,12 +141,33 @@ describe("createBedrockClassifier", () => {
     const fake = fakeClassifierClient(async () => {
       throw providerError;
     });
-    const classifier = createBedrockClassifier({ client: fake.client });
+    const classifier = createOpenRouterClassifier({ client: fake.client });
 
     await expect(classifier.classify(ITEM_BODY)).rejects.toBe(providerError);
   });
 
   it("constructs no client until a call is made", () => {
-    expect(() => createBedrockClassifier()).not.toThrow();
+    expect(() => createOpenRouterClassifier()).not.toThrow();
+  });
+
+  /**
+   * R50 — under Bedrock a missing credential surfaced from deep inside the AWS
+   * credential chain; under OpenRouter it is a wiring fault this adapter can
+   * name itself. §3.2 L246 sends a throw to SQS retry, so an unnamed one would
+   * spend six hours of retries filling the DLQ before an operator saw the
+   * cause.
+   */
+  it("names the missing key provider rather than failing inside the SDK", async () => {
+    await expect(createOpenRouterClassifier().classify(ITEM_BODY)).rejects.toThrow(
+      /OpenRouter API key/,
+    );
+  });
+
+  it("does not reach for a key when a client is injected", async () => {
+    const fake = fakeClassifierClient(async () => textResponse(VALID_ITEM));
+
+    await expect(
+      createOpenRouterClassifier({ client: fake.client }).classify(ITEM_BODY),
+    ).resolves.toEqual(VALID_ITEM);
   });
 });

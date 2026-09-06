@@ -23,10 +23,10 @@ describe("stubClassifier", () => {
    * final). AC-2.2 and E2E-7 both need a classifier that fails on demand.
    */
   test("throws for a body scripted to fail, modelling a provider error", async () => {
-    const boom = new Error("bedrock unavailable");
+    const boom = new Error("openrouter unavailable");
     const classifier = stubClassifier({ "post one": newsItem }, { "post two": boom });
 
-    await expect(classifier.classify("post two")).rejects.toThrow("bedrock unavailable");
+    await expect(classifier.classify("post two")).rejects.toThrow("openrouter unavailable");
   });
 
   test("throws for an unscripted body rather than inventing a classification", async () => {

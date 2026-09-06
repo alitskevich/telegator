@@ -1,7 +1,7 @@
 # Telegator
 
 Reads Telegram news channels, deduplicates and categorises the posts with
-Bedrock, and publishes merged digests back to Telegram. An operator dashboard
+Claude via OpenRouter, and publishes merged digests back to Telegram. An operator dashboard
 curates sources, reviews messages and replays failures.
 
 The full design is [`docs/telegator-design.md`](docs/telegator-design.md) — the

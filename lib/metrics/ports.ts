@@ -26,7 +26,7 @@ export const METRIC_NAMES = [
 
   /**
    * R50 — §7.7 L684–693's table lists neither of these, because §6 had no model
-   * call to count. R46's band is both a cost centre (one Bedrock request per
+   * call to count. R46's band is both a cost centre (one OpenRouter request per
    * aggregate invocation that has an ambiguous pair) and a silent failure mode:
    * an adjudication that throws splits rather than merging, which looks exactly
    * like correct behaviour from the outside. §7.7 L679 makes CloudWatch the

@@ -12,9 +12,9 @@ Ledger: `.claude/build-ledger.local.md` (gitignored — never commit it)
 ## Mission
 
 Build the system `docs/telegator-design.md` describes: a Telegram news pipeline
-on AWS (SQS, Lambda, DynamoDB, Bedrock) with a Next.js operator dashboard, to
-the acceptance criteria in §11 — verified **locally**. Then write `README.md`
-and `CLAUDE.md` so they describe the repo that now exists.
+on AWS (SQS, Lambda, DynamoDB) with Claude via OpenRouter and a Next.js operator
+dashboard, to the acceptance criteria in §11 — verified **locally**. Then write
+`README.md` and `CLAUDE.md` so they describe the repo that now exists.
 
 The spec is the contract. Where this file and the spec disagree about *what to
 build*, the spec wins. Where they disagree about *how the loop runs*, this file
@@ -46,8 +46,8 @@ Consequences you must design around from Phase 1, not discover in Phase 6:
   stages against `aws-sdk-client-mock` and in-memory fakes behind the interfaces
   Phase 2 defines. An E2E criterion that genuinely needs running infrastructure
   is deploy-gated: mark it BLOCKED with that reason rather than faking a pass.
-- **Bedrock is unreachable.** Every model call goes through an interface with a
-  deterministic fake in tests. No test may require network.
+- **No model provider is reachable.** Every model call goes through an interface
+  with a deterministic fake in tests. No test may require network.
 
 ---
 
@@ -258,7 +258,7 @@ For a stage needing heavy work, use
 stage's spec sections, its ledger line, and the interfaces it must use, then
 review its diff yourself before committing. You own the commit.
 
-Real Telegram HTML and real Bedrock responses must be captured as fixtures, not
+Real Telegram HTML and real model responses must be captured as fixtures, not
 fetched at test time.
 
 ### Phase 4 — Infrastructure
@@ -330,7 +330,7 @@ Two criteria are deploy-gated by construction, and you must not pretend
 otherwise:
 
 - **§11.3 similarity-threshold recalibration.** It needs ≥100 hand-judged pairs
-  embedded by the real Cohere model. You have no Bedrock access and no labelled
+  embedded by a real embedding model. You have no model access and no labelled
   set. Mark it BLOCKED — *and* deliver the parts that do not need the model: the
   sweep harness (0.70 → 0.95 in 0.01 steps), the precision/recall computation,
   and the file format for the labelled set, all unit-tested against synthetic
@@ -370,7 +370,7 @@ See *Completion Gate* below. This phase has exactly one item.
 right reason, then implement. A test written after the code it tests is a
 regression net, not a specification, and this loop needs specifications.
 
-**No network in tests, ever.** Telegram, Bedrock, DynamoDB and SQS all sit
+**No network in tests, ever.** Telegram, OpenRouter, DynamoDB and SQS all sit
 behind interfaces with deterministic fakes. A test that would fail on a plane is
 broken.
 

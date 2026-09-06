@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   type AdjudicatorClient,
-  createBedrockAdjudicator,
+  createOpenRouterAdjudicator,
   parseVerdicts,
   VERDICTS_SCHEMA,
 } from "./adjudicator";
@@ -33,10 +33,10 @@ interface FakeAdjudicatorClient {
 }
 
 /**
- * The same hand-injected fake `bedrock.test.ts` uses, and the reason
+ * The same hand-injected fake `openrouter.test.ts` uses, and the reason
  * `AdjudicatorClient` is a structural type: the request shape is assertable
- * without a test process constructing an `AnthropicBedrockMantle`, which reads
- * AWS_REGION and resolves a credential chain on construction. No network.
+ * without a test process constructing an `Anthropic` client, which under
+ * OpenRouter demands an API key on construction. No network.
  */
 function fakeAdjudicatorClient(respond: () => Promise<unknown>): FakeAdjudicatorClient {
   const requests: Record<string, unknown>[] = [];
@@ -104,18 +104,18 @@ describe("parseVerdicts (R46)", () => {
 });
 
 /**
- * `createBedrockAdjudicator` had no coverage at all, while
- * `createBedrockClassifier` — the adapter it is modelled on — has eleven tests.
+ * `createOpenRouterAdjudicator` had no coverage at all, while
+ * `createOpenRouterClassifier` — the adapter it is modelled on — has eleven tests.
  * `AdjudicatorClient` exists precisely so these can be written; nothing used
- * it. As in `bedrock.test.ts`, nothing here asserts what a model returns (R3):
+ * it. As in `openrouter.test.ts`, nothing here asserts what a model returns (R3):
  * every test is about the request put on the wire and the handling of bytes
  * handed back.
  */
-describe("createBedrockAdjudicator (R46)", () => {
+describe("createOpenRouterAdjudicator (R46)", () => {
   test("sends the model id R46's constant names, not the classifier's inline", async () => {
     const fake = fakeAdjudicatorClient(async () => response([{ id: "p1", same: true }]));
 
-    await createBedrockAdjudicator({ client: fake.client }).adjudicate([pair("p1")]);
+    await createOpenRouterAdjudicator({ client: fake.client }).adjudicate([pair("p1")]);
 
     expect(fake.requests).toHaveLength(1);
     expect(fake.requests[0]?.model).toBe(ADJUDICATOR_MODEL_ID);
@@ -124,7 +124,7 @@ describe("createBedrockAdjudicator (R46)", () => {
   test("bounds the answer with ADJUDICATOR_MAX_TOKENS", async () => {
     const fake = fakeAdjudicatorClient(async () => response([{ id: "p1", same: false }]));
 
-    await createBedrockAdjudicator({ client: fake.client }).adjudicate([pair("p1")]);
+    await createOpenRouterAdjudicator({ client: fake.client }).adjudicate([pair("p1")]);
 
     expect(fake.requests[0]?.max_tokens).toBe(ADJUDICATOR_MAX_TOKENS);
   });
@@ -137,7 +137,7 @@ describe("createBedrockAdjudicator (R46)", () => {
   test("asks for structured output against the generated verdict schema", async () => {
     const fake = fakeAdjudicatorClient(async () => response([{ id: "p1", same: true }]));
 
-    await createBedrockAdjudicator({ client: fake.client }).adjudicate([pair("p1")]);
+    await createOpenRouterAdjudicator({ client: fake.client }).adjudicate([pair("p1")]);
 
     expect(fake.requests[0]?.output_config).toEqual({
       format: { type: "json_schema", schema: VERDICTS_SCHEMA },
@@ -152,7 +152,7 @@ describe("createBedrockAdjudicator (R46)", () => {
       ]),
     );
 
-    const verdicts = await createBedrockAdjudicator({ client: fake.client }).adjudicate([
+    const verdicts = await createOpenRouterAdjudicator({ client: fake.client }).adjudicate([
       pair("p1"),
       pair("p2"),
     ]);
@@ -175,7 +175,7 @@ describe("createBedrockAdjudicator (R46)", () => {
       throw new Error("the client must not be called for an empty band");
     });
 
-    const verdicts = await createBedrockAdjudicator({ client: fake.client }).adjudicate([]);
+    const verdicts = await createOpenRouterAdjudicator({ client: fake.client }).adjudicate([]);
 
     expect(fake.requests).toEqual([]);
     expect(verdicts.size).toBe(0);
@@ -183,6 +183,13 @@ describe("createBedrockAdjudicator (R46)", () => {
 
   /** Constructing the adapter must not resolve a region or a credential chain. */
   test("constructs without a client and without reaching for AWS", () => {
-    expect(() => createBedrockAdjudicator()).not.toThrow();
+    expect(() => createOpenRouterAdjudicator()).not.toThrow();
+  });
+
+  /** R50 — the classifier's rule, applied to the second model caller. */
+  test("names the missing key provider rather than failing inside the SDK", async () => {
+    await expect(createOpenRouterAdjudicator().adjudicate([pair("p1")])).rejects.toThrow(
+      /OpenRouter API key/,
+    );
   });
 });

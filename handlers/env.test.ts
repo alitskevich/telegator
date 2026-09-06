@@ -48,6 +48,8 @@ describe("ENV_VARS", () => {
       aggregateDlqUrl: "TELEGATOR_AGGREGATE_DLQ_URL",
       publishDlqUrl: "TELEGATOR_PUBLISH_DLQ_URL",
       telegramSecretArn: "TELEGATOR_TELEGRAM_SECRET_ARN",
+      // R50 — the second secret, which Bedrock's IAM auth did not need.
+      openRouterSecretArn: "TELEGATOR_OPENROUTER_SECRET_ARN",
     });
   });
 

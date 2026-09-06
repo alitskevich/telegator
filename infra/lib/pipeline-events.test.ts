@@ -1,7 +1,6 @@
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { afterAll, describe, expect, test, vi } from "vitest";
-import { MANTLE_PROJECT_ID } from "../../lib/ai/constants";
 import { METRIC_NAMESPACE } from "../../lib/metrics/ports";
 import { cdkContext } from "../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../test/support/cdkOutdir";
@@ -53,7 +52,7 @@ describe("event source mappings (§7.3 L606-608, §7.3 L620)", () => {
   /**
    * §7.3 L620 — "Every consumer sets functionResponseTypes:
    * ['ReportBatchItemFailures']". Without it one poison message forces the whole
-   * batch to retry, which for analyze means re-billing nine Bedrock calls.
+   * batch to retry, which for analyze means re-billing nine OpenRouter calls.
    */
   test("every mapping reports batch item failures", () => {
     for (const mapping of mappings(templateFor())) {
@@ -145,10 +144,10 @@ describe("IAM (§7.6 L668-673, R24)", () => {
 
   /**
    * Attribute each policy statement to the function it was attached to, through
-   * the role both reference. Without this the Bedrock assertions below can only
-   * say "two functions got a model" — and the two are different models with
-   * different costs and capabilities, so which function got which is the whole
-   * content of §7.6 L669-670.
+   * the role both reference. Without this the secret assertions below can only
+   * say "three functions got a secret" — and R50 put two different secrets in
+   * the stack, so which function got which is the whole content of §7.6
+   * L669-671.
    */
   function statementsByFunction(template: Template): Map<string, Record<string, unknown>[]> {
     const roleToFunction = new Map<string, string>();
@@ -178,68 +177,95 @@ describe("IAM (§7.6 L668-673, R24)", () => {
   }
 
   /**
-   * Both actions, because §5's two Bedrock calls do not share an API. Filtering
-   * on `bedrock:InvokeModel` alone is what let R42 ship: analyze's grant named
-   * an action its client never issues, and a test that only looked for that
-   * action saw a well-formed statement and passed.
+   * R50 — distinct ARNs, supplied as synth context.
+   *
+   * Without them both secrets fall back to the same `telegator/*` prefix
+   * (`secretArn` in `pipeline-stack.ts`), and every assertion below would pass
+   * just as well against a stack that handed analyze the bot token and publish
+   * the model key. The whole point of these tests is telling those apart.
    */
-  const BEDROCK_ACTIONS = ["bedrock:InvokeModel", "bedrock-mantle:CreateInference"];
+  const SECRET_ARNS = {
+    openRouterSecretArn:
+      "arn:aws:secretsmanager:eu-central-1:111122223333:secret:telegator/openrouter-AbCdEf",
+    telegramSecretArn:
+      "arn:aws:secretsmanager:eu-central-1:111122223333:secret:telegator/telegram-ZyXwVu",
+  };
 
-  const bedrockFor = (template: Template, functionName: string) =>
+  const secretsFor = (template: Template, functionName: string) =>
     JSON.stringify(
       (statementsByFunction(template).get(functionName) ?? []).filter((statement) =>
-        [statement.Action]
-          .flat()
-          .map(String)
-          .some((action) => BEDROCK_ACTIONS.includes(action)),
+        [statement.Action].flat().map(String).includes("secretsmanager:GetSecretValue"),
       ),
     );
 
   /**
-   * R49 — aggregate embedded through `bedrock-runtime`, so §7.6 L670's
-   * `bedrock:InvokeModel` was correct for it while R42 was fixing analyze's.
-   * With embeddings gone (R43) both stages call the Mantle API, so one grant
-   * covers the stack and `bedrock:InvokeModel` appears nowhere.
+   * R50 — the provider swap, asserted at the only place it is enforceable.
+   *
+   * R42 and R49 each shipped a grant naming an action its client never issued,
+   * and both passed a suite that only looked for the action it expected to
+   * find. So this looks for the *prefix*: any `bedrock…` action at all is the
+   * old decision surviving the new one.
    */
-  test("grants bedrock-mantle:CreateInference to exactly two functions, and InvokeModel to none", () => {
-    const statements = policyStatements(templateFor());
-
-    const mantle = statements.filter((s) =>
-      [s.Action].flat().map(String).includes("bedrock-mantle:CreateInference"),
-    );
-    const invoke = statements.filter((s) =>
-      [s.Action].flat().map(String).includes("bedrock:InvokeModel"),
+  test("grants no Bedrock action of any kind", () => {
+    const bedrock = policyStatements(templateFor(SECRET_ARNS)).filter((statement) =>
+      [statement.Action]
+        .flat()
+        .map(String)
+        .some((action) => action.startsWith("bedrock")),
     );
 
-    expect(mantle).toHaveLength(2);
-    expect(invoke).toHaveLength(0);
-    for (const statement of mantle) {
+    expect(bedrock).toEqual([]);
+  });
+
+  /** §7.6, as revised by R50 — the model key reaches exactly the two stages that call a model. */
+  test("grants GetSecretValue to exactly three functions, none of them wildcarded", () => {
+    const statements = policyStatements(templateFor(SECRET_ARNS)).filter((statement) =>
+      [statement.Action].flat().map(String).includes("secretsmanager:GetSecretValue"),
+    );
+
+    expect(statements).toHaveLength(3);
+    for (const statement of statements) {
       expect(statement.Resource).not.toBe("*");
     }
   });
 
-  test("analyze may create a Mantle inference on the project", () => {
-    expect(bedrockFor(templateFor(), "telegator-dev-analyze")).toContain(
-      `project/${MANTLE_PROJECT_ID}`,
+  test("analyze may read the OpenRouter key", () => {
+    expect(secretsFor(templateFor(SECRET_ARNS), "telegator-dev-analyze")).toContain(
+      SECRET_ARNS.openRouterSecretArn,
     );
   });
 
-  test("aggregate may create a Mantle inference on the project", () => {
-    expect(bedrockFor(templateFor(), "telegator-dev-aggregate")).toContain(
-      `project/${MANTLE_PROJECT_ID}`,
+  test("aggregate may read the OpenRouter key", () => {
+    expect(secretsFor(templateFor(SECRET_ARNS), "telegator-dev-aggregate")).toContain(
+      SECRET_ARNS.openRouterSecretArn,
     );
   });
 
-  /** §7.6 grants Bedrock to those two stages only; scrape and publish call no model. */
-  test("no other function may invoke a model", () => {
-    const template = templateFor();
+  /**
+   * The bot token is §3.4's send credential and nothing else. A model stage
+   * holding it could post to the channel outside §3.4 L316's status guard.
+   */
+  test("neither model stage may read the Telegram token", () => {
+    const template = templateFor(SECRET_ARNS);
 
-    for (const name of [
-      "telegator-dev-scrape",
-      "telegator-dev-publish",
-      "telegator-dev-dlq-replay",
-    ]) {
-      expect(bedrockFor(template, name)).toBe("[]");
+    for (const name of ["telegator-dev-analyze", "telegator-dev-aggregate"]) {
+      expect(secretsFor(template, name)).not.toContain(SECRET_ARNS.telegramSecretArn);
+    }
+  });
+
+  test("publish may read the Telegram token and not the model key", () => {
+    const granted = secretsFor(templateFor(SECRET_ARNS), "telegator-dev-publish");
+
+    expect(granted).toContain(SECRET_ARNS.telegramSecretArn);
+    expect(granted).not.toContain(SECRET_ARNS.openRouterSecretArn);
+  });
+
+  /** scrape and dlq-replay call neither a model nor Telegram. */
+  test("no other function may read a secret", () => {
+    const template = templateFor(SECRET_ARNS);
+
+    for (const name of ["telegator-dev-scrape", "telegator-dev-dlq-replay"]) {
+      expect(secretsFor(template, name)).toBe("[]");
     }
   });
 
@@ -343,14 +369,6 @@ describe("IAM (§7.6 L668-673, R24)", () => {
       expect(actions.has("dynamodb:DeleteItem")).toBe(false);
       expect(actions.has("dynamodb:BatchWriteItem")).toBe(false);
     }
-  });
-
-  test("grants secretsmanager:GetSecretValue to exactly one function (§7.6 L671)", () => {
-    const secrets = policyStatements(templateFor()).filter((s) =>
-      [s.Action].flat().map(String).includes("secretsmanager:GetSecretValue"),
-    );
-
-    expect(secrets).toHaveLength(1);
   });
 
   /** §7.6 L675 — "No VPC." A VPC would need NAT for outbound scraping, with no security gain. */

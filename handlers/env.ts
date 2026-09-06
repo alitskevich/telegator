@@ -6,8 +6,8 @@
  * grep away rather than a runtime discovery.
  *
  * `AWS_REGION` is deliberately absent: Lambda sets it and CloudFormation
- * rejects an attempt to declare it, so it is read directly by the SDK clients
- * (§5.1 L396).
+ * rejects an attempt to declare it, so it is read directly by the AWS SDK
+ * clients.
  */
 export const ENV_VARS = {
   sourcesTable: "TELEGATOR_SOURCES_TABLE",
@@ -20,6 +20,12 @@ export const ENV_VARS = {
   aggregateDlqUrl: "TELEGATOR_AGGREGATE_DLQ_URL",
   publishDlqUrl: "TELEGATOR_PUBLISH_DLQ_URL",
   telegramSecretArn: "TELEGATOR_TELEGRAM_SECRET_ARN",
+  /**
+   * R50 — §7.6's second secret. Bedrock needed none (IAM was the credential);
+   * OpenRouter authenticates with a bearer key, so analyze and aggregate read
+   * one the way publish reads the bot token.
+   */
+  openRouterSecretArn: "TELEGATOR_OPENROUTER_SECRET_ARN",
 } as const;
 
 /**

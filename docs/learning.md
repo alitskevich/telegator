@@ -92,7 +92,7 @@ flowchart TD
   Q3 --> Pub["Lambda: publish<br/>send or edit in Telegram"]
   Pub --> TG["Telegram Bot API"]
   Scrape --> SRC[("DynamoDB: sources<br/>channels to poll")]
-  Analyze --> BR["Bedrock: Claude model"]
+  Analyze --> BR["OpenRouter: Claude model"]
   Agg --> BR
   Pub --> SM["Secrets Manager<br/>bot token"]
   Scrape & Analyze & Agg & Pub --> CW["CloudWatch<br/>metrics, logs, alarms"]
@@ -133,7 +133,7 @@ flowchart LR
 | **Resource name** | `telegator-{env}-{resource}`, so a name in a console or a log says which environment made it | built — `infra/lib/naming.ts` |
 | **Service quota** | A limit per Account and Region on how many of a thing you may have | built as a *problem*: see the concurrency trap in [section 15](#15-traps-this-project-actually-hit) |
 | **Partition** | The part of an ARN that says which AWS world you are in (`aws`, `aws-cn`, `aws-us-gov`); code writes `Aws.PARTITION` instead of the literal | built — `infra/lib/pipeline-stack.ts` |
-| **Organization / Organizational Unit / Service Control Policy** | A tree of Accounts, and rules that *remove* permissions from all of them at once | context — but it bit this project: Bedrock was blocked at the Organization level, above IAM |
+| **Organization / Organizational Unit / Service Control Policy** | A tree of Accounts, and rules that *remove* permissions from all of them at once | context — but it bit this project: Bedrock was blocked at the Organization level, above IAM, which is why the pipeline calls OpenRouter |
 | **Tag** | A key/value label on a Resource, used for cost reports and access rules | context |
 
 ---
@@ -425,20 +425,21 @@ flowchart LR
 
 ---
 
-## 9. Bedrock — calling the AI model
+## 9. OpenRouter — calling the AI model
 
-**One-line meaning:** Amazon Bedrock runs foundation models (Claude among them)
-inside AWS, so calling a model is an AWS API call under IAM — no API key to
-store. Status: **built** in [lib/ai/bedrock.ts](../lib/ai/bedrock.ts) and
-[lib/ai/constants.ts](../lib/ai/constants.ts); live calls are currently blocked
-at the account level (see Traps).
+**One-line meaning:** OpenRouter is a single HTTPS endpoint fronting models from
+many vendors, so calling Claude is a bearer-token API call rather than an AWS
+one. Status: **built** in [lib/ai/openrouter.ts](../lib/ai/openrouter.ts),
+[lib/ai/openrouterClient.ts](../lib/ai/openrouterClient.ts) and
+[lib/ai/constants.ts](../lib/ai/constants.ts). It replaced Amazon Bedrock, which
+this account cannot reach at all (see Traps).
 
 ```mermaid
 flowchart LR
-  An["Lambda: analyze"] --> C["AnthropicBedrockMantle client<br/>signs with the Lambda's IAM role"]
+  An["Lambda: analyze"] --> C["Anthropic SDK<br/>baseURL: openrouter.ai/api"]
   Ag2["Lambda: aggregate<br/>(band adjudicator)"] --> C
-  C -->|"bedrock-mantle:CreateInference"| M["Claude model<br/>anthropic.claude-haiku-4-5"]
-  X["No API key anywhere"] -.- C
+  S["Secrets Manager<br/>telegator/openrouter-api-key"] -->|"GetSecretValue"| C
+  C -->|"POST /v1/messages"| M["Claude model<br/>anthropic/claude-haiku-4.5"]
 ```
 
 Two stages call a model:
@@ -452,29 +453,36 @@ There used to be a third use — embeddings for similarity — and it was remove
 dedup now compares deterministic match keys, and no embedding model is called
 at all. The comment in `lib/ai/constants.ts` records this so nobody adds it back.
 
-- **Benefit** — IAM replaces API keys: there is no secret to store, rotate or
-  leak, and the permission is a normal policy statement like any other.
-  Inference traffic stays inside AWS.
-- **Tradeoffs** — model access is not automatic: an account must be granted
-  access per model, sometimes with a use-case form; model choice is narrower
-  than calling a provider directly; a Bedrock model id carries a prefix
-  (`anthropic.claude-haiku-4-5`) that differs from the first-party API's id.
-- **Traps** (this project hit all three)
-  - **The permission must match the API actually called.** The spec grants
-    `bedrock:InvokeModel`, but the `AnthropicBedrockMantle` client signs for a
-    different service — `bedrock-mantle` — whose action is `CreateInference` on
-    a *project* ARN. The role looked perfectly scoped and every call returned
-    403. The fix is the `createInference()` statement in
-    [pipeline-stack.ts](../infra/lib/pipeline-stack.ts).
-  - **The Mantle grant cannot pin the model.** The model id travels in the
-    request body, not the ARN, so IAM cannot restrict which model is used. The
-    only guard is the single `CLASSIFIER_MODEL_ID` constant — a real loss of
-    least privilege, recorded honestly in a comment.
-  - **An Organization can veto the whole service.** This account sits in an AWS
-    Organization where Bedrock is not enabled, so calls fail *above* IAM —
-    no policy in this repository can fix that. Compare Amplify in
+- **Benefit** — it works here, which Bedrock does not. Beyond that: one account
+  reaches many vendors, model access needs no per-model approval, and the wire
+  format is Anthropic's own Messages API — so the request bodies in §5.2 of the
+  spec did not change when the provider did, and neither did the `Classifier`
+  and `Adjudicator` ports.
+- **Tradeoffs** — a bearer key is a real secret: it must be stored, rotated and
+  granted, and IAM no longer authorizes the inference itself, only the *read* of
+  the token that does. Inference traffic also leaves AWS, and a second vendor
+  now sits on the pipeline's critical path.
+- **Traps**
+  - **An Organization can veto a whole AWS service.** This account sits in an
+    AWS Organization where Bedrock is not enabled, so calls failed *above* IAM
+    and no policy in this repository could fix it. This is what forced the
+    provider swap. Compare Amplify in
     [section 13](#13-the-hosting-story-amplify-app-runner-fargate): account
     standing beats correct code.
+  - **The permission must match the API actually called.** Under Bedrock the
+    spec granted `bedrock:InvokeModel`, but the `AnthropicBedrockMantle` client
+    signed for a *different* service — `bedrock-mantle`, action
+    `CreateInference` on a project ARN. The role looked perfectly scoped and
+    every call returned 403. The lesson outlived the provider: read what the
+    client signs for, not what the documentation names.
+  - **IAM cannot pin the model — and now cannot see it at all.** Under Bedrock
+    the model id travelled in the request body rather than the ARN, so IAM could
+    not restrict it. Under OpenRouter there is no AWS-side statement about
+    models whatsoever. The only guard either way is the single
+    `CLASSIFIER_MODEL_ID` constant.
+  - **The base URL must not carry the version segment.** The SDK appends
+    `/v1/messages` itself, so `https://openrouter.ai/api/v1` produces a 404 that
+    reads like an outage. `constants.test.ts` pins this.
 
 ---
 
@@ -909,8 +917,8 @@ is now pinned by a test or a comment so it cannot happen twice silently.
 
 | # | Trap | The lesson | Where recorded |
 | --- | --- | --- | --- |
-| 1 | Bedrock calls 403'd with a "correct" role | The permission must name the service the client *actually signs for* (`bedrock-mantle:CreateInference`, not `bedrock:InvokeModel`) | `infra/lib/pipeline-stack.ts` `createInference()` |
-| 2 | Bedrock refused above IAM | An AWS Organization can disable a whole service; no policy in the repo can help | memory notes; §9 |
+| 1 | Bedrock calls 403'd with a "correct" role | The permission must name the service the client *actually signs for* (`bedrock-mantle:CreateInference`, not `bedrock:InvokeModel`) | history; §9 |
+| 2 | Bedrock refused above IAM | An AWS Organization can disable a whole service; no policy in the repo can help — the pipeline moved to OpenRouter | `lib/ai/openrouter.ts`; §9 |
 | 3 | Amplify create returned 401 | Account standing beats correct templates; the design moved to Fargate | Fargate spec §1 |
 | 4 | GSI projection change rejected at deploy | `cdk diff` predicts from the template only; DynamoDB refuses in-place projection edits — plan two deploys | `infra/lib/data-stack.ts` comment |
 | 5 | Reserved concurrency uncreatable | A cold account's whole quota is 5; reserving any breaks stack creation — hence the `reserveConcurrency` flag | `infra/lib/config.ts` R40 |
@@ -942,7 +950,7 @@ the end.
 | Cognito pool, hosted UI, groups | [infra/lib/auth-stack.ts](../infra/lib/auth-stack.ts) |
 | Amplify app and the dashboard role | [infra/lib/app-stack.ts](../infra/lib/app-stack.ts) |
 | Narrow IAM as a habit | [infra/lib/grants.ts](../infra/lib/grants.ts) |
-| The Bedrock client and model id | [lib/ai/bedrock.ts](../lib/ai/bedrock.ts), [lib/ai/constants.ts](../lib/ai/constants.ts) |
+| The OpenRouter client and model id | [lib/ai/openrouter.ts](../lib/ai/openrouter.ts), [lib/ai/constants.ts](../lib/ai/constants.ts) |
 | OAuth token exchange and JWT checking | [lib/auth/cognito.ts](../lib/auth/cognito.ts) |
 | Reading metrics, queue depth, Logs Insights | [lib/aws/observability.ts](../lib/aws/observability.ts) |
 | Emitting custom metrics | [lib/metrics/cloudwatch.ts](../lib/metrics/cloudwatch.ts) |

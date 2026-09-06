@@ -2,7 +2,7 @@
   "name": "telegator",
   "version": "1.0.0",
   "private": true,
-  "description": "Telegram news pipeline on AWS (SQS, Lambda, DynamoDB, Bedrock) with a Next.js operator dashboard",
+  "description": "Telegram news pipeline on AWS (SQS, Lambda, DynamoDB) with Claude via OpenRouter and a Next.js operator dashboard",
   "license": "ISC",
   "type": "module",
   "engines": {
@@ -14,12 +14,13 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "synth": "cdk synth",
+    "smoke:openrouter": "export OPENROUTER_API_KEY=$(cat .orkey) &&tsx scripts/smoke-openrouter.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
-    "@anthropic-ai/bedrock-sdk": "^0.33.3",
+    "@anthropic-ai/sdk": "^0.124.0",
     "@aws-sdk/client-cloudwatch": "^3.1121.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.1121.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.1121.0",
