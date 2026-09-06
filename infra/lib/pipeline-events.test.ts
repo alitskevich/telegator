@@ -179,7 +179,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
   /**
    * R50 — distinct ARNs, supplied as synth context.
    *
-   * Without them both secrets fall back to the same `telegator/*` prefix
+   * Without them both secrets fall back to the same `telegator-*` prefix
    * (`secretArn` in `pipeline-stack.ts`), and every assertion below would pass
    * just as well against a stack that handed analyze the bot token and publish
    * the model key. The whole point of these tests is telling those apart.

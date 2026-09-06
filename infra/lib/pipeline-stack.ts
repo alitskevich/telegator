@@ -500,7 +500,14 @@ function readSecret(resource: string): PolicyStatement {
 function secretArn(scope: Construct, contextKey: string): string {
   const configured = scope.node.tryGetContext(contextKey);
   if (typeof configured === "string" && configured !== "") return configured;
-  return `arn:${Aws.PARTITION}:secretsmanager:${Aws.REGION}:${Aws.ACCOUNT_ID}:secret:telegator/*`;
+  // `telegator-*`, not `telegator/*`. The spec writes the secrets as
+  // `telegator/telegram-bot-token`, but nothing is named that way: every
+  // deployed secret follows §9.2 L810's `telegator-{env}-{resource}` scheme
+  // (`telegator-dev-telegram-token`). A `telegator/*` fallback therefore
+  // matched no secret in the account at all — it read as least privilege and
+  // was in fact zero privilege, which a deploy cannot notice because the grant
+  // is well-formed and the stage only fails on its first message.
+  return `arn:${Aws.PARTITION}:secretsmanager:${Aws.REGION}:${Aws.ACCOUNT_ID}:secret:telegator-*`;
 }
 
 /** §7.3 L610 — "Each has a matching DLQ", in the order the queue stack exposes them. */
