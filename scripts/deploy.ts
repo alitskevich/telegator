@@ -4,6 +4,7 @@ import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import type { Environment } from "../infra/lib/config";
 import { resourceName } from "../infra/lib/naming";
 import { cdkArgs, type DeploySecrets, parseDeployArgs } from "../lib/deploy/args";
+import { REGION } from "../lib/ops/target";
 
 /**
  * §9.5's deploy, as a command.
@@ -25,9 +26,6 @@ import { cdkArgs, type DeploySecrets, parseDeployArgs } from "../lib/deploy/args
  * `RETAIN` with fixed names, so a change that *replaces* one orphans the table
  * and the next deploy cannot reuse the name. Read the diff first.
  */
-
-/** §9.2 L810 — one region. A deploy elsewhere builds a second, silent copy. */
-const REGION = "eu-central-1";
 
 /**
  * The secrets' names, derived rather than written down.
