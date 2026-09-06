@@ -84,6 +84,13 @@ Each of these is enforced by a test, and each was violated at least once.
 
 ## Before production
 
+Deploy with `npm run deploy` (`scripts/deploy.ts`), never a bare `cdk deploy`.
+A bare one omits the two secret ARNs, and `pipeline-stack.ts` falls back rather
+than failing — so the stack creates cleanly and `publish` and `analyze` fail on
+their first message instead. The script resolves both ARNs by name, refuses to
+run as the account root (which cannot assume the bootstrap roles), and **diffs
+by default**: `--execute` is the opt-in.
+
 `cdk synth -c env=prod -c scheduleEnabled=true` refuses until §11.3's
 recalibration is recorded in `calibration/record.json`. That is deliberate — the
 sweep harness is `lib/calibration/`.
