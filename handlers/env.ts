@@ -53,6 +53,8 @@ export function requireEnv(name: string): string {
 export const DASHBOARD_ENV_VARS = {
   scrapeFunctionName: "TELEGATOR_SCRAPE_FUNCTION_NAME",
   dlqReplayFunctionName: "TELEGATOR_DLQ_REPLAY_FUNCTION_NAME",
+  /** R53 — "Publish now" invokes the publish stage; §7.6 L673 lists only the two above. */
+  publishFunctionName: "TELEGATOR_PUBLISH_FUNCTION_NAME",
   userPoolId: "TELEGATOR_USER_POOL_ID",
   userPoolClientId: "TELEGATOR_USER_POOL_CLIENT_ID",
   hostedUiDomain: "TELEGATOR_COGNITO_DOMAIN",

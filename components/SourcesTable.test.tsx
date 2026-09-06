@@ -232,3 +232,91 @@ describe("SourcesTable — §8.3 L741", () => {
     expect(screen.getByText(/no sources/i)).toBeDefined();
   });
 });
+
+/**
+ * Column filter and sort.
+ *
+ * *Reconciliation.* §8.3 L744 specifies the cross-column search and nothing
+ * more; §8.1 L713 records that filtering and sorting were expected to be server
+ * round-trips once the offline layer went. Both run here on the rows the page
+ * already holds — the same set the search has always run over.
+ */
+describe("filter and sort — the header row", () => {
+  const idsOnScreen = () =>
+    screen
+      .getAllByRole("row")
+      .map((row) => row.getAttribute("data-testid"))
+      .filter((id): id is string => id !== null);
+
+  test("a column filter narrows to that column alone", () => {
+    draw();
+    fireEvent.change(screen.getByLabelText("Filter category"), { target: { value: "sports" } });
+
+    expect(idsOnScreen()).toEqual(["row-sports_daily"]);
+  });
+
+  test("two column filters are ANDed", () => {
+    draw();
+    fireEvent.change(screen.getByLabelText("Filter category"), { target: { value: "sports" } });
+    fireEvent.change(screen.getByLabelText("Filter id"), { target: { value: "yigal" } });
+
+    expect(idsOnScreen()).toEqual([]);
+    expect(screen.getByText(/no sources/i)).toBeDefined();
+  });
+
+  /**
+   * The filter boxes are in the header, so an over-narrow filter must not
+   * unmount the table: the operator would lose the control they need to widen
+   * it again and the row would be unreachable without a reload.
+   */
+  test("the filter boxes survive a filter that matches nothing", () => {
+    draw();
+    fireEvent.change(screen.getByLabelText("Filter id"), { target: { value: "nothing" } });
+
+    expect(screen.getByLabelText<HTMLInputElement>("Filter id").value).toBe("nothing");
+  });
+
+  test("the search box and a column filter both apply", () => {
+    draw();
+    fireEvent.change(screen.getByPlaceholderText("Filter visible columns"), {
+      target: { value: "sports" },
+    });
+    fireEvent.change(screen.getByLabelText("Filter category"), { target: { value: "politics" } });
+
+    expect(idsOnScreen()).toEqual([]);
+  });
+
+  test("a header click sorts ascending, then descending, then not at all", () => {
+    draw({ rows: [source("b_source"), source("a_source")] });
+    const header = () => screen.getByRole("button", { name: "id" });
+
+    expect(idsOnScreen()).toEqual(["row-b_source", "row-a_source"]);
+
+    fireEvent.click(header());
+    expect(idsOnScreen()).toEqual(["row-a_source", "row-b_source"]);
+
+    fireEvent.click(header());
+    expect(idsOnScreen()).toEqual(["row-b_source", "row-a_source"]);
+
+    fireEvent.click(header());
+    expect(idsOnScreen()).toEqual(["row-b_source", "row-a_source"]);
+  });
+
+  test("numeric columns sort numerically", () => {
+    draw({
+      rows: [source("few", { lastCount: 3 }), source("many", { lastCount: 120 })],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "lastCount" }));
+
+    expect(idsOnScreen()).toEqual(["row-few", "row-many"]);
+  });
+
+  test("the sorted column reports its direction to a screen reader", () => {
+    draw();
+    fireEvent.click(screen.getByRole("button", { name: "status" }));
+
+    expect(screen.getByRole("columnheader", { name: "status" }).getAttribute("aria-sort")).toBe(
+      "ascending",
+    );
+  });
+});

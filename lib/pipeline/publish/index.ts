@@ -110,6 +110,25 @@ export async function runPublish(
     }
 
     /**
+     * §8.4 L751's soft delete, honoured before the status check.
+     *
+     * *Reconciliation.* §3.4 L316 gates this stage on `status` alone, and
+     * `softDelete` writes `deleted` without touching it — so a message an
+     * operator deleted from the dashboard was still posted if its publish job
+     * was already on the queue. R16 hides a deleted message from every read the
+     * dashboard makes, so the operator could neither see it coming nor tell it
+     * had happened.
+     *
+     * Acknowledged rather than failed, for the same reason as a missing
+     * message: a retry finds it deleted too, so failing would loop until the
+     * redrive policy gave up and fill §3.5's DLQ with posts nobody wants sent.
+     */
+    if (stored.deleted === true) {
+      deps.logger.info("publish skipped: message is deleted", { messageId });
+      continue;
+    }
+
+    /**
      * §3.4 L316 — "If `status !== 'topublish'`, acknowledge and exit — the work
      * was superseded."
      *

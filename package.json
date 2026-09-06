@@ -16,6 +16,7 @@
     "synth": "cdk synth",
     "deploy": "tsx scripts/deploy.ts --execute",
     "scrape": "tsx scripts/scrape.ts",
+    "cursors:now": "tsx scripts/set-cursors-now.ts",
     "smoke:openrouter": "export OPENROUTER_API_KEY=$(cat .orkey) &&tsx scripts/smoke-openrouter.ts",
     "dev": "next dev",
     "build": "next build",

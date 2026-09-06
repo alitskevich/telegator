@@ -1,6 +1,10 @@
 import { authContext, messages } from "../../actions/context";
-import { loadMembers, upsertRecord as upsertRecordAction } from "../../actions/records";
-import { exportTable, republishMessage } from "../../actions/triggers";
+import {
+  deleteRecords as deleteRecordsAction,
+  loadMembers,
+  upsertRecord as upsertRecordAction,
+} from "../../actions/records";
+import { exportTable, publishPending, republishMessage } from "../../actions/triggers";
 import { MessagesTable } from "../../components/MessagesTable";
 import { hasRole } from "../../lib/auth/roles";
 import { requireRole } from "../../lib/auth/session";
@@ -39,6 +43,17 @@ export default async function MessagesPage({
     await upsertRecordAction({ table: "messages", id, delta });
   }
 
+  /**
+   * §8.4 L751 — soft, and `editor`. §8.3 L742's row does not list delete;
+   * L751's action is defined over both tables, and without it a message built
+   * from a mis-scraped item cannot be cleared from the tab an operator works
+   * through.
+   */
+  async function remove(ids: string[]) {
+    "use server";
+    await deleteRecordsAction({ table: "messages", ids });
+  }
+
   async function republish(messageId: string) {
     "use server";
     await republishMessage({ messageId });
@@ -47,6 +62,11 @@ export default async function MessagesPage({
   async function members(messageId: string) {
     "use server";
     return loadMembers({ messageId });
+  }
+
+  async function publishNow(max: number) {
+    "use server";
+    return publishPending({ max });
   }
 
   async function exportMessages() {
@@ -63,7 +83,9 @@ export default async function MessagesPage({
       onSave={save}
       onRepublish={republish}
       onLoadMembers={members}
+      onDelete={remove}
       onExport={exportMessages}
+      onPublishNow={publishNow}
     />
   );
 }

@@ -5,7 +5,9 @@ import type { MemberRow } from "../lib/dashboard/records";
 import { MESSAGE_WRITABLE_FIELDS } from "../lib/dashboard/records";
 import { MESSAGE_STATUSES, type MessageListItem, type MessageStatus } from "../lib/domain/message";
 import { MESSAGE_COLUMNS } from "../lib/ui/columns";
-import { filterByKeyword } from "../lib/ui/filter";
+import { filterByColumn, filterByKeyword } from "../lib/ui/filter";
+import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
+import { TableHead } from "./TableHead";
 
 /**
  * §8.3 L742 — "Status tabs; table of id, title, category, status, date,
@@ -16,6 +18,15 @@ import { filterByKeyword } from "../lib/ui/filter";
 /** R37 — the three fields §8.4 L749 will accept for a message. */
 const EDITABLE: ReadonlySet<string> = new Set(MESSAGE_WRITABLE_FIELDS);
 
+/** R53 — what `publishPending` answers: one send attempted per pending message. */
+export interface PublishNowResult {
+  readonly published: number;
+  readonly failed: number;
+}
+
+/** R53 — the cap `publishPending` enforces server-side; the input starts here. */
+const MAX_PUBLISH_NOW = 10;
+
 export interface MessagesTableProps {
   readonly rows: readonly MessageListItem[];
   readonly status: MessageStatus;
@@ -24,18 +35,40 @@ export interface MessagesTableProps {
   readonly onSave: (id: string, delta: Record<string, string>) => Promise<void>;
   readonly onRepublish: (messageId: string) => Promise<void>;
   readonly onLoadMembers: (messageId: string) => Promise<MemberRow[]>;
+  /** §8.4 L751 — `editor`, and soft: the record survives, R16 hides it. */
+  readonly onDelete: (ids: string[]) => Promise<void>;
   readonly onExport?: () => Promise<string>;
+  /** R53 — `admin` only, and only the `topublish` tab has a backlog to drain. */
+  readonly onPublishNow?: (max: number) => Promise<PublishNowResult>;
 }
 
 const cellText = (value: unknown) => (value === undefined || value === null ? "" : String(value));
 
 export function MessagesTable(props: MessagesTableProps) {
   const [keyword, setKeyword] = useState("");
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [sort, setSort] = useState<SortState | undefined>(undefined);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
-  const visible = useMemo(
-    () => filterByKeyword([...props.rows], keyword, MESSAGE_COLUMNS),
-    [props.rows, keyword],
-  );
+  const visible = useMemo(() => {
+    // §8.3 L744 — across the columns on screen, and only those.
+    const matched = filterByKeyword([...props.rows], keyword, MESSAGE_COLUMNS);
+    // Then the per-column boxes narrow that, and the sort orders what survives.
+    return sortRows(filterByColumn(matched, columnFilters, MESSAGE_COLUMNS), sort);
+  }, [props.rows, keyword, columnFilters, sort]);
+
+  const toggle = (id: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  };
+
+  /** The edge columns this table renders itself, for `TableHead` to span. */
+  const leading = props.canEdit ? ["select", "expand"] : ["expand"];
+  const trailing = props.canEdit || props.canAdmin ? ["actions"] : [];
+  const columnCount = MESSAGE_COLUMNS.length + leading.length + trailing.length;
 
   return (
     <>
@@ -67,31 +100,113 @@ export function MessagesTable(props: MessagesTableProps) {
           />
         </label>
 
+        {props.canEdit ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (selected.size === 0) return;
+              void props.onDelete([...selected]);
+              // The rows come back without the deleted ones (R16), so a
+              // selection kept across that render would address ids the table
+              // no longer shows.
+              setSelected(new Set());
+            }}
+          >
+            Delete selected
+          </button>
+        ) : null}
+
         <button type="button" onClick={() => void props.onExport?.()}>
           Export
         </button>
+
+        {/* R53 — offered only where it means something: the backlog it runs is
+            the `topublish` one, so on any other tab the button would lie. */}
+        {props.canAdmin && props.status === "topublish" && props.onPublishNow !== undefined ? (
+          <PublishNow onPublishNow={props.onPublishNow} />
+        ) : null}
       </div>
 
-      {visible.length === 0 ? (
-        <p className="empty">No messages</p>
-      ) : (
-        <table className="data-table">
-          <thead>
+      {/* The table is rendered even with nothing in it, and "no messages" is a
+          row rather than a replacement for the whole thing: the filter boxes
+          live in the header, so unmounting the table on an empty result would
+          take away the controls an operator needs to widen it again. */}
+      <table className="data-table">
+        <TableHead
+          columns={MESSAGE_COLUMNS}
+          sort={sort}
+          onSort={(column) => setSort((current) => cycleSort(current, column))}
+          filters={columnFilters}
+          onFilter={(column, value) =>
+            setColumnFilters((current) => ({ ...current, [column]: value }))
+          }
+          leading={leading}
+          trailing={trailing}
+        />
+        <tbody>
+          {visible.length === 0 ? (
             <tr>
-              <th aria-label="expand" />
-              {MESSAGE_COLUMNS.map((column) => (
-                <th key={column}>{column}</th>
-              ))}
-              {props.canEdit || props.canAdmin ? <th aria-label="actions" /> : null}
+              <td className="empty" colSpan={columnCount}>
+                No messages
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {visible.map((message) => (
-              <MessageRow key={message.id} message={message} {...props} />
-            ))}
-          </tbody>
-        </table>
-      )}
+          ) : (
+            visible.map((message) => (
+              <MessageRow
+                key={message.id}
+                message={message}
+                selected={selected.has(message.id)}
+                onToggle={() => toggle(message.id)}
+                columnCount={columnCount}
+                {...props}
+              />
+            ))
+          )}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+/**
+ * R53 — "Publish now".
+ *
+ * The count is reported rather than assumed: `publishPending` answers with what
+ * the stage actually sent, and a failure there is a Telegram error the operator
+ * has to see. §3.4 L142 reports one in the summary instead of throwing, so a
+ * silent button would look identical to a successful one.
+ */
+function PublishNow({
+  onPublishNow,
+}: {
+  onPublishNow: (max: number) => Promise<PublishNowResult>;
+}) {
+  const [max, setMax] = useState(String(MAX_PUBLISH_NOW));
+  const [notice, setNotice] = useState("");
+
+  const requested = Number(max);
+
+  return (
+    <>
+      <label>
+        <span>publish at most</span>
+        <input value={max} onChange={(event) => setMax(event.target.value)} />
+      </label>
+      <button
+        type="button"
+        onClick={() => {
+          // Bounded here as well as server-side: an out-of-range value would be
+          // rejected by the action after a round trip that could send nothing.
+          if (!Number.isInteger(requested) || requested <= 0 || requested > MAX_PUBLISH_NOW) return;
+          setNotice("");
+          void onPublishNow(requested).then(({ published, failed }) => {
+            setNotice(`published ${published}, ${failed} failed`);
+          });
+        }}
+      >
+        Publish now
+      </button>
+      {notice === "" ? null : <output className="notice">{notice}</output>}
     </>
   );
 }
@@ -100,10 +215,19 @@ function MessageRow({
   message,
   canEdit,
   canAdmin,
+  selected,
+  onToggle,
+  columnCount,
   onSave,
   onRepublish,
   onLoadMembers,
-}: { message: MessageListItem } & Omit<MessagesTableProps, "rows" | "status" | "onExport">) {
+}: {
+  message: MessageListItem;
+  selected: boolean;
+  onToggle: () => void;
+  /** Computed once by the table, so the panel spans whatever edge columns it drew. */
+  columnCount: number;
+} & Omit<MessagesTableProps, "rows" | "status" | "onExport">) {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState(false);
   const [members, setMembers] = useState<MemberRow[] | undefined>(undefined);
@@ -124,11 +248,20 @@ function MessageRow({
     if (members === undefined) void onLoadMembers(message.id).then(setMembers);
   };
 
-  const columnCount = MESSAGE_COLUMNS.length + (canEdit || canAdmin ? 2 : 1);
-
   return (
     <>
       <tr data-testid={`row-${message.id}`}>
+        {canEdit ? (
+          <td>
+            <input
+              type="checkbox"
+              aria-label={`Select ${message.id}`}
+              checked={selected}
+              onChange={onToggle}
+            />
+          </td>
+        ) : null}
+
         <td>
           <button type="button" onClick={toggle} aria-expanded={expanded}>
             {expanded ? "▾" : "▸"} members

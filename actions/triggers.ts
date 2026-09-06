@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   exportTable as exportTableCore,
+  publishPending as publishPendingCore,
   replayDlq as replayDlqCore,
   republishMessage as republishMessageCore,
   runScraper as runScraperCore,
@@ -37,6 +38,13 @@ export async function replayDlq(input: unknown): Promise<{ replayed: number }> {
 
 export async function republishMessage(input: unknown): Promise<void> {
   await republishMessageCore(input, await deps());
+}
+
+/** R53 — "Publish now": runs the deployed publish stage over the pending backlog. */
+export async function publishPending(
+  input: unknown,
+): Promise<{ published: number; failed: number }> {
+  return publishPendingCore(input, await deps());
 }
 
 export async function exportTable(input: unknown): Promise<string> {

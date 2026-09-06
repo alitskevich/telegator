@@ -4,7 +4,12 @@ import type { LambdaInvoker } from "../aws/lambda";
 import type { MessageRepo, SourceRepo } from "../db/ports";
 import { ItemIdSchema } from "../domain/ids";
 import { MESSAGE_STATUSES } from "../domain/message";
-import { publishQueueMessage, type QueueProducer, REPLAYABLE_QUEUES } from "../queues/ports";
+import {
+  type PublishQueuePayload,
+  publishQueueMessage,
+  type QueueProducer,
+  REPLAYABLE_QUEUES,
+} from "../queues/ports";
 import { MESSAGE_COLUMNS, SOURCE_COLUMNS } from "../ui/columns";
 import { toCsv } from "../ui/csv";
 
@@ -19,7 +24,12 @@ import { toCsv } from "../ui/csv";
 export interface TriggerDeps {
   readonly auth: RequireRoleDeps;
   readonly lambda: LambdaInvoker;
-  readonly functions: { readonly scrape: string; readonly dlqReplay: string };
+  readonly functions: {
+    readonly scrape: string;
+    readonly dlqReplay: string;
+    /** R53 — see `publishPending`. §7.6 L673 names only the two above. */
+    readonly publish: string;
+  };
   readonly messages: MessageRepo;
   readonly sources: SourceRepo;
   readonly publishQueue: QueueProducer;
@@ -88,6 +98,87 @@ export async function republishMessage(input: unknown, deps: TriggerDeps): Promi
   await deps.publishQueue.send([publishQueueMessage(messageId)]);
 
   deps.revalidate("/messages");
+}
+
+/**
+ * R53 — "Publish now": run the publish stage against the pending backlog, right
+ * now. §8.4 lists no such action, and this is a divergence from §7.6 L673's
+ * two-function invoke grant, recorded here with its reason.
+ *
+ * §8.4 L753's `republishMessage` is the queue route and cannot be "now": §7.3
+ * L608 gives `telegator-publish` a queue-level `DelaySeconds 300`, FIFO offers
+ * no per-message delay, and `MessageDeduplicationId = messageId` collapses a
+ * repeat request inside the same five minutes — so a second press inside that
+ * window does nothing at all, silently. Invoking is the only route that sends
+ * on the operator's timescale, and §8.2 L734 already makes invoking the
+ * deployed function the sanctioned way to run a stage by hand.
+ *
+ * The two stay separate rather than one replacing the other: `republishMessage`
+ * *changes* a message's status back to `topublish`, which is the queue's job to
+ * pick up; this one changes nothing and only runs what is already pending.
+ */
+const MAX_PUBLISH_NOW = 10;
+
+const PublishPendingInputSchema = z.object({
+  // Capped, not merely defaulted. Every invoke is a real Telegram send and the
+  // backlog is unbounded — dev held 137 `topublish` messages when this was
+  // written, and one uncapped press would have sent all of them.
+  max: z.number().int().positive().max(MAX_PUBLISH_NOW),
+});
+
+/** §3.4 L343's summary. A failed send is reported here, not thrown (L142). */
+const PublishReplySchema = z.object({
+  batchItemFailures: z.array(z.object({ itemIdentifier: z.string() })),
+});
+
+/**
+ * The one-record SQS event `handlers/publish.ts` expects (§7.5 L652, batch size
+ * 1). Built here rather than imported: the dashboard must not reach into
+ * `handlers/` or `lib/pipeline/` (§8.2 L734), and the body is
+ * `PublishQueuePayload` either way. `messageId` carries the message id so a
+ * reported `itemIdentifier` names the story an operator can find.
+ */
+function publishInvokeEvent(messageId: string): unknown {
+  return {
+    Records: [{ messageId, body: JSON.stringify({ messageId } satisfies PublishQueuePayload) }],
+  };
+}
+
+export async function publishPending(
+  input: unknown,
+  deps: TriggerDeps,
+): Promise<{ published: number; failed: number }> {
+  await requireRole("admin", deps.auth);
+
+  const { max } = PublishPendingInputSchema.parse(input);
+
+  // Newest first, as the table lists them (`status-index` is sorted by `ts`), so
+  // what a press publishes is what the operator is looking at.
+  const pending = await deps.messages.queryByStatus("topublish", max);
+
+  let published = 0;
+  let failed = 0;
+
+  for (const message of pending) {
+    // Sequential: §3.4 L343 paces Telegram calls, and the FIFO group already
+    // serialises per message. Parallel invokes would race the same channel.
+    try {
+      const reply = await deps.lambda.invoke(
+        deps.functions.publish,
+        publishInvokeEvent(message.id),
+      );
+      const { batchItemFailures } = PublishReplySchema.parse(reply);
+      failed += batchItemFailures.length > 0 ? 1 : 0;
+      published += batchItemFailures.length > 0 ? 0 : 1;
+    } catch {
+      // Counted, not rethrown: one unreachable invoke must not strand the rest
+      // of the backlog behind it.
+      failed += 1;
+    }
+  }
+
+  deps.revalidate("/messages");
+  return { published, failed };
 }
 
 /**

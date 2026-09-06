@@ -39,3 +39,43 @@ export function filterByKeyword<T extends Record<string, unknown>>(
     }),
   );
 }
+
+/**
+ * The per-column filter row beneath §8.3's headers: one box per visible column,
+ * ANDed.
+ *
+ * *Reconciliation.* §8.3 L744 specifies only the cross-column search. This
+ * narrows rather than replaces it — an operator who knows the category they want
+ * should not have to find a keyword that appears in no other column — and both
+ * run over the rows the page already holds, as L744's search always has.
+ *
+ * The cell rules are `filterByKeyword`'s, from the same `searchableText`, so a
+ * word that matches in the search box matches in that column's own box too.
+ */
+export function filterByColumn<T extends Record<string, unknown>>(
+  rows: readonly T[],
+  filters: Readonly<Record<string, string>>,
+  visibleColumns: readonly (keyof T & string)[],
+): T[] {
+  const shown: readonly string[] = visibleColumns;
+
+  const active = Object.entries(filters)
+    .map(([column, value]) => [column, value.trim().toLowerCase()] as const)
+    /**
+     * A box holding whitespace is not a filter, and a filter left behind on a
+     * column the table no longer shows must stop applying: rows would go
+     * missing with nothing on screen to explain why.
+     */
+    .filter(([column, needle]) => needle !== "" && shown.includes(column));
+
+  if (active.length === 0) return [...rows];
+
+  // `every`, not `some`: two boxes narrow the table. ORing them would widen it
+  // with each one an operator filled in.
+  return rows.filter((row) =>
+    active.every(([column, needle]) => {
+      const text = searchableText(row[column]);
+      return text?.toLowerCase().includes(needle) === true;
+    }),
+  );
+}

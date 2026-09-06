@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { SOURCE_WRITABLE_FIELDS } from "../lib/dashboard/records";
 import type { Source } from "../lib/domain/source";
 import { SOURCE_COLUMNS } from "../lib/ui/columns";
-import { filterByKeyword } from "../lib/ui/filter";
+import { filterByColumn, filterByKeyword } from "../lib/ui/filter";
+import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
+import { TableHead } from "./TableHead";
 
 /**
  * §8.3 L741 — "Table of id, status, tgChannel, category, `teaser`, lastCount,
@@ -33,15 +35,23 @@ const cellText = (value: unknown) => (value === undefined || value === null ? ""
 
 export function SourcesTable(props: SourcesTableProps) {
   const [keyword, setKeyword] = useState("");
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [sort, setSort] = useState<SortState | undefined>(undefined);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [newId, setNewId] = useState("");
   const [notice, setNotice] = useState("");
 
-  const visible = useMemo(
+  const visible = useMemo(() => {
     // §8.3 L744 — across the columns on screen, and only those.
-    () => filterByKeyword([...props.rows], keyword, SOURCE_COLUMNS),
-    [props.rows, keyword],
-  );
+    const matched = filterByKeyword([...props.rows], keyword, SOURCE_COLUMNS);
+    // Then the per-column boxes narrow that, and the sort orders what survives.
+    return sortRows(filterByColumn(matched, columnFilters, SOURCE_COLUMNS), sort);
+  }, [props.rows, keyword, columnFilters, sort]);
+
+  /** The edge columns this table renders itself, for `TableHead` to span. */
+  const leading = props.canEdit ? ["select"] : [];
+  const trailing = props.canEdit ? ["actions"] : [];
+  const columnCount = SOURCE_COLUMNS.length + leading.length + trailing.length;
 
   const toggle = (id: string) => {
     setSelected((current) => {
@@ -119,21 +129,31 @@ export function SourcesTable(props: SourcesTableProps) {
         {notice === "" ? null : <output className="notice">{notice}</output>}
       </div>
 
-      {visible.length === 0 ? (
-        <p className="empty">No sources</p>
-      ) : (
-        <table className="data-table">
-          <thead>
+      {/* The table is rendered even with nothing in it, and "no sources" is a
+          row rather than a replacement for the whole thing: the filter boxes
+          live in the header, so unmounting the table on an empty result would
+          take away the controls an operator needs to widen it again. */}
+      <table className="data-table">
+        <TableHead
+          columns={SOURCE_COLUMNS}
+          sort={sort}
+          onSort={(column) => setSort((current) => cycleSort(current, column))}
+          filters={columnFilters}
+          onFilter={(column, value) =>
+            setColumnFilters((current) => ({ ...current, [column]: value }))
+          }
+          leading={leading}
+          trailing={trailing}
+        />
+        <tbody>
+          {visible.length === 0 ? (
             <tr>
-              {props.canEdit ? <th aria-label="select" /> : null}
-              {SOURCE_COLUMNS.map((column) => (
-                <th key={column}>{column}</th>
-              ))}
-              {props.canEdit ? <th aria-label="actions" /> : null}
+              <td className="empty" colSpan={columnCount}>
+                No sources
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {visible.map((row) => (
+          ) : (
+            visible.map((row) => (
               <SourceRow
                 key={row.id}
                 row={row}
@@ -142,10 +162,10 @@ export function SourcesTable(props: SourcesTableProps) {
                 onToggle={() => toggle(row.id)}
                 onSave={props.onSave}
               />
-            ))}
-          </tbody>
-        </table>
-      )}
+            ))
+          )}
+        </tbody>
+      </table>
     </>
   );
 }

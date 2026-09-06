@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { filterByKeyword } from "./filter";
+import { filterByColumn, filterByKeyword } from "./filter";
 
 const rows = [
   { id: "example/1", title: "Election result", category: "politics", lastCount: 12 },
@@ -116,6 +116,73 @@ describe("filterByKeyword — §8.3 L744", () => {
   test("does not mutate or reorder the input", () => {
     const original = [...rows];
     expect(filterByKeyword(rows, "politics", visible)).toEqual([rows[0], rows[2]]);
+    expect(rows).toEqual(original);
+  });
+});
+
+describe("filterByColumn", () => {
+  test("a filter matches within its own column only", () => {
+    expect(filterByColumn(rows, { category: "politics" }, visible).map((r) => r.id)).toEqual([
+      "example/1",
+      "example/3",
+    ]);
+    // "politics" is a category, not a title, so as a title filter it matches
+    // nothing — the whole point of a per-column box.
+    expect(filterByColumn(rows, { title: "politics" }, visible)).toEqual([]);
+  });
+
+  test("two filters are ANDed, not ORed", () => {
+    expect(
+      filterByColumn(rows, { category: "politics", title: "budget" }, visible).map((r) => r.id),
+    ).toEqual(["example/3"]);
+    expect(filterByColumn(rows, { category: "sports", title: "budget" }, visible)).toEqual([]);
+  });
+
+  test("is case-insensitive and matches a substring", () => {
+    expect(filterByColumn(rows, { title: "LECT" }, visible).map((r) => r.id)).toEqual([
+      "example/1",
+    ]);
+  });
+
+  test("empty and whitespace filters are not filters", () => {
+    expect(filterByColumn(rows, {}, visible)).toHaveLength(rows.length);
+    expect(filterByColumn(rows, { title: "", category: "   " }, visible)).toHaveLength(rows.length);
+  });
+
+  test("surrounding whitespace is ignored", () => {
+    expect(filterByColumn(rows, { title: "  cup  " }, visible)).toHaveLength(1);
+  });
+
+  /**
+   * A filter typed into a column and then left behind must not go on hiding
+   * rows from a table that no longer shows that column: the operator would see
+   * rows missing with nothing on screen to explain why.
+   */
+  test("a filter on a column that is not visible is ignored", () => {
+    expect(filterByColumn(rows, { id: "example/1" }, visible)).toHaveLength(rows.length);
+    expect(filterByColumn(rows, { id: "example/1" }, ["id", "title"]).map((r) => r.id)).toEqual([
+      "example/1",
+    ]);
+  });
+
+  test("numeric columns filter on what they show", () => {
+    expect(filterByColumn(rows, { lastCount: "12" }, ["lastCount"]).map((r) => r.id)).toEqual([
+      "example/1",
+      "example/3",
+    ]);
+  });
+
+  /** The same blanks `filterByKeyword` refuses to match, refused here too. */
+  test("a blank cell never matches a filter", () => {
+    const sparse = [{ title: undefined }, { title: null }, { title: "here" }];
+    expect(filterByColumn(sparse, { title: "here" }, ["title"])).toHaveLength(1);
+    expect(filterByColumn(sparse, { title: "null" }, ["title"])).toEqual([]);
+    expect(filterByColumn([{ members: {} }], { members: "object" }, ["members"])).toEqual([]);
+  });
+
+  test("does not mutate or reorder the input", () => {
+    const original = [...rows];
+    expect(filterByColumn(rows, { category: "politics" }, visible)).toEqual([rows[0], rows[2]]);
     expect(rows).toEqual(original);
   });
 });

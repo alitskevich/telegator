@@ -99,6 +99,7 @@ export class TelegatorAppStack extends Stack {
       // §8.4 L752/L754 — the two functions the manual triggers invoke by name.
       [DASHBOARD_ENV_VARS.scrapeFunctionName, pipeline.functions.scrape.functionName],
       [DASHBOARD_ENV_VARS.dlqReplayFunctionName, pipeline.functions.dlqReplay.functionName],
+      [DASHBOARD_ENV_VARS.publishFunctionName, pipeline.functions.publish.functionName],
       // §8.6 L780 — the hosted-UI session layer.
       [DASHBOARD_ENV_VARS.userPoolId, auth.userPool.userPoolId],
       [DASHBOARD_ENV_VARS.userPoolClientId, auth.userPoolClient.userPoolClientId],
@@ -306,6 +307,14 @@ export class TelegatorAppStack extends Stack {
      * import `lib/pipeline/`, so invoking is its only route into the pipeline.
      * A broader grant would let it invoke the stages directly and the boundary
      * would exist only in the source tree.
+     *
+     * R53 — `publish` is a recorded third. L673's list predates the "Publish
+     * now" trigger, which has no other route: §7.3 L608 gives the publish queue
+     * a queue-level `DelaySeconds 300`, FIFO has no per-message delay, and the
+     * message-id deduplication collapses a repeat inside five minutes — so the
+     * queue cannot express "send this now" at all. The boundary L673 exists to
+     * protect is `analyze` and `aggregate`, which stay ungranted and are named
+     * in the test.
      */
     this.appRole.addToPolicy(
       new PolicyStatement({
@@ -314,6 +323,7 @@ export class TelegatorAppStack extends Stack {
         resources: [
           pipeline.functions.scrape.functionArn,
           pipeline.functions.dlqReplay.functionArn,
+          pipeline.functions.publish.functionArn,
         ],
       }),
     );

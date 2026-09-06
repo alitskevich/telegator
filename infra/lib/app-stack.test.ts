@@ -223,6 +223,8 @@ describe("TelegatorAppStack", () => {
 
       expect(names).toContain("TELEGATOR_SCRAPE_FUNCTION_NAME");
       expect(names).toContain("TELEGATOR_DLQ_REPLAY_FUNCTION_NAME");
+      // R53 — "Publish now" invokes the publish stage, so its name travels too.
+      expect(names).toContain("TELEGATOR_PUBLISH_FUNCTION_NAME");
     });
 
     test("carries the Cognito ids the session layer needs (§8.6 L780)", () => {
@@ -249,7 +251,7 @@ describe("TelegatorAppStack", () => {
      * broader grant would let it invoke the stages directly, defeating the
      * boundary.
      */
-    test("may invoke exactly two functions, not the stages", () => {
+    test("may invoke exactly three functions, never the analysis stages", () => {
       const invoke = policyStatements(templateFor()).filter((s) =>
         actionsOf(s).includes("lambda:InvokeFunction"),
       );
@@ -258,6 +260,10 @@ describe("TelegatorAppStack", () => {
       expect(invoke[0]?.Resource).not.toBe("*");
       const serialised = JSON.stringify(invoke[0]?.Resource);
       expect(serialised).not.toContain("aggregateFunction");
+      expect(serialised).not.toContain("analyzeFunction");
+      // R53 — the third is `publish`, and only because "Publish now" runs the
+      // deployed stage; the boundary L673 protects is the analysis pair above.
+      expect(serialised).toContain("publishFunction");
     });
 
     /** R24 — §8.5 L771's chart needs GetQueryResults; StartQuery alone returns nothing. */

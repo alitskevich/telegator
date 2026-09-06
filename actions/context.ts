@@ -101,6 +101,7 @@ export const publishQueue = createSqsQueueProducer({
 export const functions = {
   scrape: requireEnv(DASHBOARD_ENV_VARS.scrapeFunctionName),
   dlqReplay: requireEnv(DASHBOARD_ENV_VARS.dlqReplayFunctionName),
+  publish: requireEnv(DASHBOARD_ENV_VARS.publishFunctionName),
 } as const;
 
 /**

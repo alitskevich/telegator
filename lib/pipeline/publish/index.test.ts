@@ -98,6 +98,31 @@ describe("runPublish", () => {
   });
 
   /**
+   * §8.4 L751's soft delete, honoured here.
+   *
+   * *Reconciliation.* §3.4 L316 gates this stage on `status` alone, and
+   * `softDelete` writes `deleted` without touching it — so a message an
+   * operator deleted from the dashboard was still posted to Telegram if its
+   * publish job was already on the queue. R16 hides a deleted message from
+   * every read the dashboard makes, which means the operator would have had no
+   * way to see it coming and none to tell it had happened.
+   */
+  test("a soft-deleted message is acknowledged with no Telegram call", async () => {
+    const { bot, messages, deps: d } = deps([message({ id: "chan_a/1" })]);
+    await messages.softDelete(["chan_a/1"]);
+    const before = await messages.get("chan_a/1");
+
+    const result = await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls).toEqual([]);
+    // Acknowledged, not failed: a retry would find it deleted too, so failing
+    // would loop until the redrive policy gave up and fill §3.5's DLQ with
+    // messages nobody wants sent.
+    expect(result.batchItemFailures).toEqual([]);
+    expect(await messages.get("chan_a/1")).toEqual(before);
+  });
+
+  /**
    * AC-4.7 (L355), implementable half. §4.2 L381: a failure arrives as HTTP 200
    * with ok:false. It must be reported so SQS retries — and must NOT write
    * `published` or a tgId that does not exist.

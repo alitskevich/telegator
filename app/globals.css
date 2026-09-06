@@ -394,6 +394,61 @@ a:hover {
   min-width: 90px;
 }
 
+/**
+ * The sort control in each column header.
+ *
+ * A button rather than a click handler on the `<th>`: it is reachable by
+ * keyboard and announced as a control, while the `<th>` around it carries
+ * `aria-sort`. Styled back to plain text because `.data-table button` above
+ * gives every other button in the table a border and a panel background.
+ */
+.data-table .column-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.data-table .column-sort:hover {
+  color: var(--text);
+}
+
+/* Sized whether or not this column is the sorted one, so clicking a header
+   does not shift the labels beside it sideways. */
+.sort-arrow {
+  display: inline-block;
+  width: 8px;
+  font-size: 9px;
+}
+
+/* The per-column filter row. Lower-case: these hold an operator's own words,
+   not the column names above them. */
+.filter-row th {
+  padding: 0 10px 8px;
+  text-transform: none;
+}
+
+.data-table .filter-row input {
+  width: 100%;
+  min-width: 70px;
+  font-weight: 400;
+}
+
+/* "No sources" / "No messages" — a row inside the table now, so that filtering
+   to nothing leaves the filter boxes in the header where the operator left
+   them. */
+.data-table td.empty {
+  padding: 16px 10px;
+  text-align: center;
+}
+
 /* §8.3 L742's status tabs. Links, not buttons — the tab is `?status=`. */
 .tabs {
   display: flex;
