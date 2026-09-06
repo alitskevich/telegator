@@ -99,3 +99,47 @@ describe("NEWS_ITEM_SCHEMA (the JSON Schema §5.2 L423 sends)", () => {
     expect(NEWS_ITEM_SCHEMA.type).toBe("object");
   });
 });
+
+/**
+ * R51 — the cap must reach the model as an *instruction*, not only as a
+ * constraint the provider does not enforce.
+ *
+ * Structured output enforces shape, types and enums; string length it leaves to
+ * the model. Emitting `maxLength` and saying nothing held the model to a limit
+ * it had never been told, and Zod then failed the item permanently down §3.2
+ * L239's transient path into the DLQ.
+ */
+describe("the summary cap reaches the model (R51)", () => {
+  interface JsonField {
+    readonly description?: string;
+    readonly maxLength?: number;
+  }
+
+  /**
+   * Narrowed by a throw rather than a non-null assertion: `noNonNullAssertion`
+   * is an error in this repo, and a schema that emitted no `summary` at all
+   * should fail as that, not as three puzzling assertion failures.
+   */
+  function summaryField(): JsonField {
+    const { properties } = NEWS_ITEM_SCHEMA as { properties: Record<string, JsonField> };
+    const field = properties.summary;
+    if (field === undefined) throw new Error("the emitted schema has no summary property");
+    return field;
+  }
+
+  const summary = summaryField();
+
+  test("is emitted as maxLength for any provider that does enforce it", () => {
+    expect(summary.maxLength).toBe(SUMMARY_MAX_LENGTH);
+  });
+
+  test("is also stated in the description, which is what the model reads", () => {
+    expect(summary.description).toContain(String(SUMMARY_MAX_LENGTH));
+  });
+
+  /** One definition: a changed cap must not leave the sentence saying 220. */
+  test("quotes the constant rather than a second hand-written number", () => {
+    const numbers = (summary.description ?? "").match(/\d+/g) ?? [];
+    expect(numbers).toEqual([String(SUMMARY_MAX_LENGTH)]);
+  });
+});

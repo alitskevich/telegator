@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AiFieldsSchema } from "../domain/item";
+import { AiFieldsSchema, SUMMARY_MAX_LENGTH } from "../domain/item";
 import { CategorySchema } from "./categories";
 
 /**
@@ -23,8 +23,26 @@ import { CategorySchema } from "./categories";
  */
 export const NewsItemSchema = AiFieldsSchema.extend({
   title: AiFieldsSchema.shape.title.describe("Essential subject in three words, English."),
+  /**
+   * The character cap is stated in words, not left to `maxLength`.
+   *
+   * `AiFieldsSchema` already caps this at `SUMMARY_MAX_LENGTH`, and
+   * `z.toJSONSchema` does emit `"maxLength": 220` — but a provider's structured
+   * output enforces shape, types and enums, not string length. So the model was
+   * held to a limit nobody had told it: it wrote what it thought fit, Zod
+   * rejected anything over, and §3.2 L239 sent a *permanent* failure down the
+   * transient-error path to the DLQ, where it burned every SQS retry first.
+   *
+   * Measured against three real DLQ bodies before and after: the longest (a
+   * 3.3 KB essay) produced a 385-character summary with the limit unstated and
+   * 203 with it stated. The other two passed either way and came back shorter.
+   *
+   * Interpolated rather than written as "220", so the cap has one definition —
+   * the file header's own argument against two hand-maintained copies.
+   */
   summary: AiFieldsSchema.shape.summary.describe(
-    "Brief factual matter — no implications, opinions or judgements. In Belarusian.",
+    "Brief factual matter — no implications, opinions or judgements. In Belarusian. " +
+      `At most ${SUMMARY_MAX_LENGTH} characters.`,
   ),
   country: AiFieldsSchema.shape.country.describe("ISO-3166 alpha-2 code."),
   location: AiFieldsSchema.shape.location.describe("City or region, English."),
