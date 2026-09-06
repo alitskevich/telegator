@@ -8,7 +8,7 @@ export default defineConfig({
    */
   oxc: { jsx: { runtime: "automatic" } },
   test: {
-    // No test may touch the network: every AWS/Telegram/Bedrock boundary is an
+    // No test may touch the network: every AWS/Telegram/OpenRouter boundary is an
     // interface with an in-memory fake (ralph-loop-prompt.md, Engineering Bar).
     environment: "node",
     include: ["**/*.test.ts", "**/*.test.tsx"],

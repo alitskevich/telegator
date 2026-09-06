@@ -1,19 +1,21 @@
 import { z } from "zod";
 import { ADJUDICATOR_MAX_TOKENS, ADJUDICATOR_MODEL_ID } from "./constants";
 import { extractText } from "./messagesContent";
+import { type ApiKeyProvider, createMessagesClient, missingApiKey } from "./openrouterClient";
 import type { Adjudicator } from "./ports";
 
 /**
  * R46 — the band adjudicator (the model that resolves the "adjudicate" verdict
  * from `lib/dedup/score.ts`'s classification).
  *
- * Built on the same shape as `createBedrockClassifier` in `lib/ai/bedrock.ts`:
- * a structural client interface, a lazily-imported `AnthropicBedrockMantle` so
- * constructing the adapter never resolves AWS credentials, and the shared
+ * Built on the same shape as `createOpenRouterClassifier` in
+ * `lib/ai/openrouter.ts`: a structural client interface, a lazily-built client
+ * so constructing the adapter never fetches a secret, and the shared
  * `extractText` over Messages content blocks. Kept in its own module rather than
- * folded into `bedrock.ts` because its contract — verdicts keyed by pair id,
+ * folded into `openrouter.ts` because its contract — verdicts keyed by pair id,
  * never positional — is the one thing this task exists to get right. The
- * content-block reader itself is shared (`./messagesContent`), not copied.
+ * content-block reader (`./messagesContent`) and the client factory
+ * (`./openrouterClient`) are shared, not copied.
  */
 
 const VerdictsSchema = z.object({
@@ -55,8 +57,10 @@ export interface AdjudicatorClient {
   create(request: unknown): Promise<unknown>;
 }
 
-export interface BedrockAdjudicatorOptions {
+export interface OpenRouterAdjudicatorOptions {
   readonly client?: AdjudicatorClient;
+  /** §7.6 — reads the key from Secrets Manager; supplied by `handlers/aggregate.ts`. */
+  readonly apiKey?: ApiKeyProvider;
 }
 
 const SYSTEM_PROMPT =
@@ -65,7 +69,9 @@ const SYSTEM_PROMPT =
   "different emphasis. Different events that merely share a place, a person or " +
   "a topic are NOT the same event. Answer for every pair you are given.";
 
-export function createBedrockAdjudicator(options: BedrockAdjudicatorOptions = {}): Adjudicator {
+export function createOpenRouterAdjudicator(
+  options: OpenRouterAdjudicatorOptions = {},
+): Adjudicator {
   let client = options.client;
 
   return {
@@ -73,12 +79,8 @@ export function createBedrockAdjudicator(options: BedrockAdjudicatorOptions = {}
       if (pairs.length === 0) return new Map();
 
       if (client === undefined) {
-        // Imported lazily so the module can be loaded without the SDK resolving
-        // a region or a credential chain.
-        const { AnthropicBedrockMantle } = await import("@anthropic-ai/bedrock-sdk");
-        // AWS_REGION is a reserved Lambda variable: read, never declared (§5.1 L396).
-        const mantle = new AnthropicBedrockMantle({ awsRegion: process.env.AWS_REGION });
-        client = { create: (request) => mantle.messages.create(request as never) };
+        if (options.apiKey === undefined) throw missingApiKey("the adjudicator");
+        client = await createMessagesClient(options.apiKey);
       }
 
       const response = await client.create({

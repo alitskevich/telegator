@@ -1,0 +1,90 @@
+name: gates
+
+# The four gates CLAUDE.md requires before any commit, plus the two things they
+# provably cannot catch: a dashboard that compiles but cannot serve a page, and
+# a model adapter that is wired to the wrong endpoint.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # ── The four gates, in CLAUDE.md's order. All four, never three. ────────
+      - name: gate 1 — tsc
+        run: npx tsc --noEmit
+
+      - name: gate 2 — vitest
+        run: npx vitest run
+
+      - name: gate 3 — biome
+        run: npx biome check .
+
+      # Credential-free by design, and must stay that way: a context lookup
+      # (`fromLookup`, `valueFromLookup`) turns synth into an authenticated call
+      # and this step is the only thing that would notice.
+      - name: gate 4 — cdk synth
+        run: npx cdk synth
+        env:
+          CI: "true"
+
+      # ── What the four gates cannot catch ───────────────────────────────────
+
+      # No gate runs a bundler, so a module-resolution break, a client/server
+      # boundary error or an invalid `next.config.ts` option ships green.
+      # Relative imports carrying a `.js` extension are the recorded case:
+      # tsc, Vite, esbuild and tsx all substitute `.ts`, Turbopack does not.
+      - name: dashboard compiles (next build)
+        run: npx next build
+        # §9.3's environment, with placeholder values — scoped to this step
+        # alone, deliberately.
+        #
+        # These are NOT secrets and must never become secrets: every one is a
+        # resource name, URL or ARN, the point `.env.local.example` makes at
+        # length. Only `next build` needs them, because `actions/context.ts`
+        # calls `readAuthConfig()` at *module scope*, so page-data collection
+        # throws before a single request is served. Nothing connects to AWS:
+        # every route is `force-dynamic`, so no build-time render reads a table.
+        #
+        # Job-level would be easier and wrong. Several tests assert that a
+        # missing variable throws *by name*; they clear `process.env` in setup
+        # today, but one that forgot would pass locally and fail only here,
+        # which is the least useful place to discover it.
+        env:
+          AWS_REGION: eu-central-1
+          TELEGATOR_SOURCES_TABLE: telegator-ci-sources
+          TELEGATOR_MESSAGES_TABLE: telegator-ci-messages
+          TELEGATOR_ANALYZE_QUEUE_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/telegator-ci-analyze
+          TELEGATOR_AGGREGATE_QUEUE_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/telegator-ci-aggregate.fifo
+          TELEGATOR_PUBLISH_QUEUE_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/telegator-ci-publish.fifo
+          TELEGATOR_ANALYZE_DLQ_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/telegator-ci-analyze-dlq
+          TELEGATOR_AGGREGATE_DLQ_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/telegator-ci-aggregate-dlq.fifo
+          TELEGATOR_PUBLISH_DLQ_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/telegator-ci-publish-dlq.fifo
+          TELEGATOR_SCRAPE_FUNCTION_NAME: telegator-ci-scrape
+          TELEGATOR_DLQ_REPLAY_FUNCTION_NAME: telegator-ci-dlq-replay
+          TELEGATOR_USER_POOL_ID: eu-central-1_ciciciciC
+          TELEGATOR_USER_POOL_CLIENT_ID: 0000000000000000000000000
+          TELEGATOR_COGNITO_DOMAIN: https://telegator-ci-users.auth.eu-central-1.amazoncognito.com
+          TELEGATOR_APP_URL: http://localhost:3000
+          TELEGATOR_SESSION_SECRET_ARN: arn:aws:secretsmanager:eu-central-1:123456789012:secret:telegator/ci-session-key
+          TELEGATOR_ANALYZE_LOG_GROUP: /aws/lambda/telegator-ci-analyze
+          TELEGATOR_TELEGRAM_SECRET_ARN: arn:aws:secretsmanager:eu-central-1:123456789012:secret:telegator/ci-telegram
+          TELEGATOR_OPENROUTER_SECRET_ARN: arn:aws:secretsmanager:eu-central-1:123456789012:secret:telegator/ci-openrouter
+
+      # No gate makes a model call. Offline mode: real adapter, real SDK, real
+      # base URL and key handling, canned far end. No network, no key, no cost.
+      - name: model adapter is correctly wired (offline)
+        run: npm run smoke:openrouter

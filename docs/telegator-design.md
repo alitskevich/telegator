@@ -1,7 +1,7 @@
 ---
 title: "Telegator on AWS + Next.js — Functional Specification & Build Blueprint"
-description: "Complete functional specification of the Telegator news aggregation pipeline, with an implementation blueprint for reproducing it on AWS (SQS, Lambda, DynamoDB, Bedrock) with a Next.js dashboard."
-keywords: [telegator, aws, nextjs, specification, pipeline, sqs, bedrock, dynamodb]
+description: "Complete functional specification of the Telegator news aggregation pipeline, with an implementation blueprint for reproducing it on AWS (SQS, Lambda, DynamoDB) with Claude via OpenRouter and a Next.js dashboard."
+keywords: [telegator, aws, nextjs, specification, pipeline, sqs, openrouter, dynamodb]
 ---
 
 # Telegator on AWS + Next.js
@@ -59,7 +59,7 @@ Consequences that shape everything downstream:
     [SQS: analyze]  Standard
              │
        ┌─────▼─────┐
-       │  analyze  │   Bedrock classify
+       │  analyze  │   OpenRouter classify
        └─────┬─────┘
      skip ◀──┤ (dropped, metric only)
              ▼
@@ -389,34 +389,34 @@ Pacing and retry are specified in §3.5.
 
 ### 5.1 Provider
 
-**Decision: Amazon Bedrock.** Classification uses Claude; embeddings use a Bedrock embedding model. IAM replaces API keys and inference stays inside AWS.
+**Decision: OpenRouter.** Classification uses Claude through OpenRouter's Anthropic-compatible Messages API. A bearer key in Secrets Manager replaces IAM: Bedrock is disabled above IAM by this account's Organization, so no role policy could ever have reached it.
+
+```ts
+import Anthropic from "@anthropic-ai/sdk";
+const client = new Anthropic({ baseURL: "https://openrouter.ai/api", apiKey });
+```
+
+OpenRouter model ids carry a vendor slug prefix: **`anthropic/claude-opus-5`**.
+
+**Alternative worth knowing about — Amazon Bedrock.** AWS-native, reached with SigV4 auth and IAM access control, with no external API key to hold. It was this spec's original decision, reversed once the Organization-level block on Bedrock proved to sit above IAM. Switching back is a client swap plus the Bedrock model-id prefix:
 
 ```ts
 import { AnthropicBedrockMantle } from "@anthropic-ai/bedrock-sdk";
 const client = new AnthropicBedrockMantle({ awsRegion: process.env.AWS_REGION });
+// model: "anthropic.claude-opus-5"  (a dot, not a slash)
 ```
 
-Bedrock model ids carry an `anthropic.` prefix: **`anthropic.claude-opus-5`**.
+This spec proceeds with OpenRouter as decided; the alternative is recorded so the choice is deliberate.
 
-**Alternative worth knowing about — Claude Platform on AWS.** Anthropic-operated, reached through AWS infrastructure with SigV4 auth, IAM access control and AWS Marketplace billing, but with same-day feature parity with the first-party API. It satisfies the same "AWS-native, no external API key" requirement that motivated the Bedrock choice. Switching is a client swap plus dropping the model-id prefix:
-
-```ts
-import AnthropicAws from "@anthropic-ai/aws-sdk";
-const client = new AnthropicAws();   // needs AWS_REGION + ANTHROPIC_AWS_WORKSPACE_ID
-// model: "claude-opus-5"  (no prefix)
-```
-
-This spec proceeds with Bedrock as decided; the alternative is recorded so the choice is deliberate.
-
-**Cost note requiring an explicit decision.** This stage runs one model call per news item continuously. `claude-opus-5` is specified because model choice is the operator's call, not an implementation detail. If throughput cost matters more than classification nuance, `anthropic.claude-haiku-4-5` is a one-line change with no other spec impact. **Decide before the first production run.**
+**Cost note requiring an explicit decision.** This stage runs one model call per news item continuously. `claude-opus-5` is specified because model choice is the operator's call, not an implementation detail. If throughput cost matters more than classification nuance, `anthropic/claude-haiku-4.5` is a one-line change with no other spec impact. **Decide before the first production run.**
 
 ### 5.2 Classification request
 
-Structured outputs and adaptive thinking/effort are both GA on Bedrock, so the Gemini `responseSchema` ports directly to `output_config.format` — no tool-use workaround needed.
+Structured outputs and adaptive thinking/effort both reach OpenRouter's Messages endpoint through `output_config`, so the Gemini `responseSchema` ports directly to `output_config.format` — no tool-use workaround needed.
 
 ```ts
 const response = await client.messages.create({
-  model: "anthropic.claude-opus-5",
+  model: "anthropic/claude-opus-5",
   max_tokens: 2000,
   output_config: {
     effort: "low",                  // classification, not reasoning
@@ -458,11 +458,11 @@ Your responses MUST follow the rules:
 
 ### 5.3 Embeddings
 
-**Model: `cohere.embed-multilingual-v3` (Bedrock), 1024 dimensions, `input_type: "search_document"`.**
+**Model: `cohere.embed-multilingual-v3` (Bedrock), 1024 dimensions, `input_type: "search_document"`.** *(Superseded: R43 removed the embedding stage, R50 removed Bedrock.)*
 
 The reason is content, not preference: item bodies are Russian and Ukrainian, summaries are Belarusian, and cross-lingual clustering is the entire point of Stage 3. Amazon Titan Text Embeddings v2 (`amazon.titan-embed-text-v2:0`) is the alternative and supports 256/512/1024 dimensions, but is English-centric.
 
-**Dimension change: 768 → 1024.** The source uses `gemini-embedding-001` at 768; neither Bedrock option offers 768. Vectors from different models are not comparable at all, so this is a full re-embed regardless. The 0.85 threshold is **not automatically transferable** — see §11.3.
+**Dimension change: 768 → 1024.** The source uses `gemini-embedding-001` at 768; neither Bedrock option offered 768. Vectors from different models are not comparable at all, so this is a full re-embed regardless. The 0.85 threshold is **not automatically transferable** — see §11.3.
 
 **Batching.** Cohere accepts up to 96 texts per call; the 10-item batch fits in one request.
 
@@ -573,8 +573,8 @@ for msgId in toPublish:
 | Stage execution | Scheduled polling | SQS event source mappings |
 | HTTP API | `onRequest` handler | Next.js server actions |
 | Auth | Firebase Auth | Amazon Cognito |
-| Secrets | Firebase secrets | Secrets Manager (Telegram) + IAM (Bedrock) |
-| AI | Gemini REST | Bedrock (Claude + Cohere) |
+| Secrets | Firebase secrets | Secrets Manager (Telegram + OpenRouter) |
+| AI | Gemini REST | OpenRouter (Claude, Messages API) |
 | Hosting | Firebase Hosting | Amplify Hosting |
 | Pipeline metrics | Table scans in the browser | CloudWatch metrics + Logs Insights |
 
@@ -617,7 +617,7 @@ Each has a matching DLQ. **Message retention: 14 days** (the SQS maximum) on eve
 
 **Visibility timeout is 6× the function timeout**, per AWS guidance, so a slow invocation cannot cause redelivery to a second worker.
 
-**Partial batch failures.** Every consumer sets `functionResponseTypes: ["ReportBatchItemFailures"]` and returns the failed message ids. Without this, one poison message forces the whole batch to retry — which for `analyze` means re-billing nine successful Bedrock calls.
+**Partial batch failures.** Every consumer sets `functionResponseTypes: ["ReportBatchItemFailures"]` and returns the failed message ids. Without this, one poison message forces the whole batch to retry — which for `analyze` means re-billing nine successful OpenRouter calls.
 
 **FIFO throughput.** 300 messages/s without batching, 3,000 with. Volumes here are orders of magnitude below that.
 
@@ -661,14 +661,14 @@ All Node.js 22, ARM64, bundled with esbuild.
 | Secret | Store | Consumers |
 | --- | --- | --- |
 | `telegator/telegram-bot-token` | Secrets Manager | `publish` |
-| Bedrock access | **No secret** — IAM role policy | `analyze`, `aggregate` |
+| `telegator/openrouter-api-key` | Secrets Manager | `analyze`, `aggregate` |
 
 Per-function least privilege:
 
 - `scrape` → read/write `sources`; `sqs:SendMessage` on the analyze queue
-- `analyze` → consume the analyze queue; `sqs:SendMessage` on aggregate; `bedrock:InvokeModel` on the Claude model ARN
-- `aggregate` → consume the aggregate queue; read/write `messages`; `sqs:SendMessage` on publish; `bedrock:InvokeModel` on the Cohere model ARN
-- `publish` → consume the publish queue; read/write `messages`; `secretsmanager:GetSecretValue` on the one secret ARN
+- `analyze` → consume the analyze queue; `sqs:SendMessage` on aggregate; `secretsmanager:GetSecretValue` on the OpenRouter key ARN
+- `aggregate` → consume the aggregate queue; read/write `messages`; `sqs:SendMessage` on publish; `secretsmanager:GetSecretValue` on the OpenRouter key ARN
+- `publish` → consume the publish queue; read/write `messages`; `secretsmanager:GetSecretValue` on the bot-token ARN
 - `dlq-replay` → receive on all DLQs, send on all source queues
 - Next.js app role → read both tables, write `sources`/`messages`, `cloudwatch:GetMetricData`, `logs:StartQuery`, `sqs:GetQueueAttributes`, `lambda:InvokeFunction` on the scraper and the replay handler
 
@@ -727,7 +727,7 @@ lib/
   queues/                     SQS producers and payload schemas (Zod)
   pipeline/                   Stage implementations
   telegram/                   Bot client, HTML parser
-  ai/                         Bedrock classification + embeddings
+  ai/                         OpenRouter classification (Messages API)
 actions/                      Server actions (§8.4)
 ```
 
@@ -839,7 +839,7 @@ The two systems must never publish the same Telegram content concurrently — th
 
 ### 11.1 Per stage
 
-§3.1–3.4 are the functional test suite, implementable against DynamoDB Local and ElasticMQ (SQS-compatible) with stubbed Telegram and Bedrock clients.
+§3.1–3.4 are the functional test suite, implementable against DynamoDB Local and ElasticMQ (SQS-compatible) with stubbed Telegram and OpenRouter clients.
 
 ### 11.2 End-to-end
 
@@ -849,7 +849,7 @@ The two systems must never publish the same Telegram content concurrently — th
 - **E2E-4** A new item merged into a published message triggers `editMessageText` with the stored `tgId`.
 - **E2E-5** **Replaying the entire aggregate DLQ leaves the messages table byte-identical.** This is the master idempotency test.
 - **E2E-6** Killing the analyze consumer for 10 minutes and restarting it processes the accumulated backlog with no loss and no duplicates.
-- **E2E-7** A Bedrock outage sends every in-flight item to the analyze DLQ; restoring service and replaying completes them.
+- **E2E-7** An OpenRouter outage sends every in-flight item to the analyze DLQ; restoring service and replaying completes them.
 
 ### 11.3 Similarity threshold recalibration *(mandatory before production)*
 

@@ -38,7 +38,7 @@ describe("SYSTEM_PROMPT", () => {
   });
 
   /**
-   * "responseSchema" is Gemini vocabulary; the Bedrock request at §5.2 L423
+   * "responseSchema" is Gemini vocabulary; the Messages request at §5.2 L423
    * calls the field `schema`. Kept because L430 says verbatim — changing prompt
    * wording changes model behaviour, and this build cannot measure the effect.
    */

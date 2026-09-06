@@ -12,6 +12,11 @@ cdk.out/
 .env*
 # — except the documented template, which holds names and ARNs, never a value.
 !.env.local.example
+# Local API keys. Unlike everything in .env.local.example these ARE secrets, and
+# `.env*` does not cover a name that does not start with `.env`.
+.orkey
+*.key
+.secrets/
 
 # ralph loop working files (the user's, and the ledger)
 .claude/*.local.md

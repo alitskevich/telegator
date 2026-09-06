@@ -1,7 +1,7 @@
 /**
  * Reading a Messages response's text back out, shared by both model callers.
  *
- * `createBedrockClassifier` (`./bedrock`) and `createBedrockAdjudicator`
+ * `createOpenRouterClassifier` (`./openrouter`) and `createOpenRouterAdjudicator`
  * (`./adjudicator`) each carried a near-identical copy of this. Two copies of a
  * parser is two places for the concatenation rule below to be lost, and the
  * adjudicator's copy was the one no test exercised — so the copy that could

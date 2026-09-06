@@ -3,8 +3,10 @@ import type { NewsItem } from "./newsItemSchema";
 /**
  * The two model boundaries, as interfaces.
  *
- * Bedrock is unreachable from the build machine, so every model call goes
- * through one of these with a deterministic fake behind it in tests. That is
+ * No model provider is reachable from the build machine — under Bedrock for
+ * want of credentials, under OpenRouter (R50) for want of a key that has no
+ * business being here — so every model call goes through one of these with a
+ * deterministic fake behind it in tests. That is
  * not only a local constraint: it is what lets §11's acceptance criteria be
  * checked at all, since a test that needs a live model cannot assert "these two
  * posts produce one message with two members".

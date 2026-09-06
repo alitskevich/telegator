@@ -1,11 +1,12 @@
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { SQSClient } from "@aws-sdk/client-sqs";
-import { createBedrockClassifier } from "../lib/ai/bedrock";
+import { createOpenRouterClassifier } from "../lib/ai/openrouter";
 import { createLogger, stdoutSink } from "../lib/logging/logger";
 import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch";
 import { type AnalyzeResult, runAnalyze } from "../lib/pipeline/analyze/index";
 import { createSqsQueueProducer } from "../lib/queues/sqs";
 import { ENV_VARS, requireEnv } from "./env";
+import { createSecretReader, secretsClient } from "./secrets";
 
 /**
  * The `telegator-analyze` entry point (§7.5 L650, SQS `telegator-analyze`).
@@ -21,7 +22,16 @@ let cached: ReturnType<typeof buildDeps> | undefined;
 
 function buildDeps() {
   return {
-    classifier: createBedrockClassifier(),
+    // R50 — §7.6 keeps the OpenRouter key in Secrets Manager. The reader is
+    // handed over rather than the key itself, so nothing is fetched until the
+    // first classification and the value is read once per container.
+    classifier: createOpenRouterClassifier({
+      apiKey: createSecretReader(
+        secretsClient(),
+        ENV_VARS.openRouterSecretArn,
+        "OpenRouter API key",
+      ),
+    }),
     queue: createSqsQueueProducer({
       client: new SQSClient({}),
       queueUrl: requireEnv(ENV_VARS.aggregateQueueUrl),

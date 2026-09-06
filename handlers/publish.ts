@@ -1,6 +1,5 @@
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { systemClock } from "../lib/clock";
 import { createMessageRepo } from "../lib/db/messages";
@@ -10,6 +9,7 @@ import { type PublishResultSummary, runPublish } from "../lib/pipeline/publish/i
 import { createTelegramBot } from "../lib/telegram/bot";
 import { createHttpPost } from "../lib/telegram/http";
 import { ENV_VARS, requireEnv } from "./env";
+import { createSecretReader, secretsClient } from "./secrets";
 
 /**
  * The `telegator-publish` entry point (§7.5 L652, SQS FIFO, batch size 1).
@@ -22,28 +22,21 @@ export interface SqsEvent {
 }
 
 let cached: ReturnType<typeof buildDeps> | undefined;
-let cachedToken: string | undefined;
-
-/**
- * §7.6 L663 keeps the bot token in Secrets Manager. Fetched on first use and
- * cached for the life of the container — item 3.12 deliberately does not cache
- * it, leaving the decision here where the container lifetime is known.
- */
-async function readToken(secrets: SecretsManagerClient): Promise<string> {
-  if (cachedToken !== undefined) return cachedToken;
-
-  const secretArn = requireEnv(ENV_VARS.telegramSecretArn);
-  const response = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn }));
-  if (response.SecretString === undefined) {
-    throw new Error("the Telegram bot token secret has no string value");
-  }
-
-  cachedToken = response.SecretString;
-  return cachedToken;
-}
 
 function buildDeps() {
-  const secrets = new SecretsManagerClient({});
+  /**
+   * §7.6 L663 keeps the bot token in Secrets Manager. Fetched on first use and
+   * cached for the life of the container — item 3.12 deliberately does not
+   * cache it, leaving the decision here where the container lifetime is known.
+   *
+   * R50 — the fetch-once body moved to `./secrets` when analyze and aggregate
+   * grew the same need for the OpenRouter key.
+   */
+  const readToken = createSecretReader(
+    secretsClient(),
+    ENV_VARS.telegramSecretArn,
+    "Telegram bot token",
+  );
   const metrics = createCloudWatchMetrics({
     client: new CloudWatchClient({}),
     logger: createLogger(stdoutSink),
@@ -56,7 +49,7 @@ function buildDeps() {
     }),
     bot: createTelegramBot({
       http: createHttpPost(),
-      tokenProvider: () => readToken(secrets),
+      tokenProvider: readToken,
       // §3.4 L343's pacing. Real time here; the stage's tests inject their own.
       sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
       logger: createLogger(stdoutSink),

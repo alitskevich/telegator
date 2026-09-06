@@ -91,7 +91,7 @@ export interface ClassificationRequestOptions {
    *
    * §5.2 L421 sets `effort: "low"` and L457 makes it the replacement for the
    * removed sampling parameters, so it is the default. But effort is not
-   * available on every Claude tier, and this build cannot reach Bedrock to
+   * available on every Claude tier, and this build cannot reach a provider to
    * establish whether R2's `CLASSIFIER_MODEL_ID` accepts it. Configurable and
    * honest beats hard-coded and guessed: nothing in this repo asserts what
    * either shape does to the model, because nothing here can observe it.
@@ -102,9 +102,9 @@ export interface ClassificationRequestOptions {
 /**
  * Builds the classification request of §5.2 L418–427.
  *
- * Pure, and deliberately not a Bedrock call: the adapter that owns the SDK
+ * Pure, and deliberately not a provider call: the adapter that owns the SDK
  * client implements `Classifier` (item 2.14), which keeps the wire shape unit
- * testable on a machine with no Bedrock access at all.
+ * testable on a machine with no model access at all.
  */
 export function buildClassificationRequest(
   itemBody: string,
@@ -145,7 +145,7 @@ function describeError(error: unknown): string {
  * Items are classified **sequentially**. §7.5 L648 gives the function 300 s for
  * ten items and §7.5 caps the stage at five concurrent invocations, so the
  * throughput ceiling is the reserved concurrency, not the loop; running the ten
- * calls in parallel would multiply this stage's instantaneous Bedrock rate by
+ * calls in parallel would multiply this stage's instantaneous OpenRouter rate by
  * ten for no deadline that needs it.
  *
  * Sends are batched once at the end because `SendMessageBatch` takes exactly
@@ -227,7 +227,7 @@ export async function runAnalyze(
     } catch (error) {
       // §7.3 L620 — exactly this message fails. Without per-message reporting
       // one poison item forces the whole batch to retry, re-billing the nine
-      // successful Bedrock calls.
+      // successful OpenRouter calls.
       batchItemFailures.push({ itemIdentifier: sqsRecord.messageId });
       deps.logger.error("analyze failed", {
         messageId: sqsRecord.messageId,

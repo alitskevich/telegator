@@ -15,7 +15,6 @@ import { NodejsFunction, OutputFormat } from "aws-cdk-lib/aws-lambda-nodejs";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import type { Construct } from "constructs";
 import { ENV_VARS } from "../../handlers/env";
-import { MANTLE_PROJECT_ID } from "../../lib/ai/constants";
 import { METRIC_NAMESPACE } from "../../lib/metrics/ports";
 import type { TelegatorConfig } from "./config";
 import type { TelegatorDataStack } from "./data-stack";
@@ -106,7 +105,8 @@ const SPECS: readonly FunctionSpec[] = [
     logRetention: RetentionDays.THREE_MONTHS,
   },
   // §7.5 L657 — 1024 MB "because it holds a day of 4 KB vectors plus a 10-item
-  // embedding batch".
+  // embedding batch". R43 removed the embeddings; the size is left as the spec
+  // sets it rather than re-tuned against a workload nothing here can measure.
   { key: "aggregate", name: "aggregate", entry: "aggregate.ts", memorySize: 1024 },
   { key: "publish", name: "publish", entry: "publish.ts", memorySize: 512 },
   {
@@ -144,11 +144,13 @@ export class TelegatorPipelineStack extends Stack {
       [ENV_VARS.analyzeDlqUrl]: dlqUrl(queues, "analyze"),
       [ENV_VARS.aggregateDlqUrl]: dlqUrl(queues, "aggregate"),
       [ENV_VARS.publishDlqUrl]: dlqUrl(queues, "publish"),
-      // §7.6 L663 — the one secret. Its ARN is a context parameter rather than
+      // §7.6 L663 — the bot token. Its ARN is a context parameter rather than
       // a lookup: a `Secret.fromLookup` would make synth an authenticated call.
-      [ENV_VARS.telegramSecretArn]: String(
-        this.node.tryGetContext("telegramSecretArn") ?? "telegram-bot-token-arn-not-configured",
-      ),
+      [ENV_VARS.telegramSecretArn]: secretArn(this, "telegramSecretArn"),
+      // §7.6, as revised by R50 — the second secret. Under Bedrock this row read
+      // "**No secret** — IAM role policy"; an OpenRouter key is a bearer token,
+      // so it is configured and granted exactly like the bot token above.
+      [ENV_VARS.openRouterSecretArn]: secretArn(this, "openRouterSecretArn"),
     };
 
     const built = SPECS.map((spec) => {
@@ -215,7 +217,7 @@ export class TelegatorPipelineStack extends Stack {
    *
    * Every mapping reports batch item failures (§7.3 L620): without it one
    * poison message forces the whole batch to retry, which for analyze means
-   * re-billing nine successful Bedrock calls.
+   * re-billing nine successful OpenRouter calls.
    */
   private wireTriggers(config: TelegatorConfig, queues: TelegatorQueueStack): void {
     this.functions.analyze.addEventSource(
@@ -287,7 +289,7 @@ export class TelegatorPipelineStack extends Stack {
     // §7.6 L669.
     queues.analyze.grantConsumeMessages(analyze);
     queues.aggregate.grantSendMessages(analyze);
-    analyze.addToRolePolicy(createInference());
+    analyze.addToRolePolicy(readSecret(secretArn(this, "openRouterSecretArn")));
 
     // §7.6 L670.
     queues.aggregate.grantConsumeMessages(aggregate);
@@ -302,10 +304,10 @@ export class TelegatorPipelineStack extends Stack {
       "dynamodb:UpdateItem",
     );
     queues.publish.grantSendMessages(aggregate);
-    aggregate.addToRolePolicy(createInference());
+    aggregate.addToRolePolicy(readSecret(secretArn(this, "openRouterSecretArn")));
 
-    // §7.6 L671. The secret's ARN is configuration rather than a lookup, so the
-    // grant is scoped to that ARN string rather than to a construct.
+    // §7.6 L671. Both secrets' ARNs are configuration rather than a lookup, so
+    // the grants are scoped to those ARN strings rather than to constructs.
     queues.publish.grantConsumeMessages(publish);
     /**
      * §7.6 L672 says "read/write `messages`", and `grantReadWriteData` matches
@@ -320,13 +322,7 @@ export class TelegatorPipelineStack extends Stack {
      * deletes should not be able to, least of all irrecoverably.
      */
     grantTableActions(data.messages, publish, "dynamodb:GetItem", "dynamodb:UpdateItem");
-    publish.addToRolePolicy(
-      new PolicyStatement({
-        effect: Effect.ALLOW,
-        actions: ["secretsmanager:GetSecretValue"],
-        resources: [String(this.node.tryGetContext("telegramSecretArn") ?? secretArnPattern())],
-      }),
-    );
+    publish.addToRolePolicy(readSecret(secretArn(this, "telegramSecretArn")));
 
     // §7.6 L672 — receive on all DLQs, send on all source queues.
     for (const dlq of queues.deadLetterQueues) dlq.grantConsumeMessages(dlqReplay);
@@ -469,35 +465,41 @@ export class TelegatorPipelineStack extends Stack {
 }
 
 /**
- * R42 — analyze's replacement for the `bedrock:InvokeModel` statement §7.6 L669
- * describes. `AnthropicBedrockMantle` (§5.1 L395-396) signs for the
- * `bedrock-mantle` service, which authorizes `CreateInference` on a project;
- * the InvokeModel grant it held instead was for an API it never calls, so every
- * classification 403'd against a role that looked correctly scoped.
+ * R50 — the model grant, which is no longer a model grant at all.
  *
- * R49 — aggregate embedded through `bedrock-runtime`, so §7.6 L670's
- * `bedrock:InvokeModel` was correct for it while R42 was fixing analyze's.
- * With embeddings gone (R43) both stages call the Mantle API, so one grant
- * covers the stack — this statement is now attached to both functions.
+ * R42 and R49 spent two rounds getting Bedrock's IAM right: the statement had
+ * to name `bedrock-mantle:CreateInference` on a *project*, not §7.6 L669's
+ * `bedrock:InvokeModel` on a model ARN, because that is the service
+ * `AnthropicBedrockMantle` actually signs for. Both are deleted with the
+ * provider. This account's Organization disables Bedrock above IAM, so no
+ * statement written here could ever have worked (docs/learning.md §9).
  *
- * Unlike a foundation-model ARN this one is account-qualified, and the model is
- * not in it: Mantle carries the id in the request body, so this statement
- * cannot restrict which model is called with. `lib/ai/constants.ts` fixes
- * `CLASSIFIER_MODEL_ID` and that is the only thing that does — recorded here
- * because it is a real loss of least privilege against L669's intent.
+ * What replaces them is one `GetSecretValue` on the OpenRouter key, attached to
+ * the same two functions. The trade §7.6 records honestly: IAM no longer
+ * authorizes the *inference*, only the read of a bearer token that does. Which
+ * model that token is spent on is fixed by `CLASSIFIER_MODEL_ID` alone — the
+ * same loss of least privilege R42 recorded against the Mantle project ARN, now
+ * unavoidable rather than incidental.
  */
-function createInference(): PolicyStatement {
+function readSecret(resource: string): PolicyStatement {
   return new PolicyStatement({
     effect: Effect.ALLOW,
-    actions: ["bedrock-mantle:CreateInference"],
-    resources: [
-      `arn:${Aws.PARTITION}:bedrock-mantle:${Aws.REGION}:${Aws.ACCOUNT_ID}:project/${MANTLE_PROJECT_ID}`,
-    ],
+    actions: ["secretsmanager:GetSecretValue"],
+    resources: [resource],
   });
 }
 
-/** Until an ARN is supplied by context, scope the grant to this account's secrets. */
-function secretArnPattern(): string {
+/**
+ * A secret's ARN from synth context, or this account's secret prefix.
+ *
+ * The fallback keeps `cdk synth` credential-free while still emitting a
+ * template that is scoped rather than `*`: an unconfigured secret produces a
+ * grant that authorizes nothing outside `telegator/`, and the function fails at
+ * runtime naming the variable (`requireEnv`) instead of succeeding too widely.
+ */
+function secretArn(scope: Construct, contextKey: string): string {
+  const configured = scope.node.tryGetContext(contextKey);
+  if (typeof configured === "string" && configured !== "") return configured;
   return `arn:${Aws.PARTITION}:secretsmanager:${Aws.REGION}:${Aws.ACCOUNT_ID}:secret:telegator/*`;
 }
 

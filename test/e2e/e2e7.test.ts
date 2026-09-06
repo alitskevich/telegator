@@ -10,7 +10,7 @@ import { recordingMetrics } from "../fakes/metrics";
 import { fakeQueueProducer } from "../fakes/queues";
 
 /**
- * E2E-7 (§11.2 L854) — "A Bedrock outage sends every in-flight item to the
+ * E2E-7 (§11.2 L854) — "An OpenRouter outage sends every in-flight item to the
  * analyze DLQ; restoring service and replaying completes them."
  *
  * The redrive half is configuration and is asserted in the queue stack
@@ -22,7 +22,7 @@ import { fakeQueueProducer } from "../fakes/queues";
  * The distinction is the whole criterion. §3.2's routing table drops an item for
  * three reasons (`low`, `category`, `nobody`) and each is a deliberate editorial
  * decision recorded as `ItemsSkipped`. An outage is not one of them, and code
- * that treated it as one would silently discard every story Bedrock was down
+ * that treated it as one would silently discard every story the provider was down
  * for, with a metric claiming they were filtered on purpose.
  */
 
@@ -51,10 +51,10 @@ const newsItem = (id: string): NewsItem => ({
   importance: "high",
 });
 
-/** Bedrock unavailable: every call throws, as `lib/ai/bedrock.ts` would. */
+/** The provider is unavailable: every call throws, as `lib/ai/openrouter.ts` would. */
 const outage = (): Classifier => ({
   classify: async () => {
-    throw new Error("ServiceUnavailableException: Bedrock is unavailable");
+    throw new Error("503 Service Unavailable: OpenRouter is unavailable");
   },
 });
 
@@ -104,7 +104,7 @@ describe("E2E-7 — during the outage", () => {
   /**
    * The load-bearing assertion. §3.2 L246 makes a provider error a retry, and
    * §3.2's three skip reasons are editorial decisions. Counting an outage as a
-   * skip would discard every story Bedrock was down for while the metric
+   * skip would discard every story the provider was down for while the metric
    * reported them as filtered on purpose — and §7.7 L679 makes CloudWatch the
    * system of record, so nothing else would ever contradict it.
    */
@@ -168,7 +168,7 @@ describe("E2E-7 — replaying after the service returns", () => {
 describe("E2E-7 — a partial outage", () => {
   /**
    * SQS redelivers only the records a handler reports, so a batch that loses
-   * half of Bedrock must not fail the half that succeeded — those items would be
+   * half of a provider outage must not fail the half that succeeded — those would be
    * classified a second time on redelivery and enqueued twice.
    */
   test("only the failing items are reported", async () => {

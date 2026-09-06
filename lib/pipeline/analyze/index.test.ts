@@ -93,7 +93,9 @@ describe("runAnalyze — acceptance criteria", () => {
     const poison = items[4];
     if (poison === undefined) throw new Error("fixture");
 
-    const h = harness(stubClassifier(results, { [poison.body]: new Error("bedrock throttled") }));
+    const h = harness(
+      stubClassifier(results, { [poison.body]: new Error("openrouter throttled") }),
+    );
 
     const result = await runAnalyze(
       items.map((item, index) => record(`m${index}`, item)),
@@ -290,7 +292,7 @@ describe("buildClassificationRequest — §5.2 L418–427", () => {
   test("R3 — effort is omitted entirely, not sent as undefined, when disabled", () => {
     // The key must be absent from the serialised request: a tier that rejects
     // `effort` rejects `"effort": null` just as hard. Nothing here asserts what
-    // Bedrock does with either shape — that is unknowable without calling it.
+    // the provider does with either shape — that is unknowable without calling it.
     const request = buildClassificationRequest("Prose to classify.", { effort: false });
 
     expect(Object.keys(request.output_config)).toEqual(["format"]);

@@ -2,7 +2,7 @@ import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { createBedrockAdjudicator } from "../lib/ai/adjudicator";
+import { createOpenRouterAdjudicator } from "../lib/ai/adjudicator";
 import { systemClock } from "../lib/clock";
 import { createMessageRepo } from "../lib/db/messages";
 import { createLogger, stdoutSink } from "../lib/logging/logger";
@@ -10,6 +10,7 @@ import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwa
 import { type AggregateResult, runAggregate } from "../lib/pipeline/aggregate/index";
 import { createSqsQueueProducer } from "../lib/queues/sqs";
 import { ENV_VARS, requireEnv } from "./env";
+import { createSecretReader, secretsClient } from "./secrets";
 
 /**
  * The `telegator-aggregate` entry point (§7.5 L651, SQS FIFO).
@@ -29,7 +30,14 @@ let cached: ReturnType<typeof buildDeps> | undefined;
 
 function buildDeps() {
   return {
-    adjudicator: createBedrockAdjudicator(),
+    // R50 — as in `analyze.ts`: the key reader, not the key.
+    adjudicator: createOpenRouterAdjudicator({
+      apiKey: createSecretReader(
+        secretsClient(),
+        ENV_VARS.openRouterSecretArn,
+        "OpenRouter API key",
+      ),
+    }),
     messages: createMessageRepo({
       client: DynamoDBDocumentClient.from(new DynamoDBClient({})),
       tableName: requireEnv(ENV_VARS.messagesTable),
