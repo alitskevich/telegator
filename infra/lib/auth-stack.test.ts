@@ -1,6 +1,6 @@
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
-import { afterAll, describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test, vi } from "vitest";
 
 /**
  * A private CDK output directory per App.
@@ -16,6 +16,14 @@ import { resolveConfig } from "./config";
 
 // Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
 afterAll(removeIsolatedOutdirs);
+
+/**
+ * The 5 s default is not enough for the first synth in a worker: CDK stages
+ * bundles on disk, and under the suite's parallelism this file's first test was
+ * intermittently timing out while the assertion itself is instant. Every other
+ * synth-based test file already raises it — this one was the last without.
+ */
+vi.setConfig({ testTimeout: 60_000 });
 
 function stackFor(context: Record<string, unknown> = {}) {
   const app = new App({ context: cdkContext(context), outdir: isolatedOutdir() });

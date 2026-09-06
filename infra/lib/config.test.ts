@@ -1,9 +1,17 @@
 import { App } from "aws-cdk-lib";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { SETTLE_DELAY_SECONDS, SQS_MAX_DELAY_SECONDS } from "../../lib/dedup/constants";
 import { cdkContext } from "../../test/support/cdkContext";
 import { ENVIRONMENTS, resolveConfig } from "./config";
 import { resourceName } from "./naming";
+
+/**
+ * The 5 s default is not enough for the first synth in a worker: CDK stages
+ * bundles on disk, and under the suite's parallelism these files intermittently
+ * timed out while the assertions themselves are instant. The synth-based test
+ * files that already raise it were, until now, only most of them.
+ */
+vi.setConfig({ testTimeout: 60_000 });
 
 describe("resourceName", () => {
   /** §9.2 L810 requires environment-prefixed names but never gives the form. */
