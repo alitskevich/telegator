@@ -4,7 +4,7 @@ import type { Construct } from "constructs";
 import type { TelegatorConfig } from "./config";
 
 /**
- * §9.1 L852 — three queues, three DLQs, redrive policies.
+ * §9.1 L884 — three queues, three DLQs, redrive policies.
  *
  * §1.3 L60 makes these the pipeline: "Work-in-flight is an SQS message. A
  * scraped post travels as a queue payload and is never written to a table while
@@ -15,24 +15,24 @@ export interface TelegatorQueueStackProps extends StackProps {
   readonly config: TelegatorConfig;
 }
 
-/** §7.3 L648 — the SQS maximum, on every queue and DLQ. */
+/** §7.3 L650 — the SQS maximum, on every queue and DLQ. */
 const RETENTION = Duration.days(14);
 
 /**
- * §7.3 L660 — "Visibility timeout is 6× the function timeout, per AWS guidance,
+ * §7.3 L662 — "Visibility timeout is 6× the function timeout, per AWS guidance,
  * so a slow invocation cannot cause redelivery to a second worker." Every
- * consumer times out at 300 s (§7.5 L687–691).
+ * consumer times out at 300 s (§7.5 L689–693).
  */
 const VISIBILITY = Duration.seconds(1_800);
 
 export class TelegatorQueueStack extends Stack {
-  /** §7.3 L644 — Standard: analyze is embarrassingly parallel. */
+  /** §7.3 L646 — Standard: analyze is embarrassingly parallel. */
   public readonly analyze: Queue;
-  /** §7.3 L645 — FIFO, grouped by date so one day's items serialise (§3.3 L270). */
+  /** §7.3 L647 — FIFO, grouped by date so one day's items serialise (§3.3 L272). */
   public readonly aggregate: Queue;
-  /** §7.3 L646 — FIFO, grouped by message id so edits to one message serialise. */
+  /** §7.3 L648 — FIFO, grouped by message id so edits to one message serialise. */
   public readonly publish: Queue;
-  /** Every DLQ, for the replay handler's grants (§7.6 L709) and the depth alarms (§7.7 L739). */
+  /** Every DLQ, for the replay handler's grants (§7.6 L711) and the depth alarms (§7.7 L750). */
   public readonly deadLetterQueues: readonly IQueue[];
 
   constructor(scope: Construct, id: string, props: TelegatorQueueStackProps) {
@@ -55,7 +55,7 @@ export class TelegatorQueueStack extends Stack {
       queueName: config.name("aggregate", { fifo: true }),
       fifo: true,
       // The producers always supply an explicit MessageDeduplicationId (§3.2
-      // L252), so content-based deduplication stays off. Enabling it would let
+      // L254), so content-based deduplication stays off. Enabling it would let
       // SQS hash the body instead, collapsing two genuinely different items that
       // happen to carry identical text.
       contentBasedDeduplication: false,
@@ -71,13 +71,13 @@ export class TelegatorQueueStack extends Stack {
       retentionPeriod: RETENTION,
       visibilityTimeout: VISIBILITY,
       /**
-       * R19 — §3.3 L290 sets the settle delay per message, but SQS FIFO supports
-       * only a queue-level `DelaySeconds`, so it lives here. §11.4 L1011 records
+       * R19 — §3.3 L292 sets the settle delay per message, but SQS FIFO supports
+       * only a queue-level `DelaySeconds`, so it lives here. §11.4 L1043 records
        * 300 s as "a starting value", which is why it comes from config rather
        * than a literal.
        */
       deliveryDelay: Duration.seconds(config.settleDelaySeconds),
-      // §7.3 L646 — publish tolerates more attempts than the other two, because a
+      // §7.3 L648 — publish tolerates more attempts than the other two, because a
       // Telegram failure is often transient rate-limiting rather than a bad payload.
       deadLetterQueue: { queue: publishDlq, maxReceiveCount: 5 },
     });
@@ -86,7 +86,7 @@ export class TelegatorQueueStack extends Stack {
   }
 
   /**
-   * §7.3 L648 — "Each has a matching DLQ."
+   * §7.3 L650 — "Each has a matching DLQ."
    *
    * Retention matters more here than on the source queue: a dead-lettered post
    * has no other record anywhere (§1.3 L69), so 14 days is the whole window an

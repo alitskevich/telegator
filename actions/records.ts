@@ -11,7 +11,7 @@ import {
 import { authContext, messages, sources } from "./context";
 
 /**
- * §8.4 L797-799. Thin wrappers: every rule — the `editor` check, the writable
+ * §8.4 L808-810. Thin wrappers: every rule — the `editor` check, the writable
  * -field allowlist, the soft delete — lives in `lib/dashboard/records.ts`, which
  * is where the tests are.
  */
@@ -28,7 +28,7 @@ export async function deleteRecords(input: unknown): Promise<void> {
   await deleteRecordsCore(input, await deps());
 }
 
-/** R26 — the lazy base-table read behind §8.3 L787's expandable member list. */
+/** R26 — the lazy base-table read behind §8.3 L798's expandable member list. */
 export async function loadMembers(input: unknown): Promise<MemberRow[]> {
   return loadMembersCore(input, await deps());
 }

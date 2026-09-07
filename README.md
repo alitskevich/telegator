@@ -1,43 +1,15 @@
 # Telegator
 
-Reads Telegram news channels, deduplicates and categorises the posts with
-Claude via OpenRouter, and publishes merged digests back to Telegram. An operator dashboard
-curates sources, reviews messages and replays failures.
+Reads Telegram news channels, deduplicates and categorises the posts with Claude
+via OpenRouter, and publishes merged digests back to Telegram. An operator
+dashboard curates sources, reviews messages and replays failures.
 
-Everything is in one document: [`docs/telegator.md`](docs/telegator.md) — the
-normative specification (Part I), a guide to every AWS service it uses
-(Part II), and the register of decisions, reconciliations and traps behind both
-(Part III). This file points at it and does not summarise it.
-
-## The pipeline
-
-```
-EventBridge ──▶ scrape ──▶ analyze queue ──▶ analyze ──▶ aggregate queue
-  (30 min)        │                            │              │
-                  │ t.me/s/{channel}           │ Claude       ▼
-                  ▼                            ▼          aggregate ──▶ publish queue
-              sources table              (classify, drop)   (match key,        │
-                                                             dedupe, merge)       ▼
-                                                                 │            publish
-                                                          messages table ◀────  (Telegram)
-```
-
-Each stage is a Lambda behind an SQS queue, and every queue has a dead-letter
-queue the dashboard can inspect and replay from.
-
-## Layout
-
-| Path | What lives there |
-| --- | --- |
-| `lib/` | All the logic: `domain/`, `pipeline/`, `dedup/`, `ai/`, `db/`, `queues/`, `telegram/`, `auth/`, `dashboard/`, `calibration/` |
-| `handlers/` | Lambda entry points — thin wrappers over `lib/pipeline/` |
-| `infra/` | AWS CDK: five stacks (data, queue, auth, pipeline, app) |
-| `app/`, `components/`, `actions/` | The Next.js dashboard and its server actions |
-| `scripts/` | One-off cutover tooling (seed, cursor re-seed) |
-| `test/` | Fakes, fixtures, end-to-end suites and the meta-tests |
-
-Every AWS and network boundary is an interface with an in-memory fake, so the
-tests never touch the network.
+**Everything is in one document: [`docs/telegator.md`](docs/telegator.md)** — the
+normative specification (Part I), a plain-English guide to every AWS service it
+uses (Part II), the register of decisions, reconciliations and traps behind both
+(Part III), and what the system is built from (Part IV). Start at §1.4 for the
+whole pipeline in one picture. This file gets you running and does not summarise
+the document.
 
 ## Running it
 
@@ -50,31 +22,27 @@ npm run synth       # cdk synth — no credentials needed
 npm run dev         # the dashboard, at localhost:3000
 ```
 
-`cdk synth` is deliberately credential-free — nothing in `infra/` uses a context
-lookup — so the templates are built and asserted on without an AWS account.
+The first four need nothing else: no AWS account, no credentials, no network.
 
-The first four need nothing else. `npm run dev` does: the dashboard reads live
-DynamoDB, SQS, CloudWatch and Cognito, so it needs a deployed environment named
-by `.env.local.example` — copy it to `.env.local` and fill it in; every variable
-is documented there with where its value comes from. Without it the server
-starts and then answers every route with `missing required environment variable`;
-with it but without credentials for that account, the pages render and the data
-reads fail with `AccessDeniedException`.
+`npm run dev` does. The dashboard reads live DynamoDB, SQS, CloudWatch and
+Cognito, so copy `.env.local.example` to `.env.local` and fill it in — every
+variable is documented there, and §29 says where each value comes from. Without
+it the server starts and answers every route with `missing required environment
+variable`; with it but without credentials for that account, the pages render and
+the data reads fail with `AccessDeniedException`.
 
-Note that no gate above runs a bundler. `npx next build` is the only thing that
-compiles `app/`, and it needs the same environment, so a change that breaks the
-dashboard at runtime can pass all four.
+No gate above runs a bundler, so a change can break the dashboard at runtime and
+still pass all four (§32.2).
 
 ## Deploying
 
 **This repository carries no AWS credentials, and nothing here has been
-deployed.** `cdk deploy` needs an account, a bootstrapped environment and the
-context values `infra/lib/config.ts` reads. Two gates precede production:
+deployed.** Use `npm run deploy`, never a bare `cdk deploy` (§33). Two gates
+precede production:
 
-- §11.3's similarity threshold must be recalibrated against Cohere. Until a
-  `calibration/record.json` exists, `cdk synth -c env=prod -c scheduleEnabled=true`
-  refuses to synthesise. The sweep harness is `lib/calibration/`.
-- §11.4's latency, throughput and cost targets are measured against a running
-  system and are unverified here.
+- §10.3's threshold calibration. Until `calibration/record.json` exists,
+  `cdk synth -c env=prod -c scheduleEnabled=true` refuses to synthesise.
+- §10.4's latency, throughput and cost targets, which are measured against a
+  running system and are unverified here.
 
-Node 24. Secrets live in Secrets Manager; none is in this repository.
+Node 22. Secrets live in Secrets Manager; none is in this repository.

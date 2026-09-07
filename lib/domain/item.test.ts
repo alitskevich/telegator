@@ -29,7 +29,7 @@ const aiFields = {
 };
 
 describe("LinkSchema", () => {
-  test("resolves a #N token to an href (§2.2 L131)", () => {
+  test("resolves a #N token to an href (§2.2 L133)", () => {
     expect(LinkSchema.parse({ id: 1, href: "https://example.test/a" })).toEqual({
       id: 1,
       href: "https://example.test/a",
@@ -41,7 +41,7 @@ describe("LinkSchema", () => {
   });
 });
 
-describe("ScrapedItemSchema (Stage A, §2.2 L128-138)", () => {
+describe("ScrapedItemSchema (Stage A, §2.2 L130-140)", () => {
   test("parses a scraped post", () => {
     expect(ScrapedItemSchema.parse(scraped)).toMatchObject(scraped);
   });
@@ -64,7 +64,7 @@ describe("ScrapedItemSchema (Stage A, §2.2 L128-138)", () => {
     expect(ScrapedItemSchema.safeParse({ ...scraped, kind }).success).toBe(true);
   });
 
-  test("rejects a kind outside §2.2 L138's enum", () => {
+  test("rejects a kind outside §2.2 L140's enum", () => {
     expect(ScrapedItemSchema.safeParse({ ...scraped, kind: "fetched" }).success).toBe(false);
   });
 
@@ -72,7 +72,7 @@ describe("ScrapedItemSchema (Stage A, §2.2 L128-138)", () => {
     expect(ScrapedItemSchema.parse({ ...scraped, status: "legacy" })).not.toHaveProperty("status");
   });
 
-  /** §3.3 L284 reads `item.tgChannel ?? "telegator_news"`, so absence is expected. */
+  /** §3.3 L286 reads `item.tgChannel ?? "telegator_news"`, so absence is expected. */
   test("allows an absent tgChannel", () => {
     const { tgChannel: _omitted, ...rest } = scraped;
 
@@ -80,8 +80,8 @@ describe("ScrapedItemSchema (Stage A, §2.2 L128-138)", () => {
   });
 });
 
-describe("AiFieldsSchema (§5.2 L443-455)", () => {
-  test("requires the six fields L443 lists as required", () => {
+describe("AiFieldsSchema (§5.2 L445-457)", () => {
+  test("requires the six fields L445 lists as required", () => {
     expect(AiFieldsSchema.parse(aiFields)).toMatchObject(aiFields);
   });
 
@@ -95,7 +95,7 @@ describe("AiFieldsSchema (§5.2 L443-455)", () => {
     },
   );
 
-  test("treats peoples, properNames and tags as optional per L443", () => {
+  test("treats peoples, properNames and tags as optional per L445", () => {
     expect(AiFieldsSchema.parse(aiFields).peoples).toBeUndefined();
     expect(AiFieldsSchema.safeParse({ ...aiFields, peoples: "Ivan Ivanov" }).success).toBe(true);
   });
@@ -104,24 +104,24 @@ describe("AiFieldsSchema (§5.2 L443-455)", () => {
     expect(AiFieldsSchema.safeParse({ ...aiFields, importance }).success).toBe(true);
   });
 
-  test("rejects an importance outside §5.2 L452's enum", () => {
+  test("rejects an importance outside §5.2 L454's enum", () => {
     expect(AiFieldsSchema.safeParse({ ...aiFields, importance: "medium" }).success).toBe(false);
   });
 
-  /** §11.2 L1009 and §5.2 L448: the source prompt's 60-symbol cap is raised to 220. */
+  /** §11.2 L1041 and §5.2 L450: the source prompt's 60-symbol cap is raised to 220. */
   test("caps summary at 220 characters", () => {
     expect(SUMMARY_MAX_LENGTH).toBe(220);
     expect(AiFieldsSchema.safeParse({ ...aiFields, summary: "x".repeat(220) }).success).toBe(true);
     expect(AiFieldsSchema.safeParse({ ...aiFields, summary: "x".repeat(221) }).success).toBe(false);
   });
 
-  /** The model returns whatever case it likes; §3.2 L254 is what uppercases it. */
+  /** The model returns whatever case it likes; §3.2 L256 is what uppercases it. */
   test("does not require the model's country to be uppercase", () => {
     expect(AiFieldsSchema.safeParse({ ...aiFields, country: "ua" }).success).toBe(true);
   });
 });
 
-describe("AnalyzedItemSchema (Stage B, §2.2 L140)", () => {
+describe("AnalyzedItemSchema (Stage B, §2.2 L142)", () => {
   const analyzed = { ...scraped, ...aiFields };
 
   test("carries Stage A plus the AI fields", () => {
@@ -129,12 +129,12 @@ describe("AnalyzedItemSchema (Stage B, §2.2 L140)", () => {
   });
 
   /**
-   * §6 L512 builds the embedding text as
+   * §6 L514 builds the embedding text as
    * [title, summary, category, tags, body].filter(Boolean).join(" ").
    * Dropping `body` between stages would silently degrade every similarity
    * score, and no test of the dedup algorithm itself would notice.
    */
-  test("keeps body, which §6 L512 embeds", () => {
+  test("keeps body, which §6 L514 embeds", () => {
     expect(AnalyzedItemSchema.parse(analyzed).body).toBe(scraped.body);
   });
 

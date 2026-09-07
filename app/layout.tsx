@@ -8,8 +8,8 @@ export const metadata: Metadata = {
 };
 
 /**
- * §8.2 L760-765. Four routes, all of them operator surfaces; there is no public
- * page and no marketing shell. The Cognito session provider named at L761 is
+ * §8.2 L771-776. Four routes, all of them operator surfaces; there is no public
+ * page and no marketing shell. The Cognito session provider named at L772 is
  * added by item 5.3 once `lib/auth/session.ts` exists — putting an empty
  * provider here now would be a component that authorises nothing while looking
  * like it does.

@@ -1,14 +1,14 @@
 import { splitTags } from "../../domain/tags";
 
 /**
- * The §3.4 L336 hashtag line (R12, §11.3 L1010).
+ * The §3.4 L338 hashtag line (R12, §11.3 L1042).
  *
  * This module only *builds* the line; `assemble.ts` appends it. That split is
  * why a module exists for a single string at all.
  */
 
 /**
- * §3.4 L336: "every `title` word longer than 4 characters" — so 5 and up.
+ * §3.4 L338: "every `title` word longer than 4 characters" — so 5 and up.
  * Named because `style/noMagicNumbers` is an error in `lib/`, and because the
  * boundary is the one thing about title words the spec states numerically.
  */
@@ -17,7 +17,7 @@ const MIN_TITLE_WORD_LENGTH = 4;
 const HASH_PREFIX = "#";
 
 /**
- * §3.4 L336 drops `none`/`null`. The spec does not say whether that comparison
+ * §3.4 L338 drops `none`/`null`. The spec does not say whether that comparison
  * folds case. **Recorded decision: case-insensitive.** The values come from
  * model output (§3.2) where `None` and `NONE` are as likely as `none`, and a
  * leaked `#none` is worse than over-dropping a genuine tag literally spelled
@@ -33,27 +33,27 @@ const DROPPED_TOKENS: ReadonlySet<string> = new Set(["none", "null"]);
  */
 const SPACE_OR_HYPHEN = /[\s-]/g;
 
-/** "`.,@!'"()` removed" — exactly the eight characters §3.4 L336 lists. */
+/** "`.,@!'"()` removed" — exactly the eight characters §3.4 L338 lists. */
 const REMOVED_CHARACTERS = /[.,@!'"()]/g;
 
 /** Title words are whitespace-delimited; a hyphen joins one word, it does not end it. */
 const WHITESPACE = /\s+/;
 
-/** The fields §3.4 L336 draws the line from, all optional but `date` and `ts`. */
+/** The fields §3.4 L338 draws the line from, all optional but `date` and `ts`. */
 export interface HashtagSource {
   readonly category?: string | undefined;
   readonly location?: string | undefined;
   readonly peoples?: string | undefined;
   readonly tags?: string | undefined;
   readonly title?: string | undefined;
-  /** Already a `YYYY-MM-DD` key on the message record (§2.3 L157). */
+  /** Already a `YYYY-MM-DD` key on the message record (§2.3 L159). */
   readonly date: string;
   /** Epoch milliseconds. */
   readonly ts: number;
 }
 
 /**
- * §3.4 L336's `#hashtag` form: spaces and hyphens to `_`, `.,@!'"()` removed,
+ * §3.4 L338's `#hashtag` form: spaces and hyphens to `_`, `.,@!'"()` removed,
  * lowercased, `#`-prefixed. Exported so the normalisation can be tested — and
  * reasoned about — apart from the assembly around it.
  *
@@ -68,7 +68,7 @@ export function toHashtag(token: string): string {
   return `${HASH_PREFIX}${body}`;
 }
 
-/** §3.4 L336's "every `title` word longer than 4 characters". */
+/** §3.4 L338's "every `title` word longer than 4 characters". */
 function titleWords(title: string | undefined): string[] {
   if (!title) return [];
 
@@ -80,7 +80,7 @@ function titleWords(title: string | undefined): string[] {
   return title.split(WHITESPACE).filter((word) => word.length > MIN_TITLE_WORD_LENGTH);
 }
 
-/** §3.4 L336's "`none`/`null`/empty dropped", case-folded per the note above. */
+/** §3.4 L338's "`none`/`null`/empty dropped", case-folded per the note above. */
 function isDropped(token: string): boolean {
   const trimmed = token.trim();
   return trimmed === "" || DROPPED_TOKENS.has(trimmed.toLowerCase());
@@ -95,9 +95,9 @@ function isDropped(token: string): boolean {
  * `#real_estate #real_estate`. Deduplicating the normalised form is the reading
  * that makes the output what the line is for — a set of distinct hashtags.
  *
- * Order is first-seen, over the sources in the order §3.4 L336 names them. That
+ * Order is first-seen, over the sources in the order §3.4 L338 names them. That
  * determinism is required, not cosmetic: AC-3.7 makes replay
- * byte-identical, and §3.4 L342 re-sends a message by edit, so a line that
+ * byte-identical, and §3.4 L344 re-sends a message by edit, so a line that
  * reshuffled itself would rewrite messages that had not changed.
  */
 export function buildHashtagLine(source: HashtagSource): string {

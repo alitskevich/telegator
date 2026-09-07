@@ -30,13 +30,13 @@ function ids(sources: readonly Source[]): string[] {
 }
 
 describe("selectSources — acceptance criteria", () => {
-  test("AC-1.1 (§3.1 L230) a source polled 5 minutes ago with lastCount = 3 is not selected", () => {
+  test("AC-1.1 (§3.1 L232) a source polled 5 minutes ago with lastCount = 3 is not selected", () => {
     const warm = source({ id: "warm", lastCount: 3, lastUpdated: polledMinutesAgo(5) });
 
     expect(selectSources([warm], NOW)).toEqual([]);
   });
 
-  test("AC-1.2 (§3.1 L231) a source with lastCount = 25 is selected regardless of lastUpdated", () => {
+  test("AC-1.2 (§3.1 L233) a source with lastCount = 25 is selected regardless of lastUpdated", () => {
     const justPolled = source({ id: "hot", lastCount: 25, lastUpdated: NOW });
     const polledAMinuteAgo = source({
       id: "hot2",
@@ -49,7 +49,7 @@ describe("selectSources — acceptance criteria", () => {
   });
 });
 
-describe("selectSources — the three tiers of §3.1 L203", () => {
+describe("selectSources — the three tiers of §3.1 L205", () => {
   test("a cold source (lastCount = 0) is excluded at 239 minutes and included at 241", () => {
     const tooSoon = source({ id: "cold-239", lastCount: 0, lastUpdated: polledMinutesAgo(239) });
     const dueNow = source({ id: "cold-241", lastCount: 0, lastUpdated: polledMinutesAgo(241) });
@@ -57,7 +57,7 @@ describe("selectSources — the three tiers of §3.1 L203", () => {
     expect(ids(selectSources([tooSoon, dueNow], NOW))).toEqual(["cold-241"]);
   });
 
-  test("a cold source is included exactly at the 240-minute boundary, since L200 is >=", () => {
+  test("a cold source is included exactly at the 240-minute boundary, since L202 is >=", () => {
     const atBoundary = source({ id: "cold-240", lastCount: 0, lastUpdated: polledMinutesAgo(240) });
 
     expect(ids(selectSources([atBoundary], NOW))).toEqual(["cold-240"]);
@@ -70,14 +70,14 @@ describe("selectSources — the three tiers of §3.1 L203", () => {
     expect(ids(selectSources([tooSoon, dueNow], NOW))).toEqual(["warm-31"]);
   });
 
-  test("a warm source is included exactly at the 30-minute boundary, since L200 is >=", () => {
+  test("a warm source is included exactly at the 30-minute boundary, since L202 is >=", () => {
     const atBoundary = source({ id: "warm-30", lastCount: 5, lastUpdated: polledMinutesAgo(30) });
 
     expect(ids(selectSources([atBoundary], NOW))).toEqual(["warm-30"]);
   });
 
   /**
-   * L203 reads "a hot source (>20 posts last run)" and "a warm source (1–20)",
+   * L205 reads "a hot source (>20 posts last run)" and "a warm source (1–20)",
    * so 20 is the top of the warm band and 21 is the bottom of the hot band.
    */
   test("lastCount = 20 is warm, so it still waits out the 30 minutes", () => {
@@ -102,7 +102,7 @@ describe("selectSources — the three tiers of §3.1 L203", () => {
 });
 
 describe("selectSources — filters", () => {
-  test("a source whose status is not `ok` is excluded, however overdue (§3.1 L197)", () => {
+  test("a source whose status is not `ok` is excluded, however overdue (§3.1 L199)", () => {
     const disabled = source({ id: "off", status: "disabled", lastCount: 25, lastUpdated: 0 });
     const noStatus = source({ id: "blank", status: undefined, lastCount: 25, lastUpdated: 0 });
 
@@ -110,7 +110,7 @@ describe("selectSources — filters", () => {
   });
 
   /**
-   * R16: §8.4 L799's soft delete sets `deleted: true`, and §3.1 has no filter for
+   * R16: §8.4 L810's soft delete sets `deleted: true`, and §3.1 has no filter for
    * it — a deleted source would keep being polled and keep publishing.
    */
   test("a soft-deleted source is excluded even while status stays `ok` (R16)", () => {
@@ -122,7 +122,7 @@ describe("selectSources — filters", () => {
 });
 
 describe("selectSources — cap and ordering", () => {
-  test("takes at most 10 sources (§3.1 L203)", () => {
+  test("takes at most 10 sources (§3.1 L205)", () => {
     const many = Array.from({ length: 25 }, (_, i) =>
       source({ id: `s${i}`, lastCount: 25, lastUpdated: NOW }),
     );

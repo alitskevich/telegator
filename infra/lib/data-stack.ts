@@ -4,9 +4,9 @@ import type { Construct } from "constructs";
 import type { TelegatorConfig } from "./config";
 
 /**
- * §9.1 L851 — two DynamoDB tables with their GSIs, PITR on `messages`.
+ * §9.1 L883 — two DynamoDB tables with their GSIs, PITR on `messages`.
  *
- * §7.2 L627: "Two tables, both `PAY_PER_REQUEST`. Nothing is co-queried across
+ * §7.2 L629: "Two tables, both `PAY_PER_REQUEST`. Nothing is co-queried across
  * them, so single-table modelling would add ceremony with no payoff."
  */
 
@@ -15,10 +15,10 @@ export interface TelegatorDataStackProps extends StackProps {
 }
 
 /**
- * The `status-index` projection on `messages` (§7.2 L634, R27).
+ * The `status-index` projection on `messages` (§7.2 L636, R27).
  *
- * L634 excludes the large attributes without listing what remains. This is
- * §8.3 L787's Messages columns plus what §8.5 L823's recent-messages card
+ * L636 excludes the large attributes without listing what remains. This is
+ * §8.3 L798's Messages columns plus what §8.5 L834's recent-messages card
  * renders.
  *
  * Leaving `members` unprojected is what forces R26: §8.3's expandable member
@@ -28,7 +28,7 @@ export interface TelegatorDataStackProps extends StackProps {
 const MESSAGE_LIST_ATTRIBUTES = [
   "title",
   // `date` is a key on `date-index` but a plain attribute here, so it has to be
-  // named explicitly or §8.3 L787's date column comes back undefined.
+  // named explicitly or §8.3 L798's date column comes back undefined.
   "date",
   "category",
   "country",
@@ -43,13 +43,13 @@ const MESSAGE_LIST_ATTRIBUTES = [
 ] as const;
 
 /**
- * The `date-index` projection (§7.2 L634, R27, amended by R44/R51).
+ * The `date-index` projection (§7.2 L636, R27, amended by R44/R51).
  *
  * The match key R46 scores on, plus the member ids R51's replay short-circuit
  * checks. Everything a merge needs beyond that comes from R9's base-table read.
  *
  * **Changing this projection on an environment that already has `date-index`
- * takes two deploys, and `cdk diff` will not warn you.** §7.2 L636 carries the
+ * takes two deploys, and `cdk diff` will not warn you.** §7.2 L638 carries the
  * sequence and what it costs while it runs. A brand-new environment creates the
  * index once and is unaffected.
  */
@@ -89,12 +89,12 @@ export class TelegatorDataStack extends Stack {
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
-    // §7.2 L631's `status-index` drives scrape selection (§3.1 L197). It has no
-    // sort key: L631 gives only a partition key.
+    // §7.2 L633's `status-index` drives scrape selection (§3.1 L199). It has no
+    // sort key: L633 gives only a partition key.
     this.sources.addGlobalSecondaryIndex({
       indexName: "status-index",
       partitionKey: { name: "status", type: AttributeType.STRING },
-      // ALL rather than INCLUDE: §3.1 L197–226 reads or writes nearly every
+      // ALL rather than INCLUDE: §3.1 L199–228 reads or writes nearly every
       // attribute of a selected source — teaser, category, tags and all five
       // cursor fields — so a narrow projection would just add a second read per
       // source on every run.
@@ -105,14 +105,14 @@ export class TelegatorDataStack extends Stack {
       tableName: config.name("messages"),
       partitionKey: { name: "id", type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,
-      // §9.1 L851 and §10.4 L996. This is the one non-functional target of §10.4
+      // §9.1 L883 and §10.4 L1028. This is the one non-functional target of §10.4
       // that can be verified without a deployment.
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
-      // §2.3 L146 — the only durable record of a Telegram post.
+      // §2.3 L148 — the only durable record of a Telegram post.
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
-    // §7.2 L632 — publish backlog, dashboard listing, counts.
+    // §7.2 L634 — publish backlog, dashboard listing, counts.
     this.messages.addGlobalSecondaryIndex({
       indexName: "status-index",
       partitionKey: { name: "status", type: AttributeType.STRING },
@@ -121,7 +121,7 @@ export class TelegatorDataStack extends Stack {
       nonKeyAttributes: [...MESSAGE_LIST_ATTRIBUTES],
     });
 
-    // §7.2 L632 — "**the deduplication index**". §6 L539 makes the date filter
+    // §7.2 L634 — "**the deduplication index**". §6 L541 makes the date filter
     // a correctness rule rather than an optimisation.
     this.messages.addGlobalSecondaryIndex({
       indexName: "date-index",

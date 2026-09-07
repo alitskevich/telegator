@@ -5,10 +5,10 @@ import { z } from "zod";
  *
  * Two fields are additions the spec does not list, each recorded as a
  * reconciliation rather than invented here:
- *  - `lastNonZeroCount` (R15). §4.1 L376 fires `SourceStale` on a source with "a
- *    non-zero historical `lastCount`", but §3.1 L218 writes `lastCount: 0` on the
+ *  - `lastNonZeroCount` (R15). §4.1 L378 fires `SourceStale` on a source with "a
+ *    non-zero historical `lastCount`", but §3.1 L220 writes `lastCount: 0` on the
  *    first zero-yield run — destroying the evidence two runs before it is needed.
- *  - `deleted` (R16). §8.4 L799 mandates a soft delete setting `deleted: true`;
+ *  - `deleted` (R16). §8.4 L810 mandates a soft delete setting `deleted: true`;
  *    §2.1's table never declares the field.
  */
 
@@ -23,7 +23,7 @@ const epochMs = z.number().int().nonnegative();
  * top of these; the write-side schemas reuse them without defaults.
  */
 const field = {
-  /** Telegram channel username, and the `t.me/s/{id}` URL segment (§3.1 L205). */
+  /** Telegram channel username, and the `t.me/s/{id}` URL segment (§3.1 L207). */
   id: z.string().min(1),
 
   /**
@@ -42,7 +42,7 @@ const field = {
   teaser: z.string().optional(),
 
   // Written by scrape (§2.1 L115–119).
-  /** The `?after=` cursor, and the sole duplicate-suppression mechanism (§3.1 L220). */
+  /** The `?after=` cursor, and the sole duplicate-suppression mechanism (§3.1 L222). */
   lastItemId: z.string().optional(),
   lastCount: count,
   lastUpdated: epochMs,
@@ -57,7 +57,7 @@ const field = {
 /**
  * A stored record, as read back from DynamoDB.
  *
- * The counters default to 0 rather than being optional: §3.1 L200 selects on
+ * The counters default to 0 rather than being optional: §3.1 L202 selects on
  * `now - lastUpdated >= (lastCount > 0 ? 30 : 240) * 60_000`, which yields NaN
  * on undefined, and NaN fails every comparison — so a never-polled source would
  * never be selected and its channel would go dark with no error anywhere.
@@ -98,7 +98,7 @@ export type SourceConfig = z.infer<typeof SourceConfigInput>;
  * Deliberately built from `field` rather than `SourceSchema.pick()`: a pick
  * carries the read-side `.default(0)` through `.partial()`, so parsing a patch
  * that omits `zeroYieldRuns` would *inject* 0 — resetting the staleness counter
- * on every successful poll and making §4.1 L376's alarm unreachable. A patch
+ * on every successful poll and making §4.1 L378's alarm unreachable. A patch
  * must leave an absent field absent.
  *
  * Strict for the mirror reason to `SourceConfigInput`: scrape must not overwrite

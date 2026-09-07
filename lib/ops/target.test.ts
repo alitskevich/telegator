@@ -26,7 +26,7 @@ describe("parseTarget", () => {
 });
 
 describe("REGION", () => {
-  /** §9.2 L864. A script pointed elsewhere addresses a second, silent copy. */
+  /** §9.2 L896. A script pointed elsewhere addresses a second, silent copy. */
   test("is the one region the project deploys to", () => {
     expect(REGION).toBe("eu-central-1");
   });

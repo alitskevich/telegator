@@ -19,7 +19,7 @@ const VerdictsSchema = z.object({
   verdicts: z.array(z.object({ id: z.string().min(1), same: z.boolean() })),
 });
 
-/** Sent as `output_config.format.schema`, generated rather than hand-written (§5.2 L425). */
+/** Sent as `output_config.format.schema`, generated rather than hand-written (§5.2 L427). */
 export const VERDICTS_SCHEMA = z.toJSONSchema(VerdictsSchema);
 
 /**

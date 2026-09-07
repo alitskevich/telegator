@@ -13,12 +13,12 @@ import { ENV_VARS, requireEnv } from "./env";
 import { createSecretReader, secretsClient } from "./secrets";
 
 /**
- * The `telegator-aggregate` entry point (§7.5 L689, SQS FIFO).
+ * The `telegator-aggregate` entry point (§7.5 L691, SQS FIFO).
  *
- * A thin wrapper per §8.2 L777. The normative §6 algorithm is in
+ * A thin wrapper per §8.2 L788. The normative §6 algorithm is in
  * `lib/dedup/dedupBatch.ts` and nothing here re-implements any of it.
  *
- * No reserved concurrency is set on this function (§7.5 L689): §3.3 L270 makes
+ * No reserved concurrency is set on this function (§7.5 L691): §3.3 L272 makes
  * the FIFO message group the concurrency control, so one date's items serialise
  * while other dates proceed in parallel.
  */

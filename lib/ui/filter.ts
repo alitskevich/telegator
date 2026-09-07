@@ -1,5 +1,5 @@
 /**
- * §8.3 L790 — "Search on every table filters across visible columns, matching
+ * §8.3 L801 — "Search on every table filters across visible columns, matching
  * the source's `filterByKeyword`."
  *
  * Shared by all three tables of §8.3 rather than reimplemented per page, so
@@ -44,10 +44,10 @@ export function filterByKeyword<T extends Record<string, unknown>>(
  * The per-column filter row beneath §8.3's headers: one box per visible column,
  * ANDed.
  *
- * *Reconciliation.* §8.3 L790 specifies only the cross-column search. This
+ * *Reconciliation.* §8.3 L801 specifies only the cross-column search. This
  * narrows rather than replaces it — an operator who knows the category they want
  * should not have to find a keyword that appears in no other column — and both
- * run over the rows the page already holds, as L790's search always has.
+ * run over the rows the page already holds, as L801's search always has.
  *
  * The cell rules are `filterByKeyword`'s, from the same `searchableText`, so a
  * word that matches in the search box matches in that column's own box too.

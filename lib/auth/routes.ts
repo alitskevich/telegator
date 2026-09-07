@@ -65,7 +65,7 @@ different browser session. Starting again will issue a fresh one.
 </html>
 `;
 
-/** §8.2 L764's refusals, as something an operator can act on. */
+/** §8.2 L775's refusals, as something an operator can act on. */
 const signInFailed = (status: number): Response =>
   new Response(SIGN_IN_FAILED_PAGE, {
     status,
@@ -77,7 +77,7 @@ const redirectUri = (config: HostedUiConfig) => `${config.appUrl}/api/auth/callb
 const redirect = (location: string) => new Response(null, { status: FOUND, headers: { location } });
 
 /**
- * §8.2 L764 — `app/api/auth/[...]/route.ts`. Three segments: `login`, `callback`
+ * §8.2 L775 — `app/api/auth/[...]/route.ts`. Three segments: `login`, `callback`
  * and `logout`.
  *
  * Written as a function over the path segments rather than inside the route file

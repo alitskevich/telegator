@@ -3,7 +3,7 @@
  *
  * OpenRouter exposes an Anthropic-compatible Messages endpoint at
  * `{OPENROUTER_BASE_URL}/v1/messages` whose `output_config` carries both
- * `effort` and the structured-output `format`, so §5.2 L420-429's request body
+ * `effort` and the structured-output `format`, so §5.2 L422-431's request body
  * is the wire shape and the ports in `./ports.ts` never learn which provider is
  * behind them.
  *
@@ -21,7 +21,7 @@
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api";
 
 /**
- * R2, re-slugged by R50 — the classifier tier §11.1 L1008 decided.
+ * R2, re-slugged by R50 — the classifier tier §11.1 L1040 decided.
  *
  * OpenRouter's `vendor/model` slug form: no Bedrock `anthropic.` prefix, and a
  * dot in the version, matching the `anthropic/claude-sonnet-4.5` form its own
@@ -29,11 +29,11 @@ export const OPENROUTER_BASE_URL = "https://openrouter.ai/api";
  */
 export const CLASSIFIER_MODEL_ID = "anthropic/claude-haiku-4.5";
 
-/** §5.2 L422. */
+/** §5.2 L424. */
 export const CLASSIFIER_MAX_TOKENS = 2000;
 
 /**
- * §5.2 L423 — `output_config.effort`, which L459 says replaces the removed
+ * §5.2 L425 — `output_config.effort`, which L461 says replaces the removed
  * `temperature` and `top_p` as the depth control.
  *
  * R3: effort is not available on every Claude tier, and this build cannot reach

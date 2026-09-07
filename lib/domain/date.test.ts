@@ -11,10 +11,10 @@ describe("toDateKey", () => {
   });
 
   /**
-   * §2.2 L135 calls this "the scrape date"; the spec never names a timezone.
+   * §2.2 L137 calls this "the scrape date"; the spec never names a timezone.
    * UTC is the recorded choice (Phase 0 conventions) and it has to be honoured
-   * exactly, because §6 L539 makes the date a correctness rule for dedup and
-   * §7.3 L645 makes it the FIFO MessageGroupId. Two same-day scrapes that
+   * exactly, because §6 L541 makes the date a correctness rule for dedup and
+   * §7.3 L647 makes it the FIFO MessageGroupId. Two same-day scrapes that
    * disagree about the date silently split one story into two messages.
    *
    * These two instants straddle UTC midnight, so a local-time implementation
@@ -57,7 +57,7 @@ describe("DateKeySchema", () => {
 
   /**
    * A calendar-invalid value must not reach the table: `date` is the partition
-   * key of `date-index` (§7.2 L632) and the FIFO group (§7.3 L645), so garbage
+   * key of `date-index` (§7.2 L634) and the FIFO group (§7.3 L647), so garbage
    * creates a partition nothing will ever query again.
    */
   test.each(["2026-02-30", "2023-02-29", "2026-13-01", "2026-00-10", "2026-01-32"])(

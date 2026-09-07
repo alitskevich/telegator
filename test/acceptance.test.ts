@@ -13,7 +13,7 @@ const repoRoot = resolve(import.meta.dirname, "..");
  * test file. A criterion added to the spec, or a test renamed out of existence,
  * fails here instead of quietly reducing what §10.1 covers.
  *
- * R18: §10.1 L954 proposes DynamoDB Local and ElasticMQ, neither of which runs
+ * R18: §10.1 L986 proposes DynamoDB Local and ElasticMQ, neither of which runs
  * without Docker. The criteria survive unchanged against in-memory fakes and
  * `aws-cdk-lib/assertions`; only the harness sentence does not.
  */

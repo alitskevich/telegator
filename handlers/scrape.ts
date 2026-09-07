@@ -12,9 +12,9 @@ import { createHttpFetcher } from "../lib/telegram/http";
 import { ENV_VARS, requireEnv } from "./env";
 
 /**
- * The `telegator-scrape` entry point (§7.5 L687, EventBridge `rate(30 minutes)`).
+ * The `telegator-scrape` entry point (§7.5 L689, EventBridge `rate(30 minutes)`).
  *
- * A thin wrapper, per §8.2 L777: `lib/pipeline/` holds the single
+ * A thin wrapper, per §8.2 L788: `lib/pipeline/` holds the single
  * implementation and this file only wires adapters to it.
  *
  * Everything is built on first invocation and reused after, so a cold start
@@ -50,7 +50,7 @@ export const handler = async (): Promise<ScrapeSummary> => {
   if (cached === undefined) cached = buildDeps();
   const deps = cached;
 
-  // §7.7 L718 makes these counts the system of record for volume, so they are
+  // §7.7 L720 makes these counts the system of record for volume, so they are
   // published even when the run throws.
   return withMetricFlush(deps.metrics, () => runScrape(deps));
 };

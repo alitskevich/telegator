@@ -9,7 +9,7 @@ import {
 } from "./ports";
 
 /**
- * The production adapters for §8.6 L829's hosted UI. Both are network calls, and
+ * The production adapters for §8.6 L840's hosted UI. Both are network calls, and
  * both sit behind the ports in `./ports.ts` so nothing in the test suite reaches
  * for them.
  */

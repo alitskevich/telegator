@@ -22,7 +22,7 @@ const overview = (extra: Partial<Overview> = {}): Overview => ({
 
 const render = (data: Overview) => renderToStaticMarkup(<Dashboard overview={data} />);
 
-describe("Dashboard — §8.3 L785", () => {
+describe("Dashboard — §8.3 L796", () => {
   test("shows the four stat cards", () => {
     const markup = render(overview());
 
@@ -32,7 +32,7 @@ describe("Dashboard — §8.3 L785", () => {
   });
 
   /**
-   * §8.5 L816 splits skips by reason, and the split is the informative part: a
+   * §8.5 L827 splits skips by reason, and the split is the informative part: a
    * total of 19 says nothing about whether the classifier or the pre-filter is
    * doing the dropping.
    */
@@ -131,7 +131,7 @@ describe("Dashboard — §8.3 L785", () => {
 });
 
 /**
- * §8.5 L818's "Errors" card is a claim about pipeline health, so the one thing
+ * §8.5 L829's "Errors" card is a claim about pipeline health, so the one thing
  * it must never do is render an unread queue as `0`. The whole page used to
  * throw instead; now the number arrives as `null` and has to look different
  * from "none".

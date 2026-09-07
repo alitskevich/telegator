@@ -11,7 +11,7 @@ import { softDeleteCommand, updateAttributes } from "./patch";
 import type { SourceRepo } from "./ports";
 
 /**
- * The DynamoDB adapter for `sources` (§2.1, §7.2 L631).
+ * The DynamoDB adapter for `sources` (§2.1, §7.2 L633).
  *
  * The `DocumentSender` port is shared with the messages repo rather than
  * duplicated — both speak to the same client.
@@ -23,7 +23,7 @@ export interface SourceRepoOptions {
 }
 
 /**
- * R16 — §8.4 L799's soft delete sets a flag §3.1 never consults, so a deleted
+ * R16 — §8.4 L810's soft delete sets a flag §3.1 never consults, so a deleted
  * source would keep being polled and keep publishing. Filtered here, where
  * every caller gets it.
  */
@@ -39,7 +39,7 @@ export function createSourceRepo(options: SourceRepoOptions): SourceRepo {
       return item === undefined ? undefined : SourceSchema.parse(item);
     },
 
-    /** §3.1 L197 — the `status-index` query that drives scrape selection. */
+    /** §3.1 L199 — the `status-index` query that drives scrape selection. */
     listByStatus: async (status: string): Promise<Source[]> => {
       const output = await client.send(
         new QueryCommand({
@@ -60,7 +60,7 @@ export function createSourceRepo(options: SourceRepoOptions): SourceRepo {
     },
 
     /**
-     * §3.1 L226's cursor write, as a patch.
+     * §3.1 L228's cursor write, as a patch.
      *
      * Only the named fields are set. Writing the whole record would undo an
      * operator's concurrent edit to `category`, `teaser` or `status`, which
@@ -96,7 +96,7 @@ export function createSourceRepo(options: SourceRepoOptions): SourceRepo {
     },
 
     /**
-     * §8.3 L786 — every source, whatever its status.
+     * §8.3 L797 — every source, whatever its status.
      *
      * A Scan, because there is no index over "all sources" and no sensible
      * partition to query: §2.1's table is one row per channel, tens of rows, and
@@ -128,14 +128,14 @@ export function createSourceRepo(options: SourceRepoOptions): SourceRepo {
       return found;
     },
 
-    /** §8.4 L797 — an operator edit. The action validates the delta first. */
+    /** §8.4 L808 — an operator edit. The action validates the delta first. */
     patch: async (id: string, delta: Readonly<Record<string, unknown>>): Promise<void> => {
       const command = updateAttributes(tableName, id, delta);
       if (command === undefined) return;
       await client.send(command);
     },
 
-    /** §8.4 L799 — soft delete, one UpdateItem per id. */
+    /** §8.4 L810 — soft delete, one UpdateItem per id. */
     softDelete: async (ids: readonly string[]): Promise<void> => {
       for (const id of ids) {
         await client.send(softDeleteCommand(tableName, id));

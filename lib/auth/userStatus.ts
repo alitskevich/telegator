@@ -7,7 +7,7 @@ import type { UserStatusReader } from "./ports";
 /**
  * The production `UserStatusReader` (R34).
  *
- * §8.6 L839 — "a disabled user is rejected at every action" — needs a live
+ * §8.6 L871 — "a disabled user is rejected at every action" — needs a live
  * answer, and Cognito's is `AdminGetUser`. R24 withheld Cognito *administration*
  * from the dashboard role because §8.2–§8.4 define no user-management surface;
  * this is a read of one field, and it is required by a rule the spec states
@@ -33,13 +33,13 @@ export function cognitoUserStatusReader(
       try {
         const user = await client.send(
           // The `sub` claim is a valid `Username` for a pool whose users are
-          // created by an administrator, which §8.6 L839 requires them to be.
+          // created by an administrator, which §8.6 L871 requires them to be.
           new AdminGetUserCommand({ UserPoolId: config.userPoolId, Username: sub }),
         );
         return user.Enabled === true;
       } catch {
         /**
-         * Every uncertain answer is "no". §8.6 L839 makes `enabled` the
+         * Every uncertain answer is "no". §8.6 L871 makes `enabled` the
          * revocation mechanism, so a deleted user, a throttled call or a
          * network fault must not read as enabled — an authorisation check that
          * opens under load is worse than one that closes under load, because

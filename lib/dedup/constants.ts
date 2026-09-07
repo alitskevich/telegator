@@ -1,7 +1,7 @@
 export { MEMBER_RENDER_LIMIT as PUBLISH_RENDER_LIMIT } from "../domain/message";
 
 /**
- * The constants of the normative deduplication algorithm (§6 L524–547), plus
+ * The constants of the normative deduplication algorithm (§6 L526–549), plus
  * the few values §6 uses without declaring.
  *
  * Each lives here exactly once. The Engineering Bar is explicit that a spec
@@ -9,15 +9,15 @@ export { MEMBER_RENDER_LIMIT as PUBLISH_RENDER_LIMIT } from "../domain/message";
  * a stage is most tempted to inline at a comparison site.
  */
 
-/** §3.3 L277, §2.3 L181 — a message stops absorbing members at 20. */
+/** §3.3 L279, §2.3 L183 — a message stops absorbing members at 20. */
 export const MAX_MEMBERS = 20;
 
-/** §6 L554, §7.3 L645 — the aggregate consumer's batch size. */
+/** §6 L556, §7.3 L647 — the aggregate consumer's batch size. */
 export const MAX_BATCH_SIZE = 10;
 
 /**
- * §3.3 L290 and §7.3 L646 — the settle delay, so a story still accumulating
- * members is published once rather than edited repeatedly. §11.4 L1011 records
+ * §3.3 L292 and §7.3 L648 — the settle delay, so a story still accumulating
+ * members is published once rather than edited repeatedly. §11.4 L1043 records
  * 300 s as "a starting value", which makes configurability binding (R19).
  */
 export const SETTLE_DELAY_SECONDS = 300;
@@ -28,7 +28,7 @@ export const SQS_MAX_DELAY_SECONDS = 900;
 /**
  * R45 — a storage bound, not a signal filter.
  *
- * Chosen so it is not normally reached: §2.3 L181 caps a message at 20 members,
+ * Chosen so it is not normally reached: §2.3 L183 caps a message at 20 members,
  * and ~10 terms each is ~200. Capping in lexical order is deterministic, which
  * AC-3.7 requires; capping by term frequency would discriminate better but is
  * not implementable from a union list, because nothing stores per-term counts.

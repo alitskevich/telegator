@@ -7,12 +7,12 @@ import { ENV_VARS, requireEnv } from "./env";
 
 export type { ReplayableQueue };
 /**
- * The `telegator-dlq-replay` entry point (§7.5 L691) — manual, invoked from the
- * dashboard (§8.4 L806, `admin` only).
+ * The `telegator-dlq-replay` entry point (§7.5 L693) — manual, invoked from the
+ * dashboard (§8.4 L817, `admin` only).
  *
- * A thin wrapper per §8.2 L777. Which DLQ to drain is the operator's choice, so
+ * A thin wrapper per §8.2 L788. Which DLQ to drain is the operator's choice, so
  * it arrives in the event rather than the environment; the queue pairs are
- * fixed by §7.3 L648's "each has a matching DLQ".
+ * fixed by §7.3 L650's "each has a matching DLQ".
  */
 export { REPLAYABLE_QUEUES };
 

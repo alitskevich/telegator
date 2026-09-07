@@ -23,7 +23,7 @@ describe("createLogger", () => {
   });
 
   /**
-   * §7.7 L735 sources the dashboard's category chart from a Logs Insights query
+   * §7.7 L737 sources the dashboard's category chart from a Logs Insights query
    * over analyze's logs rather than a metric. Insights discovers fields from the
    * top level of each JSON line, so a nested `fields` envelope would make
    * `stats count(*) by category` return nothing.

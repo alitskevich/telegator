@@ -22,7 +22,7 @@ describe("cycleSort", () => {
 
   /**
    * The third click clears rather than returning to ascending. The order the
-   * server sent is a meaningful state — §8.5 L821 queries `status-index` with
+   * server sent is a meaningful state — §8.5 L832 queries `status-index` with
    * `ts` descending, so "no sort" is "newest first" — and a cycle that never
    * reached it would put that order out of an operator's reach for the rest of
    * the session.

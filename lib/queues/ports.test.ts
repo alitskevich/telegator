@@ -37,7 +37,7 @@ describe("analyzeQueueMessage", () => {
     expect(AnalyzeQueuePayloadSchema.parse(body)).toMatchObject({ id: scraped.id });
   });
 
-  /** §7.3 L644 — telegator-analyze is a Standard queue; group and dedup ids are FIFO-only. */
+  /** §7.3 L646 — telegator-analyze is a Standard queue; group and dedup ids are FIFO-only. */
   test("sets no FIFO attributes, because the analyze queue is Standard", () => {
     const message = analyzeQueueMessage(scraped);
 
@@ -48,14 +48,14 @@ describe("analyzeQueueMessage", () => {
 
 describe("aggregateQueueMessage", () => {
   /**
-   * §3.2 L252 and §7.3 L645. The group is the date because §3.3 L270 uses it to
+   * §3.2 L254 and §7.3 L647. The group is the date because §3.3 L272 uses it to
    * serialise all of one day's items into a single in-flight batch — the
    * serialisation the dedup algorithm needs — while letting different dates run
    * in parallel. Getting this attribute wrong does not fail; it silently allows
    * two invocations to each miss the other's write and create duplicate messages.
    */
   /**
-   * AC-3.9 (§3.3 L304) — "Two items with the same `date` are never processed by
+   * AC-3.9 (§3.3 L306) — "Two items with the same `date` are never processed by
    * two concurrent invocations."
    *
    * That guarantee is SQS's, not this code's: a FIFO queue delivers one message
@@ -88,10 +88,10 @@ describe("aggregateQueueMessage", () => {
 
 describe("publishQueueMessage", () => {
   /**
-   * §3.3 L288-289 — the group serialises edits to one Telegram message and the
+   * §3.3 L290-291 — the group serialises edits to one Telegram message and the
    * deduplication id collapses repeats inside SQS's window.
    *
-   * AC-4.6 (§3.4 L357) rests on both. The window itself is SQS's and is BLOCKED;
+   * AC-4.6 (§3.4 L359) rests on both. The window itself is SQS's and is BLOCKED;
    * the ids are ours, and a group or dedup id that was not the message id would
    * leave two requests for one message free to run concurrently.
    */
@@ -109,8 +109,8 @@ describe("publishQueueMessage", () => {
   });
 
   /**
-   * R19: SQS FIFO supports only a queue-level DelaySeconds, so §3.3 L290's
-   * per-message settle delay is set on the queue (§7.3 L646) and never here.
+   * R19: SQS FIFO supports only a queue-level DelaySeconds, so §3.3 L292's
+   * per-message settle delay is set on the queue (§7.3 L648) and never here.
    */
   test("sets no per-message delay, which a FIFO queue would reject", () => {
     expect(publishQueueMessage("a/1")).not.toHaveProperty("delaySeconds");
@@ -175,7 +175,7 @@ describe("fakeQueueProducer", () => {
 });
 
 describe("SQS_MAX_BATCH_ENTRIES", () => {
-  /** §3.1 L224 — "via SendMessageBatch (10 per call)", which is the SQS API limit. */
+  /** §3.1 L226 — "via SendMessageBatch (10 per call)", which is the SQS API limit. */
   test("is the ten entries SendMessageBatch accepts", () => {
     expect(SQS_MAX_BATCH_ENTRIES).toBe(10);
   });

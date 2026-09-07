@@ -10,7 +10,7 @@ import { telegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
- * E2E-3 (§10.2 L964) — "Re-running the scraper with no new upstream content
+ * E2E-3 (§10.2 L996) — "Re-running the scraper with no new upstream content
  * enqueues **zero** messages and makes **zero** Telegram calls."
  *
  * This is the criterion that exercises §2.1 L115's claim that `lastItemId` is
@@ -21,9 +21,9 @@ import { runPipeline } from "./harness";
 const DAY_MS = 86_400_000;
 
 /**
- * §3.1 L200 — after a yielding run the source is warm (`lastCount` 1-20), so it
+ * §3.1 L202 — after a yielding run the source is warm (`lastCount` 1-20), so it
  * is due again in 30 minutes. "Re-running the scraper" means its next scheduled
- * poll (§7.5 L687's 30-minute rule), not a second call in the same instant: at
+ * poll (§7.5 L689's 30-minute rule), not a second call in the same instant: at
  * the same instant `selectSources` correctly declines to poll it at all, and the
  * criterion would pass for the wrong reason.
  */
@@ -101,7 +101,7 @@ const world = () => ({
   clock,
 });
 
-describe("E2E-3 (§10.2 L964)", () => {
+describe("E2E-3 (§10.2 L996)", () => {
   test("the second run enqueues nothing", async () => {
     await runPipeline(world());
     clock.advance(NEXT_POLL_MS);
@@ -133,7 +133,7 @@ describe("E2E-3 (§10.2 L964)", () => {
     ]);
   });
 
-  /** §4.1 L376 — a source yielding nothing repeatedly has to become observable. */
+  /** §4.1 L378 — a source yielding nothing repeatedly has to become observable. */
   test("zeroYieldRuns increments", async () => {
     await runPipeline(world());
     expect((await sources.get(SOURCE))?.zeroYieldRuns).toBe(0);
@@ -165,13 +165,13 @@ describe("E2E-3 (§10.2 L964)", () => {
 /**
  * R29, asserted rather than only recorded.
  *
- * §3.1 L220 offers the `members` map as a safety net if the cursor ever fails.
+ * §3.1 L222 offers the `members` map as a safety net if the cursor ever fails.
  * It holds only while the re-scraped duplicate lands on the same `date`, because
- * §6 L558 looks for candidates in `date-index` for that date alone. The two
+ * §6 L560 looks for candidates in `date-index` for that date alone. The two
  * tests below are the same cursor failure either side of midnight, and they
  * produce different outcomes — which is the bound, not a defect to fix here.
  */
-describe("E2E-3 — R29's bound on §3.1 L220's safety net", () => {
+describe("E2E-3 — R29's bound on §3.1 L222's safety net", () => {
   /** The cursor is lost, so the same posts are scraped again. */
   const rescrape = () => ({ ...world(), sources });
 
@@ -210,7 +210,7 @@ describe("E2E-3 — R29's bound on §3.1 L220's safety net", () => {
 
     clock.advance(NEXT_POLL_MS);
     await sources.patch(SOURCE, { lastItemId: undefined });
-    // §6 L539 makes the UTC date a correctness rule, and `date-index` is
+    // §6 L541 makes the UTC date a correctness rule, and `date-index` is
     // partitioned by it, so the duplicate cannot see yesterday's message.
     clock.advance(DAY_MS);
     const second = await runPipeline(rescrape());

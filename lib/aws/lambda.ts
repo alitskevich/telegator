@@ -1,7 +1,7 @@
 import { InvokeCommand, type InvokeCommandOutput } from "@aws-sdk/client-lambda";
 
 /**
- * §8.2 L777 — "manual triggers call `lambda:InvokeFunction` on the deployed
+ * §8.2 L788 — "manual triggers call `lambda:InvokeFunction` on the deployed
  * function, so 'run this now' executes the exact deployed artefact."
  *
  * A port, so the dashboard's tests never build a Lambda client — and so the
@@ -22,7 +22,7 @@ export function lambdaInvoker(client: LambdaInvokeClient): LambdaInvoker {
       const response = await client.send(
         new InvokeCommand({
           FunctionName: functionName,
-          // Synchronous: §8.4 L803 and L806 both return a count, so the operator
+          // Synchronous: §8.4 L814 and L817 both return a count, so the operator
           // has to wait for one. `Event` would return 202 and no summary at all.
           InvocationType: "RequestResponse",
           Payload: JSON.stringify(payload),

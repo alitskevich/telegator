@@ -15,7 +15,7 @@ import { PublishQueuePayloadSchema } from "../../queues/ports";
 import { type AggregateDeps, type AggregateRecord, runAggregate } from "./index";
 
 const DATE = "2026-08-29";
-/** A second date, which §6 L544's correctness rule keeps entirely separate. */
+/** A second date, which §6 L546's correctness rule keeps entirely separate. */
 const OTHER_DATE = "2026-08-28";
 
 function item(id: string, overrides: Partial<AnalyzedItem> = {}): AnalyzedItem {
@@ -35,7 +35,7 @@ function item(id: string, overrides: Partial<AnalyzedItem> = {}): AnalyzedItem {
   });
 }
 
-/** An SQS record as the event source mapping delivers it (§7.3 L662). */
+/** An SQS record as the event source mapping delivers it (§7.3 L664). */
 function sqsRecord(payload: AnalyzedItem): AggregateRecord {
   return { messageId: `sqs-${payload.id}`, body: JSON.stringify(payload) };
 }
@@ -59,7 +59,7 @@ function storedMessage(over: Partial<Message> & Pick<Message, "id">): Message {
   const members: Record<string, MemberBlock> = over.members ?? {
     [over.id]: { summary: "stored", links: [], channel: over.id.split("/")[0] ?? "c", ts: 1 },
   };
-  // Parsed rather than cast, so a fixture violating §2.3 L153's memberCount
+  // Parsed rather than cast, so a fixture violating §2.3 L155's memberCount
   // invariant fails in the test that built it, not somewhere downstream.
   return MessageSchema.parse({
     status: "topublish",
@@ -124,7 +124,7 @@ async function readBack(repo: FakeMessageRepo, id: string): Promise<Message> {
 
 describe("§3.3 aggregate consumer", () => {
   /**
-   * R47 — §3.3 L296 reads "two items at cosine similarity 0.90 with the same
+   * R47 — §3.3 L298 reads "two items at cosine similarity 0.90 with the same
    * date produce one message with two `members` entries". Restated for a
    * scoreless implementation: a pair scoring at or above `MERGE_THRESHOLD`
    * (here, an identical `SAME_EVENT` key) merges the same way. The id is
@@ -163,7 +163,7 @@ describe("§3.3 aggregate consumer", () => {
     await runAggregate([sqsRecord(a), sqsRecord(b)], h.deps);
 
     const message = await readBack(h.repo, "chan_a/1");
-    // Everything §3.4 L317-320 renders, present without a second read.
+    // Everything §3.4 L319-322 renders, present without a second read.
     expect(message.members["chan_a/1"]).toEqual({
       summary: "Выбухі ў горадзе",
       links: [{ id: 1, href: "https://example.test/a" }],
@@ -179,7 +179,7 @@ describe("§3.3 aggregate consumer", () => {
   });
 
   /**
-   * R51 — the wording is unchanged, but not the mechanism. Under §3.3 L281 a
+   * R51 — the wording is unchanged, but not the mechanism. Under §3.3 L283 a
    * replayed item merges by idempotent member writes alone; here the second
    * pass finds the item's own id already in the candidate's projected
    * `memberIds` and merges on that short-circuit before any scoring runs, so
@@ -204,7 +204,7 @@ describe("§3.3 aggregate consumer", () => {
     expect(second.memberCount).toBe(2);
     expect(second.tags).toBe(first.tags);
     /**
-     * R45 — §6 L591 conceded the embedding drifts on every replay, "bounded and
+     * R45 — §6 L593 conceded the embedding drifts on every replay, "bounded and
      * harmless". `unionMatchKeys` is idempotent, so its replacement does not
      * drift at all: exact equality, not a cosine within a tolerance.
      */
@@ -292,14 +292,14 @@ describe("§3.3 aggregate consumer", () => {
     expect(message.memberCount).toBe(MAX_MEMBERS);
     expect(Object.keys(message.members)).toHaveLength(MAX_MEMBERS);
     expect(message.members["chan_late/9"]).toBeUndefined();
-    // Dropped outright (§3.3 L277): no message of its own, and nothing to publish.
+    // Dropped outright (§3.3 L279): no message of its own, and nothing to publish.
     expect(await h.repo.get("chan_late/9")).toBeUndefined();
     expect(h.repo.writeCount).toBe(0);
     expect(h.queue.sent).toEqual([]);
     expect(h.metrics.get("MemberCapReached")).toBe(1);
   });
 
-  test("every touched id is enqueued with group and dedup ids equal to the message id (L288-289)", async () => {
+  test("every touched id is enqueued with group and dedup ids equal to the message id (L290-291)", async () => {
     const a = item("chan_a/1", SAME_EVENT);
     const b = item("chan_b/2", { ...SAME_EVENT, date: OTHER_DATE });
     const h = harness();
@@ -307,13 +307,13 @@ describe("§3.3 aggregate consumer", () => {
     await runAggregate([sqsRecord(a), sqsRecord(b)], h.deps);
 
     /**
-     * AC-4.6 (§3.4 L357) — the STAGE's enqueue, not just the builder's.
+     * AC-4.6 (§3.4 L359) — the STAGE's enqueue, not just the builder's.
      * `lib/queues/ports.test.ts` pins `publishQueueMessage`; a stage that
      * constructed its own message, or called a different builder, would leave
      * that test passing and two publish requests for one message free to run
      * concurrently.
      *
-     * Different dates never merge (§6 L544), so both ids are touched.
+     * Different dates never merge (§6 L546), so both ids are touched.
      */
     expect(h.queue.sent).toHaveLength(2);
     expect(h.queue.sendCalls).toBe(1);
@@ -327,7 +327,7 @@ describe("§3.3 aggregate consumer", () => {
     }
   });
 
-  test("a malformed record body is one batch item failure, not a thrown batch (§7.3 L662)", async () => {
+  test("a malformed record body is one batch item failure, not a thrown batch (§7.3 L664)", async () => {
     const good = item("chan_a/1");
     const h = harness();
     const bad: AggregateRecord = { messageId: "sqs-bad", body: "{not json" };
@@ -423,8 +423,8 @@ describe("§3.3 aggregate consumer", () => {
     expect(h.queue.sendCalls).toBe(0);
   });
 
-  /** §10.3 L985, as rewritten by R48 — two thresholds now, still injected. */
-  test("§10.3 L985: the band is configurable, not compiled in", async () => {
+  /** §10.3 L1017, as rewritten by R48 — two thresholds now, still injected. */
+  test("§10.3 L1017: the band is configurable, not compiled in", async () => {
     const a = item("chan_a/1", SAME_EVENT);
     const b = item("chan_b/2", SAME_EVENT);
     const records = [sqsRecord(a), sqsRecord(b)];

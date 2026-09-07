@@ -4,13 +4,13 @@ import { buildHashtagLine, toHashtag } from "./hashtags";
 /**
  * A fixed instant, so every expectation below can name the exact `date_`/`ts_`
  * tags. `date` is already a `YYYY-MM-DD` key by the time publish runs (§2.3
- * L157), so it is interpolated rather than derived here.
+ * L159), so it is interpolated rather than derived here.
  */
 const DATE = "2026-08-29";
 const TS = 1756468800000;
 const DATE_TS = "#date_2026_08_29 #ts_1756468800000";
 
-/** The two tags §3.4 L336 always contributes, on an otherwise empty source. */
+/** The two tags §3.4 L338 always contributes, on an otherwise empty source. */
 const empty = { date: DATE, ts: TS };
 
 describe("toHashtag", () => {
@@ -30,7 +30,7 @@ describe("toHashtag", () => {
     expect(toHashtag("NATO Summit")).toBe("#nato_summit");
   });
 
-  // §3.4 L336 lists exactly these eight characters as removed.
+  // §3.4 L338 lists exactly these eight characters as removed.
   const removed: ReadonlyArray<readonly [string, string, string]> = [
     ["period", "u.s.a", "#usa"],
     ["comma", "a,b", "#ab"],
@@ -50,7 +50,7 @@ describe("toHashtag", () => {
 
   /**
    * The underscore is not in the removal set, which is what keeps the
-   * `date_`/`ts_` tokens of §3.4 L336 readable after normalisation.
+   * `date_`/`ts_` tokens of §3.4 L338 readable after normalisation.
    */
   test("preserves underscores", () => {
     expect(toHashtag("date_2026-08-29")).toBe("#date_2026_08_29");
@@ -80,7 +80,7 @@ describe("buildHashtagLine", () => {
     );
   });
 
-  test("emits the four source fields in the order §3.4 L336 lists them", () => {
+  test("emits the four source fields in the order §3.4 L338 lists them", () => {
     const line = buildHashtagLine({
       ...empty,
       category: "geopolitics",
@@ -182,7 +182,7 @@ describe("buildHashtagLine", () => {
   /**
    * AC-3.7 makes byte-identical replay a property of the pipeline, and a
    * hashtag line that reordered itself between runs would break the edit path
-   * of §3.4 L342 by rewriting a message that had not changed.
+   * of §3.4 L344 by rewriting a message that had not changed.
    */
   test("is deterministic across repeated calls", () => {
     const source = {
@@ -200,7 +200,7 @@ describe("buildHashtagLine", () => {
 describe("title words", () => {
   /**
    * A hyphenated title word is one word, and stays one hashtag — the hyphen is
-   * normalised to `_` by §3.4 L336's mapping, it does not split the word.
+   * normalised to `_` by §3.4 L338's mapping, it does not split the word.
    */
   test("treats a hyphenated word as a single word", () => {
     expect(buildHashtagLine({ ...empty, title: "The real-estate market" })).toBe(

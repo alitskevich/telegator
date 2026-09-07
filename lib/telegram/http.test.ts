@@ -44,7 +44,7 @@ const hangingFetch: FetchLike = (_url, init) =>
 
 const PAGE = '<div class="tgme_widget_message_wrap js-widget_message_wrap">post</div>';
 
-describe("createHttpFetcher — the §3.1 L205 scrape boundary", () => {
+describe("createHttpFetcher — the §3.1 L207 scrape boundary", () => {
   test("a 200 returns the body text", async () => {
     const stub = stubFetch(200, PAGE);
 
@@ -53,7 +53,7 @@ describe("createHttpFetcher — the §3.1 L205 scrape boundary", () => {
     expect(html).toBe(PAGE);
   });
 
-  test("§3.1 L205 — a 404 yields an empty string, not an exception", async () => {
+  test("§3.1 L207 — a 404 yields an empty string, not an exception", async () => {
     const stub = stubFetch(404, "<html>Not found</html>");
 
     await expect(createHttpFetcher({ fetch: stub.fetch }).get("https://t.me/s/gone")).resolves.toBe(
@@ -61,7 +61,7 @@ describe("createHttpFetcher — the §3.1 L205 scrape boundary", () => {
     );
   });
 
-  test("§3.1 L205 — a 500 yields an empty string, not an exception", async () => {
+  test("§3.1 L207 — a 500 yields an empty string, not an exception", async () => {
     const stub = stubFetch(500, "<html>Bad gateway</html>");
 
     await expect(createHttpFetcher({ fetch: stub.fetch }).get("https://t.me/s/chan")).resolves.toBe(
@@ -69,7 +69,7 @@ describe("createHttpFetcher — the §3.1 L205 scrape boundary", () => {
     );
   });
 
-  test("§3.1 L218 — a network error yields an empty string, so zeroYieldRuns can count it", async () => {
+  test("§3.1 L220 — a network error yields an empty string, so zeroYieldRuns can count it", async () => {
     const failing: FetchLike = () => Promise.reject(new Error("ECONNRESET"));
 
     await expect(createHttpFetcher({ fetch: failing }).get("https://t.me/s/chan")).resolves.toBe(
@@ -90,13 +90,13 @@ describe("createHttpFetcher — the §3.1 L205 scrape boundary", () => {
     );
   });
 
-  test("§7.5 L687 — a hung request times out and yields an empty string", async () => {
+  test("§7.5 L689 — a hung request times out and yields an empty string", async () => {
     const fetcher = createHttpFetcher({ fetch: hangingFetch, timeoutMs: 5 });
 
     await expect(fetcher.get("https://t.me/s/chan")).resolves.toBe("");
   });
 
-  test("§3.1 L205 — browser-like headers reach fetch unchanged", async () => {
+  test("§3.1 L207 — browser-like headers reach fetch unchanged", async () => {
     const stub = stubFetch(200, PAGE);
     const headers = {
       "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0",
@@ -117,7 +117,7 @@ describe("createHttpFetcher — the §3.1 L205 scrape boundary", () => {
     expect(stub.calls[0]?.init.headers).toEqual({});
   });
 
-  test("§3.1 L205 — the URL is used verbatim, cursor query included", async () => {
+  test("§3.1 L207 — the URL is used verbatim, cursor query included", async () => {
     const stub = stubFetch(200, PAGE);
 
     await createHttpFetcher({ fetch: stub.fetch }).get("https://t.me/s/chan?after=100674");
@@ -133,9 +133,9 @@ describe("createHttpFetcher — the §3.1 L205 scrape boundary", () => {
     expect(stub.calls[0]?.init.signal.aborted).toBe(false);
   });
 
-  test("§7.5 L687 — ten hung sources still fit the scrape stage's 300 s budget", () => {
-    const SOURCES_PER_RUN = 10; // §3.1 L203 — "Take the first 10".
-    const SCRAPE_TIMEOUT_MS = 300_000; // §7.5 L687.
+  test("§7.5 L689 — ten hung sources still fit the scrape stage's 300 s budget", () => {
+    const SOURCES_PER_RUN = 10; // §3.1 L205 — "Take the first 10".
+    const SCRAPE_TIMEOUT_MS = 300_000; // §7.5 L689.
 
     expect(SCRAPE_FETCH_TIMEOUT_MS * SOURCES_PER_RUN).toBeLessThan(SCRAPE_TIMEOUT_MS);
   });
@@ -152,7 +152,7 @@ describe("createHttpPost — the §4.2 Bot API boundary", () => {
     expect(response).toEqual({ status: 200, body: { ok: true, result: { message_id: 7 } } });
   });
 
-  test("§4.2 L384 — an ok:false 200 is returned intact, not thrown", async () => {
+  test("§4.2 L386 — an ok:false 200 is returned intact, not thrown", async () => {
     const stub = stubFetch(200, JSON.stringify({ ok: false, description: "chat not found" }));
 
     const response = await createHttpPost({ fetch: stub.fetch }).post("https://api/bot1/x", {});
@@ -160,7 +160,7 @@ describe("createHttpPost — the §4.2 Bot API boundary", () => {
     expect(response).toEqual({ status: 200, body: { ok: false, description: "chat not found" } });
   });
 
-  test("§3.4 L346 — a 429 returns its status and body rather than throwing", async () => {
+  test("§3.4 L348 — a 429 returns its status and body rather than throwing", async () => {
     const body = { ok: false, description: "Too Many Requests", parameters: { retry_after: 12 } };
     const stub = stubFetch(429, JSON.stringify(body));
 
@@ -228,7 +228,7 @@ describe("createHttpPost — the §4.2 Bot API boundary", () => {
     );
   });
 
-  test("§7.5 L689 — a hung Bot API call aborts inside the publish stage's 300 s budget", async () => {
+  test("§7.5 L691 — a hung Bot API call aborts inside the publish stage's 300 s budget", async () => {
     const PUBLISH_TIMEOUT_MS = 300_000;
 
     expect(BOT_API_TIMEOUT_MS).toBeLessThan(PUBLISH_TIMEOUT_MS);

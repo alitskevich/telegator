@@ -14,7 +14,7 @@ import { resourceName } from "./naming";
 vi.setConfig({ testTimeout: 60_000 });
 
 describe("resourceName", () => {
-  /** §9.2 L864 requires environment-prefixed names but never gives the form. */
+  /** §9.2 L896 requires environment-prefixed names but never gives the form. */
   test("applies the telegator-{env}-{resource} scheme", () => {
     expect(resourceName("dev", "messages")).toBe("telegator-dev-messages");
     expect(resourceName("prod", "analyze")).toBe("telegator-prod-analyze");
@@ -24,7 +24,7 @@ describe("resourceName", () => {
     expect(resourceName("dev", "sources")).toBe(resourceName("dev", "sources"));
   });
 
-  /** A FIFO queue's name must end in `.fifo`; §7.3 L645-646's names omit it. */
+  /** A FIFO queue's name must end in `.fifo`; §7.3 L647-648's names omit it. */
   test("appends the .fifo suffix when asked", () => {
     expect(resourceName("dev", "aggregate", { fifo: true })).toBe("telegator-dev-aggregate.fifo");
   });
@@ -54,7 +54,7 @@ describe("resolveConfig", () => {
   });
 
   /**
-   * R23 — the flag cannot be derived from the environment name (L942, L944). A
+   * R23 — the flag cannot be derived from the environment name (L974, L976). A
    * dev deploy that can post to production channels is a defect, and so is a
    * prod deploy that starts posting before the 48-hour soak.
    */
@@ -108,8 +108,8 @@ describe("resolveConfig", () => {
     expect(resolveConfig(appWith({ scheduleEnabled: "false" })).scheduleEnabled).toBe(false);
   });
 
-  /** §11.4 L1011 calls 300 s "a starting value", which makes configurability binding (R19). */
-  test("defaults the settle delay to the §3.3 L290 value", () => {
+  /** §11.4 L1043 calls 300 s "a starting value", which makes configurability binding (R19). */
+  test("defaults the settle delay to the §3.3 L292 value", () => {
     expect(resolveConfig(appWith({})).settleDelaySeconds).toBe(SETTLE_DELAY_SECONDS);
   });
 

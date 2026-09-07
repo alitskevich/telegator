@@ -44,13 +44,13 @@ const policyStatements = (t: Template) =>
 const alarms = (t: Template) =>
   Object.values(t.findResources("AWS::CloudWatch::Alarm")).map((r) => r.Properties ?? {});
 
-describe("event source mappings (§7.3 L644-646, §7.3 L662)", () => {
+describe("event source mappings (§7.3 L646-648, §7.3 L664)", () => {
   test("declares one mapping per consumer", () => {
     expect(mappings(templateFor())).toHaveLength(3);
   });
 
   /**
-   * §7.3 L662 — "Every consumer sets functionResponseTypes:
+   * §7.3 L664 — "Every consumer sets functionResponseTypes:
    * ['ReportBatchItemFailures']". Without it one poison message forces the whole
    * batch to retry, which for analyze means re-billing nine OpenRouter calls.
    */
@@ -69,7 +69,7 @@ describe("event source mappings (§7.3 L644-646, §7.3 L662)", () => {
   });
 
   /**
-   * §3.2 L239 gives analyze a 60 s window. R33: §3.3 L268 also gives aggregate
+   * §3.2 L241 gives analyze a 60 s window. R33: §3.3 L270 also gives aggregate
    * 300 s, but AWS supports no batching window on a FIFO queue and CDK rejects
    * it at synth — so analyze's is the only one, and this asserts that rather
    * than the spec's stated pair.
@@ -83,7 +83,7 @@ describe("event source mappings (§7.3 L644-646, §7.3 L662)", () => {
   });
 });
 
-describe("the EventBridge schedule (§7.5 L687, R22, R23)", () => {
+describe("the EventBridge schedule (§7.5 L689, R22, R23)", () => {
   test("fires every 30 minutes", () => {
     templateFor().hasResourceProperties("AWS::Events::Rule", {
       ScheduleExpression: "rate(30 minutes)",
@@ -91,7 +91,7 @@ describe("the EventBridge schedule (§7.5 L687, R22, R23)", () => {
   });
 
   /**
-   * R23 and §9.2 L864. The flag is not derived from the environment name:
+   * R23 and §9.2 L896. The flag is not derived from the environment name:
    * §9.5 step 4 deploys PROD with the schedule disabled too, enabling it only at
    * step 7 after a 48-hour soak. A dev deploy that can post to production
    * Telegram channels is a defect, and so is a prod deploy that starts posting
@@ -114,7 +114,7 @@ describe("the EventBridge schedule (§7.5 L687, R22, R23)", () => {
   });
 });
 
-describe("IAM (§7.6 L705-710, R24)", () => {
+describe("IAM (§7.6 L707-712, R24)", () => {
   /**
    * §7.6's whole point is per-function least privilege. A wildcard resource
    * would grant every function every table and queue in the account.
@@ -131,7 +131,7 @@ describe("IAM (§7.6 L705-710, R24)", () => {
 
   /**
    * R24 — §7.6 omits PutMetricData, yet §7.7's twelve counters are unemittable
-   * without it, and §7.7 L718 makes them the system of record for volume.
+   * without it, and §7.7 L720 makes them the system of record for volume.
    */
   test("grants PutMetricData, conditioned on the Telegator namespace", () => {
     const putMetric = policyStatements(templateFor()).filter((s) =>
@@ -147,7 +147,7 @@ describe("IAM (§7.6 L705-710, R24)", () => {
    * the role both reference. Without this the secret assertions below can only
    * say "three functions got a secret" — and R50 put two different secrets in
    * the stack, so which function got which is the whole content of §7.6
-   * L706-708.
+   * L708-710.
    */
   function statementsByFunction(template: Template): Map<string, Record<string, unknown>[]> {
     const roleToFunction = new Map<string, string>();
@@ -243,7 +243,7 @@ describe("IAM (§7.6 L705-710, R24)", () => {
 
   /**
    * The bot token is §3.4's send credential and nothing else. A model stage
-   * holding it could post to the channel outside §3.4 L315's status guard.
+   * holding it could post to the channel outside §3.4 L317's status guard.
    */
   test("neither model stage may read the Telegram token", () => {
     const template = templateFor(SECRET_ARNS);
@@ -270,18 +270,18 @@ describe("IAM (§7.6 L705-710, R24)", () => {
   });
 
   /**
-   * §7.6 L709 reads "read/write `messages`", which `grantReadWriteData` matches
+   * §7.6 L711 reads "read/write `messages`", which `grantReadWriteData` matches
    * literally — and that helper also grants DeleteItem and BatchWriteItem.
-   * `publish` calls exactly two APIs: `GetItem` (§3.4 L315's load) and
-   * `UpdateItem` (§3.4 L348's result write).
+   * `publish` calls exactly two APIs: `GetItem` (§3.4 L317's load) and
+   * `UpdateItem` (§3.4 L350's result write).
    *
    * The narrow reading wins here because of what the wide one enables. §7.2
    * makes `messages` the only durable record of a Telegram post — §1.3 L69 says
-   * a post that never merges "leaves no row anywhere" — and §8.4 L799 makes even
+   * a post that never merges "leaves no row anywhere" — and §8.4 L810 makes even
    * an operator's delete soft for that reason. A stage that never deletes should
    * not be able to, least of all irrecoverably.
    */
-  test("publish may read and update messages, and nothing more (§7.6 L709)", () => {
+  test("publish may read and update messages, and nothing more (§7.6 L711)", () => {
     const statements = statementsByFunction(templateFor()).get("telegator-dev-publish") ?? [];
     const dynamo = new Set(
       statements
@@ -315,7 +315,7 @@ describe("IAM (§7.6 L705-710, R24)", () => {
     );
 
   /**
-   * §7.6 L705 — "read/write `sources`". `scrape` calls `listByStatus` (a Query
+   * §7.6 L707 — "read/write `sources`". `scrape` calls `listByStatus` (a Query
    * on `status-index`) and `updateCursor` (an UpdateItem). It never reads a
    * source by id, never creates one, and never deletes one.
    */
@@ -326,7 +326,7 @@ describe("IAM (§7.6 L705-710, R24)", () => {
   });
 
   /**
-   * §7.6 L707 — "read/write `messages`". `aggregate` calls `get`, `queryByDate`
+   * §7.6 L709 — "read/write `messages`". `aggregate` calls `get`, `queryByDate`
    * (on `date-index`), `putNew` and `mergeMember`: §6's create branch genuinely
    * needs PutItem, which is why this stage is not `publish`.
    */
@@ -339,7 +339,7 @@ describe("IAM (§7.6 L705-710, R24)", () => {
   /**
    * A Query against a GSI is authorised on the index ARN, not the table's —
    * `table.grant()` grants only the table, so a narrowed Query that forgot the
-   * index would fail at runtime on §3.1 L197's source selection and §6 L558's
+   * index would fail at runtime on §3.1 L199's source selection and §6 L560's
    * dedup read, which is a worse outcome than the widening being removed.
    */
   test("a narrowed Query still reaches the indexes it queries", () => {
@@ -354,7 +354,7 @@ describe("IAM (§7.6 L705-710, R24)", () => {
     }
   });
 
-  /** No stage deletes a record: §8.4 L799 makes even an operator's delete soft. */
+  /** No stage deletes a record: §8.4 L810 makes even an operator's delete soft. */
   test("no pipeline function may delete a record", () => {
     const template = templateFor();
 
@@ -371,7 +371,7 @@ describe("IAM (§7.6 L705-710, R24)", () => {
     }
   });
 
-  /** §9.3 L907 — "No VPC." A VPC would need NAT for outbound scraping, with no security gain. */
+  /** §9.3 L939 — "No VPC." A VPC would need NAT for outbound scraping, with no security gain. */
   test("places no function in a VPC", () => {
     for (const fn of Object.values(templateFor().findResources("AWS::Lambda::Function"))) {
       expect(fn.Properties?.VpcConfig).toBeUndefined();
@@ -379,7 +379,7 @@ describe("IAM (§7.6 L705-710, R24)", () => {
   });
 });
 
-describe("alarms (§7.7 L739)", () => {
+describe("alarms (§7.7 L750)", () => {
   test("declares the five §7.7 alarms", () => {
     // Three DLQ-depth alarms, plus SourceStale, DedupCandidateCount, the Lambda
     // error rate and the analyze queue age.
@@ -398,7 +398,7 @@ describe("alarms (§7.7 L739)", () => {
     }
   });
 
-  /** §7.2 L638 — "Alarm at > 500 — the point at which the in-memory comparison assumption needs revisiting." */
+  /** §7.2 L640 — "Alarm at > 500 — the point at which the in-memory comparison assumption needs revisiting." */
   test("alarms when a day's dedup candidates exceed 500", () => {
     const alarm = alarms(templateFor()).find((a) => a.MetricName === "DedupCandidateCount");
 
@@ -407,7 +407,7 @@ describe("alarms (§7.7 L739)", () => {
   });
 
   /**
-   * R25 — §7.7 L739 alarms on "SourceStale for any source", but the metric is
+   * R25 — §7.7 L750 alarms on "SourceStale for any source", but the metric is
    * dimensioned by a runtime-discovered Source. A CloudWatch alarm cannot
    * enumerate that at synth time and lookups are banned, so item 3.5 emits the
    * metric undimensioned as well and the alarm watches that.
@@ -419,7 +419,7 @@ describe("alarms (§7.7 L739)", () => {
     expect(alarm?.Dimensions ?? []).toEqual([]);
   });
 
-  /** §10.4 L995 targets "oldest message < 1 hour under normal load". */
+  /** §10.4 L1027 targets "oldest message < 1 hour under normal load". */
   test("alarms when the analyze queue's oldest message passes an hour", () => {
     const alarm = alarms(templateFor()).find(
       (a) => a.MetricName === "ApproximateAgeOfOldestMessage",

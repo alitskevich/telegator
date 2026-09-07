@@ -19,12 +19,12 @@ import { telegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
- * E2E-5 (§10.2 L966) — "**Replaying the entire aggregate DLQ leaves the messages
+ * E2E-5 (§10.2 L998) — "**Replaying the entire aggregate DLQ leaves the messages
  * table byte-identical.** This is the master idempotency test."
  *
  * "Byte-identical" is narrowed, and the narrowing is the spec's own — but less
- * than it was. §6 L591 stamps `ts: now()` on every write, so a replay under a
- * real clock cannot leave that byte unchanged. §6 L591's second concession is
+ * than it was. §6 L593 stamps `ts: now()` on every write, so a replay under a
+ * real clock cannot leave that byte unchanged. §6 L593's second concession is
  * gone: it applied to the centroid, and R45 replaced the centroid with
  * `unionMatchKeys`, which is idempotent, so the match key of a *merged* message
  * survives a replay exactly too. What must be identical is everything the
@@ -129,7 +129,7 @@ async function runThenReplay() {
 
   const before = await snapshot();
 
-  // §3.5 L362 — the replay puts the same bodies back on the source queue.
+  // §3.5 L364 — the replay puts the same bodies back on the source queue.
   clock.advance(REPLAY_DELAY_MS);
   const publishQueue = fakeQueueProducer();
   const replay = await runAggregate(
@@ -183,7 +183,7 @@ describe("E2E-5 fixtures", () => {
   });
 });
 
-describe("E2E-5 (§10.2 L966)", () => {
+describe("E2E-5 (§10.2 L998)", () => {
   test("the scenario has both a merged message and a lone one", async () => {
     const { before } = await runThenReplay();
 
@@ -204,7 +204,7 @@ describe("E2E-5 (§10.2 L966)", () => {
 
   /**
    * R11 — an existing member keeps the `ts` it was first written with. Without
-   * that, every replay would rewrite every member block and §3.4 L317's ordering
+   * that, every replay would rewrite every member block and §3.4 L319's ordering
    * would shuffle on each one.
    */
   test("every member block is unchanged, including its ts", async () => {
@@ -231,14 +231,14 @@ describe("E2E-5 (§10.2 L966)", () => {
   });
 
   /**
-   * Item 8.6 found a third deviation here — §6 L579's merge branch wrote
+   * Item 8.6 found a third deviation here — §6 L581's merge branch wrote
    * `status: "topublish"` unconditionally, so a replay returned every published
-   * message to the publish queue and §3.4 L343 edited the live post with
+   * message to the publish queue and §3.4 L345 edited the live post with
    * identical text. R39 closed it: a merge that changes nothing a reader would
    * see leaves the status alone.
    *
    * So only two deviations from "byte-identical" survive, and both are the
-   * spec's own: §6 L591's `ts` stamp and §6 L591's centroid drift.
+   * spec's own: §6 L593's `ts` stamp and §6 L593's centroid drift.
    */
   test("status survives the replay, so nothing is re-published", async () => {
     const { before, after } = await runThenReplay();
@@ -258,7 +258,7 @@ describe("E2E-5 (§10.2 L966)", () => {
   });
 
   /**
-   * §3.4 L348's publish result survives. A replay that cleared `tgId` would turn
+   * §3.4 L350's publish result survives. A replay that cleared `tgId` would turn
    * the next publish into a second post rather than an edit.
    */
   test("tgId and tgAt survive the replay", async () => {
@@ -268,7 +268,7 @@ describe("E2E-5 (§10.2 L966)", () => {
     expect(after.map((message) => message.tgAt)).toEqual(before.map((message) => message.tgAt));
   });
 
-  /** §6 L582's create branch is conditional (R38); a replay must not reach it. */
+  /** §6 L584's create branch is conditional (R38); a replay must not reach it. */
   test("the replay merges rather than recreating", async () => {
     const { before, after } = await runThenReplay();
 
@@ -280,7 +280,7 @@ describe("E2E-5 (§10.2 L966)", () => {
   });
 
   /**
-   * R45 — `unionMatchKeys` is idempotent, so the field §6 L591 conceded would
+   * R45 — `unionMatchKeys` is idempotent, so the field §6 L593 conceded would
    * drift now does not. Asserted for the merged message specifically: that is
    * the case the centroid could not hold, and a key that drifted would stop a
    * message matching its own members on the next pass.

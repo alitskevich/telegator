@@ -1,5 +1,5 @@
 /**
- * §8.4 L801's export format.
+ * §8.4 L812's export format.
  *
  * RFC 4180 quoting, which is not optional here: a headline containing a comma is
  * ordinary news copy, and unquoted it shifts every later column by one — so the

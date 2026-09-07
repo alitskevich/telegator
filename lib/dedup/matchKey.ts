@@ -1,9 +1,9 @@
 import { MATCH_KEY_CAP } from "./constants";
 
 /**
- * The deduplication match key (R46), replacing §6 L512-512's embedding.
+ * The deduplication match key (R46), replacing §6 L514-514's embedding.
  *
- * Built only from the fields §5.2 L445-455 makes the classifier emit in English
+ * Built only from the fields §5.2 L447-457 makes the classifier emit in English
  * — `title`, `peoples`, `properNames`, `tags`. §6's multilingual embedder
  * existed to serve `summary` (Belarusian) and `body` (Russian/Ukrainian), which
  * `buildEmbeddingText` concatenated into the vector and which a match key does
@@ -44,12 +44,12 @@ function sortedSet(values: readonly string[]): string[] {
   return [...new Set(values.filter((value) => value !== ""))].sort().slice(0, MATCH_KEY_CAP);
 }
 
-/** `peoples` and `properNames` are comma-separated by §5.2 L453-454. */
+/** `peoples` and `properNames` are comma-separated by §5.2 L455-456. */
 function splitCommas(value: string | undefined): string[] {
   return value === undefined ? [] : value.split(",").map(canonical);
 }
 
-/** `title` is "three words, English" (§5.2 L445), so whitespace is the separator. */
+/** `title` is "three words, English" (§5.2 L447), so whitespace is the separator. */
 function splitWords(value: string | undefined): string[] {
   return value === undefined ? [] : canonical(value).split(WHITESPACE);
 }
@@ -86,8 +86,8 @@ export function unionMatchKeys(a: MatchKey, b: MatchKey): MatchKey {
 }
 
 /**
- * R44 — §7.2 L634–634 stores a dedup match as three projections for the
- * `date-index` (L634). This function reads them back as a `MatchKey` for the
+ * R44 — §7.2 L636–636 stores a dedup match as three projections for the
+ * `date-index` (L636). This function reads them back as a `MatchKey` for the
  * scorer, structurally: the read path never builds a full payload.
  */
 export function matchKeyOf(record: {

@@ -6,19 +6,19 @@ import { renderMember, renderMembers } from "./render";
 /**
  * Built through `MemberBlockSchema.parse` rather than an object literal: the
  * house rule bans type assertions, and parsing also proves each fixture is a
- * block the aggregate stage could actually have written (§2.3 L166–173).
+ * block the aggregate stage could actually have written (§2.3 L168–175).
  */
 function member(fields: Record<string, unknown>): MemberBlock {
   return MemberBlockSchema.parse({ summary: "s", channel: "chan", ts: 0, ...fields });
 }
 
-/** The `🔘 ` prefix and ` - @mention` suffix §3.4 L320 fixes around every block. */
+/** The `🔘 ` prefix and ` - @mention` suffix §3.4 L322 fixes around every block. */
 function line(itemId: string, content: string, channel: string): string {
   return `🔘 ${content} - <a href="https://t.me/${itemId}">@${channel}</a>`;
 }
 
 describe("renderMember", () => {
-  test("emits the §3.4 L320 shape: 🔘 prefix, content, and the @channel link", () => {
+  test("emits the §3.4 L322 shape: 🔘 prefix, content, and the @channel link", () => {
     const rendered = renderMember("chan/7", member({ summary: "Выбух", channel: "chan" }));
 
     expect(rendered).toBe(line("chan/7", "Выбух", "chan"));
@@ -26,7 +26,7 @@ describe("renderMember", () => {
     expect(rendered.endsWith(' - <a href="https://t.me/chan/7">@chan</a>')).toBe(true);
   });
 
-  test("§3.4 L317 — replaces a resolved [text](#N) token with an anchor", () => {
+  test("§3.4 L319 — replaces a resolved [text](#N) token with an anchor", () => {
     const rendered = renderMember(
       "chan/7",
       member({ summary: "see [the report](#1) now", links: [{ id: 1, href: "https://e.by/r" }] }),
@@ -51,7 +51,7 @@ describe("renderMember", () => {
     expect(rendered).toContain('<a href="https://e.by/two">two</a>');
   });
 
-  /** AC-4.4 (§3.4 L355). */
+  /** AC-4.4 (§3.4 L357). */
   test("AC-4.4 — a [x](#3) token with no matching link degrades to plain `x`", () => {
     const rendered = renderMember(
       "chan/7",
@@ -74,7 +74,7 @@ describe("renderMember", () => {
   });
 
   /**
-   * §3.4 L345 sends with `parse_mode: html`, so raw `<` and `&` in a summary
+   * §3.4 L347 sends with `parse_mode: html`, so raw `<` and `&` in a summary
    * would be parsed as markup by Telegram and reject or corrupt the send.
    */
   test('HTML-escapes &, <, > and " in the summary text', () => {
@@ -101,7 +101,7 @@ describe("renderMember", () => {
 });
 
 describe("renderMembers", () => {
-  test("§3.4 L317 — orders members by ts ascending", () => {
+  test("§3.4 L319 — orders members by ts ascending", () => {
     const rendered = renderMembers({
       "chan/3": member({ summary: "third", ts: 300 }),
       "chan/1": member({ summary: "first", ts: 100 }),
@@ -115,7 +115,7 @@ describe("renderMembers", () => {
     ]);
   });
 
-  test("§3.4 L317 — renders only the first 12 when 20 members are present", () => {
+  test("§3.4 L319 — renders only the first 12 when 20 members are present", () => {
     const members: Record<string, MemberBlock> = {};
     for (let i = 1; i <= 20; i++) {
       members[`chan/${i}`] = member({ summary: `s${i}`, ts: i });
@@ -156,7 +156,7 @@ describe("renderMembers", () => {
     ]);
   });
 
-  /** AC-4.3 (§3.4 L354). */
+  /** AC-4.3 (§3.4 L356). */
   test("AC-4.3 — a member keyed abc/1 never renders content belonging to abc/12", () => {
     const rendered = renderMembers({
       "abc/1": member({ summary: "content of one", channel: "abc", ts: 1 }),

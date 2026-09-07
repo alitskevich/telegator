@@ -12,9 +12,9 @@ import { MessageStatusSchema } from "../../lib/domain/message";
 import { authorized } from "../authorize";
 
 /**
- * §8.3 L787 — the Messages page.
+ * §8.3 L798 — the Messages page.
  *
- * §8.2 L764 spells the tab as `?status=`, so it is a URL and not component
+ * §8.2 L775 spells the tab as `?status=`, so it is a URL and not component
  * state: a reload, a bookmark and a link shared with another operator all show
  * the same tab.
  */
@@ -29,7 +29,7 @@ export default async function MessagesPage({
   const session = await authorized(requireRole("viewer", await authContext()));
   const principal = { roles: session.roles, enabled: true };
 
-  // §8.2 L764's example is `?status=topublish`, which is also the tab an
+  // §8.2 L775's example is `?status=topublish`, which is also the tab an
   // operator opens this page to work through. An unparseable value falls back
   // rather than 500s — a mistyped URL should not be an error page.
   const { status: raw } = await searchParams;
@@ -44,8 +44,8 @@ export default async function MessagesPage({
   }
 
   /**
-   * §8.4 L799 — soft, and `editor`. §8.3 L787's row does not list delete;
-   * L799's action is defined over both tables, and without it a message built
+   * §8.4 L810 — soft, and `editor`. §8.3 L798's row does not list delete;
+   * L810's action is defined over both tables, and without it a message built
    * from a mis-scraped item cannot be cleared from the tab an operator works
    * through.
    */

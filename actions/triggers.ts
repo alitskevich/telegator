@@ -12,7 +12,7 @@ import {
 import { authContext, functions, lambda, messages, publishQueue, sources } from "./context";
 
 /**
- * §8.4 L803-801. Thin wrappers: the role gates, the input validation and the
+ * §8.4 L814-812. Thin wrappers: the role gates, the input validation and the
  * write-then-enqueue ordering all live in `lib/dashboard/triggers.ts`.
  */
 

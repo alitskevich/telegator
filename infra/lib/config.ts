@@ -12,7 +12,7 @@ import { type NameOptions, resourceName } from "./naming";
  * infrastructure gate into an authenticated call.
  */
 
-/** §9.2 L864 — two environments, isolated by AWS account. */
+/** §9.2 L896 — two environments, isolated by AWS account. */
 export const ENVIRONMENTS = ["dev", "prod"] as const;
 
 export type Environment = (typeof ENVIRONMENTS)[number];
@@ -21,20 +21,20 @@ export interface TelegatorConfig {
   readonly env: Environment;
   /**
    * R23. §9.5 deploys **prod** with the schedule disabled too, enabling it only
-   * after a 48-hour soak against test channels (L942, L944), so this cannot be
+   * after a 48-hour soak against test channels (L974, L976), so this cannot be
    * derived from the environment name: it is its own parameter, `false` in both,
    * and a deploy must opt in.
    */
   readonly scheduleEnabled: boolean;
   /**
-   * §3.3 L290 and §7.3 L646. §11.4 L1011 records 300 s as "a starting value",
+   * §3.3 L292 and §7.3 L648. §11.4 L1043 records 300 s as "a starting value",
    * which makes configurability binding (R19) — and R19 also records that SQS
    * FIFO supports only a queue-level delay, so this is a stack parameter rather
    * than something a producer sets per message.
    */
   readonly settleDelaySeconds: number;
   /**
-   * R40 — §7.5 L693: a reservation is creatable only while the account keeps 5
+   * R40 — §7.5 L695: a reservation is creatable only while the account keeps 5
    * concurrent executions unreserved, and a cold account's entire quota is 5.
    *
    * Its own parameter rather than a dev-only branch, for R23's reason: the

@@ -26,7 +26,7 @@ import { type Band, classify, matchScore } from "./score";
 /**
  * The normative deduplication algorithm of §6.
  *
- * Pure: it writes no table row and enqueues nothing (§6 L584–585), which is what
+ * Pure: it writes no table row and enqueues nothing (§6 L586–587), which is what
  * makes the whole of §6 testable with no AWS at all.
  *
  * Eight reconciliations are implemented here rather than transcribed. §25 of
@@ -34,8 +34,8 @@ import { type Band, classify, matchScore } from "./score";
  *
  *  - **R7** — descriptive fields are picked explicitly, so a spread cannot write
  *    fields §2.3's table does not have.
- *  - **R8** — every write carries `ts`, the GSI sort key (§2.3 L161).
- *  - **R9** — `date-index` projects no `members` (§7.2 L634), so a merge is
+ *  - **R8** — every write carries `ts`, the GSI sort key (§2.3 L163).
+ *  - **R9** — `date-index` projects no `members` (§7.2 L636), so a merge is
  *    attribute-level and the matched record is read from the base table.
  *  - **R10** — pass 2 skips a candidate this batch already touched, so a stale
  *    stored copy cannot overwrite the batch's own fresher work.
@@ -46,7 +46,7 @@ import { type Band, classify, matchScore } from "./score";
  *  - **R46** — match key, `matchScore` and a two-threshold band replace embedding
  *    and cosine. Only the band costs a model call, and one call serves the batch.
  *  - **R51** — replay is settled by `memberIds` identity before any scoring,
- *    because §3.3 L281 lets later members overwrite what a replay would match on.
+ *    because §3.3 L283 lets later members overwrite what a replay would match on.
  */
 
 export interface DedupDeps {
@@ -55,7 +55,7 @@ export interface DedupDeps {
    * at all when nothing falls in the band.
    */
   readonly adjudicator: Adjudicator;
-  /** §6 L558 — the `date-index` query. */
+  /** §6 L560 — the `date-index` query. */
   loadCandidatesByDate(date: string): Promise<DedupCandidate[]>;
   /**
    * R9 — the base-table read that supplies what a `date-index` candidate lacks:
@@ -72,7 +72,7 @@ export interface DedupDeps {
    */
   readonly logger: Logger;
   /**
-   * §10.3 L985 requires recalibration before production. Injected so that
+   * §10.3 L1017 requires recalibration before production. Injected so that
    * recalibration stays a configuration change rather than a code edit (R46).
    */
   readonly band?: Band;
@@ -84,9 +84,9 @@ export type DedupWrite =
 
 export interface DedupResult {
   readonly writes: readonly DedupWrite[];
-  /** §6 L585 — every touched message id. */
+  /** §6 L587 — every touched message id. */
   readonly toPublish: readonly string[];
-  /** §7.2 L638 — alarmed above 500, where §6's in-memory assumption stops holding. */
+  /** §7.2 L640 — alarmed above 500, where §6's in-memory assumption stops holding. */
   readonly candidateCount: number;
 }
 
@@ -103,14 +103,14 @@ interface Pending {
   /**
    * What the stored record rendered as before this batch touched it (R39).
    *
-   * `undefined` for a message this batch created. §2.3 L178 argues that
+   * `undefined` for a message this batch created. §2.3 L180 argues that
    * "re-processing a replayed item writes `members.{itemId}` with the same value
-   * — a no-op", but §6 L579's merge branch also writes `status: "topublish"`,
+   * — a no-op", but §6 L581's merge branch also writes `status: "topublish"`,
    * which returns an already-published message to the publish queue and edits
    * the live post with its own text. Comparing the finished state against this
    * snapshot is what tells the two apart.
    *
-   * A snapshot rather than a running flag, because §3.3 L281 has each item's
+   * A snapshot rather than a running flag, because §3.3 L283 has each item's
    * descriptive fields overwrite: replaying two members writes the first item's
    * title and then the second's, so an incremental check sees a change in a
    * state that ends up identical.
@@ -173,8 +173,8 @@ export async function dedupBatch(
 
   const pending = new Map<string, Pending>();
   const toPublish: string[] = [];
-  // All items in a batch share one date (§7.3 L645's FIFO group) and nothing is
-  // written until the caller applies the result, so §6 L558's per-item query
+  // All items in a batch share one date (§7.3 L647's FIFO group) and nothing is
+  // written until the caller applies the result, so §6 L560's per-item query
   // returns the same rows every time.
   const candidatesByDate = new Map<string, DedupCandidate[]>();
   let candidateCount = 0;
@@ -191,7 +191,7 @@ export async function dedupBatch(
 
   /**
    * R9's base-table read, memoised: the merge branch needs `members` and
-   * `bandFieldsOf` needs the descriptive fields §7.2 L634 does not project, so
+   * `bandFieldsOf` needs the descriptive fields §7.2 L636 does not project, so
    * memoising keeps that at one `GetItem` per candidate per batch rather than
    * one per caller. `absorb` spreads rather than mutates, so sharing is safe.
    */
@@ -205,7 +205,7 @@ export async function dedupBatch(
   };
 
   /**
-   * §6 L579 — the create/merge tail, shared by the items decided on sight and
+   * §6 L581 — the create/merge tail, shared by the items decided on sight and
    * the ones decided by the model. A second copy is how the two paths would
    * drift on R11 or the member cap.
    */
@@ -218,7 +218,7 @@ export async function dedupBatch(
     }
 
     if (state !== undefined) {
-      // §3.3 L277 — the cap rejects only a *new* key, so a replay of an item
+      // §3.3 L279 — the cap rejects only a *new* key, so a replay of an item
       // already present still merges. Returning drops the item outright.
       if (Object.keys(state.members).length >= MAX_MEMBERS && !(item.id in state.members)) {
         deps.metrics.count("MemberCapReached", 1);
@@ -226,7 +226,7 @@ export async function dedupBatch(
       }
     }
 
-    // §6 L579–591, with R11's preservation.
+    // §6 L581–593, with R11's preservation.
     const existing = state?.members[item.id];
     const block: MemberBlock = {
       summary: item.summary,
@@ -256,15 +256,15 @@ export async function dedupBatch(
           }
         : {
             ...state,
-            // R45 — the union, where §3.3 L278 took the elementwise mean.
+            // R45 — the union, where §3.3 L280 took the elementwise mean.
             key: unionMatchKeys(state.key, key),
             members: { ...state.members, [item.id]: block },
             addedMembers: { ...state.addedMembers, [item.id]: block },
-            // §3.3 L280 — item side first, so a replay is a fixed point.
+            // §3.3 L282 — item side first, so a replay is a fixed point.
             tags: mergeTags(item.tags, state.tags),
-            // §3.3 L279 uses `??`, which keeps an empty-string image (R30).
+            // §3.3 L281 uses `??`, which keeps an empty-string image (R30).
             image: state.image ?? item.image,
-            // §3.3 L281 — the newest item's descriptive fields overwrite.
+            // §3.3 L283 — the newest item's descriptive fields overwrite.
             title: item.title,
             category: item.category,
             country: item.country,
@@ -286,7 +286,7 @@ export async function dedupBatch(
      * R51, AC-3.7 — the replay short-circuit, ahead of every comparison.
      *
      * An item already listed in a same-date message's `memberIds` belongs to
-     * that message by identity, whatever it would now score: §3.3 L281 lets
+     * that message by identity, whatever it would now score: §3.3 L283 lets
      * later members overwrite the descriptive fields, so a replayed item can
      * have drifted well away from the key it helped build. Re-scoring it is how
      * a DLQ drain splits a story that was already published and posts it twice.
@@ -315,11 +315,11 @@ export async function dedupBatch(
      */
     let best: Best | undefined;
     const better = (candidate: Best) => {
-      // §6 L571 records any improvement, with no threshold test.
+      // §6 L573 records any improvement, with no threshold test.
       if (best === undefined || candidate.score > best.score) best = candidate;
     };
 
-    // Pass 1 — messages touched earlier in this batch (§6 L566–544).
+    // Pass 1 — messages touched earlier in this batch (§6 L568–546).
     for (const candidate of pending.values()) {
       if (candidate.date !== item.date) continue;
       better({
@@ -331,7 +331,7 @@ export async function dedupBatch(
     }
 
     /**
-     * Pass 2 — stored messages on the same date (§6 L570).
+     * Pass 2 — stored messages on the same date (§6 L572).
      *
      * Both passes run and the highest score across them wins (R46). A band
      * needs the best candidate settled before it can classify at all, so
@@ -403,7 +403,7 @@ export async function dedupBatch(
   const writes = [...pending.values()].map((state) => toWrite(state, now));
 
   // R39 — a merge that changed nothing a reader would see must not be published
-  // again. Filtered here rather than per item because §3.3 L281's overwrite
+  // again. Filtered here rather than per item because §3.3 L283's overwrite
   // makes an intermediate state differ from one that ends up identical.
   const republished = new Set(
     [...pending.values()]
@@ -421,7 +421,7 @@ export async function dedupBatch(
 /**
  * R46 — one call for the batch, and a failure that splits.
  *
- * §10.3 L975 ranks a false merge as the costlier error, so a throw, a timeout or
+ * §10.3 L1007 ranks a false merge as the costlier error, so a throw, a timeout or
  * a refusal returns no verdicts and every pending pair falls through to
  * `distinct` — never to `merge`, and never to a thrown batch, which would strand
  * the items that were never ambiguous.
@@ -450,7 +450,7 @@ async function adjudicate(
  * R46 — what crosses the model boundary.
  *
  * `entities` and `tags` come from the match key, the canonical form of §5.2
- * L453-455's comma-separated fields that both sides have; `title`, `category`
+ * L455-457's comma-separated fields that both sides have; `title`, `category`
  * and `location` are the record's own. The key-derived title is a poor fallback
  * for a record that has none — `titleTokens` is alphabetised, so it carries no
  * word order.
@@ -472,12 +472,12 @@ function fieldsOf(from: Described): AdjudicationFields {
 /**
  * R46 — the candidate's side of a band pair, from the base table.
  *
- * §7.2 L634's projection carries no `title`, `category` or `location`, and
+ * §7.2 L636's projection carries no `title`, `category` or `location`, and
  * describing the candidate from its key instead would hand the model the same
  * three token sets `matchScore` just failed to decide on — a tie broken with the
  * data that produced it.
  *
- * One read per band pair, at most ten per batch (§7.3 L645), and only here:
+ * One read per band pair, at most ten per batch (§7.3 L647), and only here:
  * `merge` and `distinct` are decided from the projection alone.
  *
  * A record that cannot be read falls back to the key-derived form — a degraded
@@ -594,7 +594,7 @@ function toWrite(state: Pending, ts: number): DedupWrite {
   const shared = {
     memberCount,
     /**
-     * R45 — the three projections §7.2 L634 scores on, written from the union
+     * R45 — the three projections §7.2 L636 scores on, written from the union
      * `absorb` maintained. `embedding` is not written at all: nothing computes
      * one any more, and R43 removed it from the schema — a stored record's
      * orphan bytes are simply never touched again, rather than overwritten

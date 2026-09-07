@@ -50,7 +50,7 @@ export function parseSeedArgs(argv: readonly string[]): SeedArgs {
 }
 
 export interface ReseedArgs {
-  /** §9.5 L943's live values. The spec names no source, so they arrive as a file. */
+  /** §9.5 L975's live values. The spec names no source, so they arrive as a file. */
   readonly cursorsFile: string;
   readonly write: boolean;
 }

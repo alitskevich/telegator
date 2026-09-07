@@ -38,11 +38,11 @@ export interface PipelineWorld {
 }
 
 export interface PipelineRun {
-  /** Stage A payloads the scraper enqueued (§2.2 L128). */
+  /** Stage A payloads the scraper enqueued (§2.2 L130). */
   readonly analyzeMessages: QueueMessage[];
-  /** Stage B payloads analyze enqueued (§2.2 L140). */
+  /** Stage B payloads analyze enqueued (§2.2 L142). */
   readonly aggregateMessages: QueueMessage[];
-  /** `{messageId}` envelopes aggregate enqueued (§7.3 L646). */
+  /** `{messageId}` envelopes aggregate enqueued (§7.3 L648). */
   readonly publishMessages: QueueMessage[];
   readonly scrape: Awaited<ReturnType<typeof runScrape>>;
   /**

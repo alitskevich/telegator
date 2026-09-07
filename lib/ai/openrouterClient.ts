@@ -46,7 +46,7 @@ export async function createMessagesClient(apiKey: ApiKeyProvider): Promise<Mess
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ baseURL: OPENROUTER_BASE_URL, apiKey: await apiKey() });
 
-  // `as never`: §5.2 L423-425's `output_config` is an OpenRouter extension the
+  // `as never`: §5.2 L425-427's `output_config` is an OpenRouter extension the
   // SDK's own request type does not declare. The cast is at the boundary and
   // nowhere else — `ClassificationRequest` remains the typed definition of what
   // goes on the wire.
@@ -58,7 +58,7 @@ export async function createMessagesClient(apiKey: ApiKeyProvider): Promise<Mess
  * neither an injected client nor a key provider.
  *
  * Named here so the two adapters cannot word it differently, and so it reads as
- * a wiring fault rather than a provider outage: §3.2 L256 routes provider
+ * a wiring fault rather than a provider outage: §3.2 L258 routes provider
  * errors to SQS retry, and retrying a missing dependency for six hours before
  * the DLQ would hide the real cause behind a full DLQ.
  */

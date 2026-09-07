@@ -23,7 +23,7 @@ describe("mergeTags", () => {
   });
 
   /**
-   * §3.3 L280 calls `mergeTags(item.tags, match.tags)` — item first. First-seen
+   * §3.3 L282 calls `mergeTags(item.tags, match.tags)` — item first. First-seen
    * order is what makes the result deterministic, and determinism is what
    * AC-3.7 requires when it says `tags` are unchanged on replay.
    */
@@ -61,8 +61,8 @@ describe("mergeTags", () => {
 
   /**
    * Decision, not an accident: deduplication is exact-match. The spec never asks
-   * for case folding (§3.2 L254 says only "comma-split, deduplicated,
-   * comma-joined"), and folding would discard a tag's stored form. §3.4 L336
+   * for case folding (§3.2 L256 says only "comma-split, deduplicated,
+   * comma-joined"), and folding would discard a tag's stored form. §3.4 L338
    * lowercases when it builds hashtags, so display case does not leak onward.
    */
   test("deduplicates by exact match, so War and war both survive", () => {

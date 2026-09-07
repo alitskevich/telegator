@@ -9,9 +9,9 @@ import { ENV_VARS, requireEnv } from "./env";
 import { createSecretReader, secretsClient } from "./secrets";
 
 /**
- * The `telegator-analyze` entry point (§7.5 L688, SQS `telegator-analyze`).
+ * The `telegator-analyze` entry point (§7.5 L690, SQS `telegator-analyze`).
  *
- * A thin wrapper per §8.2 L777; the routing table and the pre-filter live in
+ * A thin wrapper per §8.2 L788; the routing table and the pre-filter live in
  * `lib/pipeline/analyze/`. Built on first invocation, never at module scope.
  */
 export interface SqsEvent {
@@ -48,7 +48,7 @@ export const handler = async (event: SqsEvent): Promise<AnalyzeResult> => {
   if (cached === undefined) cached = buildDeps();
   const deps = cached;
 
-  // §7.3 L662's partial batch failures are the return value, so the flush must
+  // §7.3 L664's partial batch failures are the return value, so the flush must
   // not swallow it — withMetricFlush returns the work's result unchanged.
   return withMetricFlush(deps.metrics, () => runAnalyze(event.Records, deps));
 };

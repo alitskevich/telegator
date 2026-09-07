@@ -20,7 +20,7 @@ import {
 } from "./computations";
 
 /**
- * Everything `app/page.tsx` renders (§8.3 L785), gathered in one place so the
+ * Everything `app/page.tsx` renders (§8.3 L796), gathered in one place so the
  * page itself stays a thin composition of a data load and a component.
  */
 
@@ -40,7 +40,7 @@ export interface Overview {
   readonly analyzed: number;
   readonly skipped: SkippedItems;
   readonly published: number;
-  /** §8.5 L818. `null` when any DLQ went unread — see `errorCount`. */
+  /** §8.5 L829. `null` when any DLQ went unread — see `errorCount`. */
   readonly errors: number | null;
   readonly statusSlices: Slice[];
   readonly categorySlices: Slice[];
@@ -61,7 +61,7 @@ export interface OverviewDeps {
 /**
  * One read per queue for the whole page.
  *
- * The strip and the status chart both want every depth, and §8.5 L823's cache
+ * The strip and the status chart both want every depth, and §8.5 L834's cache
  * covers CloudWatch only — so without this, a page load makes twelve SQS calls
  * for six numbers that cannot have changed between them.
  */

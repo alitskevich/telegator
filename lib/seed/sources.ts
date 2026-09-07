@@ -1,13 +1,13 @@
 import type { Source } from "../domain/source";
 
 /**
- * §9.4 L931-933 — "Because the schema changed, seeding is a **migration**, not a
+ * §9.4 L963-965 — "Because the schema changed, seeding is a **migration**, not a
  * copy."
  *
- * `sources` only: R20 records that §11.6 L1013's "skip the import entirely" wins
+ * `sources` only: R20 records that §11.6 L1045's "skip the import entirely" wins
  * over §9.4's messages row, and that the messages transform is unimplementable
  * anyway — the export carries one flat `summary`/`links` per message, so a
- * per-member `MemberBlock` (§2.3 L167-172) cannot be reconstructed for any
+ * per-member `MemberBlock` (§2.3 L169-174) cannot be reconstructed for any
  * multi-member record.
  *
  * A pure transform. R21 keeps the export outside this repository, so the tests
@@ -32,7 +32,7 @@ function text(value: unknown): string | undefined {
 }
 
 /**
- * The export writes every field as a string. `lastCount` drives §3.1 L200's
+ * The export writes every field as a string. `lastCount` drives §3.1 L202's
  * refresh heuristic, which compares it numerically, so leaving it a string
  * would compare `"120" > 20` as false and pin every source to the slowest
  * poll rate — with nothing to see in the record.
@@ -80,7 +80,7 @@ export function toSeedSource(row: unknown): Source {
   /**
    * `zeroYieldRuns` is deliberately absent. §2.4 gives it a read-side default of
    * 0, so writing it would store the same value with an extra attribute, and
-   * §4.1 L376's staleness alarm reads the default identically.
+   * §4.1 L378's staleness alarm reads the default identically.
    */
   return seeded as Source;
 }

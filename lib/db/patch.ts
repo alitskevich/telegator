@@ -39,7 +39,7 @@ export function updateAttributes(
 }
 
 /**
- * §8.4 L799 — "Deletes are **soft**, matching the source."
+ * §8.4 L810 — "Deletes are **soft**, matching the source."
  *
  * The row survives and R16's repository-level filter hides it from every read.
  * A hard delete would also destroy the `members` map, which §1.3 L69 makes

@@ -67,7 +67,7 @@ export function cloudWatchMetricReader(client: MetricDataClient): MetricReader {
           MetricStat: {
             Metric: { Namespace: METRIC_NAMESPACE, MetricName: name, Dimensions },
             Period: period,
-            // §8.5 L814-816 says Sum. `Average` over a counter reads as a rate.
+            // §8.5 L825-827 says Sum. `Average` over a counter reads as a rate.
             Stat: "Sum",
           },
           ReturnData: true,
@@ -116,7 +116,7 @@ export interface QueueAttributesClient {
 }
 
 /**
- * A count that is absent or unparseable reads as zero. §8.5 L818 makes DLQ depth
+ * A count that is absent or unparseable reads as zero. §8.5 L829 makes DLQ depth
  * the "Errors" card, and `NaN` there renders as an empty card — indistinguishable
  * from a healthy pipeline.
  */
@@ -155,7 +155,7 @@ export interface LogsQueryClient {
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * §8.5 L820 — the category chart, over 7 days of analyze logs.
+ * §8.5 L831 — the category chart, over 7 days of analyze logs.
  *
  * The query text is built from `CLASSIFIED_LOG_MESSAGE` and `CATEGORY_LOG_FIELD`
  * rather than string literals. Those constants are exported by the analyze stage

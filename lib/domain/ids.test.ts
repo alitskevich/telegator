@@ -2,12 +2,12 @@ import { describe, expect, test } from "vitest";
 import { formatItemId, ItemIdSchema, parseItemId, sourceIdOf } from "./ids";
 
 describe("formatItemId", () => {
-  test("joins the source and Telegram message id with a slash (§2.2 L129)", () => {
+  test("joins the source and Telegram message id with a slash (§2.2 L131)", () => {
     expect(formatItemId("yigal_levin", "12345")).toBe("yigal_levin/12345");
   });
 
   /**
-   * §2.4 L185: ids are used verbatim as SQS fields, DynamoDB map keys and
+   * §2.4 L187: ids are used verbatim as SQS fields, DynamoDB map keys and
    * partition keys. "Both encoders are deleted. No encode/decode layer exists."
    * So the slash must survive intact — percent-encoding it here would silently
    * break every id in the system.
@@ -31,9 +31,9 @@ describe("parseItemId", () => {
   });
 
   /**
-   * §6 L591 takes the channel as `item.id.split("/")[0]`. That is only correct
+   * §6 L593 takes the channel as `item.id.split("/")[0]`. That is only correct
    * while the source segment contains no slash — otherwise the channel is
-   * silently truncated and §3.4 L320 renders a broken @mention link.
+   * silently truncated and §3.4 L322 renders a broken @mention link.
    */
   test("rejects a source segment containing a slash", () => {
     expect(() => parseItemId("a/b/1")).toThrow();
@@ -49,18 +49,18 @@ describe("parseItemId", () => {
 });
 
 describe("sourceIdOf", () => {
-  test("returns the channel segment §6 L591 needs for the @mention", () => {
+  test("returns the channel segment §6 L593 needs for the @mention", () => {
     expect(sourceIdOf("yigal_levin/12345")).toBe("yigal_levin");
   });
 
   test("throws rather than returning undefined for a malformed id", () => {
     // A silent undefined would reach MemberBlock.channel and render as
-    // "@undefined" in a published Telegram message (§3.4 L320).
+    // "@undefined" in a published Telegram message (§3.4 L322).
     expect(() => sourceIdOf("nonsense")).toThrow();
   });
 });
 
-describe("defect D2 is structurally dead (§2.3 L179)", () => {
+describe("defect D2 is structurally dead (§2.3 L181)", () => {
   test("abc/1 and abc/12 are distinct ids", () => {
     expect(formatItemId("abc", "1")).not.toBe(formatItemId("abc", "12"));
   });

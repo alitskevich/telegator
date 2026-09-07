@@ -63,8 +63,8 @@ describe("§10.4 row 1 — end-to-end latency (BLOCKED, and R28)", () => {
    * delay)". Measuring it needs a running system, so the target is BLOCKED.
    *
    * Its arithmetic is not. The parenthesis names the two intervals the target is
-   * made of, and this build configures them at 30 minutes (§7.5 L687's
-   * `rate(30 minutes)`) and 300 seconds (§3.3 L290's settle delay) — 35 minutes
+   * made of, and this build configures them at 30 minutes (§7.5 L689's
+   * `rate(30 minutes)`) and 300 seconds (§3.3 L292's settle delay) — 35 minutes
    * before a post is even eligible to publish. R28 recorded that as unresolved
    * rather than worked around, and this is the assertion that keeps it visible:
    * a future change to either interval will either fix the contradiction or

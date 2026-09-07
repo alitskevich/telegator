@@ -8,7 +8,7 @@ import { createSessionKeyReader } from "../../../../lib/auth/sessionKey";
 import { systemClock } from "../../../../lib/clock";
 
 /**
- * §8.2 L764. A thin wrapper, exactly like the Lambda entry points in `handlers/`:
+ * §8.2 L775. A thin wrapper, exactly like the Lambda entry points in `handlers/`:
  * it adapts Next's request-scoped cookie store to the `CookieJar` port, reads
  * configuration once, and hands the decision to `lib/auth/routes.ts` — which is
  * where the tests are.

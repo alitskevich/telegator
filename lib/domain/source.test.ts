@@ -16,7 +16,7 @@ describe("SourceSchema", () => {
   });
 
   /**
-   * §3.1 L200 selects on `now - lastUpdated >= (lastCount > 0 ? 30 : 240) * 60_000`.
+   * §3.1 L202 selects on `now - lastUpdated >= (lastCount > 0 ? 30 : 240) * 60_000`.
    * That arithmetic yields NaN on undefined, and NaN fails every comparison — so a
    * never-polled source would never be selected and the channel would go dark with
    * no error anywhere. Defaults make the formula total.
@@ -59,20 +59,20 @@ describe("SourceSchema", () => {
   });
 
   /**
-   * R16: §8.4 L799 requires a soft delete setting `deleted: true`, but §2.1's
+   * R16: §8.4 L810 requires a soft delete setting `deleted: true`, but §2.1's
    * field table never declares the field.
    */
-  test("accepts the soft-delete flag §8.4 L799 requires", () => {
+  test("accepts the soft-delete flag §8.4 L810 requires", () => {
     expect(SourceSchema.parse({ ...seedRecord, deleted: true }).deleted).toBe(true);
     expect(SourceSchema.parse(seedRecord).deleted).toBeUndefined();
   });
 
   /**
-   * R15: §4.1 L376 fires SourceStale on a source with "a non-zero historical
-   * lastCount", but §3.1 L218 sets lastCount to 0 on the first zero-yield run,
+   * R15: §4.1 L378 fires SourceStale on a source with "a non-zero historical
+   * lastCount", but §3.1 L220 sets lastCount to 0 on the first zero-yield run,
    * destroying the evidence before the third run can use it.
    */
-  test("carries lastNonZeroCount, which §4.1 L376's staleness rule needs", () => {
+  test("carries lastNonZeroCount, which §4.1 L378's staleness rule needs", () => {
     expect(SourceSchema.parse({ ...seedRecord, lastNonZeroCount: 25 }).lastNonZeroCount).toBe(25);
   });
 
@@ -123,7 +123,7 @@ describe("SourceCursorUpdate", () => {
    * Exact equality, not toMatchObject, and that is the point. Building this from
    * SourceSchema.pick() carries the read-side .default(0) through .partial(), so
    * a patch omitting zeroYieldRuns would have 0 injected into it — resetting the
-   * staleness counter on every successful poll and making §4.1 L376's alarm
+   * staleness counter on every successful poll and making §4.1 L378's alarm
    * unreachable. A patch must leave an absent field absent.
    */
   test("accepts the scrape-written fields of §2.1 L115-119 and injects nothing else", () => {

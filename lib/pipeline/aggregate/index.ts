@@ -14,33 +14,33 @@ import {
 } from "../../queues/ports";
 
 /**
- * Stage 3 — the §3.3 aggregate consumer (L266–307).
+ * Stage 3 — the §3.3 aggregate consumer (L268–309).
  *
  * **Wiring only.** §6's algorithm lives in `lib/dedup/dedupBatch.ts`, pure and
- * separately tested; what is left here is the four steps §6 L584–585 leave to
+ * separately tested; what is left here is the four steps §6 L586–587 leave to
  * the caller: parse the payloads, apply the writes, enqueue the touched ids,
  * and report which SQS records failed.
  *
  * Every §7.7 aggregate counter is emitted by `dedupBatch` through the sink this
- * stage hands it. Emitting any again would double-count a number §7.7 L718
+ * stage hands it. Emitting any again would double-count a number §7.7 L720
  * makes the pipeline's system of record.
  */
 
 export interface AggregateDeps {
   /**
-   * R46 — §3.3 L272's single `embedBatch` call for the batch, replaced by at
+   * R46 — §3.3 L274's single `embedBatch` call for the batch, replaced by at
    * most one adjudication call for the batch: only the pairs `lib/dedup`'s band
    * cannot decide reach a model at all.
    */
   readonly adjudicator: Adjudicator;
   readonly messages: MessageRepo;
-  /** §7.3 L646 — the publish FIFO queue. */
+  /** §7.3 L648 — the publish FIFO queue. */
   readonly queue: QueueProducer;
   readonly clock: Clock;
   readonly metrics: MetricSink;
   readonly logger: Logger;
   /**
-   * §10.3 L985 requires the decision boundary to be recalibrated before
+   * §10.3 L1017 requires the decision boundary to be recalibrated before
    * production. Passed straight through to `dedupBatch`, so that recalibration
    * is a configuration change rather than a code edit (R46).
    */
@@ -51,7 +51,7 @@ export interface AggregateDeps {
  * The two fields of an SQS record this stage reads.
  *
  * Structural rather than the SDK's `SQSRecord`: a real record satisfies it, and
- * typing it here keeps `aws-lambda` out of `lib/`, which §8.2 L777 reserves for
+ * typing it here keeps `aws-lambda` out of `lib/`, which §8.2 L788 reserves for
  * the stage implementation itself.
  */
 export interface AggregateRecord {
@@ -59,7 +59,7 @@ export interface AggregateRecord {
   readonly body: string;
 }
 
-/** §7.3 L662 — the `ReportBatchItemFailures` response shape. */
+/** §7.3 L664 — the `ReportBatchItemFailures` response shape. */
 export interface BatchItemFailure {
   readonly itemIdentifier: string;
 }
@@ -110,8 +110,8 @@ export async function runAggregate(
   } catch (error) {
     // The candidate query is batch-wide, so a failure here says nothing about
     // which item is at fault: every parsed record is reported so SQS redelivers
-    // the whole batch (§7.3 L662). An adjudication failure is NOT one of these —
-    // §10.3 L975 makes it split rather than throw, inside `dedupBatch`.
+    // the whole batch (§7.3 L664). An adjudication failure is NOT one of these —
+    // §10.3 L1007 makes it split rather than throw, inside `dedupBatch`.
     deps.logger.error("aggregate dedup failed", { error: describeError(error) });
     failRecordsFor(recordsByItemId.keys());
     return { batchItemFailures: toFailures(failed) };
@@ -145,7 +145,7 @@ export async function runAggregate(
     }
   }
 
-  // §6 L584–585 — write first, enqueue second, and only what was written. An id
+  // §6 L586–587 — write first, enqueue second, and only what was written. An id
   // whose write failed would send publish to a record that does not reflect it.
   await enqueuePublish(
     result.toPublish.filter((id) => written.has(id)),
@@ -158,12 +158,12 @@ export async function runAggregate(
 }
 
 /**
- * §3.3 L286–290 — one publish enqueue per touched id.
+ * §3.3 L288–292 — one publish enqueue per touched id.
  *
  * `publishQueueMessage` sets `MessageGroupId` and `MessageDeduplicationId` to the
- * message id (L288–289). **R19: no per-message `DelaySeconds`.** SQS FIFO
- * supports only a queue-level delay, so L290's settle delay is configured on the
- * publish queue itself (§7.3 L646) and cannot be set here.
+ * message id (L290–291). **R19: no per-message `DelaySeconds`.** SQS FIFO
+ * supports only a queue-level delay, so L292's settle delay is configured on the
+ * publish queue itself (§7.3 L648) and cannot be set here.
  */
 async function enqueuePublish(
   messageIds: readonly string[],
@@ -173,7 +173,7 @@ async function enqueuePublish(
 ): Promise<void> {
   for (const chunk of chunks(messageIds, SQS_MAX_BATCH_ENTRIES)) {
     // A send failure is reported even though the write succeeded: redelivery
-    // replays the item, and §6 L591's `members`-keyed map makes that a no-op
+    // replays the item, and §6 L593's `members`-keyed map makes that a no-op
     // (AC-3.7). An un-enqueued message would otherwise never be published.
     try {
       const sent = await deps.queue.send(chunk.map(publishQueueMessage));
@@ -194,7 +194,7 @@ async function enqueuePublish(
   }
 }
 
-/** Builds §6's dependencies from the stage's: L558's query is `queryByDate`, R9's read is `get`. */
+/** Builds §6's dependencies from the stage's: L560's query is `queryByDate`, R9's read is `get`. */
 function dedupDeps(deps: AggregateDeps): DedupDeps {
   return {
     adjudicator: deps.adjudicator,
@@ -208,7 +208,7 @@ function dedupDeps(deps: AggregateDeps): DedupDeps {
 }
 
 /**
- * §7.3 L662 — a body that is not a valid Stage B payload is one item's failure,
+ * §7.3 L664 — a body that is not a valid Stage B payload is one item's failure,
  * never the batch's. It is logged by SQS message id rather than by content: the
  * body is unvalidated input and belongs in the DLQ, not in every log line.
  */

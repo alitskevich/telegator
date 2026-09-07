@@ -10,17 +10,17 @@ import { requireRole } from "../../lib/auth/session";
 import { authorized } from "../authorize";
 
 /**
- * §8.3 L786 — the Sources page.
+ * §8.3 L797 — the Sources page.
  *
  * Thin: authorise, load, render. Every action passed down re-checks the caller's
- * role server-side (§8.4 L808), so the `canEdit` and `canAdmin` flags below only
+ * role server-side (§8.4 L819), so the `canEdit` and `canAdmin` flags below only
  * decide what is on screen — they are not the gate.
  */
 
 export const dynamic = "force-dynamic";
 
 export default async function SourcesPage() {
-  // §8.6 L831 — `viewer` reads every page. An unauthorised caller gets the
+  // §8.6 L842 — `viewer` reads every page. An unauthorised caller gets the
   // AuthorizationError rather than a table with the controls hidden.
   const session = await authorized(requireRole("viewer", await authContext()));
   const principal = { roles: session.roles, enabled: true };

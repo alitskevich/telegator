@@ -5,10 +5,10 @@ import { lambdaInvoker } from "../lib/aws/lambda";
 import { parseTarget, REGION } from "../lib/ops/target";
 
 /**
- * §8.4 L803's "Scrape now", as a command.
+ * §8.4 L814's "Scrape now", as a command.
  *
  * It **invokes the deployed function**; it does not run `lib/pipeline/scrape/`
- * here. That is §8.2 L777's rule, and the reason it gives applies to a terminal
+ * here. That is §8.2 L788's rule, and the reason it gives applies to a terminal
  * exactly as it does to the dashboard: "manual triggers call
  * `lambda:InvokeFunction` on the deployed function, so 'run this now' executes
  * the exact deployed artefact."
@@ -22,14 +22,14 @@ import { parseTarget, REGION } from "../lib/ops/target";
  *   npm run scrape
  *   npm run scrape -- --env=prod
  *
- * No `--execute` gate, unlike `deploy`. A scrape is what §7.5 L687's schedule
+ * No `--execute` gate, unlike `deploy`. A scrape is what §7.5 L689's schedule
  * does every 30 minutes unattended, and E2E-3 pins that a run with no new
  * upstream content enqueues zero messages and makes zero Telegram calls. It
- * does advance §3.1 L226's cursors, so it is not free — but it is the ordinary
+ * does advance §3.1 L228's cursors, so it is not free — but it is the ordinary
  * operation of the pipeline, not a change to it.
  */
 
-/** §7.5 L687's function, named the way every other resource is (§9.2 L864). */
+/** §7.5 L689's function, named the way every other resource is (§9.2 L896). */
 const SCRAPE_RESOURCE = "scrape";
 
 interface ScrapeSummary {
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
 
   console.log(`processed ${summary.processed}, enqueued ${summary.enqueued}`);
 
-  // §3.1 L226 advances a cursor per source, so a second run right after a first
+  // §3.1 L228 advances a cursor per source, so a second run right after a first
   // is expected to be empty. E2E-3 pins exactly that, and an operator who does
   // not know it reads a zero as a failure.
   if (summary.enqueued === 0) {

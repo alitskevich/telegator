@@ -1533,8 +1533,8 @@ Numbers are permanent. `R6` was never issued.
 | **R12** | §3.4, §11.3 | The hashtag line **is** appended — §11.3 is the later decision. Appending makes overflow reachable for the first time, so a truncation rule has to exist: drop the hashtag line first, then reduce member blocks. Hashtags are derived metadata and reconstructible; a member block is the only surviving rendering of a scraped post. Content outlives metadata. |
 | **R13** | §3.4, AC-4.2 | The photo threshold is **1012**, not the 1024-character caption limit: 1012 is the stricter bound *and* the one an acceptance criterion asserts. This makes the 1013–1024 band unreachable. Kept separate from Telegram's protocol limit, which is a different number for a different reason. |
 | **R14** | §3.1, AC-1.2 | §3.1's two-tier formula puts a hot source in the same 30-minute bucket as a warm one, contradicting its own prose and failing AC-1.2 for any hot source polled recently. Prose and criterion agree against the formula, so the formula is the defect: the hot tier is restored as a leading disjunct, with the published expression kept verbatim below it. |
-| **R15** | §2.1 | `lastNonZeroCount` is this build's addition, so the legacy export has none. Seeding it from `lastCount` is the closest true statement available. |
-| **R16** | §2.3 | A soft-deleted message must be neither a merge target nor a dashboard row. The condition is written once and applied to every read. |
+| **R15** | §2.1, §9.4 | The legacy export carries no `lastNonZeroCount`, so seeding it from `lastCount` is the closest true statement available: the last poll's count was, at the time, the last non-zero one if it was non-zero. |
+| **R16** | §2.1, §2.3 | A soft-deleted record must be neither a merge target nor a dashboard row, and §3.1's selection never consults the flag on its own. The condition is written once and applied to every read of both tables. |
 | **R17** | §2.3 | `status: error` has no writer in the current code — only the DLQ handler is specified to set it. |
 | **R18** | §10.1 | §10.1's DynamoDB Local and ElasticMQ need Docker. The harness instead wires the stages the way SQS wires them and no more tightly: every hand-off is a serialised queue message, never an object passed straight from one stage to the next. |
 | **R19** | §3.3 | No per-message `DelaySeconds`. SQS FIFO supports only a queue-level delay, so the settle delay is configured on the publish queue itself. |
@@ -1645,10 +1645,10 @@ have to re-derive all of it.
 | `next` 16, `react` 19 | §8's App Router dashboard. |
 | `jose` | ID-token verification against Cognito's JWKS (§8.6). |
 | `server-only` | Marks modules that must never reach a client bundle. |
-| `vitest` 4 | The suite. **Vitest 4 uses oxc, not esbuild**, so JSX is configured under `oxc.jsx`, and an `esbuild.jsx` setting is silently ignored. |
+| `vitest` 4 | The suite. **Vitest 4 uses oxc, not esbuild**: JSX goes in `oxc: { jsx: { runtime: "automatic" } }`, and an `esbuild.jsx` setting is accepted and then silently ignored. |
 | `@biomejs/biome` 2 | Lint and format, in one tool. |
 | `tsx` | Runs the `scripts/` entry points directly. |
-| `aws-sdk-client-mock` | Present, but **do not reach for it**: it does not typecheck against the installed SDK. Inject a structural client port instead. |
+| `aws-sdk-client-mock` | Declared, and deliberately **unused**: its `mockClient()` signature is built against an older `@smithy/types` than the installed SDK and does not typecheck against it, and 4.1.0 is the latest release. Inject a structural client port and stub that instead. |
 
 **Layout.** Every rule lives in `lib/`; everything else is a wrapper over it.
 
@@ -1865,7 +1865,7 @@ Everything below is a `scripts/` entry point, run with `tsx`, and the only place
 | `reseed-cursors` | §9.5 step 5 — carries `lastItemId` across from the legacy system so AWS resumes rather than re-scraping. |
 | `set-cursors-now` | Fast-forwards every cursor to the current head, for a dev environment that should not replay history. |
 | `scrape` | Invokes the deployed scraper, for a manual run outside the schedule. |
-| `smoke:openrouter` | The §32.2 gap-filler: the real adapter and the real SDK against a canned far end, offline by default, with a flag for one live call. |
+| `smoke:openrouter` | The §32.2 gap-filler: the real adapter and the real SDK against a canned far end. Offline by default; `-- --live` with `OPENROUTER_API_KEY` set makes exactly one real call. |
 
 Region and `--env` parsing are shared between all of them, so no two scripts can
 disagree about which environment they are pointed at.

@@ -36,7 +36,7 @@ function dashboardSources(): string[] {
   return [join(repoRoot, "app"), join(repoRoot, "actions")].flatMap(walk);
 }
 
-describe("the §8.2 L777 boundary", () => {
+describe("the §8.2 L788 boundary", () => {
   /**
    * "**`lib/pipeline/` holds the single implementation of every stage.** The
    * Lambda handlers are thin wrappers around it... The dashboard does **not**
@@ -96,7 +96,7 @@ describe("the §8.2 L777 boundary", () => {
   });
 
   /**
-   * §9.3 L874 deploys this on Amplify. A CDK import would pull the whole
+   * §9.3 L906 deploys this on Amplify. A CDK import would pull the whole
    * construct library into the server bundle to read a constant — which is what
    * `actions/context.ts` briefly did in item 5.10 for `DASHBOARD_ENV_VARS`, and
    * what moving `ROLE_GROUPS` avoided in item 5.2.
@@ -121,7 +121,7 @@ describe("the §8.2 L777 boundary", () => {
   });
 
   /**
-   * §8.1 L749-753 is a deletion, and it is the point of the section: the
+   * §8.1 L760-764 is a deletion, and it is the point of the section: the
    * offline-first layer is gone, "**Removed:** IndexedDB schema and stores, the
    * `downstream`/`since` protocol, `upsertBatch` reconciliation, soft-delete
    * tombstone propagation, `resetDb`, and the client cache-invalidation

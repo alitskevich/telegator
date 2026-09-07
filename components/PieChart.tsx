@@ -2,7 +2,7 @@ import type { Slice } from "../lib/dashboard/computations";
 import { PIE_CENTRE, PIE_RADIUS, type PieSlice, toPieSlices } from "../lib/ui/pie";
 
 /**
- * §8.5 L825 — the two pie charts, hand-built. "No charting library is needed for
+ * §8.5 L836 — the two pie charts, hand-built. "No charting library is needed for
  * two pie charts."
  *
  * A server component: it takes computed values and renders SVG, with no state

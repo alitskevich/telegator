@@ -9,7 +9,7 @@ import { type AssembledMessage, assembleMessage } from "./assemble";
 /**
  * §3.4 — the publish consumer.
  *
- * Batch size is 1 (§3.4 L311), deliberately: each send is rate-limited against
+ * Batch size is 1 (§3.4 L313), deliberately: each send is rate-limited against
  * Telegram and the FIFO message group already serialises work per message. This
  * still loops, so the stage stays correct if the batch size is ever raised.
  */
@@ -30,7 +30,7 @@ export interface PublishDeps {
 }
 
 /**
- * §3.4 L348 sends first and records second, and nothing can make those atomic:
+ * §3.4 L350 sends first and records second, and nothing can make those atomic:
  * Telegram has no idempotency key, and a post cannot be un-sent. So the gap is
  * narrowed rather than closed. Three attempts covers the failure that actually
  * happens here — a throttled `UpdateItem` — while leaving the loop bounded.
@@ -44,7 +44,7 @@ export interface PublishResultSummary {
   readonly batchItemFailures: ReadonlyArray<{ readonly itemIdentifier: string }>;
 }
 
-/** §3.4 L315 — the only status that is still worth sending. */
+/** §3.4 L317 — the only status that is still worth sending. */
 const PUBLISHABLE_STATUS = "topublish";
 
 async function send(
@@ -54,7 +54,7 @@ async function send(
 ): Promise<TelegramResponse> {
   switch (assembled.method) {
     case "editMessageText":
-      // `assembleMessage` chose this branch because a tgId exists (§3.4 L343),
+      // `assembleMessage` chose this branch because a tgId exists (§3.4 L345),
       // so the narrowing below is exhaustive rather than defensive.
       if (tgId === undefined) {
         throw new Error("editMessageText was chosen for a message with no tgId");
@@ -110,9 +110,9 @@ export async function runPublish(
     }
 
     /**
-     * §8.4 L799's soft delete, honoured before the status check.
+     * §8.4 L810's soft delete, honoured before the status check.
      *
-     * *Reconciliation.* §3.4 L315 gates this stage on `status` alone, and
+     * *Reconciliation.* §3.4 L317 gates this stage on `status` alone, and
      * `softDelete` writes `deleted` without touching it — so a message an
      * operator deleted from the dashboard was still posted if its publish job
      * was already on the queue. R16 hides a deleted message from every read the
@@ -129,7 +129,7 @@ export async function runPublish(
     }
 
     /**
-     * §3.4 L315 — "If `status !== 'topublish'`, acknowledge and exit — the work
+     * §3.4 L317 — "If `status !== 'topublish'`, acknowledge and exit — the work
      * was superseded."
      *
      * This is also the guard that actually protects Telegram from a duplicate
@@ -147,9 +147,9 @@ export async function runPublish(
     const response = await send(deps.bot, assembled, stored.tgId);
 
     if (!response.ok) {
-      // §4.2 L384 — `ok` is the error signal, not the HTTP status. Reporting the
+      // §4.2 L386 — `ok` is the error signal, not the HTTP status. Reporting the
       // record sends it back through SQS retry and ultimately to the DLQ (§3.4
-      // L348). Crucially, no status or tgId is written: a tgId that does not
+      // L350). Crucially, no status or tgId is written: a tgId that does not
       // exist on Telegram would turn every future publish into an edit of
       // nothing.
       deps.metrics.count("TelegramApiErrors", 1, { Method: assembled.method });
@@ -163,7 +163,7 @@ export async function runPublish(
     }
 
     const now = deps.clock.now();
-    // §2.3 L159 — an edit keeps the id it is editing; a first send takes the
+    // §2.3 L161 — an edit keeps the id it is editing; a first send takes the
     // one Telegram just issued.
     const tgId = stored.tgId ?? String(response.result?.message_id ?? "");
 
@@ -175,9 +175,9 @@ export async function runPublish(
        *
        * The message is ACKNOWLEDGED, not reported. Reporting it returns it to
        * SQS, and a redelivery finds `status: topublish` with no stored `tgId` —
-       * so §3.4 L315's guard passes, `assembleMessage` picks `sendMessage`
+       * so §3.4 L317's guard passes, `assembleMessage` picks `sendMessage`
        * again, and subscribers get a second post that no future edit can reach.
-       * That is the outcome §9.5 L946 calls out as the thing that must never
+       * That is the outcome §9.5 L978 calls out as the thing that must never
        * happen. §3.4's "Failure → throw" is about a failure to publish; this
        * publish succeeded, and only its bookkeeping did not.
        *

@@ -17,7 +17,7 @@ describe("PieChart", () => {
     expect(markup).toContain("M 100 100 L 100 20 A 80 80 0 0 1 180 100 Z");
   });
 
-  /** §8.5 L825's special case, reaching the DOM and not only the geometry. */
+  /** §8.5 L836's special case, reaching the DOM and not only the geometry. */
   test("draws a circle when one slice is the whole chart", () => {
     const markup = render([{ label: "politics", value: 7 }]);
 

@@ -13,7 +13,7 @@ Ledger: `.claude/build-ledger.local.md` (gitignored — never commit it)
 
 Build the system `docs/telegator.md` describes: a Telegram news pipeline
 on AWS (SQS, Lambda, DynamoDB) with Claude via OpenRouter and a Next.js operator
-dashboard, to the acceptance criteria in §11 — verified **locally**. Then write
+dashboard, to the acceptance criteria in §10 — verified **locally**. Then write
 `README.md` and `CLAUDE.md` so they describe the repo that now exists.
 
 The spec is the contract. Where this file and the spec disagree about *what to
@@ -42,7 +42,7 @@ Consequences you must design around from Phase 1, not discover in Phase 6:
   credentials **only while every stack stays environment-agnostic**. Never use
   `Vpc.fromLookup`, `StringParameter.valueFromLookup`, or any other context
   lookup — each one turns synth into an authenticated call and breaks the gate.
-- **§11.1's "DynamoDB Local and ElasticMQ" is not executable here.** Test the
+- **§10.1's "DynamoDB Local and ElasticMQ" is not executable here.** Test the
   stages against `aws-sdk-client-mock` and in-memory fakes behind the interfaces
   Phase 2 defines. An E2E criterion that genuinely needs running infrastructure
   is deploy-gated: mark it BLOCKED with that reason rather than faking a pass.
@@ -163,7 +163,7 @@ No code. Produce the ledger, and nothing else.
    section is load-bearing.
 3. Use **`superpowers:dispatching-parallel-agents`**: one read-only agent per
    spec area — domain model (§2), pipeline stages (§3–4), AI contract and dedup
-   (§5–6), AWS architecture (§7, §9), dashboard (§8), acceptance (§11–12). Each
+   (§5–6), AWS architecture (§7, §9), dashboard (§8), acceptance (§10–11). Each
    reports: the concrete build units in its area, their dependency order, what
    is normative versus illustrative, what the spec leaves undefined, and every
    place it contradicts another section.
@@ -174,27 +174,13 @@ No code. Produce the ledger, and nothing else.
 **Known conditions to confirm and fold in.** This list is a starting point, not
 the whole audit; re-derive every claim yourself rather than trusting it.
 
-- **§10 does not exist.** The document goes from `## 9. Deployment` straight to
-  `## 11. Acceptance Criteria`, yet §1.3 cites "§10 D15–D19", §7.5 cites "D19"
-  and "D4", and §9.5 cites "D19". The decision log those references point at is
-  missing. Record what each surviving reference implies, note the gap as a spec
-  reconciliation, and proceed — do not invent the decisions.
-- **The classification model is specified twice, differently.** §5.1 specifies
-  `anthropic.claude-opus-5` and defers the choice to the operator; §12.1 records
-  it as decided: `claude-haiku-4-5`. §12 is the later, explicitly-resolved
-  section. Reconcile, record, and put the model id in one config constant so the
-  disagreement can never be re-litigated in code.
-- **§5.4 is labelled "(35)" and lists 29 categories.** Count them yourself. The
-  category set is an enum other stages validate against, so the count matters —
-  build the list the spec actually contains and record the discrepancy.
 - **The seed data §9.4 needs is not in this repo.** `data-sources.json` and
   `data-messages.json` live in `~/Projects/codespace/apps/telegator/data/`.
   `scripts/seed.ts` must take a path argument rather than assuming `data/`.
-- **§11.1 proposes DynamoDB Local and ElasticMQ.** Neither can run here (no
+- **§10.1 proposes DynamoDB Local and ElasticMQ.** Neither can run here (no
   Docker). See *Environment*.
-- **§2.4 is written as a diff against the source system** ("Both encoders are
-  deleted"). The target-state rule is the one that matters: composite ids
-  containing `/` are used verbatim everywhere, with no encode/decode layer.
+- **Composite ids containing `/` are used verbatim everywhere** (§2.4), with no
+  encode/decode layer anywhere in the pipeline.
 
 Commit nothing else in Phase 0. The ledger is gitignored.
 
@@ -247,7 +233,7 @@ and unit tests over recorded fixtures.
 Two properties the spec makes non-negotiable, and every stage test must cover
 its share of them:
 
-- **Idempotency.** §11.2 E2E-5 makes DLQ replay leaving the table byte-identical
+- **Idempotency.** §10.2 E2E-5 makes DLQ replay leaving the table byte-identical
   the master test. A stage that is not idempotent is not done.
 - **Denormalization.** §1.3 and §2.3: `publish` cannot look items up at send
   time, so `aggregate` must copy each item's renderable content into the
@@ -322,20 +308,20 @@ accept to the ledger as Phase 7 items and work them normally.
 
 ### Phase 8 — Acceptance
 
-Walk §11 criterion by criterion, one ledger item per criterion. For each, either
+Walk §10 criterion by criterion, one ledger item per criterion. For each, either
 produce a passing automated test naming it (`E2E-2`, `E2E-5`, …) or mark it
 BLOCKED with the reason.
 
 Two criteria are deploy-gated by construction, and you must not pretend
 otherwise:
 
-- **§11.3 similarity-threshold recalibration.** It needs ≥100 hand-judged pairs
+- **§10.3 similarity-threshold recalibration.** It needs ≥100 hand-judged pairs
   embedded by a real embedding model. You have no model access and no labelled
   set. Mark it BLOCKED — *and* deliver the parts that do not need the model: the
   sweep harness (0.70 → 0.95 in 0.01 steps), the precision/recall computation,
   and the file format for the labelled set, all unit-tested against synthetic
   vectors. Then the recalibration is one data-collection run, not a project.
-- **§11.4 non-functional targets** (latency, p95 duration, queue age, cost) are
+- **§10.4 non-functional targets** (latency, p95 duration, queue age, cost) are
   measured against a running system. BLOCKED, with the alarms of §7.7 recorded
   as the mechanism that will measure them.
 
@@ -376,7 +362,7 @@ broken.
 
 **Assert on behaviour, not on mocks.** "The client was called with X" is a weak
 test; "given these two posts, one message with two members results" is the test
-§11 actually asks for.
+§10 actually asks for.
 
 **Types are derived, not duplicated.** Zod schemas are the source of truth
 (§8.4 requires them); TypeScript types come from `z.infer`. Two hand-maintained
@@ -453,7 +439,7 @@ Emit `<promise>DONE</promise>` only when **all** of these are true:
 1. Every ledger box is ticked — done or explicitly BLOCKED.
 2. All five commands above pass, and you have seen their output **this**
    iteration.
-3. Every §11.1 and §11.2 acceptance criterion is either covered by a passing
+3. Every §10.1 and §10.2 acceptance criterion is either covered by a passing
    test that names it, or BLOCKED with a stated reason.
 4. `README.md` and `CLAUDE.md` exist, and every factual statement in them
    matches the tree you just listed — script names, layout, gates.

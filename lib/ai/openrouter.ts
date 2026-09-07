@@ -51,7 +51,7 @@ export function createOpenRouterClassifier(options: OpenRouterClassifierOptions 
 
       const response = await client.create(request);
 
-      // Validated here rather than downstream: §3.2 L249 sends a provider error
+      // Validated here rather than downstream: §3.2 L251 sends a provider error
       // back through SQS retry to the DLQ, and a response that violates the
       // schema is the same class of event. Letting it through would put an
       // unvalidated category into the aggregate queue.

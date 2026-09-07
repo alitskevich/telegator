@@ -70,7 +70,7 @@ const policyStatements = (t: Template) =>
 const actionsOf = (statement: Record<string, unknown>) => [statement.Action].flat().map(String);
 
 describe("TelegatorAppStack", () => {
-  test("declares one Amplify app (§9.1 L855)", () => {
+  test("declares one Amplify app (§9.1 L887)", () => {
     templateFor().resourceCountIs("AWS::Amplify::App", 1);
   });
 
@@ -85,7 +85,7 @@ describe("TelegatorAppStack", () => {
   });
 
   /**
-   * §9.3 L874 — Amplify Hosting "supports the App Router (SSR, server actions,
+   * §9.3 L906 — Amplify Hosting "supports the App Router (SSR, server actions,
    * streaming) natively with no OpenNext adapter or Fargate service". Only the
    * WEB_COMPUTE platform runs server-side; WEB would deploy a static export and
    * every server action in §8.4 would 404.
@@ -94,7 +94,7 @@ describe("TelegatorAppStack", () => {
     expect(amplifyApp(templateFor())?.Platform).toBe("WEB_COMPUTE");
   });
 
-  test("names the app with the §9.2 L864 environment prefix", () => {
+  test("names the app with the §9.2 L896 environment prefix", () => {
     expect(amplifyApp(templateFor({ env: "prod" }))?.Name).toBe("telegator-prod-dashboard");
   });
 
@@ -114,7 +114,7 @@ describe("TelegatorAppStack", () => {
       expect(names).toContain("TELEGATOR_MESSAGES_TABLE");
     });
 
-    test("carries every queue and DLQ url §8.5 L818 and §8.2 L765 need", () => {
+    test("carries every queue and DLQ url §8.5 L829 and §8.2 L776 need", () => {
       const names = Object.keys(variables(templateFor()));
 
       for (const name of [
@@ -152,11 +152,11 @@ describe("TelegatorAppStack", () => {
       );
 
     /**
-     * §7.6 L710 — "read both tables, write `sources`/`messages`". The dashboard
+     * §7.6 L712 — "read both tables, write `sources`/`messages`". The dashboard
      * calls `get`, `listAll` (a Scan), `put`, `patch` and `softDelete` on
      * sources, and `get`, `queryByStatus`, `countByStatus`, `patch` and
      * `softDelete` on messages. Every write is an UpdateItem or a PutItem —
-     * §8.4 L799's delete is soft, so it is an update.
+     * §8.4 L810's delete is soft, so it is an update.
      */
     test("holds only the DynamoDB actions §8.4's pages and actions perform", () => {
       const actions = new Set(
@@ -177,7 +177,7 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
-     * The rule §8.4 L799 states — "Deletes are **soft**, matching the source" —
+     * The rule §8.4 L810 states — "Deletes are **soft**, matching the source" —
      * expressed as a permission. An operator's delete sets `deleted: true`; a
      * role that could also delete the row makes that promise unenforceable.
      */
@@ -198,7 +198,7 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
-     * §8.5 L820's category chart is a Logs Insights query over the analyze log
+     * §8.5 L831's category chart is a Logs Insights query over the analyze log
      * group, and `logsInsightsCategoryReader` takes the group name as an
      * argument. Without this variable the chart has nothing to query, and the
      * role's existing logs:StartQuery grant would be pointed at nothing.
@@ -217,7 +217,7 @@ describe("TelegatorAppStack", () => {
       expect(declared.TELEGATOR_SESSION_SECRET_ARN).toBe(SESSION_SECRET_ARN);
     });
 
-    /** §8.4 L803/L806 — runScraper and replayDlq invoke by function name. */
+    /** §8.4 L814/L817 — runScraper and replayDlq invoke by function name. */
     test("carries the two function names the manual triggers invoke", () => {
       const names = Object.keys(variables(templateFor()));
 
@@ -227,7 +227,7 @@ describe("TelegatorAppStack", () => {
       expect(names).toContain("TELEGATOR_PUBLISH_FUNCTION_NAME");
     });
 
-    test("carries the Cognito ids the session layer needs (§8.6 L829)", () => {
+    test("carries the Cognito ids the session layer needs (§8.6 L840)", () => {
       const names = Object.keys(variables(templateFor()));
 
       expect(names).toContain("TELEGATOR_USER_POOL_ID");
@@ -235,7 +235,7 @@ describe("TelegatorAppStack", () => {
     });
   });
 
-  describe("the app role (§7.6 L710, R24)", () => {
+  describe("the app role (§7.6 L712, R24)", () => {
     test("may read both tables and write them", () => {
       const dynamo = policyStatements(templateFor()).filter((s) =>
         actionsOf(s).some((action) => action.startsWith("dynamodb:")),
@@ -245,8 +245,8 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
-     * §7.6 L710 scopes the invoke grant to "the scraper and the replay
-     * handler". §8.2 L777 is why that matters: the dashboard must not import
+     * §7.6 L712 scopes the invoke grant to "the scraper and the replay
+     * handler". §8.2 L788 is why that matters: the dashboard must not import
      * lib/pipeline/, so invoking is its only route into the pipeline — and a
      * broader grant would let it invoke the stages directly, defeating the
      * boundary.
@@ -262,11 +262,11 @@ describe("TelegatorAppStack", () => {
       expect(serialised).not.toContain("aggregateFunction");
       expect(serialised).not.toContain("analyzeFunction");
       // R53 — the third is `publish`, and only because "Publish now" runs the
-      // deployed stage; the boundary L710 protects is the analysis pair above.
+      // deployed stage; the boundary L712 protects is the analysis pair above.
       expect(serialised).toContain("publishFunction");
     });
 
-    /** R24 — §8.5 L820's chart needs GetQueryResults; StartQuery alone returns nothing. */
+    /** R24 — §8.5 L831's chart needs GetQueryResults; StartQuery alone returns nothing. */
     test("may both start a Logs Insights query and read its results", () => {
       const logs = policyStatements(templateFor()).flatMap(actionsOf);
 
@@ -274,7 +274,7 @@ describe("TelegatorAppStack", () => {
       expect(logs).toContain("logs:GetQueryResults");
     });
 
-    /** R24 — §8.4 L804's republishMessage "enqueues", which §7.6 L710 omits. */
+    /** R24 — §8.4 L815's republishMessage "enqueues", which §7.6 L712 omits. */
     test("may send to the publish queue, which republishMessage requires", () => {
       const sends = policyStatements(templateFor()).filter((s) =>
         actionsOf(s).includes("sqs:SendMessage"),
@@ -283,7 +283,7 @@ describe("TelegatorAppStack", () => {
       expect(sends.length).toBeGreaterThan(0);
     });
 
-    /** R24 — §8.2 L765's "DLQ inspection" needs more than queue depth. */
+    /** R24 — §8.2 L776's "DLQ inspection" needs more than queue depth. */
     test("may receive from the DLQs, which DLQ inspection requires", () => {
       const receives = policyStatements(templateFor()).flatMap(actionsOf);
 
@@ -291,7 +291,7 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
-     * R34 revises R24, narrowing rather than relaxing it: §8.6 L839 requires
+     * R34 revises R24, narrowing rather than relaxing it: §8.6 L871 requires
      * that a disabled user is rejected at every action, and enforcing that needs
      * a live read of one field. `AdminGetUser` is that read, and the only
      * Cognito action this role may hold.
@@ -306,7 +306,7 @@ describe("TelegatorAppStack", () => {
 
     /**
      * Named individually, because "exactly one action" is a rule a future edit
-     * can satisfy while swapping which one. These are the §8.6 L835 grants that
+     * can satisfy while swapping which one. These are the §8.6 L846 grants that
      * have no route, page or action behind them.
      */
     test("is granted no user-management API", () => {
@@ -328,7 +328,7 @@ describe("TelegatorAppStack", () => {
 
     /**
      * `logs:StartQuery` supports resource-level scoping, and the dashboard
-     * queries exactly one log group — §8.5 L820's category chart over the
+     * queries exactly one log group — §8.5 L831's category chart over the
      * analyze logs, the only group `lib/aws/observability.ts` is ever
      * constructed with. On `*` this role could run Insights queries against
      * every log group in the account, which for an operator console is a
@@ -347,7 +347,7 @@ describe("TelegatorAppStack", () => {
        *
        * R41 makes the group a construct this stack owns and hands to the
        * function, so the reference is an `Fn::ImportValue` of its `Arn`. The
-       * implicitly managed group it replaced was not the 90-day one §11.5 L1012
+       * implicitly managed group it replaced was not the 90-day one §11.5 L1044
        * requires. What is asserted is unchanged: one statement, never `*`.
        */
       const resource = JSON.stringify(starts[0]?.Resource);
@@ -389,7 +389,7 @@ describe("TelegatorAppStack", () => {
 
   /**
    * R52. The branch, which is what Amplify actually builds and serves — see
-   * `addBranch` in the stack for why §9.1 L855 does not list it.
+   * `addBranch` in the stack for why §9.1 L887 does not list it.
    */
   describe("the deployed branch", () => {
     /**
@@ -432,7 +432,7 @@ describe("TelegatorAppStack", () => {
       );
     });
 
-    test("marks the §9.2 L864 environment on the branch", () => {
+    test("marks the §9.2 L896 environment on the branch", () => {
       expect(amplifyBranch(templateFor(CONNECTED))?.Stage).toBe("DEVELOPMENT");
       expect(amplifyBranch(templateFor({ ...CONNECTED, env: "prod" }))?.Stage).toBe("PRODUCTION");
     });

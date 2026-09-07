@@ -3,9 +3,9 @@ import { CATEGORIES, CategorySchema, DROPPED_CATEGORY } from "./categories";
 
 describe("CATEGORIES", () => {
   /**
-   * R4. §5.4's heading reads "Categories (35)", §5.2 L451 says "One of the 35
-   * values in §5.4", and §7.7 L735 reasons from "Thirty-five category
-   * dimensions". The fenced block at L492–499 contains 29 tokens. Two entries
+   * R4. §5.4's heading reads "Categories (35)", §5.2 L453 says "One of the 35
+   * values in §5.4", and §7.7 L737 reasons from "Thirty-five category
+   * dimensions". The fenced block at L494–501 contains 29 tokens. Two entries
    * (`human-rights`, `nature`) sit off the block's four-column grid, which is
    * the signature of removed text — but the six missing names cannot be
    * recovered from this document, so the list the spec actually contains ships.
@@ -16,10 +16,10 @@ describe("CATEGORIES", () => {
 
   /**
    * Asserted as the whole list, in document order. This enum constrains model
-   * output (§5.2 L425/L451) and other stages route on it, so an edit here
+   * output (§5.2 L427/L453) and other stages route on it, so an edit here
    * changes what the classifier is able to say — it must be deliberate.
    */
-  test("is §5.4 L492-499 verbatim, in document order", () => {
+  test("is §5.4 L494-501 verbatim, in document order", () => {
     expect([...CATEGORIES]).toEqual([
       "art&fashion",
       "crime",
@@ -78,18 +78,18 @@ describe("CategorySchema", () => {
 
 describe("DROPPED_CATEGORY (R5)", () => {
   /**
-   * §3.2 L251 drops items whose `category === "crime&law"`. §5.4 contains
-   * `crime`, and no `crime&law`. §5.2 L425 constrains the model's output to the
+   * §3.2 L253 drops items whose `category === "crime&law"`. §5.4 contains
+   * `crime`, and no `crime&law`. §5.2 L427 constrains the model's output to the
    * §5.4 enum via output_config.format, so the model cannot emit "crime&law" —
    * the drop rule is unreachable, its ItemsSkipped{Reason=category} metric
-   * (§7.7 L727) is always zero, and crime content is published.
+   * (§7.7 L729) is always zero, and crime content is published.
    *
    * §3.2 is the normative stage spec, so the rule is implemented literally and
    * this test makes the mismatch visible rather than silently dead. Changing the
    * string would change what reaches production channels, which is the spec
    * owner's call and not this build's.
    */
-  test("is the literal §3.2 L251 routes on", () => {
+  test("is the literal §3.2 L253 routes on", () => {
     expect(DROPPED_CATEGORY).toBe("crime&law");
   });
 

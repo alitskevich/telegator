@@ -12,9 +12,9 @@ import { ROLE_GROUPS } from "../../lib/auth/roles";
 import type { TelegatorConfig } from "./config";
 
 /**
- * §9.1 L853 — Cognito user pool, groups, app client.
+ * §9.1 L885 — Cognito user pool, groups, app client.
  *
- * §8.6 L841 is a prohibition this stack has to honour structurally: "The
+ * §8.6 L873 is a prohibition this stack has to honour structurally: "The
  * source's API handler bypasses authentication entirely when an emulator
  * environment variable is set... No code path skips authorisation." That is why
  * local development points at a real dev pool rather than at a stub, and why
@@ -49,7 +49,7 @@ export class TelegatorAuthStack extends Stack {
     this.userPool = new UserPool(this, "UserPool", {
       userPoolName: poolName,
       /**
-       * §8.6 L839 — "a new user is created **disabled** with no roles and must be
+       * §8.6 L871 — "a new user is created **disabled** with no roles and must be
        * enabled manually". Self-sign-up would let anyone create an enabled
        * account with no operator in the loop, so `AdminCreateUser` is the only
        * path in. This is the security-critical property of the whole stack.
@@ -63,13 +63,13 @@ export class TelegatorAuthStack extends Stack {
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
-    /** §8.6 L829 — "hosted UI", which requires a domain. */
+    /** §8.6 L840 — "hosted UI", which requires a domain. */
     this.userPoolDomain = this.userPool.addDomain("HostedUiDomain", {
       cognitoDomain: { domainPrefix: poolName },
     });
 
     /**
-     * §9.1 L858 deploys Auth **before** App, so the Amplify domain does not
+     * §9.1 L890 deploys Auth **before** App, so the Amplify domain does not
      * exist yet and the callback URL cannot be derived from it. A context
      * parameter rather than a lookup: `valueFromLookup` would turn synth into an
      * authenticated call and break the only infrastructure gate this build has.

@@ -14,7 +14,7 @@ import { loadOverview } from "../lib/dashboard/overview";
 import { authorized } from "./authorize";
 
 /**
- * §8.3 L785 — the dashboard.
+ * §8.3 L796 — the dashboard.
  *
  * A thin composition: load, then render. Every rule about what the numbers mean
  * lives in `lib/dashboard/`, and the layout in `components/Dashboard.tsx`, both
@@ -27,8 +27,8 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   /**
-   * §8.6 L832 gives `viewer` "Read all pages" — a grant to a role, not to the
-   * public, and §8.6 L841 allows no code path that skips authorisation. This
+   * §8.6 L843 gives `viewer` "Read all pages" — a grant to a role, not to the
+   * public, and §8.6 L873 allows no code path that skips authorisation. This
    * page shipped without the check in item 5.11 and served live pipeline data
    * to anyone: 24 h counters, DLQ depths, and the ten most recent messages with
    * their titles and target channels.

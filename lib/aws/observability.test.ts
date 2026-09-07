@@ -43,7 +43,7 @@ describe("cloudWatchMetricReader", () => {
   });
 
   /**
-   * §8.5 L814-816 asks for a Sum over the `Telegator` namespace. Statistic and
+   * §8.5 L825-827 asks for a Sum over the `Telegator` namespace. Statistic and
    * namespace are the two things that make the number mean what the card says:
    * `Average` over a counter would read as a rate, and the wrong namespace
    * returns nothing at all while looking like a quiet pipeline.
@@ -85,7 +85,7 @@ describe("cloudWatchMetricReader", () => {
 
   describe("sumByDimension", () => {
     /**
-     * §8.5 L816 — "`ItemsSkipped` Sum by `Reason`". CloudWatch cannot enumerate
+     * §8.5 L827 — "`ItemsSkipped` Sum by `Reason`". CloudWatch cannot enumerate
      * a dimension's values inside GetMetricData, so the caller supplies the
      * values it knows: `SKIP_REASONS` from `lib/pipeline/analyze/route.ts`, the
      * same list the emitting stage uses. One query per value, no discovery API,
@@ -171,7 +171,7 @@ describe("sqsQueueDepthReader", () => {
   });
 
   /**
-   * §8.5 L818 makes the DLQ depths the "Errors" card. A missing attribute must
+   * §8.5 L829 makes the DLQ depths the "Errors" card. A missing attribute must
    * read as zero rather than NaN, which would render as an empty card and look
    * exactly like a healthy pipeline.
    */

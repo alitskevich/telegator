@@ -77,7 +77,7 @@ const deps = () => ({
   revalidate: (path: string) => revalidated.push(path),
 });
 
-describe("upsertRecord — §8.4 L797", () => {
+describe("upsertRecord — §8.4 L808", () => {
   test("an editor may patch a writable source field", async () => {
     signedInAs("editor");
 
@@ -97,7 +97,7 @@ describe("upsertRecord — §8.4 L797", () => {
   });
 
   /**
-   * §8.4 L808 — "every action ... re-checks the caller's role server-side". The
+   * §8.4 L819 — "every action ... re-checks the caller's role server-side". The
    * action is the boundary; a hidden button is not one.
    */
   test("a viewer is rejected and writes nothing", async () => {
@@ -152,7 +152,7 @@ describe("upsertRecord — §8.4 L797", () => {
     });
 
     /**
-     * R37. `memberCount` is `size(members)` by §2.3 L153's invariant, `status`
+     * R37. `memberCount` is `size(members)` by §2.3 L155's invariant, `status`
      * is a pipeline state machine with `republishMessage` as its only correct
      * transition, and `date` partitions `date-index`.
      */
@@ -166,7 +166,7 @@ describe("upsertRecord — §8.4 L797", () => {
       }
     });
 
-    test("the message allowlist is §8.3 L787's descriptive columns", () => {
+    test("the message allowlist is §8.3 L798's descriptive columns", () => {
       expect([...MESSAGE_WRITABLE_FIELDS]).toEqual(["title", "category", "tgChannel"]);
     });
 
@@ -222,7 +222,7 @@ describe("upsertRecord — §8.4 L797", () => {
   });
 });
 
-describe("deleteRecords — §8.4 L798", () => {
+describe("deleteRecords — §8.4 L809", () => {
   /** "soft delete, sets `deleted: true`". The row survives; R16 hides it from reads. */
   test("sets the flag rather than removing the row", async () => {
     signedInAs("editor");
@@ -268,9 +268,9 @@ describe("deleteRecords — §8.4 L798", () => {
   });
 });
 
-describe('upsertRecord as add — §8.3 L786\'s "add"', () => {
+describe('upsertRecord as add — §8.3 L797\'s "add"', () => {
   /**
-   * §8.4 L797 calls this `upsertRecord`, and the Sources table offers "add", so
+   * §8.4 L808 calls this `upsertRecord`, and the Sources table offers "add", so
    * a delta for an id that does not exist creates the row. A bare UpdateItem
    * would create a *partial* one — no `lastCount`, no `zeroYieldRuns` — and
    * §3.1's refresh heuristic and §4.1's staleness alarm both read those, so the
@@ -328,7 +328,7 @@ describe('upsertRecord as add — §8.3 L786\'s "add"', () => {
 
 describe("loadMembers — R26", () => {
   /**
-   * §8.3 L787 wants an expandable member list, and §7.2 L634 projects `members`
+   * §8.3 L798 wants an expandable member list, and §7.2 L636 projects `members`
    * on no index. So the list query returns `memberCount` and expanding one row
    * issues a base-table GetItem — this action. Rendering every member list from
    * the index result is the defect R26 exists to prevent, and it would fail
@@ -353,7 +353,7 @@ describe("loadMembers — R26", () => {
     expect(members[0]?.summary).toBe("first");
   });
 
-  /** §3.4 L317 sorts members by `ts` for stable ordering; the list shows the same. */
+  /** §3.4 L319 sorts members by `ts` for stable ordering; the list shows the same. */
   test("orders members oldest first, as the published message does", async () => {
     signedInAs("viewer");
     messages = fakeMessageRepo([
@@ -373,7 +373,7 @@ describe("loadMembers — R26", () => {
     ]);
   });
 
-  /** §8.4 L801 makes reading a `viewer` right; every action still re-checks. */
+  /** §8.4 L812 makes reading a `viewer` right; every action still re-checks. */
   test("an unauthenticated caller is rejected", async () => {
     await expect(loadMembers({ messageId: "example/1" }, deps())).rejects.toBeInstanceOf(
       AuthorizationError,

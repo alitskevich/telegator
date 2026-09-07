@@ -6,7 +6,7 @@ import type { MemberBlock } from "../domain/message";
 import { SourceSchema } from "../domain/source";
 
 /**
- * §8.4 L797-799 — `upsertRecord` and `deleteRecords`, both `editor`.
+ * §8.4 L808-810 — `upsertRecord` and `deleteRecords`, both `editor`.
  *
  * The logic lives here rather than in `actions/records.ts` so it can be tested
  * without a request context; the action file is a `"use server"` wrapper, the
@@ -33,13 +33,13 @@ export const SOURCE_WRITABLE_FIELDS = [
 ] as const;
 
 /**
- * §8.3 L787's descriptive columns — R37.
+ * §8.3 L798's descriptive columns — R37.
  *
  * The Messages table also shows `id`, `status`, `date` and `memberCount`, and
  * none of them is editable. `id` is the key. `memberCount` is `size(members)` by
- * §2.3 L153's invariant, so editing it produces a record `MessageSchema` itself
+ * §2.3 L155's invariant, so editing it produces a record `MessageSchema` itself
  * rejects. `date` partitions `date-index`, which §6's dedup reads. And `status`
- * is a pipeline state machine whose only correct transition is §8.4 L804's
+ * is a pipeline state machine whose only correct transition is §8.4 L815's
  * `republishMessage`, because that also enqueues — setting `topublish` here
  * would leave a message waiting for a publish that nothing asked for.
  */
@@ -119,7 +119,7 @@ export async function upsertRecord(input: unknown, deps: RecordActionDeps): Prom
 
   if (existing === undefined) {
     /**
-     * §8.3 L786's "add". A bare `UpdateItem` would create a *partial* source —
+     * §8.3 L797's "add". A bare `UpdateItem` would create a *partial* source —
      * no `lastCount`, no `zeroYieldRuns` — and §3.1's refresh heuristic and
      * §4.1's staleness alarm both read those, so the source would poll on the
      * wrong schedule and never alarm. `SourceSchema` supplies the defaults.
@@ -149,9 +149,9 @@ export interface MemberRow extends MemberBlock {
 const MembersInputSchema = z.object({ messageId: ItemIdSchema });
 
 /**
- * R26 — the expandable member list of §8.3 L787, one message at a time.
+ * R26 — the expandable member list of §8.3 L798, one message at a time.
  *
- * §7.2 L634 projects `members` on no index, so the list query returns
+ * §7.2 L636 projects `members` on no index, so the list query returns
  * `memberCount` and expanding a row comes here for a base-table `GetItem`.
  * Rendering the list from the index result instead is the defect this prevents,
  * and it would fail silently: the map is simply absent, so every row would
@@ -174,7 +174,7 @@ export async function loadMembers(input: unknown, deps: RecordActionDeps): Promi
   return (
     Object.entries(message.members)
       .map(([itemId, block]) => ({ itemId, ...block }))
-      // §3.4 L317 sorts members by `ts` when it renders the published message; the
+      // §3.4 L319 sorts members by `ts` when it renders the published message; the
       // panel shows the same order, so an operator can match one to the other.
       .sort((a, b) => a.ts - b.ts)
   );

@@ -29,18 +29,18 @@ describe("the classification model (R2, re-slugged by R50)", () => {
     expect(CLASSIFIER_MODEL_ID).not.toBe("anthropic/claude-opus-5");
   });
 
-  test("max_tokens is 2000 (§5.2 L422)", () => {
+  test("max_tokens is 2000 (§5.2 L424)", () => {
     expect(CLASSIFIER_MAX_TOKENS).toBe(2000);
   });
 
   /**
-   * R3. §5.2 L423 sets effort "low" and L459 makes effort the replacement for
+   * R3. §5.2 L425 sets effort "low" and L461 makes effort the replacement for
    * the removed temperature/top_p. Effort is not available across every Claude
    * tier, and this build cannot reach a provider to find out whether the haiku
    * tier R2 selects accepts it — so the value is exported and the request
    * builder treats it as omittable rather than assuming.
    */
-  test("effort is the low value §5.2 L423 sets", () => {
+  test("effort is the low value §5.2 L425 sets", () => {
     expect(CLASSIFIER_EFFORT).toBe("low");
   });
 });

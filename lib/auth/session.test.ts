@@ -91,7 +91,7 @@ describe("startSession", () => {
   });
 
   /**
-   * §8.6 L829 puts the dashboard behind a Cognito hosted UI, so the cookie must
+   * §8.6 L840 puts the dashboard behind a Cognito hosted UI, so the cookie must
    * be unreadable to script (an XSS in an operator console would otherwise lift
    * an admin session), confined to this site, and never sent in the clear.
    */
@@ -147,7 +147,7 @@ describe("readSession", () => {
   });
 });
 
-describe("requireRole — the three gates of §8.4 L808 and §8.6 L839", () => {
+describe("requireRole — the three gates of §8.4 L819 and §8.6 L871", () => {
   test("passes an enabled admin an admin check", async () => {
     await signIn(["admin"]);
     status.enable(SUB);
@@ -172,7 +172,7 @@ describe("requireRole — the three gates of §8.4 L808 and §8.6 L839", () => {
 
   /**
    * The gate the ledger names explicitly. The token is valid, unexpired and
-   * carries `admin`; only the directory says otherwise. §8.6 L839 — "a disabled
+   * carries `admin`; only the directory says otherwise. §8.6 L871 — "a disabled
    * user is rejected at every action" — which is why the check is here on every
    * call and not cached into the cookie at sign-in.
    */
@@ -209,7 +209,7 @@ describe("requireRole — the three gates of §8.4 L808 and §8.6 L839", () => {
   });
 
   /**
-   * §8.6 L841 — "The source's API handler bypasses authentication entirely when
+   * §8.6 L873 — "The source's API handler bypasses authentication entirely when
    * an emulator environment variable is set... **No code path skips
    * authorisation.**" Asserted against the process environment rather than by
    * reading the source, so it holds however the bypass might be spelled.

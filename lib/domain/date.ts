@@ -4,8 +4,8 @@ import type { Clock } from "../clock";
 /**
  * The pipeline's date key, `YYYY-MM-DD`.
  *
- * §2.2 L135: "the scrape date, not the post date". It partitions deduplication
- * *and* is the FIFO `MessageGroupId`, and §6 L539 makes the first a correctness
+ * §2.2 L137: "the scrape date, not the post date". It partitions deduplication
+ * *and* is the FIFO `MessageGroupId`, and §6 L541 makes the first a correctness
  * rule rather than an optimisation.
  *
  * The document names no timezone. **UTC** is the recorded choice, applied in
@@ -32,7 +32,7 @@ export function toDateKey(epochMs: number): DateKey {
   return new Date(epochMs).toISOString().slice(0, 10);
 }
 
-/** §3.1 L222's `date = today`, read from the injected clock. */
+/** §3.1 L224's `date = today`, read from the injected clock. */
 export function todayKey(clock: Clock): DateKey {
   return toDateKey(clock.now());
 }

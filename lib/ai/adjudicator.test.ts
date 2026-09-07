@@ -130,7 +130,7 @@ describe("createOpenRouterAdjudicator (R46)", () => {
   });
 
   /**
-   * §5.2 L425's structured output. Without the schema on the request the model
+   * §5.2 L427's structured output. Without the schema on the request the model
    * is free to answer in prose, and `parseVerdicts` would reject every batch —
    * a failure that reads as a model fault rather than a missing request field.
    */

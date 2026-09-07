@@ -1,19 +1,19 @@
 import type { Source } from "../domain/source";
 
 /**
- * §9.5 step 5 (L943) — "Re-seed source cursors (`lastItemId`) from the live
+ * §9.5 step 5 (L975) — "Re-seed source cursors (`lastItemId`) from the live
  * Firebase values, so AWS resumes where Firebase stopped rather than
  * re-scraping."
  *
  * Ordering is load-bearing and nothing here can check it: the values have to be
  * the ones Firebase stopped at. If Firebase is still advancing its own cursors
- * when this runs, step 6 (L944) enables the AWS schedule against a stale value
- * and re-scrapes the gap — which is L946's double-post.
+ * when this runs, step 6 (L976) enables the AWS schedule against a stale value
+ * and re-scrapes the gap — which is L978's double-post.
  *
  * The spec names no source for the live values, so they arrive as a JSON map.
  */
 
-/** §3.1 L211 captures the id from `href="https://t.me/{any}/{digits}"`. */
+/** §3.1 L213 captures the id from `href="https://t.me/{any}/{digits}"`. */
 const TELEGRAM_MESSAGE_ID = /^\d+$/;
 
 export type CursorMap = Readonly<Record<string, string>>;
@@ -55,7 +55,7 @@ export interface CursorPlan {
 /**
  * Work out what to write, without writing it.
  *
- * A backwards move is refused rather than applied. §9.5 L946 is the invariant of
+ * A backwards move is refused rather than applied. §9.5 L978 is the invariant of
  * the whole cutover — "The two systems must never publish the same Telegram
  * content concurrently — they would double-post" — and moving a cursor back
  * makes AWS re-scrape posts it has already published, which is that failure
@@ -63,7 +63,7 @@ export interface CursorPlan {
  * the file, rather than in the channel where subscribers see it.
  *
  * §9.5 no longer carries a step disabling the Firebase Telegram schedulers, so
- * this refusal is the only mechanical guard L946 has left. It is deliberately
+ * this refusal is the only mechanical guard L978 has left. It is deliberately
  * strict for that reason: one conflicting cursor blocks the whole write.
  */
 export function planCursorReseed(sources: readonly Source[], cursors: CursorMap): CursorPlan {
@@ -86,7 +86,7 @@ export function planCursorReseed(sources: readonly Source[], cursors: CursorMap)
     const update = { id, from, lastItemId };
 
     if (from === undefined) {
-      // No cursor at all is the case this step exists for: §3.1 L205 omits
+      // No cursor at all is the case this step exists for: §3.1 L207 omits
       // `?after=` without one, so the first poll re-scrapes the whole visible
       // history of the channel.
       updates.push(update);

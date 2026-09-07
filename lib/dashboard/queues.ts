@@ -5,10 +5,10 @@ import type { DlqInspector, DlqMessage } from "../queues/inspect";
 import { REPLAYABLE_QUEUES, type ReplayableQueue } from "../queues/ports";
 
 /**
- * §8.2 L765 — "Queue depths + DLQ inspection/replay".
+ * §8.2 L776 — "Queue depths + DLQ inspection/replay".
  *
- * §8.3 has no row for this page, so its content comes from L765 and from §7.7
- * L737's operational view: for each stage, what is waiting, what has failed, and
+ * §8.3 has no row for this page, so its content comes from L776 and from §7.7
+ * L748's operational view: for each stage, what is waiting, what has failed, and
  * what those failures actually contain.
  */
 
@@ -53,8 +53,8 @@ const InspectInputSchema = z.object({ queueName: z.enum(REPLAYABLE_QUEUES) });
 /**
  * Read what is sitting in one DLQ.
  *
- * `viewer`, because §8.6 L832 gives that role every page and this is part of
- * one — replaying is the privileged act (§8.4 L806), not looking. The queue is
+ * `viewer`, because §8.6 L843 gives that role every page and this is part of
+ * one — replaying is the privileged act (§8.4 L817), not looking. The queue is
  * named rather than defaulted, as it is in `handlers/dlqReplay.ts`: showing an
  * operator the wrong queue's contents would misinform a decision to replay.
  */

@@ -32,7 +32,7 @@ import { REGION } from "../lib/ops/target";
  *
  * §7.6 writes them as `telegator/telegram-bot-token`, but nothing in this
  * account is named that way: the deployed secrets are `telegator-dev-*`,
- * because §9.2 L864's `telegator-{env}-{resource}` scheme is what every other
+ * because §9.2 L896's `telegator-{env}-{resource}` scheme is what every other
  * resource follows. `resourceName` is the same function the stacks use, so a
  * rename cannot leave this script pointing at the old name — and the `{env}`
  * segment means `--env=prod` looks up prod's secrets, never dev's.

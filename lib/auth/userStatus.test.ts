@@ -46,7 +46,7 @@ describe("cognitoUserStatusReader", () => {
   });
 
   /**
-   * §8.6 L839 makes `enabled` the revocation mechanism, so every uncertain
+   * §8.6 L871 makes `enabled` the revocation mechanism, so every uncertain
    * answer has to be "no". A user Cognito cannot find, a response with the field
    * absent, or a throttled call must not read as enabled — the alternative is an
    * authorisation check that opens under load.

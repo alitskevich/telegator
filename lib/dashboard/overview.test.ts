@@ -46,7 +46,7 @@ beforeEach(() => {
 
 const deps = () => ({ metrics, queues, logs, messages, clock, queueUrls: QUEUES, dlqUrls: DLQS });
 
-describe("loadOverview — §8.3 L785 and §8.5", () => {
+describe("loadOverview — §8.3 L796 and §8.5", () => {
   test("carries the three 24 h counters", async () => {
     metrics.set("ItemsScraped", 412);
     metrics.set("ItemsAnalyzed", 388);
@@ -73,7 +73,7 @@ describe("loadOverview — §8.3 L785 and §8.5", () => {
     expect((await loadOverview(deps())).published).toBe(2);
   });
 
-  /** §8.5 L818 — "Sum of all DLQ depths". */
+  /** §8.5 L829 — "Sum of all DLQ depths". */
   test("errors is the sum of the DLQ depths", async () => {
     queues.set(DLQS.analyze, { available: 2, inFlight: 1 });
     queues.set(DLQS.publish, { available: 3, inFlight: 0 });
@@ -96,7 +96,7 @@ describe("loadOverview — §8.3 L785 and §8.5", () => {
     expect((await loadOverview(deps())).categorySlices).toEqual([{ label: "politics", value: 9 }]);
   });
 
-  /** §8.3 L785 — "queue-depth strip", every queue and its DLQ. */
+  /** §8.3 L796 — "queue-depth strip", every queue and its DLQ. */
   test("the strip carries each queue and its DLQ", async () => {
     queues.set(QUEUES.publish, { available: 2, inFlight: 1 });
     queues.set(DLQS.publish, { available: 7, inFlight: 0 });
@@ -116,7 +116,7 @@ describe("loadOverview — §8.3 L785 and §8.5", () => {
   /**
    * Every queue depth is read for both the strip and the status chart. Reading
    * SQS twice per page load doubles six API calls for a number that cannot have
-   * changed between them — and §8.5 L823's cache covers CloudWatch only.
+   * changed between them — and §8.5 L834's cache covers CloudWatch only.
    */
   test("reads each queue exactly once", async () => {
     await loadOverview(deps());
@@ -170,7 +170,7 @@ describe("a queue the dashboard cannot read", () => {
     expect(strip.find((entry) => entry.label === "aggregate")?.depth).toBeNull();
   });
 
-  /** §8.5 L818's card. A zero here would read as "the pipeline is fine". */
+  /** §8.5 L829's card. A zero here would read as "the pipeline is fine". */
   test("makes the error count unknown when a DLQ cannot be read", async () => {
     queues.fail("dlq/publish");
 

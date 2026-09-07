@@ -57,7 +57,7 @@ const repoWith = (s: ReturnType<typeof stub>) =>
 
 const block = { summary: "Выбухі", links: [], channel: "yigal_levin", ts: 10 };
 
-// Parsed rather than declared, so a fixture that violates §2.3 L153's
+// Parsed rather than declared, so a fixture that violates §2.3 L155's
 // memberCount invariant fails here rather than somewhere downstream.
 const storedMessage = MessageSchema.parse({
   id: ITEM_ID,
@@ -87,10 +87,10 @@ describe("createMessageRepo.get", () => {
 
 describe("createMessageRepo.mergeMember (R9)", () => {
   /**
-   * The reconciliation this whole adapter exists for. §6 L584 reads as a
-   * whole-record write, but §7.2 L634 says "Nothing projects `members`" — so a
+   * The reconciliation this whole adapter exists for. §6 L586 reads as a
+   * whole-record write, but §7.2 L636 says "Nothing projects `members`" — so a
    * record built from a date-index candidate carries none, and a PutItem would
-   * erase every member already stored. §2.3 L178 describes the correct write:
+   * erase every member already stored. §2.3 L180 describes the correct write:
    * "writes members.{itemId} with the same value — a no-op."
    */
   test("issues an UpdateItem that sets one member path, never a Put", async () => {
@@ -110,7 +110,7 @@ describe("createMessageRepo.mergeMember (R9)", () => {
   });
 
   /**
-   * §2.4 L185 — ids are used verbatim as map keys, "via ExpressionAttributeNames
+   * §2.4 L187 — ids are used verbatim as map keys, "via ExpressionAttributeNames
    * placeholders, which accept any characters". A `/` is not legal in an
    * expression path fragment, so the key must be a placeholder.
    */
@@ -129,9 +129,9 @@ describe("createMessageRepo.mergeMember (R9)", () => {
   });
 
   /**
-   * One batch can absorb several items into one message (§6 L579 keys pending
+   * One batch can absorb several items into one message (§6 L581 keys pending
    * by message id). A write per member would publish an intermediate
-   * memberCount that §2.3 L153's invariant forbids.
+   * memberCount that §2.3 L155's invariant forbids.
    */
   test("sets every member of a multi-member merge in one write", async () => {
     const s = stub();
@@ -150,7 +150,7 @@ describe("createMessageRepo.mergeMember (R9)", () => {
   });
 
   /**
-   * §3.3 L282 preserves tgId so the next publish is an edit (§2.3 L159), and R7
+   * §3.3 L284 preserves tgId so the next publish is an edit (§2.3 L161), and R7
    * notes the §6 spread would silently drop tgAt. Publish owns both.
    */
   test("never writes tgId or tgAt", async () => {
@@ -207,7 +207,7 @@ describe("createMessageRepo.mergeMember (R9)", () => {
 });
 
 describe("createMessageRepo.queryByDate", () => {
-  test("queries date-index, the deduplication index (§7.2 L632)", async () => {
+  test("queries date-index, the deduplication index (§7.2 L634)", async () => {
     const s = stub([{ Items: [] }]);
 
     await repoWith(s).queryByDate("2026-08-29");
@@ -216,7 +216,7 @@ describe("createMessageRepo.queryByDate", () => {
     expect(String(s.input()?.KeyConditionExpression)).toContain("date");
   });
 
-  /** R16 — §8.4 L799's soft delete has no filter anywhere in §3 or §6. */
+  /** R16 — §8.4 L810's soft delete has no filter anywhere in §3 or §6. */
   test("filters soft-deleted messages", async () => {
     const s = stub([{ Items: [] }]);
 
@@ -274,7 +274,7 @@ describe("createMessageRepo.queryByDate", () => {
 });
 
 describe("createMessageRepo.queryByStatus", () => {
-  test("queries status-index newest first (§8.5 L821)", async () => {
+  test("queries status-index newest first (§8.5 L832)", async () => {
     const s = stub([{ Items: [] }]);
 
     await repoWith(s).queryByStatus("published");
@@ -303,7 +303,7 @@ describe("createMessageRepo writes", () => {
   });
 
   /**
-   * R44/R51 — `putNew` writes `Item: message` verbatim (§6 L582's create
+   * R44/R51 — `putNew` writes `Item: message` verbatim (§6 L584's create
    * branch), so the match key and member ids need no adapter code either; this
    * pins that a create carrying them actually writes them.
    */
@@ -340,7 +340,7 @@ describe("createMessageRepo writes", () => {
 
 describe("createMessageRepo.countByStatus", () => {
   /**
-   * §8.5 L817 — "DynamoDB count on `status-index` (`published`)", window "all".
+   * §8.5 L828 — "DynamoDB count on `status-index` (`published`)", window "all".
    * `Select: COUNT` because the card needs a number: fetching every published
    * message to call `.length` would grow unboundedly with the archive.
    */
@@ -390,8 +390,8 @@ describe("createMessageRepo.countByStatus", () => {
 
 describe("createMessageRepo.putNew is conditional (R38)", () => {
   /**
-   * §6 L582's create branch writes a whole record keyed by the creating item's
-   * id (§2.3 L150). An id that already exists therefore means the item is a
+   * §6 L584's create branch writes a whole record keyed by the creating item's
+   * id (§2.3 L152). An id that already exists therefore means the item is a
    * replay — never new work — and an unconditional PutItem would overwrite the
    * record it could not see, destroying its `members`, its `tgId` and its date.
    * Item 8.4 measured that: 6 Telegram sends for 3 stories, with the first three

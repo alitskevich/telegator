@@ -4,7 +4,7 @@ import { inspectDlq as inspectDlqCore, type QueuePageDeps } from "../lib/dashboa
 import type { DlqMessage } from "../lib/queues/inspect";
 import { authContext, dlqInspector, dlqUrls, queueDepths, queueUrls } from "./context";
 
-/** §8.2 L765's DLQ inspection. Replay lives in `actions/triggers.ts` (§8.4 L806). */
+/** §8.2 L776's DLQ inspection. Replay lives in `actions/triggers.ts` (§8.4 L817). */
 
 export async function queuePageDeps(): Promise<QueuePageDeps> {
   return {

@@ -10,11 +10,11 @@ import type { NewsItem } from "./newsItemSchema";
  * two posts produce one message with two members".
  */
 
-/** §5.2 — one request per item (§3.2 L245). */
+/** §5.2 — one request per item (§3.2 L247). */
 export interface Classifier {
   /**
    * Classifies one item body. Throws on a provider error rather than returning
-   * a sentinel: §3.2 L249/L256 route a provider failure to a throw so SQS
+   * a sentinel: §3.2 L251/L258 route a provider failure to a throw so SQS
    * retries and the item reaches the DLQ, because an error is transient while a
    * `skip` decision is final.
    */

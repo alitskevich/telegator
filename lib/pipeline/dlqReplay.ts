@@ -3,7 +3,7 @@ import type { Logger } from "../logging/logger";
 import type { QueueDrainer, QueueMessage, QueueProducer } from "../queues/ports";
 
 /**
- * §3.5 L360–364 — the DLQ replay handler.
+ * §3.5 L362–366 — the DLQ replay handler.
  *
  * "One Lambda, invoked manually from the dashboard, drains a named DLQ back
  * onto its source queue with a replay counter. This is the operator's recovery
@@ -21,7 +21,7 @@ export interface DlqReplayDeps {
 }
 
 export interface DlqReplayOptions {
-  /** §8.4 L806 — the operator bounds the drain. */
+  /** §8.4 L817 — the operator bounds the drain. */
   readonly max: number;
 }
 
@@ -36,14 +36,14 @@ const RECEIVE_LIMIT = 10;
 /**
  * Rebuilds a queue message from a dead-lettered one.
  *
- * The **group** is preserved: §3.3 L270 relies on it to serialise one date's
+ * The **group** is preserved: §3.3 L272 relies on it to serialise one date's
  * items, and losing it would let two invocations process the same date
  * concurrently and create the duplicate messages FIFO exists to prevent.
  *
  * The **deduplication id is deliberately fresh**. SQS silently discards a FIFO
  * message repeating a `MessageDeduplicationId` inside its five-minute window, so
  * the original id would make a prompt replay vanish with no error anywhere — the
- * worst outcome for a recovery path. §3.5 L364 makes a new id safe: a duplicate
+ * worst outcome for a recovery path. §3.5 L366 makes a new id safe: a duplicate
  * delivery is harmless, a swallowed replay is not.
  */
 function toReplayMessage(received: {
@@ -108,7 +108,7 @@ export async function replayDlq(
     }
   }
 
-  // §3.5 L362's "replay counter" — the operator's receipt that the drain ran.
+  // §3.5 L364's "replay counter" — the operator's receipt that the drain ran.
   deps.logger.info("dlq replay complete", { replayed, failed });
 
   return { replayed, failed };

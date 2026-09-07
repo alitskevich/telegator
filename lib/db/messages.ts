@@ -23,7 +23,7 @@ import { softDeleteCommand, updateAttributes } from "./patch";
 import type { MemberMerge, MessageRepo, PublishResult } from "./ports";
 
 /**
- * The DynamoDB adapter for `messages` (§2.3, §7.2 L632).
+ * The DynamoDB adapter for `messages` (§2.3, §7.2 L634).
  *
  * `@aws-sdk/lib-dynamodb` rather than the low-level client: it marshals the
  * `members` map without hand-written attribute-value envelopes.
@@ -68,7 +68,7 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
   const { client, tableName } = options;
 
   return {
-    /** §3.4 L315 and R9 — the only access that returns `members`. */
+    /** §3.4 L317 and R9 — the only access that returns `members`. */
     get: async (id: string): Promise<Message | undefined> => {
       const output = await client.send(new GetCommand({ TableName: tableName, Key: { id } }));
       const item = "Item" in output ? output.Item : undefined;
@@ -76,7 +76,7 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
     },
 
     /**
-     * §6 L558 — `date-index`. R44/R51 amend §7.2 L634's projection: it now
+     * §6 L560 — `date-index`. R44/R51 amend §7.2 L636's projection: it now
      * carries the match key and `memberIds` rather than the embedding.
      */
     queryByDate: async (date: string): Promise<DedupCandidate[]> => {
@@ -94,7 +94,7 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
       return items.map((item) => DedupCandidateSchema.parse(item));
     },
 
-    /** §8.5 L821 — `status-index`, `ts` descending. */
+    /** §8.5 L832 — `status-index`, `ts` descending. */
     queryByStatus: async (status: MessageStatus, limit?: number): Promise<MessageListItem[]> => {
       const output = await client.send(
         new QueryCommand({
@@ -104,7 +104,7 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
           FilterExpression: NOT_DELETED,
           ExpressionAttributeNames: { "#status": "status", "#deleted": "deleted" },
           ExpressionAttributeValues: { ":status": status, ":notDeleted": false },
-          // §8.5 L821 wants the most recent first.
+          // §8.5 L832 wants the most recent first.
           ScanIndexForward: false,
           ...(limit === undefined ? {} : { Limit: limit }),
         }),
@@ -114,7 +114,7 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
     },
 
     /**
-     * §8.5 L817 — `Select: COUNT` over `status-index`, across every page.
+     * §8.5 L828 — `Select: COUNT` over `status-index`, across every page.
      *
      * A Query stops at 1 MB of scanned data and returns a cursor. Counting only
      * the first page would make this card silently plateau as the archive grew:
@@ -152,10 +152,10 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
     },
 
     /**
-     * §6 L582's create branch — a whole new record, written only if there is not
+     * §6 L584's create branch — a whole new record, written only if there is not
      * one already (R38).
      *
-     * A message is keyed by the id of the item that created it (§2.3 L150), so
+     * A message is keyed by the id of the item that created it (§2.3 L152), so
      * an existing id means a replay rather than new work — and a write that
      * cannot see the record it would replace must not replace it.
      *
@@ -181,26 +181,26 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
     },
 
     /**
-     * §6 L579's merge branch, written attribute-level — reconciliation R9.
+     * §6 L581's merge branch, written attribute-level — reconciliation R9.
      *
-     * §6 L584 reads as a whole-record write, but §7.2 L634 projects no
+     * §6 L586 reads as a whole-record write, but §7.2 L636 projects no
      * `members`, so a record built from a `date-index` candidate carries none
-     * and a `PutItem` would erase every member already stored. §2.3 L178
+     * and a `PutItem` would erase every member already stored. §2.3 L180
      * describes the correct write: set `members.{itemId}`, no condition needed.
      *
      * Every member the batch added is set in **one** UpdateItem. A write per
      * member would publish an intermediate `memberCount` disagreeing with the
-     * map, which §2.3 L153's invariant forbids.
+     * map, which §2.3 L155's invariant forbids.
      *
      * `MessageMergeAttributes` omits `tgId` and `tgAt`, so this expression
-     * cannot touch what publish owns (§3.3 L282, §2.3 L159).
+     * cannot touch what publish owns (§3.3 L284, §2.3 L161).
      */
     mergeMember: async ({ id, members, attributes }: MemberMerge): Promise<void> => {
       const names: Record<string, string> = { "#members": "members" };
       const values: Record<string, unknown> = {};
       const assignments: string[] = [];
 
-      // §2.4 L185 — ids are used verbatim as map keys "via
+      // §2.4 L187 — ids are used verbatim as map keys "via
       // ExpressionAttributeNames placeholders, which accept any characters". A
       // `/` is illegal in an expression path fragment, so the key never appears
       // in the expression text itself.
@@ -232,7 +232,7 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
       );
     },
 
-    /** §3.4 L348 — the result write after a successful send or edit. */
+    /** §3.4 L350 — the result write after a successful send or edit. */
     markPublished: async ({ id, tgId, tgAt, ts }: PublishResult): Promise<void> => {
       await client.send(
         new UpdateCommand({
@@ -255,14 +255,14 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
       );
     },
 
-    /** §8.4 L797 — an operator edit. The action validates the delta first. */
+    /** §8.4 L808 — an operator edit. The action validates the delta first. */
     patch: async (id: string, delta: Readonly<Record<string, unknown>>): Promise<void> => {
       const command = updateAttributes(tableName, id, delta);
       if (command === undefined) return;
       await client.send(command);
     },
 
-    /** §8.4 L799 — soft delete, one UpdateItem per id. */
+    /** §8.4 L810 — soft delete, one UpdateItem per id. */
     softDelete: async (ids: readonly string[]): Promise<void> => {
       for (const id of ids) {
         await client.send(softDeleteCommand(tableName, id));

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Composite item ids, per §2.4 L183–185.
+ * Composite item ids, per §2.4 L185–187.
  *
  * An id is `{sourceId}/{telegramMessageId}` and is used **verbatim** everywhere:
  * as an SQS payload field, as a DynamoDB map key (via `ExpressionAttributeNames`
@@ -11,10 +11,10 @@ import { z } from "zod";
  */
 
 /**
- * The source segment must not itself contain a slash: §6 L591 takes the channel
- * as `id.split("/")[0]`, which would silently truncate otherwise, and §3.4 L320
+ * The source segment must not itself contain a slash: §6 L593 takes the channel
+ * as `id.split("/")[0]`, which would silently truncate otherwise, and §3.4 L322
  * renders that channel into a public Telegram link. The message segment is
- * digits because §3.1 L211 captures it from `href="https://t.me/{any}/{digits}"`.
+ * digits because §3.1 L213 captures it from `href="https://t.me/{any}/{digits}"`.
  */
 const ITEM_ID_PATTERN = /^[^/]+\/\d+$/;
 
@@ -29,7 +29,7 @@ export interface ItemIdParts {
   readonly tgMessageId: string;
 }
 
-/** §3.1 L222 — `id = "{sourceId}/{messageId}"`. */
+/** §3.1 L224 — `id = "{sourceId}/{messageId}"`. */
 export function formatItemId(sourceId: string, tgMessageId: string): ItemId {
   return ItemIdSchema.parse(`${sourceId}/${tgMessageId}`);
 }
@@ -46,7 +46,7 @@ export function parseItemId(id: string): ItemIdParts {
   return { sourceId, tgMessageId };
 }
 
-/** §6 L591's `item.id.split("/")[0]`, but strict: a malformed id throws rather
+/** §6 L593's `item.id.split("/")[0]`, but strict: a malformed id throws rather
  * than yielding `undefined` into a rendered `@mention`. */
 export function sourceIdOf(id: string): string {
   return parseItemId(id).sourceId;

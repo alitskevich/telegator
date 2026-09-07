@@ -18,8 +18,8 @@ describe("NewsItemSchema", () => {
   });
 
   /**
-   * Narrower than the payload schema of item 2.5: §5.2 L451 constrains the
-   * model's category to §5.4's enum, while §2.2 L136 lets the item carry an
+   * Narrower than the payload schema of item 2.5: §5.2 L453 constrains the
+   * model's category to §5.4's enum, while §2.2 L138 lets the item carry an
    * operator's arbitrary source default until AI overwrites it.
    */
   test("constrains category to §5.4's enum, unlike the item payload", () => {
@@ -33,7 +33,7 @@ describe("NewsItemSchema", () => {
     ).toBe(false);
   });
 
-  test("keeps §5.2 L443's required/optional split", () => {
+  test("keeps §5.2 L445's required/optional split", () => {
     expect(NewsItemSchema.safeParse({ ...valid, peoples: undefined }).success).toBe(true);
     const { location: _omitted, ...missingRequired } = valid;
     expect(NewsItemSchema.safeParse(missingRequired).success).toBe(false);
@@ -57,8 +57,8 @@ function propertyOf(name: string) {
   return property;
 }
 
-describe("NEWS_ITEM_SCHEMA (the JSON Schema §5.2 L425 sends)", () => {
-  test("declares exactly the six required fields of §5.2 L443", () => {
+describe("NEWS_ITEM_SCHEMA (the JSON Schema §5.2 L427 sends)", () => {
+  test("declares exactly the six required fields of §5.2 L445", () => {
     expect(NEWS_ITEM_SCHEMA.required).toEqual([
       "title",
       "summary",
@@ -77,12 +77,12 @@ describe("NEWS_ITEM_SCHEMA (the JSON Schema §5.2 L425 sends)", () => {
     expect(propertyOf("category").enum).toEqual([...CATEGORIES]);
   });
 
-  test("enumerates importance as high or low (§5.2 L452)", () => {
+  test("enumerates importance as high or low (§5.2 L454)", () => {
     expect(propertyOf("importance").enum).toEqual(["high", "low"]);
   });
 
   /**
-   * §5.2 L445-455's Description column is the only place the "three words",
+   * §5.2 L447-457's Description column is the only place the "three words",
    * "In Belarusian" and importance guidance appear. Structured output drops
    * them unless they reach the emitted schema, and then the model never sees
    * the instruction at all.
@@ -107,7 +107,7 @@ describe("NEWS_ITEM_SCHEMA (the JSON Schema §5.2 L425 sends)", () => {
  * Structured output enforces shape, types and enums; string length it leaves to
  * the model. Emitting `maxLength` and saying nothing held the model to a limit
  * it had never been told, and Zod then failed the item permanently down §3.2
- * L249's transient path into the DLQ.
+ * L251's transient path into the DLQ.
  */
 describe("the summary cap reaches the model (R51)", () => {
   interface JsonField {

@@ -3,7 +3,7 @@ import { recordingMetrics } from "../../test/fakes/metrics";
 import { METRIC_NAMES, METRIC_NAMESPACE } from "./ports";
 
 describe("the metric catalogue", () => {
-  test("is the twelve names §7.7 L723-733 lists, then R50's two", () => {
+  test("is the twelve names §7.7 L725-735 lists, then R50's two", () => {
     expect([...METRIC_NAMES]).toEqual([
       "ItemsScraped",
       "ItemsDropped",
@@ -32,7 +32,7 @@ describe("the metric catalogue", () => {
     expect(METRIC_NAMES).toContain("DedupAdjudicationFailed");
   });
 
-  test("publishes under the namespace §7.7 L720 names", () => {
+  test("publishes under the namespace §7.7 L722 names", () => {
     expect(METRIC_NAMESPACE).toBe("Telegator");
   });
 });
@@ -60,7 +60,7 @@ describe("recordingMetrics", () => {
   });
 
   /**
-   * §3.2 L251-252 routes drops by reason, and §8.5 L816 charts items skipped
+   * §3.2 L253-254 routes drops by reason, and §8.5 L827 charts items skipped
    * "Sum by Reason". A fake that collapsed the dimension would let a test pass
    * while the stage attributed every skip to the wrong cause.
    */

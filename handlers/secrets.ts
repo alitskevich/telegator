@@ -4,7 +4,7 @@ import { requireEnv } from "./env";
 /**
  * Reading a Secrets Manager string once per container.
  *
- * §7.6 L699's two secrets, read by three handlers, so the fetch-once-then-cache
+ * §7.6 L701's two secrets, read by three handlers, so the fetch-once-then-cache
  * behaviour is written once. The caller is always a Lambda entry point, whose
  * container lifetime is the natural cache scope.
  *

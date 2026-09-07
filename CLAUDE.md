@@ -1,104 +1,70 @@
 # Working in this repository
 
-`docs/telegator.md` is the project's only document. **Part I (§1–§11) is the
-normative spec — do not edit it to match the code.** Code cites it by section
-and line (`§3.4 L316`), and `test/specCitations.test.ts` fails if a citation
-stops resolving, so an edit to Part I means re-pointing every citation into it.
+`docs/telegator.md` is the project's only document, and it is where the reasoning
+lives. This file is the short list of what to do and not do; each rule names the
+section that explains it.
 
-A divergence from Part I is a **reconciliation**: the comment that makes it
-names the number and the reason in a sentence or two, and §25 of the document
-carries the full account. Add a row there when you issue a new number.
+**Part I (§1–§11) is the normative spec — do not edit it to match the code.** Code
+cites it by section and line (`§3.4 L316`), and `test/specCitations.test.ts` fails
+when a citation stops resolving, so editing Part I means re-pointing every
+citation into it.
+
+A divergence from Part I is a **reconciliation**: the comment that makes it names
+the number and the reason in a sentence or two, and §25 carries the full account.
+Add a row there when you issue a new number.
 
 ## The four gates
 
-All four must pass before any commit. Not three.
+All four pass before any commit. Not three (§32.1).
 
 ```bash
-npx tsc --noEmit     # never skip: it has caught six defects a green suite did not
+npx tsc --noEmit     # never skip: it has caught defects a green suite did not
 npx vitest run
 npx biome check .
 npx cdk synth        # credential-free, and must stay that way
 ```
 
-`tsc` and `vitest` disagree more often than you would expect — an unattached L1
-CDK property, an untyped `vi.fn()`, a fixture inventing a field. Run both.
-
 Never weaken a gate to pass: no `.skip`, no `any`, no `@ts-expect-error`, no lint
-suppression.
+suppression. `tsc` and `vitest` disagree more often than you would expect — run
+both.
 
-## How the code is arranged
+**What they do not cover is §32.2.** In short: no gate makes a model call, so use
+`npm run smoke:openrouter`; and no gate runs a bundler, so run the dev server and
+request the routes before believing `app/` works.
 
-- `lib/` holds every rule. `handlers/` and `app/` are thin wrappers over it.
-- Every AWS, Telegram and OpenRouter boundary is an interface in a `ports.ts` with
-  an in-memory fake in `test/fakes/`. **No test touches the network.**
-- Zod schemas are the source of truth; types come from `z.infer`.
-- `aws-sdk-client-mock` does not typecheck against the installed SDK. Inject a
-  structural client port instead — see `lib/metrics/cloudwatch.ts`.
+## Rules with silent failure modes
 
-## Boundaries that are easy to violate
+Each is enforced by a test, and each was violated at least once (§32.3).
 
-Each of these is enforced by a test, and each was violated at least once.
-
-- **The dashboard must not reach `lib/pipeline/`** (§8.2 L734). `app/` and
-  `actions/` are checked over the *transitive* closure, along with `aws-cdk-lib`
-  — see `test/boundaries.test.ts`. A constant needed by two layers moves to a
-  module neither owns; that has happened seven times, most recently `SKIP_REASONS`
-  and the log field names.
-- **No CDK context lookup** (`fromLookup`, `valueFromLookup`). Each turns synth
+- **Relative imports carry no extension.** `"../lib/clock"`, never
+  `"../lib/clock.js"`. Turbopack does not substitute `.js` → `.ts`, so every
+  dashboard route 500s while all four gates stay green. No setting restores it.
+- **The dashboard must not reach `lib/pipeline/`** (§8.2), checked over the
+  *transitive* closure. A constant needed by two layers moves to a module neither
+  owns.
+- **Every `app/**/page.tsx` calls `requireRole("viewer", …)`.**
+- **No CDK context lookup** (`fromLookup`, `valueFromLookup`) — each turns synth
   into an authenticated call and breaks the only infrastructure gate there is.
-- **Every `app/**/page.tsx` calls `requireRole("viewer", …)`** —
-  `test/pageAuth.test.ts`. The dashboard root shipped once without it.
-- **Relative imports carry no extension** — `test/importExtensions.test.ts`.
-  Write `"../lib/clock"`, never `"../lib/clock.js"`. Turbopack does not perform
-  TypeScript's `.js` → `.ts` substitution and reports `Module not found`; every
-  dashboard route then 500s. `tsc`, Vite, esbuild and tsx all substitute, so the
-  whole repo was written this way and all four gates stayed green against an app
-  that could not serve a page. There is no Turbopack setting that restores it.
-- **Item ids are `{sourceId}/{telegramMessageId}`, used verbatim** (§2.4).
-- **Every AC-x.y in §3.1–3.4 is named by a test** — `test/acceptance.test.ts`
-  audits both directions.
+- **Every AC-x.y in §3.1–3.4 is named by a test**, audited in both directions.
+- A source scan that names what it forbids will match itself: exclude the file, or
+  scan only shipped source.
 
-## Things that will surprise you
+## Conventions
 
-- `next dev` rewrites `tsconfig.json` and `next-env.d.ts`. That is expected;
-  biome's formatter is disabled for both, and it appends its own `include`
-  entries. `**/*.ts` and `**/*.tsx` must remain among them
-  (`test/tsconfig.test.ts`) — a directory-scoped `include` left four categories
-  of file unchecked.
-- `vitest.config.ts` needs `oxc: { jsx: { runtime: "automatic" } }`. Vitest 4
-  uses oxc, not esbuild, and silently ignores `esbuild.jsx`.
-- `biome` forbids `console` outside `scripts/**`, and magic numbers in `lib/`,
-  `handlers/` and `actions/`.
-- A source scan that names what it forbids will match itself. That has happened
-  four times; exclude the file, or scan only shipped source.
-- **None of the four gates makes a model call**, and none can. `vitest` forbids
-  the network, and the other three never execute a request — so a base URL that
-  composes to the wrong path, an unrecognised auth header or an `output_config`
-  the tier rejects all pass every gate against an adapter that cannot classify a
-  single item. `npm run smoke:openrouter` covers that gap offline (real adapter,
-  real SDK, canned far end); add `-- --live` with `OPENROUTER_API_KEY` set for one
-  real call.
-- **None of the four gates runs a bundler.** `npx next build` is the only thing
-  that compiles `app/`, and it needs §9.3's environment set, so it is not one of
-  them. A change that breaks the dashboard at runtime — resolution, a client/
-  server boundary, an invalid `next.config.ts` option — passes all four. Run the
-  dev server and request the routes before believing `app/` works.
-- An invalid `experimental` option in `next.config.ts` is warned about and then
-  **dropped whole**, so its valid siblings stop applying too. The warning is one
-  line at startup, above the ready banner.
+§28 has the layout and the full list. The ones worth repeating here: `lib/` holds
+every rule and everything else wraps it; Zod schemas are the source of truth;
+every boundary is a port with an in-memory fake and **no test touches the
+network**; `console` belongs in `scripts/` only; magic numbers are banned in
+`lib/`, `handlers/` and `actions/`, and the values live in §31.
 
-## Before production
+`next dev` rewrites `tsconfig.json` and `next-env.d.ts`. That is expected — commit
+it with your work.
 
-Deploy with `npm run deploy` (`scripts/deploy.ts`), never a bare `cdk deploy`.
-A bare one omits the two secret ARNs, and `pipeline-stack.ts` falls back rather
-than failing — so the stack creates cleanly and `publish` and `analyze` fail on
-their first message instead. The script resolves both ARNs by name, refuses to
-run as the account root (which cannot assume the bootstrap roles), and **diffs
-by default**: `--execute` is the opt-in.
+## Deploying
 
-`cdk synth -c env=prod -c scheduleEnabled=true` refuses until §11.3's
-recalibration is recorded in `calibration/record.json`. That is deliberate — the
-sweep harness is `lib/calibration/`.
+`npm run deploy`, never a bare `cdk deploy`: §33 says what a bare one omits and
+why the stack then creates cleanly and fails on its first message. §10.3's
+calibration gate refuses a prod synth until `calibration/record.json` exists.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

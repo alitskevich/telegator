@@ -13,7 +13,7 @@ import { recordingMetrics } from "../fakes/metrics";
 import { fakeQueueProducer } from "../fakes/queues";
 
 /**
- * E2E-6 (§10.2 L959) — "Killing the analyze consumer for 10 minutes and
+ * E2E-6 (§10.2 L991) — "Killing the analyze consumer for 10 minutes and
  * restarting it processes the accumulated backlog with no loss and no
  * duplicates."
  *

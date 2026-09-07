@@ -8,10 +8,10 @@ import type { DlqMessage } from "../../lib/queues/inspect";
 import { authorized } from "../authorize";
 
 /**
- * §8.2 L765 — "Queue depths + DLQ inspection/replay".
+ * §8.2 L776 — "Queue depths + DLQ inspection/replay".
  *
- * §8.3 lists no columns for this page, so its content is derived from L765 and
- * §7.7 L737. Recorded in the ledger as a spec gap filled deliberately rather
+ * §8.3 lists no columns for this page, so its content is derived from L776 and
+ * §7.7 L748. Recorded in the ledger as a spec gap filled deliberately rather
  * than a section transcribed.
  */
 

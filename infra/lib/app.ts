@@ -15,7 +15,7 @@ import { TelegatorQueueStack } from "./queue-stack";
  * `valueFromLookup`) anywhere below this point breaks the build's verification,
  * not just one stack.
  *
- * Stack order is §9.1 L858: Data, Queue, Auth -> Pipeline -> App.
+ * Stack order is §9.1 L890: Data, Queue, Auth -> Pipeline -> App.
  */
 export function createApp(props?: AppProps): App {
   // `props` exists for tests: each needs its own `outdir`, because
@@ -24,7 +24,7 @@ export function createApp(props?: AppProps): App {
   const app = new App(props);
   const config = resolveConfig(app);
 
-  // §9.1 L858 — Data, Queue and Auth have no dependencies on each other.
+  // §9.1 L890 — Data, Queue and Auth have no dependencies on each other.
   const data = new TelegatorDataStack(app, "TelegatorDataStack", { config });
   const queues = new TelegatorQueueStack(app, "TelegatorQueueStack", { config });
   const auth = new TelegatorAuthStack(app, "TelegatorAuthStack", { config });
