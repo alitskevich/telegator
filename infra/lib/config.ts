@@ -12,7 +12,7 @@ import { type NameOptions, resourceName } from "./naming";
  * infrastructure gate into an authenticated call.
  */
 
-/** §9.2 L810 — two environments, isolated by AWS account. */
+/** §9.2 L864 — two environments, isolated by AWS account. */
 export const ENVIRONMENTS = ["dev", "prod"] as const;
 
 export type Environment = (typeof ENVIRONMENTS)[number];
@@ -20,30 +20,26 @@ export type Environment = (typeof ENVIRONMENTS)[number];
 export interface TelegatorConfig {
   readonly env: Environment;
   /**
-   * R23. §9.2 L810 disables the schedule in dev — but §9.5 step 4 (L830) also
-   * deploys **prod** with it disabled, enabling it only at step 7 (L833) after a
-   * 48-hour soak against test channels. So this cannot be derived from the
-   * environment name: it is its own parameter, defaulting to `false` in both, and
-   * a deploy must opt in.
+   * R23. §9.5 deploys **prod** with the schedule disabled too, enabling it only
+   * after a 48-hour soak against test channels (L942, L944), so this cannot be
+   * derived from the environment name: it is its own parameter, `false` in both,
+   * and a deploy must opt in.
    */
   readonly scheduleEnabled: boolean;
   /**
-   * §3.3 L294 and §7.3 L608. §12.4 L886 records 300 s as "a starting value",
+   * §3.3 L290 and §7.3 L646. §11.4 L1011 records 300 s as "a starting value",
    * which makes configurability binding (R19) — and R19 also records that SQS
    * FIFO supports only a queue-level delay, so this is a stack parameter rather
    * than something a producer sets per message.
    */
   readonly settleDelaySeconds: number;
   /**
-   * R40. §3.1 L185 and §3.2 L229 give scrape, analyze and dlq-replay a reserved
-   * concurrency, but a reservation is creatable only while the account keeps 5
-   * concurrent executions unreserved. A cold account's entire quota is 5, so AWS
-   * rejects every reservation and the stack cannot be created at all.
+   * R40 — §7.5 L693: a reservation is creatable only while the account keeps 5
+   * concurrent executions unreserved, and a cold account's entire quota is 5.
    *
    * Its own parameter rather than a dev-only branch, for R23's reason: the
-   * driver is the account's quota, not the environment name — a prod account
-   * with a cold quota fails identically. It defaults to `true`, so the spec is
-   * what deploys unless a deploy states otherwise on the command line.
+   * driver is the account's quota, not the environment name. Defaults to `true`,
+   * so the document is what deploys unless a deploy says otherwise.
    */
   readonly reserveConcurrency: boolean;
   /** `resourceName` already bound to this environment. */
@@ -89,17 +85,15 @@ function readSettleDelay(raw: unknown): number {
 }
 
 /**
- * §11.3's closing rule, as a gate rather than a sentence: "Until this is done
+ * §10.3's closing rule, as a gate rather than a sentence: "Until this is done
  * the pipeline must not publish to production channels."
  *
- * R23 already keeps the schedule off by default in both environments, but
- * nothing stopped `scheduleEnabled=true` for prod — which is the one action the
- * rule forbids. dev is deliberately exempt: §9.5 step 4 deploys prod against
- * test channels with the schedule disabled, and dev exists to exercise the
- * pipeline before the calibration does.
+ * R23 keeps the schedule off by default, but nothing stopped
+ * `scheduleEnabled=true` for prod — the one action the rule forbids. dev is
+ * exempt: it exists to exercise the pipeline before the calibration does.
  *
- * The check reads a file at synth time. That keeps `cdk synth` credential-free,
- * which is the property the whole infrastructure gate rests on.
+ * The check reads a file at synth time, which keeps `cdk synth` credential-free
+ * — the property the whole infrastructure gate rests on.
  */
 function assertPublishable(env: string, scheduleEnabled: boolean): void {
   if (env !== "prod" || !scheduleEnabled) return;
@@ -109,7 +103,7 @@ function assertPublishable(env: string, scheduleEnabled: boolean): void {
 
   throw new Error(
     `cannot enable the prod schedule: ${blocker}. ` +
-      "§11.3 is mandatory before production — run the sweep in `lib/calibration/` and " +
+      "§10.3 is mandatory before production — run the sweep in `lib/calibration/` and " +
       "record the result, or deploy prod with the schedule disabled (§9.5 step 4).",
   );
 }

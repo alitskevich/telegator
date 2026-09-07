@@ -137,12 +137,12 @@ describe("readCalibrationRecord", () => {
     expect(() => readCalibrationRecord("x", reads('{"mergeThreshold":0.72}'))).toThrow();
   });
 
-  test("the path is the one §11.3 step 6 records into", () => {
+  test("the path is the one §10.3 step 6 records into", () => {
     expect(CALIBRATION_RECORD_PATH).toBe("calibration/record.json");
   });
 });
 
-describe("productionBlocker — §11.3's closing rule (R48)", () => {
+describe("productionBlocker — §10.3's closing rule (R48)", () => {
   test("a complete, applied calibration blocks nothing", () => {
     expect(productionBlocker(record() as never)).toBeNull();
   });
@@ -205,7 +205,7 @@ describe("productionBlocker — §11.3's closing rule (R48)", () => {
 
 describe("the repository's current state", () => {
   /**
-   * Asserted, not assumed. §11.3 is mandatory before production, and this is the
+   * Asserted, not assumed. §10.3 is mandatory before production, and this is the
    * test that will fail — correctly — on the day someone records a calibration,
    * telling them to update the ledger's blocked item rather than leaving it
    * blocked forever.

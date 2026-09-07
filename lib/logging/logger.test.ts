@@ -23,7 +23,7 @@ describe("createLogger", () => {
   });
 
   /**
-   * §7.7 L695 sources the dashboard's category chart from a Logs Insights query
+   * §7.7 L735 sources the dashboard's category chart from a Logs Insights query
    * over analyze's logs rather than a metric. Insights discovers fields from the
    * top level of each JSON line, so a nested `fields` envelope would make
    * `stats count(*) by category` return nothing.
@@ -60,7 +60,7 @@ describe("createLogger", () => {
 
   /**
    * A logger that throws inside a `catch` converts a handled failure into an
-   * unhandled one. §1.3 L49 makes that permanent data loss: a post that errors
+   * unhandled one. §1.3 L69 makes that permanent data loss: a post that errors
    * past its retries exists only in the logs and the DLQ.
    */
   test("never throws on a value JSON cannot serialise", () => {

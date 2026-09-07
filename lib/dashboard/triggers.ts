@@ -14,9 +14,9 @@ import { MESSAGE_COLUMNS, SOURCE_COLUMNS } from "../ui/columns";
 import { toCsv } from "../ui/csv";
 
 /**
- * §8.4 L752-755 — the three `admin` triggers and the `viewer` export.
+ * §8.4 L803-801 — the three `admin` triggers and the `viewer` export.
  *
- * None of this imports `lib/pipeline/`. §8.2 L734 makes that the point rather
+ * None of this imports `lib/pipeline/`. §8.2 L777 makes that the point rather
  * than a style rule: a trigger must run "the exact deployed artefact", which
  * only an invoke does.
  */
@@ -27,7 +27,7 @@ export interface TriggerDeps {
   readonly functions: {
     readonly scrape: string;
     readonly dlqReplay: string;
-    /** R53 — see `publishPending`. §7.6 L673 names only the two above. */
+    /** R53 — see `publishPending`. §7.6 L710 names only the two above. */
     readonly publish: string;
   };
   readonly messages: MessageRepo;
@@ -36,10 +36,10 @@ export interface TriggerDeps {
   readonly revalidate: (path: string) => void;
 }
 
-/** §3.1's summary, narrowed to what §8.4 L752 returns. */
+/** §3.1's summary, narrowed to what §8.4 L803 returns. */
 const ScrapeReplySchema = z.object({ processed: z.number().int().nonnegative() });
 
-/** §7.5 L653's replay summary, narrowed to what §8.4 L754 returns. */
+/** §7.5 L691's replay summary, narrowed to what §8.4 L806 returns. */
 const ReplayReplySchema = z.object({ replayed: z.number().int().nonnegative() });
 
 export async function runScraper(deps: TriggerDeps): Promise<{ processed: number }> {
@@ -76,9 +76,9 @@ export async function replayDlq(input: unknown, deps: TriggerDeps): Promise<{ re
 const RepublishInputSchema = z.object({ messageId: ItemIdSchema });
 
 /**
- * §8.4 L753 — "sets `topublish`, enqueues", in that order and for that reason.
+ * §8.4 L804 — "sets `topublish`, enqueues", in that order and for that reason.
  *
- * §3.4 L316 has the publish stage load the message and drop anything not in
+ * §3.4 L315 has the publish stage load the message and drop anything not in
  * `topublish`. A request that arrived before the status write landed would be
  * silently discarded, and the operator would see a button that did nothing.
  */
@@ -102,15 +102,15 @@ export async function republishMessage(input: unknown, deps: TriggerDeps): Promi
 
 /**
  * R53 — "Publish now": run the publish stage against the pending backlog, right
- * now. §8.4 lists no such action, and this is a divergence from §7.6 L673's
+ * now. §8.4 lists no such action, and this is a divergence from §7.6 L710's
  * two-function invoke grant, recorded here with its reason.
  *
- * §8.4 L753's `republishMessage` is the queue route and cannot be "now": §7.3
- * L608 gives `telegator-publish` a queue-level `DelaySeconds 300`, FIFO offers
+ * §8.4 L804's `republishMessage` is the queue route and cannot be "now": §7.3
+ * L646 gives `telegator-publish` a queue-level `DelaySeconds 300`, FIFO offers
  * no per-message delay, and `MessageDeduplicationId = messageId` collapses a
  * repeat request inside the same five minutes — so a second press inside that
  * window does nothing at all, silently. Invoking is the only route that sends
- * on the operator's timescale, and §8.2 L734 already makes invoking the
+ * on the operator's timescale, and §8.2 L777 already makes invoking the
  * deployed function the sanctioned way to run a stage by hand.
  *
  * The two stay separate rather than one replacing the other: `republishMessage`
@@ -126,15 +126,15 @@ const PublishPendingInputSchema = z.object({
   max: z.number().int().positive().max(MAX_PUBLISH_NOW),
 });
 
-/** §3.4 L343's summary. A failed send is reported here, not thrown (L142). */
+/** §3.4 L346's summary. A failed send is reported here, not thrown (L150). */
 const PublishReplySchema = z.object({
   batchItemFailures: z.array(z.object({ itemIdentifier: z.string() })),
 });
 
 /**
- * The one-record SQS event `handlers/publish.ts` expects (§7.5 L652, batch size
+ * The one-record SQS event `handlers/publish.ts` expects (§7.5 L690, batch size
  * 1). Built here rather than imported: the dashboard must not reach into
- * `handlers/` or `lib/pipeline/` (§8.2 L734), and the body is
+ * `handlers/` or `lib/pipeline/` (§8.2 L777), and the body is
  * `PublishQueuePayload` either way. `messageId` carries the message id so a
  * reported `itemIdentifier` names the story an operator can find.
  */
@@ -160,7 +160,7 @@ export async function publishPending(
   let failed = 0;
 
   for (const message of pending) {
-    // Sequential: §3.4 L343 paces Telegram calls, and the FIFO group already
+    // Sequential: §3.4 L346 paces Telegram calls, and the FIFO group already
     // serialises per message. Parallel invokes would race the same channel.
     try {
       const reply = await deps.lambda.invoke(
@@ -190,7 +190,7 @@ export { MESSAGE_COLUMNS as MESSAGE_EXPORT_COLUMNS, SOURCE_COLUMNS as SOURCE_EXP
 const ExportInputSchema = z.object({ table: z.enum(["sources", "messages"]) });
 
 /**
- * §8.4 L755 — `exportTable`, `viewer`.
+ * §8.4 L801 — `exportTable`, `viewer`.
  *
  * Returns CSV text rather than a `Blob`: a server action's return value is
  * serialised, and the page turns this into a download. The columns are §8.3's,

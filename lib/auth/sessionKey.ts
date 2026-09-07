@@ -12,7 +12,7 @@ export interface SecretsReadClient {
 /**
  * Reads the cookie sealing key from Secrets Manager, once.
  *
- * Same shape as `handlers/publish.ts` for the bot token of §7.6 L663: the ARN is
+ * Same shape as `handlers/publish.ts` for the bot token of §7.6 L699: the ARN is
  * configuration and travels in an environment variable, the value is fetched at
  * runtime. Amplify's server runtime reuses a process across requests, so the
  * cache spares every authenticated page a round trip for a value that does not

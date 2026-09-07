@@ -39,18 +39,18 @@ const table = (t: Template, name: string) =>
   )?.Properties;
 
 describe("TelegatorDataStack", () => {
-  test("declares exactly the two tables §7.2 L583 names", () => {
+  test("declares exactly the two tables §7.2 L627 names", () => {
     templateFor().resourceCountIs("AWS::DynamoDB::Table", 2);
   });
 
-  test("names them with the §9.2 L810 environment prefix", () => {
+  test("names them with the §9.2 L864 environment prefix", () => {
     const t = templateFor({ env: "prod" });
 
     expect(table(t, "telegator-prod-sources")).toBeDefined();
     expect(table(t, "telegator-prod-messages")).toBeDefined();
   });
 
-  /** §7.2 L583 — "both `PAY_PER_REQUEST`". */
+  /** §7.2 L627 — "both `PAY_PER_REQUEST`". */
   test.each(["telegator-dev-sources", "telegator-dev-messages"])("%s bills per request", (name) => {
     expect(table(templateFor(), name)?.BillingMode).toBe("PAY_PER_REQUEST");
   });
@@ -62,7 +62,7 @@ describe("TelegatorDataStack", () => {
   });
 
   describe("sources", () => {
-    /** §7.2 L587 — `status-index`: PK `status`, and no sort key. */
+    /** §7.2 L631 — `status-index`: PK `status`, and no sort key. */
     test("has a status-index keyed on status alone", () => {
       const gsis = table(templateFor(), "telegator-dev-sources")?.GlobalSecondaryIndexes;
 
@@ -72,7 +72,7 @@ describe("TelegatorDataStack", () => {
     });
 
     /**
-     * §3.1 L187-216 reads or writes nearly every attribute of a selected source
+     * §3.1 L197-226 reads or writes nearly every attribute of a selected source
      * — teaser, category, tags, the cursor fields — so a narrow projection would
      * force a second read per source on every run.
      */
@@ -91,7 +91,7 @@ describe("TelegatorDataStack", () => {
 
     const index = (t: Template, name: string) => gsisOf(t)?.find((g) => g.IndexName === name);
 
-    test("has both indexes §7.2 L588 names", () => {
+    test("has both indexes §7.2 L632 names", () => {
       expect(
         gsisOf(templateFor())
           ?.map((g) => g.IndexName)
@@ -114,10 +114,10 @@ describe("TelegatorDataStack", () => {
     });
 
     /**
-     * §7.2 L598 — status-index "uses INCLUDE with dashboard-visible attributes
+     * §7.2 L634 — status-index "uses INCLUDE with dashboard-visible attributes
      * only, excluding `embedding` and `members` — the two large attributes".
      * This is the assertion that keeps R26 honest: with `members` unprojected,
-     * §8.3 L742's expandable member list must be a lazy base-table read.
+     * §8.3 L787's expandable member list must be a lazy base-table read.
      */
     test("status-index excludes the two large attributes", () => {
       const projection = index(templateFor(), "status-index")?.Projection;
@@ -127,7 +127,7 @@ describe("TelegatorDataStack", () => {
       expect(projection?.NonKeyAttributes).not.toContain("embedding");
     });
 
-    test("status-index projects what §8.3 L742 and §8.5 L772 render (R27)", () => {
+    test("status-index projects what §8.3 L787 and §8.5 L821 render (R27)", () => {
       const projected = index(templateFor(), "status-index")?.Projection?.NonKeyAttributes ?? [];
 
       for (const attribute of ["title", "category", "date", "tgChannel", "memberCount"]) {
@@ -136,7 +136,7 @@ describe("TelegatorDataStack", () => {
     });
 
     /**
-     * R44 — §7.2 L598 called this "the one query that needs vectors". There are
+     * R44 — §7.2 L634 called this "the one query that needs vectors". There are
      * no vectors now: the projection carries the match key R46 scores on and
      * `memberIds` instead, and still excludes `members`.
      */
@@ -168,7 +168,7 @@ describe("TelegatorDataStack", () => {
       });
     });
 
-    /** §9.1 L800 and §11.4 L877 — the only §11.4 row verifiable without a deployment. */
+    /** §9.1 L851 and §10.4 L996 — the only §10.4 row verifiable without a deployment. */
     test("has point-in-time recovery enabled", () => {
       expect(
         table(templateFor(), "telegator-dev-messages")?.PointInTimeRecoverySpecification,

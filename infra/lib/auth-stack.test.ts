@@ -40,12 +40,12 @@ const groups = (t: Template) =>
   );
 
 describe("TelegatorAuthStack", () => {
-  test("declares one user pool (§8.6 L780)", () => {
+  test("declares one user pool (§8.6 L829)", () => {
     stackFor().template.resourceCountIs("AWS::Cognito::UserPool", 1);
   });
 
   /**
-   * §8.6 L788 — "a new user is created **disabled** with no roles and must be
+   * §8.6 L839 — "a new user is created **disabled** with no roles and must be
    * enabled manually". Self-sign-up would let anyone create an enabled account
    * with no operator in the loop, so AdminCreateUser has to be the only path.
    * This is the single most security-relevant assertion in the stack.
@@ -56,7 +56,7 @@ describe("TelegatorAuthStack", () => {
     });
   });
 
-  test("declares one group per role (§8.6 L782-786)", () => {
+  test("declares one group per role (§8.6 L831-835)", () => {
     expect(groups(stackFor().template).sort()).toEqual(["admin", "editor", "viewer"]);
   });
 
@@ -76,12 +76,12 @@ describe("TelegatorAuthStack", () => {
     expect(byName.editor).toBeLessThan(byName.viewer ?? 0);
   });
 
-  /** §8.6 L780 — "hosted UI", which needs a domain. */
+  /** §8.6 L829 — "hosted UI", which needs a domain. */
   test("declares a hosted-UI domain", () => {
     stackFor().template.resourceCountIs("AWS::Cognito::UserPoolDomain", 1);
   });
 
-  test("names the pool and domain with the §9.2 L810 environment prefix", () => {
+  test("names the pool and domain with the §9.2 L864 environment prefix", () => {
     const { template } = stackFor({ env: "prod" });
 
     expect(pool(template)?.UserPoolName).toBe("telegator-prod-users");
@@ -95,7 +95,7 @@ describe("TelegatorAuthStack", () => {
   });
 
   /**
-   * The callback URL is a context parameter because §9.1 L806 deploys Auth
+   * The callback URL is a context parameter because §9.1 L858 deploys Auth
    * *before* App, so the Amplify domain does not exist yet — and a lookup would
    * break the credential-free synth gate.
    */

@@ -27,7 +27,7 @@ const DATE = "2026-08-29";
 /**
  * Fixtures are parsed rather than cast — the house rule bans type assertions,
  * and parsing also proves each fixture is a payload the scrape stage could
- * actually have enqueued (§7.3 L606 carries `ScrapedItemSchema`).
+ * actually have enqueued (§7.3 L644 carries `ScrapedItemSchema`).
  */
 function scraped(id: string, body: string, fields: Record<string, unknown> = {}): ScrapedItem {
   return ScrapedItemSchema.parse({ id, body, date: DATE, kind: "post", ...fields });
@@ -69,7 +69,7 @@ function logLines(sink: RecordingSink): Record<string, unknown>[] {
 }
 
 describe("runAnalyze — acceptance criteria", () => {
-  test("AC-2.1 (§3.2 L250) an item classified importance: low never reaches the aggregate queue", async () => {
+  test("AC-2.1 (§3.2 L260) an item classified importance: low never reaches the aggregate queue", async () => {
     const item = scraped("chan/1", "Some prose about a thing.");
     const h = harness(stubClassifier({ [item.body]: classification({ importance: "low" }) }));
 
@@ -79,12 +79,12 @@ describe("runAnalyze — acceptance criteria", () => {
     expect(h.queue.sendCalls).toBe(0);
     expect(h.metrics.get("ItemsSkipped", { Reason: "low" })).toBe(1);
     expect(h.metrics.get("ItemsAnalyzed")).toBe(0);
-    // §3.2 L246 — a `skip` decision is final, so the message is NOT failed back
+    // §3.2 L256 — a `skip` decision is final, so the message is NOT failed back
     // to SQS. Only a provider error takes the retry path.
     expect(result.batchItemFailures).toEqual([]);
   });
 
-  test("AC-2.2 (§3.2 L251) a provider error on one message leaves the other nine successfully processed", async () => {
+  test("AC-2.2 (§3.2 L261) a provider error on one message leaves the other nine successfully processed", async () => {
     const items = Array.from({ length: ANALYZE_BATCH_SIZE }, (_, index) =>
       scraped(`chan/${index}`, `Item ${index} prose.`),
     );
@@ -107,13 +107,13 @@ describe("runAnalyze — acceptance criteria", () => {
     expect(result.batchItemFailures).toEqual([{ itemIdentifier: "m4" }]);
   });
 
-  test("AC-2.5 (§3.2 L254) a failed item is reported as a batch item failure with its payload untouched", async () => {
+  test("AC-2.5 (§3.2 L264) a failed item is reported as a batch item failure with its payload untouched", async () => {
     // Only the implementable half is asserted here. "An item failing three times
     // lands in the analyze DLQ" is SQS's `maxReceiveCount 3` redrive policy
-    // (§7.3 L606), configured in infra — no code in this stage can make it true
+    // (§7.3 L644), configured in infra — no code in this stage can make it true
     // or false. What this stage owes the criterion is that the failure is
     // reported per-message and the payload is handed back unmodified, so the
-    // DLQ copy is replayable (§3.2 L246).
+    // DLQ copy is replayable (§3.2 L256).
     const item = scraped("chan/9", "Prose that the provider refuses.");
     const body = JSON.stringify(item);
     const h = harness(stubClassifier({}, { [item.body]: new Error("provider exploded") }));
@@ -128,7 +128,7 @@ describe("runAnalyze — acceptance criteria", () => {
   });
 });
 
-describe("runAnalyze — pre-filter (§3.2 L231)", () => {
+describe("runAnalyze — pre-filter (§3.2 L241)", () => {
   test("an empty body is dropped with ItemsSkipped{Reason: nobody} and no AI call", async () => {
     const item = scraped("chan/2", "   ", { kind: "empty" });
     const h = harness(stubClassifier({}));
@@ -156,9 +156,9 @@ describe("runAnalyze — pre-filter (§3.2 L231)", () => {
   });
 });
 
-describe("runAnalyze — enqueue to aggregate (§3.2 L242)", () => {
+describe("runAnalyze — enqueue to aggregate (§3.2 L252)", () => {
   /**
-   * AC-3.9 (§3.3 L308), the half this code owns. The criterion — "two items with
+   * AC-3.9 (§3.3 L304), the half this code owns. The criterion — "two items with
    * the same `date` are never processed by two concurrent invocations" — is
    * SQS's FIFO message-group guarantee, and a fake queue asserting it would only
    * be demonstrating its own single-threaded loop.
@@ -179,7 +179,7 @@ describe("runAnalyze — enqueue to aggregate (§3.2 L242)", () => {
     expect(sent.messageDeduplicationId).toBe("chan/7");
   });
 
-  test("the enqueued payload is normalised — country uppercased, tags merged (§3.2 L244)", async () => {
+  test("the enqueued payload is normalised — country uppercased, tags merged (§3.2 L254)", async () => {
     const item = scraped("chan/8", "Prose worth keeping too.", { tags: "belarus,minsk" });
     const h = harness(stubClassifier({ [item.body]: classification({ tags: "minsk,economy" }) }));
 
@@ -192,7 +192,7 @@ describe("runAnalyze — enqueue to aggregate (§3.2 L242)", () => {
     expect(payload.tags).toBe("minsk,economy,belarus");
   });
 
-  test("ItemsAnalyzed counts only the items that reached the aggregate queue (§7.7 L687)", async () => {
+  test("ItemsAnalyzed counts only the items that reached the aggregate queue (§7.7 L726)", async () => {
     const kept = scraped("chan/10", "Kept prose.");
     const dropped = scraped("chan/11", "Boring prose.");
     const filtered = scraped("chan/12", "");
@@ -210,7 +210,7 @@ describe("runAnalyze — enqueue to aggregate (§3.2 L242)", () => {
   });
 
   test("a rejected SendMessageBatch entry fails that message rather than losing it", async () => {
-    // `send` reports partial failures in its result and never throws (§3.1 L216
+    // `send` reports partial failures in its result and never throws (§3.1 L226
     // reading in lib/queues/ports.ts), so an unchecked result would silently
     // drop the item: acked to SQS, absent from aggregate.
     const item = scraped("chan/13", "Prose the queue rejects.");
@@ -232,9 +232,9 @@ describe("runAnalyze — enqueue to aggregate (§3.2 L242)", () => {
   });
 });
 
-describe("runAnalyze — category log line (§7.7 L695, §8.5 L771)", () => {
+describe("runAnalyze — category log line (§7.7 L735, §8.5 L820)", () => {
   test("the category field name is `category`, at the top level of the JSON line", () => {
-    // §8.5 L771's chart is a Logs Insights `stats count(*) by category` over this
+    // §8.5 L820's chart is a Logs Insights `stats count(*) by category` over this
     // stage's logs. Insights discovers fields from the top level of each JSON
     // line, so both the name and the nesting are load-bearing: rename either and
     // the chart returns nothing, with no error anywhere.
@@ -269,7 +269,7 @@ describe("runAnalyze — category log line (§7.7 L695, §8.5 L771)", () => {
   });
 });
 
-describe("buildClassificationRequest — §5.2 L418–427", () => {
+describe("buildClassificationRequest — §5.2 L420–429", () => {
   test("carries the model, max_tokens, system prompt, schema and the item body", () => {
     const request = buildClassificationRequest("Prose to classify.");
 
@@ -299,7 +299,7 @@ describe("buildClassificationRequest — §5.2 L418–427", () => {
     expect(JSON.parse(JSON.stringify(request)).output_config).not.toHaveProperty("effort");
   });
 
-  test("§5.2 L457 — neither temperature nor top_p is carried over", () => {
+  test("§5.2 L459 — neither temperature nor top_p is carried over", () => {
     const request = buildClassificationRequest("Prose to classify.");
 
     expect(request).not.toHaveProperty("temperature");

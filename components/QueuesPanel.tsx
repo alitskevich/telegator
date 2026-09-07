@@ -5,10 +5,10 @@ import type { QueueRow } from "../lib/dashboard/queues";
 import type { DlqMessage } from "../lib/queues/inspect";
 
 /**
- * §8.2 L723 — "Queue depths + DLQ inspection/replay".
+ * §8.2 L765 — "Queue depths + DLQ inspection/replay".
  *
- * §8.3 has no row describing this page, so the content is derived from L723 and
- * §7.7 L697's operational view: per stage, what is waiting, what has failed, and
+ * §8.3 has no row describing this page, so the content is derived from L765 and
+ * §7.7 L737's operational view: per stage, what is waiting, what has failed, and
  * what those failures contain.
  */
 
@@ -67,7 +67,7 @@ function QueueCard({
         </button>
 
         {/* Replaying an empty DLQ invokes a Lambda and reads a queue to move
-            nothing, so the control is not offered for one. §8.4 L754 is admin. */}
+            nothing, so the control is not offered for one. §8.4 L806 is admin. */}
         {canAdmin && row.dlqDepth > 0 ? (
           <>
             <label>

@@ -72,7 +72,7 @@ describe("parseVerdicts (R46)", () => {
    * three pairs reintroduces exactly that, so an incomplete verdict set is an
    * error rather than a partial result.
    */
-  test("rejects a verdict set that does not cover every requested pair", () => {
+  test("AC-3.12: rejects a verdict set that does not cover every requested pair", () => {
     expect(() => parseVerdicts(response([{ id: "a", same: true }]), ["a", "b"])).toThrow(
       /verdict/i,
     );
@@ -130,7 +130,7 @@ describe("createOpenRouterAdjudicator (R46)", () => {
   });
 
   /**
-   * §5.2 L423's structured output. Without the schema on the request the model
+   * §5.2 L425's structured output. Without the schema on the request the model
    * is free to answer in prose, and `parseVerdicts` would reject every batch —
    * a failure that reads as a model fault rather than a missing request field.
    */

@@ -77,7 +77,7 @@ function sentData(client: RecordingClient, index = 0) {
 }
 
 describe("createCloudWatchMetrics", () => {
-  test("sends one datum under the §7.7 L681 namespace for a single count", async () => {
+  test("sends one datum under the §7.7 L720 namespace for a single count", async () => {
     const { client, metrics } = setup();
 
     metrics.count("ItemsScraped", 3, { Source: "yigal_levin" });
@@ -117,7 +117,7 @@ describe("createCloudWatchMetrics", () => {
   });
 
   /**
-   * §8.5 L765-767 reads these with the `Sum` statistic, so N identical data
+   * §8.5 L814-816 reads these with the `Sum` statistic, so N identical data
    * points and one summed datum chart the same — and one datum is cheaper.
    */
   test("aggregates repeated counts of the same name and dimensions into one summed datum", async () => {
@@ -229,7 +229,7 @@ describe("createCloudWatchMetrics", () => {
 });
 
 /**
- * §1.3 L49 — a post that never merges "leaves no row anywhere". A lost metric
+ * §1.3 L69 — a post that never merges "leaves no row anywhere". A lost metric
  * is bad; a stage killed by its own telemetry loses posts, which is worse.
  */
 describe("a failing PutMetricData", () => {
@@ -280,7 +280,7 @@ describe("a failing PutMetricData", () => {
 });
 
 /**
- * §7.7 L695 refuses a per-category metric: "Thirty-five category dimensions
+ * §7.7 L735 refuses a per-category metric: "Thirty-five category dimensions
  * would create 35 billable metrics for a chart nobody watches minute-to-minute".
  */
 describe("the cardinality guard", () => {

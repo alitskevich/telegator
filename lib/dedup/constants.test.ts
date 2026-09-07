@@ -11,24 +11,24 @@ import {
   SQS_MAX_DELAY_SECONDS,
 } from "./constants";
 
-describe("the §6 CONST block (L491-493)", () => {
+describe("the §6 CONST block (L544-277)", () => {
   test("MAX_MEMBERS is 20", () => {
     expect(MAX_MEMBERS).toBe(20);
   });
 });
 
 describe("constants §6 references but does not declare", () => {
-  test("MAX_BATCH_SIZE is 10, the batch §6 L489 and §7.3 L607 both cap", () => {
+  test("MAX_BATCH_SIZE is 10, the batch §6 L554 and §7.3 L645 both cap", () => {
     expect(MAX_BATCH_SIZE).toBe(10);
   });
 
-  /** §3.3 L294 and §7.3 L608; §12.4 L886 records 300 s as "a starting value". */
+  /** §3.3 L290 and §7.3 L646; §11.4 L1011 records 300 s as "a starting value". */
   test("SETTLE_DELAY_SECONDS is 300", () => {
     expect(SETTLE_DELAY_SECONDS).toBe(300);
   });
 
   /**
-   * SQS caps DelaySeconds at 900. §12.4 makes the settle delay configurable, so
+   * SQS caps DelaySeconds at 900. §11.4 makes the settle delay configurable, so
    * item 4.1 validates any override against this bound rather than discovering
    * it at deploy time.
    */
@@ -40,7 +40,7 @@ describe("constants §6 references but does not declare", () => {
 
 describe("no constant is declared twice", () => {
   /**
-   * §3.4 L318 renders 12 of the 20 stored members. The value belongs to the
+   * §3.4 L317 renders 12 of the 20 stored members. The value belongs to the
    * message domain (item 2.6) and is re-exported here rather than restated —
    * two independent literals would drift silently.
    */
@@ -62,7 +62,7 @@ describe("the R46 band and its weights", () => {
    * so the triangle inequality holds. `dedupBatch`'s Pass 2 reasons with that
    * to bound how far apart two candidates for one item can be.
    *
-   * §11.3 (R48) sweeps the thresholds and takes the weights from a coarse grid.
+   * §10.3 (R48) sweeps the thresholds and takes the weights from a coarse grid.
    * A grid point that did not sum to 1 would leave the scores looking sane
    * while quietly costing the property the argument rests on, so it is pinned
    * here rather than left to the sweep.

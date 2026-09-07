@@ -35,12 +35,10 @@ const transientCookie = (maxAge: number): CookieOptions => ({
 /**
  * The page a refused sign-in renders.
  *
- * A bare `Response(null, { status: 400 })` is what an operator first met here:
- * a blank window, no reason and no way back. The status was never wrong — the
- * request really is malformed — but this is also the likeliest thing to go
- * wrong in the whole flow, because the state cookie above lives for
- * `STATE_TTL_SECONDS` and a sign-in that pauses for longer than that arrives
- * with nothing left to match.
+ * A bare 400 would be a blank window with no reason and no way back. The status
+ * is right — the request really is malformed — but this is the likeliest thing
+ * to go wrong in the whole flow: the state cookie lives for `STATE_TTL_SECONDS`,
+ * and a sign-in that pauses longer arrives with nothing left to match.
  *
  * Fixed strings only, and deliberately so: `state` and `code` are both
  * attacker-supplied — anyone on the internet can send a browser to this route,
@@ -67,7 +65,7 @@ different browser session. Starting again will issue a fresh one.
 </html>
 `;
 
-/** §8.2 L722's refusals, as something an operator can act on. */
+/** §8.2 L764's refusals, as something an operator can act on. */
 const signInFailed = (status: number): Response =>
   new Response(SIGN_IN_FAILED_PAGE, {
     status,
@@ -79,7 +77,7 @@ const redirectUri = (config: HostedUiConfig) => `${config.appUrl}/api/auth/callb
 const redirect = (location: string) => new Response(null, { status: FOUND, headers: { location } });
 
 /**
- * §8.2 L722 — `app/api/auth/[...]/route.ts`. Three segments: `login`, `callback`
+ * §8.2 L764 — `app/api/auth/[...]/route.ts`. Three segments: `login`, `callback`
  * and `logout`.
  *
  * Written as a function over the path segments rather than inside the route file

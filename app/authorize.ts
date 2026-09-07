@@ -4,11 +4,11 @@ import { AuthorizationError, type AuthorizationReason, type Session } from "../l
 /**
  * The bridge from §8.6's three gates to the two answers HTTP has for them.
  *
- * `requireRole` throws — deliberately, since §8.6 L790 allows no code path that
+ * `requireRole` throws — deliberately, since §8.6 L841 allows no code path that
  * skips authorisation — and an uncaught throw out of a server component is a
- * 500. That is what every page of §8.2 L718-723 served to a signed-out browser,
+ * 500. That is what every page of §8.2 L760-765 served to a signed-out browser,
  * which is every browser's first visit: an opaque error page, on a console whose
- * sign-in route at L722 worked the whole time and which nothing ever linked to.
+ * sign-in route at L764 worked the whole time and which nothing ever linked to.
  *
  * This lives in `app/` rather than `lib/auth/` because it is written in Next's
  * vocabulary, and `lib/auth/session.ts` is imported by the Lambda handlers too —

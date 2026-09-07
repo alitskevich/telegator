@@ -12,14 +12,14 @@ import { parseTelegramPage } from "../lib/telegram/parse";
  * newest message its channel has right now.
  *
  * **Not a cursor reset.** Clearing `lastItemId` looks equivalent and is not:
- * §3.1 L195 would then fetch the bare `t.me/s/{id}` page, and since the cursor
- * is the sole duplicate-suppression mechanism (§3.1 L210) its whole newest
+ * §3.1 L205 would then fetch the bare `t.me/s/{id}` page, and since the cursor
+ * is the sole duplicate-suppression mechanism (§3.1 L220) its whole newest
  * window — ~20 posts a channel — is enqueued as new. Writing the newest id
  * leaves that window *behind* the cursor, so only posts published after this
  * run are ever enqueued.
  *
  * What it is for: a cursor months behind resumes by replaying every post since,
- * which is correct for a cutover (`reseed-cursors.ts`, §9.5 L831) and wrong
+ * which is correct for a cutover (`reseed-cursors.ts`, §9.5 L943) and wrong
  * after an outage nobody intends to backfill.
  *
  *   npm run cursors:now                    # dry run against dev
@@ -28,14 +28,14 @@ import { parseTelegramPage } from "../lib/telegram/parse";
  *
  * Dry run by default, like the other cutover scripts: `--write` is opt-in
  * because a cursor moved forward cannot be moved back — the posts it skipped
- * are gone from `t.me/s/`'s window and §1.3 L49 has no table to recover them.
+ * are gone from `t.me/s/`'s window and §1.3 L69 has no table to recover them.
  *
  * This one reads the channels directly rather than invoking the deployed
  * function, unlike `scrape.ts`: it is a repair of stored state, not a pipeline
  * run, and it must not enqueue anything.
  */
 
-/** §7.2 L587's table, environment-prefixed per §9.2 L810. */
+/** §7.2 L631's table, environment-prefixed per §9.2 L864. */
 const SOURCES_RESOURCE = "sources";
 
 const WRITE = "--write";
@@ -103,7 +103,7 @@ async function main(): Promise<void> {
 
     if (newest === undefined) {
       // An unreachable or renamed channel parses empty exactly as a quiet one
-      // does, so this is reported, never acted on. §4.1 L373's `SourceStale`
+      // does, so this is reported, never acted on. §4.1 L376's `SourceStale`
       // is what distinguishes them, over runs.
       skipped.push(`${source.id}: no posts on the page`);
       continue;
@@ -128,7 +128,7 @@ async function main(): Promise<void> {
 
   if (write) {
     for (const advance of advances) {
-      // A patch, not a put: §3.1 L216's `updateCursor` writes only the cursor,
+      // A patch, not a put: §3.1 L226's `updateCursor` writes only the cursor,
       // so an operator's concurrent edit to `category` or `teaser` survives.
       await repo.updateCursor(advance.id, { lastItemId: advance.to });
     }

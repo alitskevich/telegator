@@ -143,9 +143,9 @@ describe("createSqsQueueProducer", () => {
 
   /**
    * The contract that matters: `SendMessageBatch` answers HTTP 200 with both
-   * arrays, and §3.1 L216 / AC-1.5 L224 need that visible as a value. A throw
+   * arrays, and §3.1 L226 / AC-1.5 L234 need that visible as a value. A throw
    * here would push the caller into a try/catch and let the cursor advance past
-   * the failed half (§1.3 L49: nothing is recoverable afterwards).
+   * the failed half (§1.3 L69: nothing is recoverable afterwards).
    */
   test("does not throw on a partial failure and returns both outcomes", async () => {
     sqsMock.on(SendMessageBatchCommand).resolves({
@@ -159,7 +159,7 @@ describe("createSqsQueueProducer", () => {
     expect(result.failed).toEqual([{ index: 1, code: "InternalError", message: "server busy" }]);
   });
 
-  test("chunks at the 10-entry API limit (§3.1 L214)", async () => {
+  test("chunks at the 10-entry API limit (§3.1 L224)", async () => {
     sqsMock
       .on(SendMessageBatchCommand)
       .resolvesOnce({ Successful: successFor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) })
@@ -213,7 +213,7 @@ describe("createSqsQueueProducer", () => {
     expect(entry.MessageDeduplicationId).toBe("yigal_levin/12345");
   });
 
-  /** §7.3 L606 — telegator-analyze is Standard, and SQS rejects the FIFO keys there. */
+  /** §7.3 L644 — telegator-analyze is Standard, and SQS rejects the FIFO keys there. */
   test("omits FIFO attributes entirely for a standard message", async () => {
     sqsMock.on(SendMessageBatchCommand).resolves({ Successful: successFor([0]) });
 

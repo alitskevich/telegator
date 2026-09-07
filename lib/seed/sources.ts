@@ -1,20 +1,20 @@
 import type { Source } from "../domain/source";
 
 /**
- * §9.4 L820-822 — "Because the schema changed, seeding is a **migration**, not a
+ * §9.4 L931-933 — "Because the schema changed, seeding is a **migration**, not a
  * copy."
  *
- * `sources` only: R20 records that §12.6 L888's "skip the import entirely" wins
+ * `sources` only: R20 records that §11.6 L1013's "skip the import entirely" wins
  * over §9.4's messages row, and that the messages transform is unimplementable
  * anyway — the export carries one flat `summary`/`links` per message, so a
- * per-member `MemberBlock` (§2.3 L157-162) cannot be reconstructed for any
+ * per-member `MemberBlock` (§2.3 L167-172) cannot be reconstructed for any
  * multi-member record.
  *
  * A pure transform. R21 keeps the export outside this repository, so the tests
  * run against inline fixtures and the write goes through the repository port.
  */
 
-/** §2.1 L102-106's operator fields, plus the scrape cursor. Everything else is dropped. */
+/** §2.1 L110-114's operator fields, plus the scrape cursor. Everything else is dropped. */
 const TEXT_FIELDS = [
   "tgChannel",
   "category",
@@ -32,7 +32,7 @@ function text(value: unknown): string | undefined {
 }
 
 /**
- * The export writes every field as a string. `lastCount` drives §3.1 L190's
+ * The export writes every field as a string. `lastCount` drives §3.1 L200's
  * refresh heuristic, which compares it numerically, so leaving it a string
  * would compare `"120" > 20` as false and pin every source to the slowest
  * poll rate — with nothing to see in the record.
@@ -66,7 +66,7 @@ export function toSeedSource(row: unknown): Source {
   /**
    * An empty string cannot be a GSI partition key — DynamoDB rejects the write.
    * Omitting the attribute leaves the record out of the sparse `status-index`,
-   * which is precisely what §2.1 L102 means by "any value other than `ok`
+   * which is precisely what §2.1 L110 means by "any value other than `ok`
    * disables the source".
    */
   const status = text(source.status);
@@ -80,7 +80,7 @@ export function toSeedSource(row: unknown): Source {
   /**
    * `zeroYieldRuns` is deliberately absent. §2.4 gives it a read-side default of
    * 0, so writing it would store the same value with an extra attribute, and
-   * §4.1 L373's staleness alarm reads the default identically.
+   * §4.1 L376's staleness alarm reads the default identically.
    */
   return seeded as Source;
 }

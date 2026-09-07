@@ -1,5 +1,5 @@
 /**
- * §3.4 L338 sends with Telegram's HTML parse mode, so every value interpolated
+ * §3.4 L341 sends with Telegram's HTML parse mode, so every value interpolated
  * into a message must be escaped or Telegram reads it as markup — a summary
  * containing `<` or `&` otherwise yields broken tags or a rejected send. The
  * spec does not state this; it is a recorded correctness decision.

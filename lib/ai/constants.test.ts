@@ -7,12 +7,7 @@ import {
 } from "./constants";
 
 describe("the classification model (R2, re-slugged by R50)", () => {
-  /**
-   * §5.1 L399 and §5.2 L419 specify `claude-opus-5`; §12.1 L883 records the
-   * decision as `claude-haiku-4-5`. §12 is titled "Open Questions -- Solved"
-   * and is the later, explicitly-resolved section, so the tier is haiku.
-   */
-  test("is the haiku tier §12.1 decided, in OpenRouter's slug form", () => {
+  test("is the haiku tier §11.1 decided, in OpenRouter's slug form", () => {
     expect(CLASSIFIER_MODEL_ID).toBe("anthropic/claude-haiku-4.5");
   });
 
@@ -30,22 +25,22 @@ describe("the classification model (R2, re-slugged by R50)", () => {
     expect(CLASSIFIER_MODEL_ID.startsWith("anthropic.")).toBe(false);
   });
 
-  test("is not the opus id §5.1 L419 still shows", () => {
+  test("is not the opus tier the earlier draft named", () => {
     expect(CLASSIFIER_MODEL_ID).not.toBe("anthropic/claude-opus-5");
   });
 
-  test("max_tokens is 2000 (§5.2 L420)", () => {
+  test("max_tokens is 2000 (§5.2 L422)", () => {
     expect(CLASSIFIER_MAX_TOKENS).toBe(2000);
   });
 
   /**
-   * R3. §5.2 L421 sets effort "low" and L457 makes effort the replacement for
+   * R3. §5.2 L423 sets effort "low" and L459 makes effort the replacement for
    * the removed temperature/top_p. Effort is not available across every Claude
    * tier, and this build cannot reach a provider to find out whether the haiku
    * tier R2 selects accepts it — so the value is exported and the request
    * builder treats it as omittable rather than assuming.
    */
-  test("effort is the low value §5.2 L421 sets", () => {
+  test("effort is the low value §5.2 L423 sets", () => {
     expect(CLASSIFIER_EFFORT).toBe("low");
   });
 });

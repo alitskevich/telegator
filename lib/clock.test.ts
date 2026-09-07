@@ -27,7 +27,7 @@ describe("fixedClock", () => {
 
 describe("advancingClock", () => {
   // R11: replay idempotency must be proven under a clock that moves. A frozen
-  // clock makes `ts: now()` (spec §6 L522) look idempotent when it is not.
+  // clock makes `ts: now()` (spec §6 L591) look idempotent when it is not.
   test("returns a later instant on each call", () => {
     const clock = advancingClock(1_000, 5);
 

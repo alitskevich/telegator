@@ -14,7 +14,7 @@ import { resourceName } from "./naming";
 vi.setConfig({ testTimeout: 60_000 });
 
 describe("resourceName", () => {
-  /** §9.2 L810 requires environment-prefixed names but never gives the form. */
+  /** §9.2 L864 requires environment-prefixed names but never gives the form. */
   test("applies the telegator-{env}-{resource} scheme", () => {
     expect(resourceName("dev", "messages")).toBe("telegator-dev-messages");
     expect(resourceName("prod", "analyze")).toBe("telegator-prod-analyze");
@@ -24,7 +24,7 @@ describe("resourceName", () => {
     expect(resourceName("dev", "sources")).toBe(resourceName("dev", "sources"));
   });
 
-  /** A FIFO queue's name must end in `.fifo`; §7.3 L607-608's names omit it. */
+  /** A FIFO queue's name must end in `.fifo`; §7.3 L645-646's names omit it. */
   test("appends the .fifo suffix when asked", () => {
     expect(resourceName("dev", "aggregate", { fifo: true })).toBe("telegator-dev-aggregate.fifo");
   });
@@ -54,25 +54,20 @@ describe("resolveConfig", () => {
   });
 
   /**
-   * R23. §9.2 L810 disables the schedule in dev, but §9.5 step 4 (L830) also
-   * deploys *prod* with it disabled, enabling it only at step 7 (L833). So the
-   * flag cannot be derived from the environment name: it is its own parameter,
-   * defaulting to false in both. A dev deploy that can post to production
-   * Telegram channels is a defect, and so is a prod deploy that starts posting
-   * before the 48-hour soak of L830.
+   * R23 — the flag cannot be derived from the environment name (L942, L944). A
+   * dev deploy that can post to production channels is a defect, and so is a
+   * prod deploy that starts posting before the 48-hour soak.
    */
   /**
-   * §11.3's closing rule — "Until this is done the pipeline must not publish to
-   * production channels" — as a gate rather than a sentence. R23 already keeps
-   * the schedule off by default, but nothing stopped someone passing
-   * `scheduleEnabled=true` for prod, and that is the one action §11.3 forbids.
+   * §10.3's closing rule as a gate rather than a sentence: R23 keeps the
+   * schedule off by default, but nothing stopped a prod deploy passing
+   * `scheduleEnabled=true`, which is the one action §10.3 forbids.
    *
-   * dev is deliberately unaffected: §9.5 step 4 runs prod against TEST channels
-   * with the schedule disabled, and the whole point of dev is to exercise the
+   * dev is deliberately unaffected — the whole point of dev is to exercise the
    * pipeline before the calibration exists.
    */
-  test("refuses to enable the prod schedule while §11.3's recalibration is outstanding", () => {
-    expect(() => resolveConfig(appWith({ env: "prod", scheduleEnabled: true }))).toThrow(/11\.3/);
+  test("refuses to enable the prod schedule while §10.3's recalibration is outstanding", () => {
+    expect(() => resolveConfig(appWith({ env: "prod", scheduleEnabled: true }))).toThrow(/10\.3/);
   });
 
   test("names what is missing, not merely that something is", () => {
@@ -98,7 +93,7 @@ describe("resolveConfig", () => {
 
   /**
    * The opt-in still exists; it is prod that is now gated. This test used prod
-   * and had to move to dev when §11.3's rule became a check — the mechanism it
+   * and had to move to dev when §10.3's rule became a check — the mechanism it
    * covers is "explicit opt-in", and the environment it used was incidental to
    * that.
    */
@@ -113,8 +108,8 @@ describe("resolveConfig", () => {
     expect(resolveConfig(appWith({ scheduleEnabled: "false" })).scheduleEnabled).toBe(false);
   });
 
-  /** §12.4 L886 calls 300 s "a starting value", which makes configurability binding (R19). */
-  test("defaults the settle delay to the §3.3 L294 value", () => {
+  /** §11.4 L1011 calls 300 s "a starting value", which makes configurability binding (R19). */
+  test("defaults the settle delay to the §3.3 L290 value", () => {
     expect(resolveConfig(appWith({})).settleDelaySeconds).toBe(SETTLE_DELAY_SECONDS);
   });
 

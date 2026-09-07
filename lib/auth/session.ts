@@ -20,7 +20,7 @@ const TAG_BYTES = 16;
 const MS_PER_SECOND = 1000;
 
 /**
- * What the cookie carries. Deliberately not `enabled`: §8.6 L788 rejects a
+ * What the cookie carries. Deliberately not `enabled`: §8.6 L839 rejects a
  * disabled user "at every action", and a flag written at sign-in would go stale
  * the moment an operator disables the account it belongs to.
  */
@@ -87,7 +87,7 @@ export function unsealSession(cookie: string, key: Uint8Array): Session | null {
 }
 
 /**
- * §8.6 L780 puts an operator console behind Cognito. `httpOnly` because an XSS
+ * §8.6 L829 puts an operator console behind Cognito. `httpOnly` because an XSS
  * here would otherwise lift an admin session; `secure` because the session is a
  * bearer credential; `lax` because the hosted UI returns by top-level
  * navigation, which `strict` would strip the cookie from.
@@ -158,15 +158,15 @@ export interface RequireRoleDeps extends ReadSessionDeps {
 }
 
 /**
- * The three gates of §8.4 L757 ("every action ... re-checks the caller's role
- * server-side") and §8.6 L788, in order: authenticated, not disabled, ranked at
+ * The three gates of §8.4 L808 ("every action ... re-checks the caller's role
+ * server-side") and §8.6 L839, in order: authenticated, not disabled, ranked at
  * or above `min`.
  *
  * The disabled check is a live read on every call. That is the entire content of
  * "rejected at every action" — an operator who disables a compromised admin has
  * not invalidated their cookie, and expects the next click to fail.
  *
- * §8.6 L790: no branch of this function reads `process.env`, so there is no
+ * §8.6 L841: no branch of this function reads `process.env`, so there is no
  * emulator bypass to find.
  */
 export async function requireRole(min: Role, deps: RequireRoleDeps): Promise<Session> {

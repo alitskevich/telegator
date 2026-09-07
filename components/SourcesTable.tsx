@@ -9,16 +9,16 @@ import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
 import { TableHead } from "./TableHead";
 
 /**
- * §8.3 L741 — "Table of id, status, tgChannel, category, `teaser`, lastCount,
+ * §8.3 L786 — "Table of id, status, tgChannel, category, `teaser`, lastCount,
  * lastResult, `zeroYieldRuns`; inline edit; add; delete; export; **Scrape now**
- * trigger", with L744's search.
+ * trigger", with L790's search.
  *
  * The server actions arrive as props. That is what lets this be tested against a
  * DOM without AWS, and it keeps the component ignorant of authorisation — which
- * §8.4 L757 re-checks server-side regardless of what is on screen.
+ * §8.4 L808 re-checks server-side regardless of what is on screen.
  */
 
-/** The subset of L741's columns §2.1 L102-106 lets an operator write. */
+/** The subset of L786's columns §2.1 L110-114 lets an operator write. */
 const EDITABLE: ReadonlySet<string> = new Set(SOURCE_WRITABLE_FIELDS);
 
 export interface SourcesTableProps {
@@ -42,7 +42,7 @@ export function SourcesTable(props: SourcesTableProps) {
   const [notice, setNotice] = useState("");
 
   const visible = useMemo(() => {
-    // §8.3 L744 — across the columns on screen, and only those.
+    // §8.3 L790 — across the columns on screen, and only those.
     const matched = filterByKeyword([...props.rows], keyword, SOURCE_COLUMNS);
     // Then the per-column boxes narrow that, and the sort orders what survives.
     return sortRows(filterByColumn(matched, columnFilters, SOURCE_COLUMNS), sort);
@@ -88,7 +88,7 @@ export function SourcesTable(props: SourcesTableProps) {
                 // An empty id would create a row nothing can address, and the
                 // action would reject it after a round trip.
                 if (newId.trim() === "") return;
-                // §2.1 L103 — `ok` enables polling, which is what "add" means.
+                // §2.1 L111 — `ok` enables polling, which is what "add" means.
                 void props.onSave(newId.trim(), { status: "ok" });
                 setNewId("");
               }}
@@ -108,7 +108,7 @@ export function SourcesTable(props: SourcesTableProps) {
           </>
         ) : null}
 
-        {/* §8.4 L755 — export is `viewer`, so everyone who can see the table has it. */}
+        {/* §8.4 L801 — export is `viewer`, so everyone who can see the table has it. */}
         <button type="button" onClick={() => void props.onExport?.()}>
           Export
         </button>

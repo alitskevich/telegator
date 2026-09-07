@@ -34,7 +34,7 @@ const draw = (props: Partial<Parameters<typeof QueuesPanel>[0]> = {}) =>
 
 const queue = (name: string) => screen.getByTestId(`queue-${name}`);
 
-describe("QueuesPanel — §8.2 L723", () => {
+describe("QueuesPanel — §8.2 L765", () => {
   test("shows every stage with both depths", () => {
     draw();
 
@@ -95,7 +95,7 @@ describe("QueuesPanel — §8.2 L723", () => {
     });
   });
 
-  describe("replay (§8.4 L754)", () => {
+  describe("replay (§8.4 L806)", () => {
     test("replays the named queue up to the given max", async () => {
       draw();
       const card = queue("analyze");
@@ -125,7 +125,7 @@ describe("QueuesPanel — §8.2 L723", () => {
       expect(within(queue("aggregate")).queryByRole("button", { name: "Replay" })).toBeNull();
     });
 
-    /** §8.4 L754 — `admin`. Inspection stays available to everyone (§8.6 L783). */
+    /** §8.4 L806 — `admin`. Inspection stays available to everyone (§8.6 L832). */
     test("a viewer sees no replay control but may still inspect", () => {
       draw({ canAdmin: false });
 

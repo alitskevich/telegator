@@ -12,9 +12,9 @@ import { ENV_VARS, requireEnv } from "./env";
 import { createSecretReader, secretsClient } from "./secrets";
 
 /**
- * The `telegator-publish` entry point (§7.5 L652, SQS FIFO, batch size 1).
+ * The `telegator-publish` entry point (§7.5 L690, SQS FIFO, batch size 1).
  *
- * A thin wrapper per §8.2 L734; the status guard of §3.4 L316 and the send-mode
+ * A thin wrapper per §8.2 L777; the status guard of §3.4 L315 and the send-mode
  * decision live in `lib/pipeline/publish/`.
  */
 export interface SqsEvent {
@@ -25,12 +25,9 @@ let cached: ReturnType<typeof buildDeps> | undefined;
 
 function buildDeps() {
   /**
-   * §7.6 L663 keeps the bot token in Secrets Manager. Fetched on first use and
-   * cached for the life of the container — item 3.12 deliberately does not
-   * cache it, leaving the decision here where the container lifetime is known.
-   *
-   * R50 — the fetch-once body moved to `./secrets` when analyze and aggregate
-   * grew the same need for the OpenRouter key.
+   * §7.6 L699's bot token, fetched on first use and cached for the life of the
+   * container — the scope where that lifetime is known. R50 moved the
+   * fetch-once body to `./secrets`, which analyze and aggregate share.
    */
   const readToken = createSecretReader(
     secretsClient(),
@@ -50,7 +47,7 @@ function buildDeps() {
     bot: createTelegramBot({
       http: createHttpPost(),
       tokenProvider: readToken,
-      // §3.4 L343's pacing. Real time here; the stage's tests inject their own.
+      // §3.4 L346's pacing. Real time here; the stage's tests inject their own.
       sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
       logger: createLogger(stdoutSink),
       metrics,

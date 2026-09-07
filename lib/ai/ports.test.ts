@@ -18,8 +18,8 @@ describe("stubClassifier", () => {
   });
 
   /**
-   * §3.2 L239 routes a provider error to a throw, so SQS retries and the item
-   * ultimately reaches the DLQ (§3.2 L246: an error is transient, a skip is
+   * §3.2 L249 routes a provider error to a throw, so SQS retries and the item
+   * ultimately reaches the DLQ (§3.2 L256: an error is transient, a skip is
    * final). AC-2.2 and E2E-7 both need a classifier that fails on demand.
    */
   test("throws for a body scripted to fail, modelling a provider error", async () => {

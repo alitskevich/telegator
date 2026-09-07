@@ -1,8 +1,8 @@
 /**
  * Column sorting for §8.3's tables.
  *
- * *Reconciliation.* §8.3 L744 specifies only the cross-column search, and §8.1
- * L713 records that with the offline layer deleted "filtering and sorting become
+ * *Reconciliation.* §8.3 L790 specifies only the cross-column search, and §8.1
+ * L755 records that with the offline layer deleted "filtering and sorting become
  * server round-trips". This sorts on the client instead, over the rows the page
  * already holds — the same set, no second query — which is the precedent
  * `filterByKeyword` set for the search beside it. A server sort would be a
@@ -24,7 +24,7 @@ export interface SortState {
  * descending, then none.
  *
  * The third click clears rather than returning to ascending, because the order
- * the server sent carries meaning of its own — §8.5 L772 reads `status-index`
+ * the server sent carries meaning of its own — §8.5 L821 reads `status-index`
  * with `ts` descending, so an unsorted Messages table is "newest first". A cycle
  * that never reached it would put that order out of reach for the session.
  */

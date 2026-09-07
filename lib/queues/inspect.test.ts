@@ -18,7 +18,7 @@ function client(reply: () => unknown) {
 
 const DLQ = "https://sqs/telegator-analyze-dlq";
 
-describe("createSqsDlqInspector — §8.2 L723's DLQ inspection", () => {
+describe("createSqsDlqInspector — §8.2 L765's DLQ inspection", () => {
   test("returns the message bodies", async () => {
     const stub = client(() => ({
       Messages: [

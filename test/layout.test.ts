@@ -5,7 +5,7 @@ import { describe, expect, test } from "vitest";
 const repoRoot = resolve(import.meta.dirname, "..");
 
 /**
- * §8.2 L725–732 names these five directories. The tree is not decoration: §8.2
+ * §8.2 L767–775 names these five directories. The tree is not decoration: §8.2
  * makes `lib/pipeline/` the single implementation of every stage, with the
  * Lambda handlers as thin wrappers over it. A second copy of a stage growing
  * inside `handlers/` is the failure this layout exists to prevent.

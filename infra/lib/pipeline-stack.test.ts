@@ -66,7 +66,7 @@ const NAMES = [
 
 describe("TelegatorPipelineStack functions", () => {
   /**
-   * §8.5 L771's category chart is a Logs Insights query grouping by a top-level
+   * §8.5 L820's category chart is a Logs Insights query grouping by a top-level
    * `category` field, which only works if Lambda emits the line the analyze
    * stage produced and nothing else. `LoggingFormat.JSON` wraps every record in
    * an envelope and carries ours as a `message` string, so the query would match
@@ -74,7 +74,7 @@ describe("TelegatorPipelineStack functions", () => {
    * TEXT is today's default; declaring it means a future default cannot change
    * that silently.
    */
-  test("logs in TEXT format, which §8.5 L771's query depends on", () => {
+  test("logs in TEXT format, which §8.5 L820's query depends on", () => {
     const formats = functions(stackFor().template).map(
       (fn) => (fn.LoggingConfig as { LogFormat?: string } | undefined)?.LogFormat,
     );
@@ -83,8 +83,8 @@ describe("TelegatorPipelineStack functions", () => {
     expect(formats.every((format) => format === "Text")).toBe(true);
   });
 
-  /** §7.5 L655 — "Five functions, down from the source system's seven". */
-  test("declares exactly the five functions §7.5 L649-653 inventories", () => {
+  /** §7.5 L683 — "Five functions, down from the source system's seven". */
+  test("declares exactly the five functions §7.5 L687-691 inventories", () => {
     expect(functions(stackFor().template)).toHaveLength(5);
   });
 
@@ -92,7 +92,7 @@ describe("TelegatorPipelineStack functions", () => {
     expect(named(stackFor().template, name)).toBeDefined();
   });
 
-  /** §7.5 L645 — "All Node.js 22, ARM64, bundled with esbuild." */
+  /** §7.5 L683 — "All Node.js 22, ARM64, bundled with esbuild." */
   test.each(NAMES)("%s runs Node.js 22 on ARM64", (name) => {
     const fn = named(stackFor().template, name);
 
@@ -108,7 +108,7 @@ describe("TelegatorPipelineStack functions", () => {
   test.each([
     ["telegator-dev-scrape", 512],
     ["telegator-dev-analyze", 512],
-    // §7.5 L657 — "aggregate is given 1024 MB because it holds a day of 4 KB
+    // §7.5 L689 — "aggregate is given 1024 MB because it holds a day of 4 KB
     // vectors plus a 10-item embedding batch".
     ["telegator-dev-aggregate", 1024],
     ["telegator-dev-publish", 512],
@@ -117,7 +117,7 @@ describe("TelegatorPipelineStack functions", () => {
     expect(named(stackFor().template, name)?.MemorySize).toBe(memory);
   });
 
-  describe("reserved concurrency (§7.5 L649-653)", () => {
+  describe("reserved concurrency (§7.5 L687-691)", () => {
     test.each([
       ["telegator-dev-scrape", 1],
       ["telegator-dev-analyze", 5],
@@ -127,7 +127,7 @@ describe("TelegatorPipelineStack functions", () => {
     });
 
     /**
-     * §7.5 L651-652 say "by message group" rather than a number, and §3.3 L260
+     * §7.5 L689-690 say "by message group" rather than a number, and §3.3 L270
      * is explicit that this "replaces a blunt reserved-concurrency-of-1".
      * Reserving here would serialise across dates too, undoing the parallelism
      * FIFO groups exist to allow.
@@ -150,17 +150,13 @@ describe("TelegatorPipelineStack functions", () => {
     /**
      * R40 — `reserveConcurrency=false` drops every reservation.
      *
-     * A reservation is only creatable while the account keeps 5 concurrent
-     * executions unreserved. A cold account's quota is 5 in total, so AWS
-     * rejects *any* reservation: "Specified ReservedConcurrentExecutions for
-     * function decreases account's UnreservedConcurrentExecution below its
-     * minimum value of [5]". §3.1 L185 and §3.2 L229 are then undeployable
-     * through no fault of the template.
+     * A cold account's whole quota is 5, so AWS rejects *any* reservation and
+     * §3.1 L195 and §3.2 L239 become undeployable through no fault of the
+     * template (§7.5 L693).
      *
      * Its own parameter rather than a dev-only branch, for R23's reason: the
-     * driver is the account's quota, not the environment name — a prod account
-     * with a cold quota fails identically. The default stays spec-faithful, so
-     * a deploy has to opt out and say so on the command line.
+     * driver is the account's quota, not the environment name. The default stays
+     * faithful, so a deploy has to opt out on the command line.
      */
     test("reserveConcurrency=false drops every reservation", () => {
       const reserved = functions(stackFor({ reserveConcurrency: "false" }).template).filter(
@@ -182,7 +178,7 @@ describe("TelegatorPipelineStack functions", () => {
     });
   });
 
-  /** §12.5 L887 — analyze's logs are the source of §8.5 L771's category chart. */
+  /** §11.5 L1012 — analyze's logs are the source of §8.5 L820's category chart. */
   test("retains analyze logs for 90 days", () => {
     const groups = Object.values(stackFor().template.findResources("AWS::Logs::LogGroup")).map(
       (r) => r.Properties ?? {},
@@ -196,13 +192,11 @@ describe("TelegatorPipelineStack functions", () => {
    * R41 — the retention has to apply to the group the function actually writes
    * to, not merely to a group that exists.
    *
-   * `@aws-cdk/aws-lambda:useCdkManagedLogGroup` makes every function declare its
-   * own `/aws/lambda/<name>` group. Declaring a second one beside it for
-   * retention collides on deploy ("already exists in stack"), and until it
-   * collided it was inert: the function used the managed group's 731 days while
-   * this suite asserted 90 against the group nothing referenced. The assertion
-   * above could not see the difference — the managed group's name is an
-   * `Fn::Join`, so `String(...)` renders "[object Object]" and never matches.
+   * CDK's managed-log-group feature already declares `/aws/lambda/<name>`, so a
+   * second group beside it collides on deploy — and until it collided it was
+   * inert, the function using the managed group's 731 days while this suite
+   * asserted 90 against a group nothing referenced. The assertion above could
+   * not see it: the managed name is an `Fn::Join`, which never string-matches.
    */
   /**
    * The count is the evidence that cdk.json's flags reached this synthesis.
@@ -278,7 +272,7 @@ describe("TelegatorPipelineStack functions", () => {
     }
   });
 
-  test("names functions with the §9.2 L810 environment prefix", () => {
+  test("names functions with the §9.2 L864 environment prefix", () => {
     expect(named(stackFor({ env: "prod" }).template, "telegator-prod-scrape")).toBeDefined();
   });
 

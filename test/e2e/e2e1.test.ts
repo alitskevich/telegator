@@ -14,7 +14,7 @@ import { telegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
- * E2E-1 (§11.2 L848) — "A seeded source with three fresh posts produces three
+ * E2E-1 (§10.2 L962) — "A seeded source with three fresh posts produces three
  * analyze messages, at least one message record, and one Telegram send."
  */
 
@@ -115,7 +115,7 @@ describe("E2E-1 fixtures", () => {
   });
 });
 
-describe("E2E-1 (§11.2 L848)", () => {
+describe("E2E-1 (§10.2 L962)", () => {
   test("three fresh posts produce three analyze messages", async () => {
     const run = await runPipeline(world);
 
@@ -147,8 +147,8 @@ describe("E2E-1 (§11.2 L848)", () => {
   });
 
   /**
-   * §3.1 L216 — the cursor advances only after the enqueue succeeds, and it is
-   * "the sole duplicate-suppression mechanism" (§2.1 L107). A run that published
+   * §3.1 L226 — the cursor advances only after the enqueue succeeds, and it is
+   * "the sole duplicate-suppression mechanism" (§2.1 L115). A run that published
    * correctly but left the cursor behind would re-scrape all three posts on the
    * next pass, which E2E-3 then fails.
    */
@@ -165,7 +165,7 @@ describe("E2E-1 (§11.2 L848)", () => {
     expect(run.scrape.enqueued).toBe(3);
   });
 
-  /** §3.1 L195's request, including the headers §3.1 requires. */
+  /** §3.1 L205's request, including the headers §3.1 requires. */
   test("fetches the preview page for the seeded source", async () => {
     await runPipeline(world);
 

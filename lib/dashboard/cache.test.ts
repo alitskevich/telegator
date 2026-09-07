@@ -6,7 +6,7 @@ import { CACHE_TTL_MS, cachedCategoryLogReader, cachedMetricReader } from "./cac
 const NOW = 1_770_000_000_000;
 const WINDOW = { startMs: NOW - 86_400_000, endMs: NOW };
 
-describe("cachedMetricReader — §8.5 L774", () => {
+describe("cachedMetricReader — §8.5 L823", () => {
   /**
    * "All CloudWatch reads are cached 60 s ... so a refresh does not re-query."
    * The dashboard has eight cards over four metrics; without this, an operator

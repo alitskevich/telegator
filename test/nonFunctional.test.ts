@@ -15,7 +15,7 @@ import { TelegatorQueueStack } from "../infra/lib/queue-stack";
 vi.setConfig({ testTimeout: 60_000 });
 
 /**
- * §11.4's non-functional table, row by row.
+ * §10.4's non-functional table, row by row.
  *
  * Four of the six rows are targets measured against a running system — latency,
  * p95 stage duration, queue age under load, and cost — and none of them can be
@@ -57,14 +57,14 @@ const SCHEDULE_MINUTES = 30;
 const LATENCY_TARGET_MINUTES = 15;
 const SECONDS_PER_MINUTE = 60;
 
-describe("§11.4 row 1 — end-to-end latency (BLOCKED, and R28)", () => {
+describe("§10.4 row 1 — end-to-end latency (BLOCKED, and R28)", () => {
   /**
    * "Telegram post → published within **15 minutes** (scrape interval + settle
    * delay)". Measuring it needs a running system, so the target is BLOCKED.
    *
    * Its arithmetic is not. The parenthesis names the two intervals the target is
-   * made of, and this build configures them at 30 minutes (§7.5 L649's
-   * `rate(30 minutes)`) and 300 seconds (§3.3 L294's settle delay) — 35 minutes
+   * made of, and this build configures them at 30 minutes (§7.5 L687's
+   * `rate(30 minutes)`) and 300 seconds (§3.3 L290's settle delay) — 35 minutes
    * before a post is even eligible to publish. R28 recorded that as unresolved
    * rather than worked around, and this is the assertion that keeps it visible:
    * a future change to either interval will either fix the contradiction or
@@ -84,7 +84,7 @@ describe("§11.4 row 1 — end-to-end latency (BLOCKED, and R28)", () => {
   });
 });
 
-describe("§11.4 rows 2-4 — measured against a running system (BLOCKED)", () => {
+describe("§10.4 rows 2-4 — measured against a running system (BLOCKED)", () => {
   /**
    * p95 stage duration < 60 s, and cost < $40/month. Neither is observable from
    * a template: the first needs invocation timings and the second needs a bill.
@@ -116,7 +116,7 @@ describe("§11.4 rows 2-4 — measured against a running system (BLOCKED)", () =
   });
 });
 
-describe("§11.4 row 5 — availability", () => {
+describe("§10.4 row 5 — availability", () => {
   /**
    * "No DLQ non-empty for more than one hour without an alarm." Unlike the rows
    * above this is a claim about the alarms rather than about observed behaviour,
@@ -131,7 +131,7 @@ describe("§11.4 row 5 — availability", () => {
     expect(dlqAlarms).toHaveLength(3);
   });
 
-  test("and fires well inside the hour §11.4 allows", () => {
+  test("and fires well inside the hour §10.4 allows", () => {
     const dlqAlarms = alarms(stack().template).filter(
       (alarm) => alarm.MetricName === "ApproximateNumberOfMessagesVisible" && alarm.Threshold === 0,
     );
@@ -155,11 +155,11 @@ describe("§11.4 row 5 — availability", () => {
   });
 });
 
-describe("§11.4 row 6 — data durability", () => {
+describe("§10.4 row 6 — data durability", () => {
   /**
    * "PITR on `messages`". The one row that is purely configuration, and the one
    * that matters most if anything else goes wrong: §7.2 makes `messages` the
-   * only durable record of a Telegram post, and §1.3 L49 says a post that never
+   * only durable record of a Telegram post, and §1.3 L69 says a post that never
    * merges "leaves no row anywhere".
    */
   test("messages has point-in-time recovery", () => {

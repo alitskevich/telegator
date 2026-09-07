@@ -3,30 +3,30 @@ import { ItemIdSchema } from "../domain/ids";
 import { AnalyzedItemSchema, ScrapedItemSchema } from "../domain/item";
 
 /**
- * The three queues of §7.3 L604–608, their payload schemas, and the producer
+ * The three queues of §7.3 L642–646, their payload schemas, and the producer
  * boundary.
  *
- * §1.3 L42 makes the queue the pipeline: a scraped post travels as a queue
+ * §1.3 L62 makes the queue the pipeline: a scraped post travels as a queue
  * payload and is never written to a table while in transit. These schemas are
  * therefore the only definition of what is in flight.
  */
 
 /**
- * The SQS `SendMessageBatch` entry limit, which §3.1 L214 restates as "10 per
+ * The SQS `SendMessageBatch` entry limit, which §3.1 L224 restates as "10 per
  * call". Distinct from `MAX_BATCH_SIZE` in the dedup constants: that is the
- * consumer's batch size (§6 L489, §7.3 L607). Same number, different contract —
+ * consumer's batch size (§6 L554, §7.3 L645). Same number, different contract —
  * one is an API limit, the other a tuning choice.
  */
 export const SQS_MAX_BATCH_ENTRIES = 10;
 
-/** §7.3 L606 — Standard queue, carrying Stage A items (§2.2 L120–130). */
+/** §7.3 L644 — Standard queue, carrying Stage A items (§2.2 L128–138). */
 export const AnalyzeQueuePayloadSchema = ScrapedItemSchema;
 
-/** §7.3 L607 — FIFO queue, carrying Stage B items (§2.2 L132). */
+/** §7.3 L645 — FIFO queue, carrying Stage B items (§2.2 L140). */
 export const AggregateQueuePayloadSchema = AnalyzedItemSchema;
 
 /**
- * §7.3 L608 — FIFO queue. §3.3 L290 says only "Send the message id to the
+ * §7.3 L646 — FIFO queue. §3.3 L286 says only "Send the message id to the
  * publish queue"; the envelope is a decision, taken as JSON with a named field
  * so the body parses the same way as every other queue's and can carry a second
  * field later without a format change.
@@ -76,10 +76,10 @@ export interface QueueDrainer {
 }
 
 /**
- * §7.3 L610 — "each has a matching DLQ". The three queues an operator may drain.
+ * §7.3 L648 — "each has a matching DLQ". The three queues an operator may drain.
  *
  * Defined here rather than in `handlers/dlqReplay.ts` so the dashboard can name
- * them without importing a module that imports `lib/pipeline/`, which §8.2 L734
+ * them without importing a module that imports `lib/pipeline/`, which §8.2 L777
  * forbids it from depending on.
  */
 export const REPLAYABLE_QUEUES = ["analyze", "aggregate", "publish"] as const;
@@ -92,23 +92,23 @@ export interface QueueProducer {
    *
    * Returns per-entry outcomes and **does not throw on a partial failure**,
    * because that is what `SendMessageBatch` does: it answers HTTP 200 with
-   * `Successful[]` and `Failed[]`. §3.1 L216 writes the cursor "only after the
+   * `Successful[]` and `Failed[]`. §3.1 L226 writes the cursor "only after the
    * enqueue succeeds" without defining success for a half-failed batch; the
    * recorded reading is strict — any non-empty `failed` leaves `lastItemId`
-   * unadvanced, so the next run retries those posts (AC-1.5, L224).
+   * unadvanced, so the next run retries those posts (AC-1.5, L234).
    */
   send(messages: readonly QueueMessage[]): Promise<SendResult>;
 }
 
-/** §3.1 L214 — scrape enqueues only `kind === "post"` items. */
+/** §3.1 L224 — scrape enqueues only `kind === "post"` items. */
 export function analyzeQueueMessage(item: z.infer<typeof AnalyzeQueuePayloadSchema>): QueueMessage {
   return { body: JSON.stringify(item) };
 }
 
 /**
- * §3.2 L242 and §7.3 L607.
+ * §3.2 L252 and §7.3 L645.
  *
- * The group is the date because §3.3 L260 uses it to serialise one day's items
+ * The group is the date because §3.3 L270 uses it to serialise one day's items
  * into a single in-flight batch — exactly the serialisation the dedup algorithm
  * needs — while letting different dates proceed in parallel.
  */
@@ -123,11 +123,11 @@ export function aggregateQueueMessage(
 }
 
 /**
- * §3.3 L292–293. The group serialises edits to one Telegram message; the dedup
+ * §3.3 L288–289. The group serialises edits to one Telegram message; the dedup
  * id collapses repeat requests inside SQS's fixed 5-minute window.
  *
  * No delay is set here: R19 — FIFO queues support only a queue-level
- * `DelaySeconds`, so §3.3 L294's settle delay lives on the queue (§7.3 L608).
+ * `DelaySeconds`, so §3.3 L290's settle delay lives on the queue (§7.3 L646).
  */
 export function publishQueueMessage(messageId: string): QueueMessage {
   return {

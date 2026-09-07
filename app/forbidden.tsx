@@ -1,6 +1,6 @@
 /**
  * §8.6's 403, covering both refusals that a fresh sign-in cannot lift:
- * `disabled` (L788 — "a new user is created disabled ... and must be enabled
+ * `disabled` (L839 — "a new user is created disabled ... and must be enabled
  * manually") and `forbidden` (a session ranked below the page's minimum).
  *
  * They share a page because `forbidden.js` takes no props, and they would share

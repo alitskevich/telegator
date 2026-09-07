@@ -3,20 +3,18 @@ import type { NewsItem } from "./newsItemSchema";
 /**
  * The two model boundaries, as interfaces.
  *
- * No model provider is reachable from the build machine — under Bedrock for
- * want of credentials, under OpenRouter (R50) for want of a key that has no
- * business being here — so every model call goes through one of these with a
- * deterministic fake behind it in tests. That is
- * not only a local constraint: it is what lets §11's acceptance criteria be
- * checked at all, since a test that needs a live model cannot assert "these two
- * posts produce one message with two members".
+ * No model provider is reachable from the build machine, for want of a key that
+ * has no business being here, so every model call goes through one of these with
+ * a deterministic fake behind it in tests. That is what lets §10's acceptance
+ * criteria be checked at all: a test needing a live model cannot assert "these
+ * two posts produce one message with two members".
  */
 
-/** §5.2 — one request per item (§3.2 L234). */
+/** §5.2 — one request per item (§3.2 L245). */
 export interface Classifier {
   /**
    * Classifies one item body. Throws on a provider error rather than returning
-   * a sentinel: §3.2 L239/L246 route a provider failure to a throw so SQS
+   * a sentinel: §3.2 L249/L256 route a provider failure to a throw so SQS
    * retries and the item reaches the DLQ, because an error is transient while a
    * `skip` decision is final.
    */
@@ -52,11 +50,9 @@ export interface AdjudicationPair {
  * One call per aggregate batch, carrying at most one pair per item, because
  * only each item's highest-scoring candidate is ever ambiguous.
  *
- * Returns a map keyed by `AdjudicationPair.id`. Never an array: §6 indexed one
- * provider response positionally against its input, and a misaligned response
- * silently attached the wrong result to the wrong item — the class of bug the
- * removed embedding provider (R43) could only guard against by checking its
- * response length before returning. A keyed map removes the bug rather than
+ * Returns a map keyed by `AdjudicationPair.id`, never an array (§5.3): a
+ * positional response that came back short would silently attach every
+ * subsequent result to the wrong item. A keyed map removes that bug rather than
  * checking for it.
  */
 export interface Adjudicator {

@@ -10,12 +10,12 @@ import { recordingMetrics } from "../fakes/metrics";
 import { fakeQueueProducer } from "../fakes/queues";
 
 /**
- * E2E-7 (§11.2 L854) — "An OpenRouter outage sends every in-flight item to the
+ * E2E-7 (§10.2 L966) — "An OpenRouter outage sends every in-flight item to the
  * analyze DLQ; restoring service and replaying completes them."
  *
  * The redrive half is configuration and is asserted in the queue stack
  * (`maxReceiveCount: 3` on the analyze queue): SQS moves a message to the DLQ,
- * not this code. What is ours is the decision §3.2 L246 makes — a provider error
+ * not this code. What is ours is the decision §3.2 L256 makes — a provider error
  * is transient, so the item is FAILED BACK rather than dropped — and the
  * behaviour on replay once the provider returns.
  *
@@ -102,10 +102,10 @@ describe("E2E-7 — during the outage", () => {
   });
 
   /**
-   * The load-bearing assertion. §3.2 L246 makes a provider error a retry, and
+   * The load-bearing assertion. §3.2 L256 makes a provider error a retry, and
    * §3.2's three skip reasons are editorial decisions. Counting an outage as a
    * skip would discard every story the provider was down for while the metric
-   * reported them as filtered on purpose — and §7.7 L679 makes CloudWatch the
+   * reported them as filtered on purpose — and §7.7 L718 makes CloudWatch the
    * system of record, so nothing else would ever contradict it.
    */
   test("nothing is counted as skipped", async () => {

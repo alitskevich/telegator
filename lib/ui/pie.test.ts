@@ -3,7 +3,7 @@ import { PIE_CENTRE, PIE_PALETTE, PIE_RADIUS, sliceColor, toPieSlices } from "./
 
 const slice = (label: string, value: number) => ({ label, value });
 
-describe("toPieSlices — §8.5 L776's arc geometry", () => {
+describe("toPieSlices — §8.5 L825's arc geometry", () => {
   /**
    * The source's geometry, kept verbatim: centre 100,100, radius 80, and the
    * path form `M cx cy L … A r r 0 large 1 … Z`. Slices start at twelve o'clock
@@ -47,7 +47,7 @@ describe("toPieSlices — §8.5 L776's arc geometry", () => {
     /**
      * At 100% the start and end points coincide, so the arc degenerates: SVG
      * draws nothing at all, and the chart renders empty rather than full. §8.5
-     * L776 calls this out, and it is the case a live dashboard hits most —
+     * L825 calls this out, and it is the case a live dashboard hits most —
      * every message published, every item one category.
      */
     test("a lone slice is a circle, not a path", () => {
@@ -96,7 +96,7 @@ describe("toPieSlices — §8.5 L776's arc geometry", () => {
 });
 
 describe("the palette", () => {
-  /** §8.5 L776 — "its 10-colour palette", cycled across §5.4's 29 categories. */
+  /** §8.5 L825 — "its 10-colour palette", cycled across §5.4's 29 categories. */
   test("has ten colours", () => {
     expect(PIE_PALETTE).toHaveLength(10);
   });

@@ -4,7 +4,7 @@ import { AuthorizationError, type AuthorizationReason, type Session } from "../l
 
 /**
  * `requireRole` throws, and a throw out of a server component is an HTTP 500.
- * Every page of §8.2 L718-723 returned one to a signed-out browser — including
+ * Every page of §8.2 L760-765 returned one to a signed-out browser — including
  * the first visit anyone ever makes, which is necessarily signed out. The
  * console has a working sign-in route and nothing sent a browser to it.
  *
@@ -39,7 +39,7 @@ describe("authorized()", () => {
   });
 
   /**
-   * §8.6 L780 puts the console behind the hosted UI. A signed-out visitor has
+   * §8.6 L829 puts the console behind the hosted UI. A signed-out visitor has
    * not been refused anything — they have not been asked yet — so this is the
    * one reason that must offer a way in.
    */
@@ -50,7 +50,7 @@ describe("authorized()", () => {
   });
 
   /**
-   * §8.6 L788: "a disabled user is rejected at every action". They are signed
+   * §8.6 L839: "a disabled user is rejected at every action". They are signed
    * in and stay signed in; sending them to the hosted UI would loop them
    * straight back with the same cookie and the same answer.
    */

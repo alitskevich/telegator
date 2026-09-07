@@ -94,7 +94,7 @@ export const publishQueue = createSqsQueueProducer({
 });
 
 /**
- * §8.4 L752/L754 — the two functions the manual triggers invoke, by name. The
+ * §8.4 L803/L806 — the two functions the manual triggers invoke, by name. The
  * names are set by `infra/lib/app-stack.ts`, which grants InvokeFunction on
  * exactly these two.
  */
@@ -105,7 +105,7 @@ export const functions = {
 } as const;
 
 /**
- * §8.5's read side, with L774's 60 s cache applied at the port so every
+ * §8.5's read side, with L823's 60 s cache applied at the port so every
  * CloudWatch read is covered — including ones added later.
  */
 export const metrics = cachedMetricReader(
@@ -135,5 +135,5 @@ export const dlqUrls = {
   publish: requireEnv(ENV_VARS.publishDlqUrl),
 } as const;
 
-/** §8.2 L723 — reads DLQ bodies without consuming them. */
+/** §8.2 L765 — reads DLQ bodies without consuming them. */
 export const dlqInspector = createSqsDlqInspector(sqs);

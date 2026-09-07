@@ -14,7 +14,7 @@
  */
 
 export interface DeployArgs {
-  /** §9.2 L810's `-c env`. */
+  /** §9.2 L864's `-c env`. */
   readonly env: string;
   /** Opt-in. Without it the script diffs and changes nothing. */
   readonly execute: boolean;
@@ -79,7 +79,7 @@ export function parseDeployArgs(argv: readonly string[]): DeployArgs {
 
 /** The two Secrets Manager ARNs the pipeline's functions are granted and read. */
 export interface DeploySecrets {
-  /** §7.6 L663 — `publish` reads the bot token. */
+  /** §7.6 L699 — `publish` reads the bot token. */
   readonly telegramSecretArn: string;
   /** §7.6, as revised by R50 — `analyze` and `aggregate` read the model key. */
   readonly openRouterSecretArn: string;

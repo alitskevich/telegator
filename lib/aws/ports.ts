@@ -1,7 +1,7 @@
 import type { MetricDimensionName, MetricName } from "../metrics/ports";
 
 /**
- * The read side of §8.5 L763-772: what the dashboard's cards are computed from.
+ * The read side of §8.5 L812-821: what the dashboard's cards are computed from.
  *
  * Ports rather than clients, for the same reason the pipeline has them — a page
  * test must be able to state "24 h of scraping was 412 items" without a network.
@@ -48,7 +48,7 @@ export interface CategoryCount {
   readonly count: number;
 }
 
-/** §8.5 L771 — the category chart, from Logs Insights over the analyze logs. */
+/** §8.5 L820 — the category chart, from Logs Insights over the analyze logs. */
 export interface CategoryLogReader {
   countByCategory(window: TimeWindow): Promise<CategoryCount[]>;
 }

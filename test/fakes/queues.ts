@@ -97,7 +97,7 @@ export function fakeQueueDrainer(messages: readonly ReceivedMessage[] = []): Fak
   };
 }
 
-/** An in-memory DLQ inspector for §8.2 L723's panel. */
+/** An in-memory DLQ inspector for §8.2 L765's panel. */
 export class FakeDlqInspector implements DlqInspector {
   readonly asked: string[] = [];
   private readonly contents = new Map<string, DlqMessage[]>();

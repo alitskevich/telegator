@@ -8,21 +8,18 @@ import type { Adjudicator } from "./ports";
  * R46 — the band adjudicator (the model that resolves the "adjudicate" verdict
  * from `lib/dedup/score.ts`'s classification).
  *
- * Built on the same shape as `createOpenRouterClassifier` in
- * `lib/ai/openrouter.ts`: a structural client interface, a lazily-built client
- * so constructing the adapter never fetches a secret, and the shared
- * `extractText` over Messages content blocks. Kept in its own module rather than
- * folded into `openrouter.ts` because its contract — verdicts keyed by pair id,
- * never positional — is the one thing this task exists to get right. The
- * content-block reader (`./messagesContent`) and the client factory
- * (`./openrouterClient`) are shared, not copied.
+ * Same shape as `createOpenRouterClassifier`: a structural client interface, a
+ * lazily-built client so constructing the adapter never fetches a secret, and
+ * the shared `extractText`. Its own module rather than folded into
+ * `openrouter.ts` because its contract — verdicts keyed by pair id, never
+ * positional (§5.3) — is the thing this adapter exists to get right.
  */
 
 const VerdictsSchema = z.object({
   verdicts: z.array(z.object({ id: z.string().min(1), same: z.boolean() })),
 });
 
-/** Sent as `output_config.format.schema`, generated rather than hand-written (§5.2 L423). */
+/** Sent as `output_config.format.schema`, generated rather than hand-written (§5.2 L425). */
 export const VERDICTS_SCHEMA = z.toJSONSchema(VerdictsSchema);
 
 /**

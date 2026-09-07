@@ -29,7 +29,7 @@ const urlFor = (channel: string, after?: string): string =>
 
 /**
  * Pages are assembled from **recorded** chunks, never hand-written markup: the
- * loop's rule is that real Telegram HTML is captured (§4.1 L371 makes the four
+ * loop's rule is that real Telegram HTML is captured (§4.1 L374 makes the four
  * literal class names the system's most fragile dependency), so a volume or
  * ordering test re-ids a real chunk rather than inventing a simplified one.
  */
@@ -64,7 +64,7 @@ function source(fields: Record<string, unknown>): Source {
     id: CHANNEL,
     status: SOURCE_STATUS_OK,
     tgChannel: "target",
-    // Long overdue, so selection (§3.1 L190) never gets in the way of what a
+    // Long overdue, so selection (§3.1 L200) never gets in the way of what a
     // test is actually asserting.
     lastUpdated: NOW - COLD_INTERVAL_MS,
     ...fields,
@@ -116,10 +116,10 @@ async function readBack(repo: FakeSourceRepo, id: string): Promise<Source> {
 }
 
 describe("runScrape — acceptance criteria", () => {
-  test("AC-1.4 (§3.1 L223) an unreachable source increments zeroYieldRuns and leaves other sources unaffected", async () => {
+  test("AC-1.4 (§3.1 L233) an unreachable source increments zeroYieldRuns and leaves other sources unaffected", async () => {
     const h = harness({
       sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
-      // Only the second channel answers; the first is modelled the way §3.1 L195
+      // Only the second channel answers; the first is modelled the way §3.1 L205
       // says a non-2xx arrives — an empty string, not an exception.
       pages: { [urlFor(OTHER_CHANNEL)]: postsPage([500, 501]) },
     });
@@ -141,7 +141,7 @@ describe("runScrape — acceptance criteria", () => {
     expect(result).toEqual({ processed: 2, enqueued: 2 });
   });
 
-  test("AC-1.4 (§3.1 L223) a fetcher that throws still leaves other sources unaffected", async () => {
+  test("AC-1.4 (§3.1 L233) a fetcher that throws still leaves other sources unaffected", async () => {
     const h = harness({
       sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
       pages: { [urlFor(OTHER_CHANNEL)]: postsPage([600]) },
@@ -164,7 +164,7 @@ describe("runScrape — acceptance criteria", () => {
     expect((await readBack(h.repo, OTHER_CHANNEL)).lastItemId).toBe("600");
   });
 
-  test("AC-1.5 (§3.1 L224) a failed SendMessageBatch leaves lastItemId unchanged", async () => {
+  test("AC-1.5 (§3.1 L234) a failed SendMessageBatch leaves lastItemId unchanged", async () => {
     const h = harness({
       sources: [source({ lastItemId: "100000", lastCount: 3, zeroYieldRuns: 2 })],
       pages: { [urlFor(CHANNEL, "100000")]: postsPage([100001, 100002]) },
@@ -177,7 +177,7 @@ describe("runScrape — acceptance criteria", () => {
 
     const after = await readBack(h.repo, CHANNEL);
     expect(after.lastItemId).toBe("100000");
-    // §3.1 L216 — "Cursor fields are written **only after** the enqueue
+    // §3.1 L226 — "Cursor fields are written **only after** the enqueue
     // succeeds", read strictly: a non-empty `failed` writes nothing at all, so
     // the source stays overdue and the next run retries the whole page.
     expect(h.repo.writeCount).toBe(0);
@@ -185,7 +185,7 @@ describe("runScrape — acceptance criteria", () => {
     expect(result).toEqual({ processed: 2, enqueued: 1 });
   });
 
-  test("AC-1.6 (§3.1 L225) a forwarded post is counted and dropped, never enqueued", async () => {
+  test("AC-1.6 (§3.1 L235) a forwarded post is counted and dropped, never enqueued", async () => {
     const h = harness({
       sources: [source({})],
       pages: { [urlFor(CHANNEL)]: telegramFixture("forwarded") },
@@ -218,7 +218,7 @@ describe("runScrape — acceptance criteria", () => {
 });
 
 describe("runScrape — fetch", () => {
-  test("§3.1 L195 the ?after= cursor is appended only when lastItemId exists", async () => {
+  test("§3.1 L205 the ?after= cursor is appended only when lastItemId exists", async () => {
     const withCursor = harness({
       sources: [source({ lastItemId: "100674" })],
       pages: { [urlFor(CHANNEL, "100674")]: postsPage([100675]) },
@@ -237,7 +237,7 @@ describe("runScrape — fetch", () => {
     expect(withoutCursor.fetcher.requests.map((r) => r.url)).toEqual(["https://t.me/s/chan"]);
   });
 
-  test("§3.1 L195 browser-like headers are sent on every request", async () => {
+  test("§3.1 L205 browser-like headers are sent on every request", async () => {
     const h = harness({
       sources: [source({})],
       pages: { [urlFor(CHANNEL)]: postsPage([1]) },
@@ -256,7 +256,7 @@ describe("runScrape — fetch", () => {
 });
 
 describe("runScrape — cursor", () => {
-  test("§2.1 L107 lastItemId is the numerically newest id, not the lexicographically newest", async () => {
+  test("§2.1 L115 lastItemId is the numerically newest id, not the lexicographically newest", async () => {
     const h = harness({
       sources: [source({})],
       // "9" sorts after "10" as a string; the cursor must not go backwards.
@@ -268,7 +268,7 @@ describe("runScrape — cursor", () => {
     expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe("10");
   });
 
-  test("§2.1 L107 lastItemId covers every post seen, including dropped ones", async () => {
+  test("§2.1 L115 lastItemId covers every post seen, including dropped ones", async () => {
     const h = harness({
       sources: [source({})],
       pages: { [urlFor(CHANNEL)]: page([postChunk(41), forwardChunk(42)]) },
@@ -280,7 +280,7 @@ describe("runScrape — cursor", () => {
     expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe("42");
   });
 
-  test("§3.1 L208 a successful parse resets zeroYieldRuns and records lastNonZeroCount (R15)", async () => {
+  test("§3.1 L218 a successful parse resets zeroYieldRuns and records lastNonZeroCount (R15)", async () => {
     const h = harness({
       sources: [source({ zeroYieldRuns: 2, lastNonZeroCount: 0 })],
       pages: { [urlFor(CHANNEL)]: telegramFixture("multiPost") },
@@ -306,14 +306,14 @@ describe("runScrape — cursor", () => {
 
     const after = await readBack(h.repo, CHANNEL);
     expect(after.lastCount).toBe(0);
-    // Without this, §4.1 L373's "non-zero historical lastCount" is gone two runs
+    // Without this, §4.1 L376's "non-zero historical lastCount" is gone two runs
     // before the alarm needs it.
     expect(after.lastNonZeroCount).toBe(4);
   });
 });
 
 describe("runScrape — metrics", () => {
-  test("§7.7 L684 ItemsScraped is counted per source", async () => {
+  test("§7.7 L723 ItemsScraped is counted per source", async () => {
     const h = harness({
       sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
       pages: {
@@ -328,12 +328,12 @@ describe("runScrape — metrics", () => {
     expect(h.metrics.get("ItemsScraped", { Source: OTHER_CHANNEL })).toBe(1);
   });
 
-  test("§4.1 L373 three consecutive zero-yield runs emit SourceStale, dimensioned and undimensioned (R25)", async () => {
+  test("§4.1 L376 three consecutive zero-yield runs emit SourceStale, dimensioned and undimensioned (R25)", async () => {
     const repo = fakeSourceRepo([source({ lastCount: 0, lastNonZeroCount: 5 })]);
     const metrics = recordingMetrics();
 
     for (let run = 0; run < STALE_ZERO_YIELD_RUNS; run++) {
-      // Each run needs the cold source to be due again (§3.1 L190).
+      // Each run needs the cold source to be due again (§3.1 L200).
       const at = NOW + run * COLD_INTERVAL_MS;
       await runScrape(harness({ sources: [], repo, metrics, at }).deps);
 
@@ -344,12 +344,12 @@ describe("runScrape — metrics", () => {
 
     expect((await readBack(repo, CHANNEL)).zeroYieldRuns).toBe(STALE_ZERO_YIELD_RUNS);
     expect(metrics.get("SourceStale", { Source: CHANNEL })).toBe(1);
-    // R25 — §7.7 L699 alarms on "SourceStale for any source", and a CloudWatch
+    // R25 — §7.7 L739 alarms on "SourceStale for any source", and a CloudWatch
     // alarm cannot enumerate a runtime-discovered dimension at synth time.
     expect(metrics.get("SourceStale", {})).toBe(1);
   });
 
-  test("§4.1 L373 a source that never yielded anything does not alarm", async () => {
+  test("§4.1 L376 a source that never yielded anything does not alarm", async () => {
     const repo = fakeSourceRepo([source({ lastCount: 0, lastNonZeroCount: 0 })]);
     const metrics = recordingMetrics();
 
@@ -364,7 +364,7 @@ describe("runScrape — metrics", () => {
 });
 
 describe("runScrape — enqueue", () => {
-  test("§3.1 L214 posts are sent in batches of SQS_MAX_BATCH_ENTRIES", async () => {
+  test("§3.1 L224 posts are sent in batches of SQS_MAX_BATCH_ENTRIES", async () => {
     const total = SQS_MAX_BATCH_ENTRIES + 2;
     const ids = Array.from({ length: total }, (_, index) => 900 + index);
     const inner = fakeQueueProducer();
@@ -388,7 +388,7 @@ describe("runScrape — enqueue", () => {
     expect(result).toEqual({ processed: total, enqueued: total });
   });
 
-  test("§3.1 L214 only kind === 'post' items reach the analyze queue", async () => {
+  test("§3.1 L224 only kind === 'post' items reach the analyze queue", async () => {
     const h = harness({
       sources: [source({})],
       pages: { [urlFor(CHANNEL)]: page([postChunk(11), forwardChunk(12)]) },
@@ -399,11 +399,11 @@ describe("runScrape — enqueue", () => {
     const bodies = h.queue.sent.map((message) => JSON.parse(message.body));
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({ id: `${CHANNEL}/11`, kind: "post", tgChannel: "target" });
-    // §2.2 L127 — the Standard analyze queue carries no group id.
+    // §2.2 L135 — the Standard analyze queue carries no group id.
     expect(h.queue.sent[0]?.messageGroupId).toBeUndefined();
   });
 
-  test("§2.2 L127 every post of one run shares a single date key", async () => {
+  test("§2.2 L135 every post of one run shares a single date key", async () => {
     const h = harness({
       sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
       pages: {
@@ -418,7 +418,7 @@ describe("runScrape — enqueue", () => {
     expect(dates).toEqual(new Set([new Date(NOW).toISOString().slice(0, 10)]));
   });
 
-  test("§3.1 L187 only sources selectable by §3.1 L190 are polled", async () => {
+  test("§3.1 L197 only sources selectable by §3.1 L200 are polled", async () => {
     const h = harness({
       sources: [
         source({ id: CHANNEL, lastCount: 3, lastUpdated: NOW }),

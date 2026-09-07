@@ -9,7 +9,7 @@ const rows = [
 
 const visible = ["title", "category"] as const;
 
-describe("filterByKeyword — §8.3 L744", () => {
+describe("filterByKeyword — §8.3 L790", () => {
   /** "Search on every table filters across visible columns." */
   test("matches on any visible column", () => {
     expect(filterByKeyword(rows, "cup", visible).map((r) => r.id)).toEqual(["example/2"]);
@@ -30,7 +30,7 @@ describe("filterByKeyword — §8.3 L744", () => {
   });
 
   /**
-   * "Visible columns" is the load-bearing half of L744. An operator who filters
+   * "Visible columns" is the load-bearing half of L790. An operator who filters
    * a table to three columns and types a word expects the rows they can read to
    * explain the match; matching a hidden `id` or `tgId` returns rows with
    * no visible reason to be there.

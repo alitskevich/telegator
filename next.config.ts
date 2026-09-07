@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 /**
- * §9.3 L814 deploys this on Amplify Hosting with platform `WEB_COMPUTE`, so the
+ * §9.3 L874 deploys this on Amplify Hosting with platform `WEB_COMPUTE`, so the
  * default server output is exactly what is wanted here — no `output: "export"`,
  * which would strip the server actions of §8.4, and no `standalone`, which
  * Amplify's build image does not consume.

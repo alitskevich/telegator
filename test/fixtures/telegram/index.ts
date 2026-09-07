@@ -10,10 +10,10 @@ import { resolve } from "node:path";
  * date anchor, the self-closing `<br/>`, the `forwarded_from_name` anchor and the
  * three classes that carry a `background-image`. The *content* is placeholder
  * text: the live page is 148 KB of third-party news, and only the structure is
- * what §3.1 L197–207 parses.
+ * what §3.1 L207–218 parses.
  */
 
-/** §3.1 L197 — the literal the page is split on. */
+/** §3.1 L207 — the literal the page is split on. */
 export const CHUNK_MARKER = '<div class="tgme_widget_message_wrap js-widget_message_wrap">';
 
 const files = {

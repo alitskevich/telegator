@@ -21,16 +21,14 @@ import { SQS_MAX_BATCH_ENTRIES } from "./ports";
 
 /**
  * The `QueueProducer` (lib/queues/ports.ts) adapter over `SendMessageBatch`,
- * for all three queues of §7.3 L604–608.
+ * for all three queues of §7.3 L642–646.
  *
- * The whole point of this file is to preserve, unflattened, the shape of the
- * SQS response: a partial failure is HTTP 200 with `Successful[]` *and*
- * `Failed[]`. §3.1 L216 writes the cursor "only after the enqueue succeeds" and
- * AC-1.5 (L224) reads that strictly — any non-empty `failed` leaves
- * `lastItemId` unadvanced. If this adapter threw on a partial failure, the
- * cursor logic in lib/pipeline/scrape/index.ts would have to be a try/catch,
- * and the half of the batch SQS rejected would be skipped forever: §1.3 L49
- * says an unmerged post leaves no row anywhere to recover it from.
+ * The point of this file is to preserve, unflattened, the shape of the SQS
+ * response: a partial failure is HTTP 200 with `Successful[]` *and* `Failed[]`.
+ * §3.1 L226 advances the cursor only after the enqueue succeeds and AC-1.5
+ * reads that strictly, so throwing here would turn the cursor logic into a
+ * try/catch and skip the rejected half forever — and §1.3 L69 leaves no row
+ * anywhere to recover it from.
  */
 
 /** Loop seed; `style/noMagicNumbers` is an error under `lib/`. */
@@ -81,7 +79,7 @@ export interface SqsSendClient {
 export interface SqsQueueProducerOptions {
   readonly client: SqsSendClient;
   /**
-   * §7.3 L604–608 gives each stage its own queue, so the URL identifies the
+   * §7.3 L642–646 gives each stage its own queue, so the URL identifies the
    * producer and is fixed at construction — never a per-call argument that a
    * caller could get wrong on one call out of many.
    */
@@ -89,8 +87,8 @@ export interface SqsQueueProducerOptions {
 }
 
 /**
- * §7.3 L607–608 — `MessageGroupId`/`MessageDeduplicationId` for the two FIFO
- * queues, and neither for Standard `analyze` (L606): SQS rejects the whole
+ * §7.3 L645–646 — `MessageGroupId`/`MessageDeduplicationId` for the two FIFO
+ * queues, and neither for Standard `analyze` (L644): SQS rejects the whole
  * request when a Standard queue is sent those keys, so they are omitted rather
  * than sent as `undefined`.
  *
@@ -171,7 +169,7 @@ function attribute(output: SqsBatchResponse, indices: readonly number[]): SendRe
 /**
  * Builds the producer. `client` and `queueUrl` are the only configuration; the
  * client is injected so tests substitute a stub and production wires one real
- * `SQSClient` per Lambda (§8.2 L734 keeps handlers thin).
+ * `SQSClient` per Lambda (§8.2 L777 keeps handlers thin).
  *
  * **Whole-call failure.** When `client.send` itself throws, every entry of that
  * chunk is reported as `failed` with `SQS_TRANSPORT_FAILURE_CODE` and the
@@ -217,13 +215,13 @@ export function createSqsQueueProducer(options: SqsQueueProducerOptions): QueueP
       const successful: number[] = [];
       const failed: SendFailure[] = [];
 
-      // §3.1 L214 restates the API's own limit as "10 per call"; a caller may
+      // §3.1 L224 restates the API's own limit as "10 per call"; a caller may
       // hand over more than that, so chunking belongs here rather than being
       // every caller's obligation.
       for (let offset = FIRST_INDEX; offset < messages.length; offset += SQS_MAX_BATCH_ENTRIES) {
         const chunk = messages.slice(offset, offset + SQS_MAX_BATCH_ENTRIES);
         // Awaited in the loop on purpose: scrape has a reserved concurrency of 1
-        // (§3.1 L185) and ordering the calls keeps FIFO group ordering intact.
+        // (§3.1 L195) and ordering the calls keeps FIFO group ordering intact.
         const outcome = await sendChunk(chunk, offset);
         successful.push(...outcome.successful);
         failed.push(...outcome.failed);
@@ -254,7 +252,7 @@ const MAX_RECEIVE = 10;
  * §3.5's read side over `ReceiveMessage`/`DeleteMessage`.
  *
  * `MessageGroupId` is requested explicitly: it is a system attribute SQS omits
- * unless asked for, and §3.3 L260 depends on the group surviving a replay.
+ * unless asked for, and §3.3 L270 depends on the group surviving a replay.
  */
 export function createSqsQueueDrainer(options: SqsQueueDrainerOptions): QueueDrainer {
   const { client, queueUrl } = options;

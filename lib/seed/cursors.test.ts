@@ -20,7 +20,7 @@ describe("parseCursorFile", () => {
     });
   });
 
-  /** §3.1 L201 captures the id from `href="https://t.me/{any}/{digits}"`. */
+  /** §3.1 L211 captures the id from `href="https://t.me/{any}/{digits}"`. */
   test("rejects a cursor that is not digits", () => {
     expect(() => parseCursorFile({ yigal_levin: "4821a" })).toThrow(/yigal_levin/);
     expect(() => parseCursorFile({ yigal_levin: "" })).toThrow(/yigal_levin/);
@@ -52,7 +52,7 @@ describe("planCursorReseed — §9.5 step 5", () => {
 
   /**
    * A source that never ran on AWS has no cursor at all, which is exactly the
-   * case this step exists for: without the reseed, §3.1 L195 omits `?after=` and
+   * case this step exists for: without the reseed, §3.1 L205 omits `?after=` and
    * the first poll re-scrapes the channel's whole visible history.
    */
   test("seeds a source that has no cursor yet", () => {
@@ -71,7 +71,7 @@ describe("planCursorReseed — §9.5 step 5", () => {
   /**
    * An id in the file with no matching source is a typo or a source deleted
    * since the export. Silently ignoring it would leave a channel un-reseeded,
-   * and §9.5 L831's whole purpose is that AWS resumes where Firebase stopped.
+   * and §9.5 L943's whole purpose is that AWS resumes where Firebase stopped.
    */
   test("reports an id that matches no source", () => {
     const plan = planCursorReseed([source("a", "10")], { a: "15", ghost: "99" });
@@ -80,7 +80,7 @@ describe("planCursorReseed — §9.5 step 5", () => {
   });
 
   /**
-   * The invariant of §9.5 L834: "The two systems must never publish the same
+   * The invariant of §9.5 L946: "The two systems must never publish the same
    * Telegram content concurrently — they would double-post." Moving a cursor
    * backwards makes AWS re-scrape posts it has already handled, which is that
    * failure exactly, so it is refused rather than applied.

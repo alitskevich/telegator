@@ -33,7 +33,7 @@ function encode(level: LogLevel, msg: string, fields: LogFields | undefined): st
   } catch {
     // Something in `fields` is circular or otherwise unserialisable. Degrade
     // that field rather than throw — this logger is called from `catch` blocks,
-    // where throwing turns a handled failure into lost data (§1.3 L49).
+    // where throwing turns a handled failure into lost data (§1.3 L69).
     const safe: LogFields = {};
     for (const [key, value] of Object.entries(fields ?? {})) {
       try {
@@ -50,8 +50,8 @@ function encode(level: LogLevel, msg: string, fields: LogFields | undefined): st
 /**
  * A structured logger emitting one JSON object per line.
  *
- * The shape is load-bearing, not cosmetic: §7.7 L695 refuses a per-category
- * CloudWatch metric and sources the dashboard's category chart (§8.5 L771) from
+ * The shape is load-bearing, not cosmetic: §7.7 L735 refuses a per-category
+ * CloudWatch metric and sources the dashboard's category chart (§8.5 L820) from
  * a Logs Insights query over analyze's logs instead. Insights discovers fields
  * from the top level of each JSON line, so caller fields are lifted there.
  */

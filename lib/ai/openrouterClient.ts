@@ -3,15 +3,14 @@ import { OPENROUTER_BASE_URL } from "./constants";
 /**
  * R50 — the one place a real model client is constructed.
  *
- * Both adapters (`./openrouter` and `./adjudicator`) used to carry their own
- * copy of the four lines that built an `AnthropicBedrockMantle`. Under Bedrock
- * that duplication was merely untidy; under OpenRouter it is a hazard, because
- * the client now needs a *secret* and two copies means two places for the
- * base URL, the key handling and the lazy import to drift apart.
+ * Both adapters (`./openrouter` and `./adjudicator`) build one from here rather
+ * than each holding its own copy: the client needs a *secret*, and two copies
+ * would be two places for the base URL, the key handling and the lazy import to
+ * drift apart.
  *
- * The import stays lazy for the reason it always was: loading this module must
- * not pull the SDK in, so a test process can import the adapters without an SDK
- * ever reaching for credentials.
+ * The import stays lazy so that loading this module does not pull the SDK in,
+ * and a test process can import the adapters without an SDK ever reaching for
+ * credentials.
  */
 
 /**
@@ -47,7 +46,7 @@ export async function createMessagesClient(apiKey: ApiKeyProvider): Promise<Mess
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ baseURL: OPENROUTER_BASE_URL, apiKey: await apiKey() });
 
-  // `as never`: §5.2 L421-423's `output_config` is an OpenRouter extension the
+  // `as never`: §5.2 L423-425's `output_config` is an OpenRouter extension the
   // SDK's own request type does not declare. The cast is at the boundary and
   // nowhere else — `ClassificationRequest` remains the typed definition of what
   // goes on the wire.
@@ -59,7 +58,7 @@ export async function createMessagesClient(apiKey: ApiKeyProvider): Promise<Mess
  * neither an injected client nor a key provider.
  *
  * Named here so the two adapters cannot word it differently, and so it reads as
- * a wiring fault rather than a provider outage: §3.2 L246 routes provider
+ * a wiring fault rather than a provider outage: §3.2 L256 routes provider
  * errors to SQS retry, and retrying a missing dependency for six hours before
  * the DLQ would hide the real cause behind a full DLQ.
  */

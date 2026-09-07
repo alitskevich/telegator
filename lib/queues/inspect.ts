@@ -5,7 +5,7 @@ import {
 } from "@aws-sdk/client-sqs";
 
 /**
- * §8.2 L723 — "Queue depths + DLQ inspection/replay".
+ * §8.2 L765 — "Queue depths + DLQ inspection/replay".
  *
  * Depths come from `GetQueueAttributes` (`lib/aws/observability.ts`); this is the
  * other half, which reads what is actually sitting in a DLQ. R24 added

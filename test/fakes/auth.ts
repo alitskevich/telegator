@@ -68,7 +68,7 @@ export class FakeIdTokenVerifier implements IdTokenVerifier {
 }
 
 /**
- * A user directory. Unknown subjects are disabled, matching §8.6 L788's "a new
+ * A user directory. Unknown subjects are disabled, matching §8.6 L839's "a new
  * user is created **disabled**" — the safe default is also the specified one.
  */
 export class FakeUserStatusReader implements UserStatusReader {

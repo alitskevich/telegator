@@ -7,13 +7,13 @@ import { parseReseedArgs } from "../lib/seed/args";
 import { parseCursorFile, planCursorReseed } from "../lib/seed/cursors";
 
 /**
- * §9.5 step 5 (L831) — re-seed `lastItemId` so AWS resumes where Firebase
+ * §9.5 step 5 (L943) — re-seed `lastItemId` so AWS resumes where Firebase
  * stopped rather than re-scraping.
  *
  * **The cursors must be the values Firebase stopped at.** If the Firebase
  * Telegram schedulers are still running when this is taken, they keep advancing
- * their own cursors underneath, so step 6 (L832) enables the AWS schedule
- * against a stale value and re-scrapes the gap — which is L834's double-post.
+ * their own cursors underneath, so step 6 (L944) enables the AWS schedule
+ * against a stale value and re-scrapes the gap — which is L946's double-post.
  * §9.5 no longer carries a step for stopping them, and nothing here can verify
  * that they have stopped, so the script says so and refuses any cursor that
  * would move backwards.
@@ -44,7 +44,7 @@ async function main(): Promise<void> {
   for (const conflict of plan.backwards) {
     console.error(
       `  ${conflict.id}: REFUSED, ${conflict.lastItemId} is behind ${conflict.from} — ` +
-        "re-scraping would re-publish (§9.5 L834)",
+        "re-scraping would re-publish (§9.5 L946)",
     );
   }
 
@@ -57,13 +57,13 @@ async function main(): Promise<void> {
   if (!write) {
     console.log(
       "dry run — pass --write to apply. Confirm the Firebase Telegram schedulers are " +
-        "stopped first: these cursors must be the values they stopped at (§9.5 L834).",
+        "stopped first: these cursors must be the values they stopped at (§9.5 L946).",
     );
     return;
   }
 
   for (const update of plan.updates) {
-    // A patch, not a put: §3.1 L216's `updateCursor` writes only the cursor, so
+    // A patch, not a put: §3.1 L226's `updateCursor` writes only the cursor, so
     // an operator's concurrent edit to `category` or `teaser` survives.
     await repo.updateCursor(update.id, { lastItemId: update.lastItemId });
   }

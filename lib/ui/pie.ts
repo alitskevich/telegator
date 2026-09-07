@@ -1,7 +1,7 @@
 import type { Slice } from "../dashboard/computations";
 
 /**
- * §8.5 L776 — "the source's hand-built SVG arc geometry (centre 100,100, radius
+ * §8.5 L825 — "the source's hand-built SVG arc geometry (centre 100,100, radius
  * 80, `M cx cy L … A r r 0 large 1 … Z`, with the full-circle special case) and
  * its 10-colour palette. No charting library is needed for two pie charts."
  *
@@ -42,7 +42,7 @@ export interface PieSlice {
   /**
    * `circle` when this slice is the entire chart. At 100% the arc's start and
    * end points coincide and SVG draws nothing, so the chart would render empty
-   * rather than full — §8.5 L776 calls the case out for that reason.
+   * rather than full — §8.5 L825 calls the case out for that reason.
    */
   readonly kind: "path" | "circle";
   /** Absent for the `circle` case. */

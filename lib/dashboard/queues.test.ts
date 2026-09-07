@@ -45,7 +45,7 @@ const deps = () => ({
   dlqUrls: DLQS,
 });
 
-describe("loadQueues — §8.2 L723", () => {
+describe("loadQueues — §8.2 L765", () => {
   test("carries every stage with both depths", async () => {
     queues.set(QUEUES.analyze, { available: 4, inFlight: 1 });
     queues.set(DLQS.analyze, { available: 2, inFlight: 0 });
@@ -68,10 +68,10 @@ describe("loadQueues — §8.2 L723", () => {
   });
 });
 
-describe("inspectDlq — §8.2 L723", () => {
+describe("inspectDlq — §8.2 L765", () => {
   const body = { messageId: "m1", body: '{"id":"example/1"}', receiveCount: 3 };
 
-  /** §8.6 L783 — `viewer` reads all pages, and this is part of one. */
+  /** §8.6 L832 — `viewer` reads all pages, and this is part of one. */
   test("a viewer may inspect", async () => {
     signedInAs("viewer");
     inspector.set(DLQS.publish, [body]);

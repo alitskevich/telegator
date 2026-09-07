@@ -1,12 +1,12 @@
 /**
- * §8.3 L741 and L742's table columns.
+ * §8.3 L786 and L787's table columns.
  *
- * One definition per table, shared by the page and by §8.4 L755's export — L744
+ * One definition per table, shared by the page and by §8.4 L801's export — L790
  * ties them together ("filters across visible columns"), and an export whose
  * columns differed from the table it was taken from would be quietly wrong.
  */
 
-/** §8.3 L741 — the Sources table. */
+/** §8.3 L786 — the Sources table. */
 export const SOURCE_COLUMNS = [
   "id",
   "status",
@@ -18,7 +18,7 @@ export const SOURCE_COLUMNS = [
   "zeroYieldRuns",
 ] as const;
 
-/** §8.3 L742 — the Messages table, minus the expandable member list. */
+/** §8.3 L787 — the Messages table, minus the expandable member list. */
 export const MESSAGE_COLUMNS = [
   "id",
   "title",

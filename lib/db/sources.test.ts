@@ -50,7 +50,7 @@ describe("createSourceRepo", () => {
     await expect(repoWith(stub([{}])).get("nope")).resolves.toBeUndefined();
   });
 
-  /** §3.1 L187 — "Query `sources` by `status-index` for `status = 'ok'`". */
+  /** §3.1 L197 — "Query `sources` by `status-index` for `status = 'ok'`". */
   test("lists by status through status-index", async () => {
     const s = stub([{ Items: [stored] }]);
 
@@ -79,9 +79,9 @@ describe("createSourceRepo", () => {
   });
 
   /**
-   * §3.1 L216 writes the cursor after a successful enqueue. It has to be a
+   * §3.1 L226 writes the cursor after a successful enqueue. It has to be a
    * patch: writing the whole record would undo an operator's concurrent edit to
-   * `category` or `teaser`, which §2.1 L102-106 marks operator-owned.
+   * `category` or `teaser`, which §2.1 L110-114 marks operator-owned.
    */
   test("updateCursor patches only the fields it is given", async () => {
     const s = stub();
@@ -104,7 +104,7 @@ describe("createSourceRepo", () => {
     expect(s.inputs).toHaveLength(0);
   });
 
-  /** R15 — the field §4.1 L373's staleness rule needs after L208 zeroes lastCount. */
+  /** R15 — the field §4.1 L376's staleness rule needs after L218 zeroes lastCount. */
   test("updateCursor can write lastNonZeroCount", async () => {
     const s = stub();
 

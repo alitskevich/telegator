@@ -3,7 +3,7 @@ import type { MessageListItem } from "../lib/domain/message";
 import { PieChart } from "./PieChart";
 
 /**
- * §8.3 L740 — "Stat cards (items scraped / analysed / skipped 24 h, messages
+ * §8.3 L785 — "Stat cards (items scraped / analysed / skipped 24 h, messages
  * published), status and category charts from CloudWatch, queue-depth strip, 10
  * most recent messages".
  *
@@ -14,7 +14,7 @@ import { PieChart } from "./PieChart";
 /**
  * What a number that could not be read shows as.
  *
- * Never `0`. §8.5 L769's "Errors" card is the reason: zero dead letters is a
+ * Never `0`. §8.5 L818's "Errors" card is the reason: zero dead letters is a
  * claim that the pipeline is healthy, and an unreadable DLQ is not evidence for
  * it. The same applies to a queue depth — an empty queue and a queue nobody
  * could reach look identical at `0` and mean opposite things.
@@ -34,7 +34,7 @@ export function Dashboard({ overview }: { overview: Overview }) {
       <section className="stat-cards">
         <StatCard label="Items scraped" value={overview.scraped} note="last 24 h" />
         <StatCard label="Items analysed" value={overview.analyzed} note="last 24 h" />
-        {/* §8.5 L767 — the split is the informative part. A bare total says
+        {/* §8.5 L816 — the split is the informative part. A bare total says
             nothing about whether the pre-filter or the classifier is dropping. */}
         <StatCard label="Items skipped" value={overview.skipped.total} note={skipDetail} />
         <StatCard label="Messages published" value={overview.published} note="all time" />

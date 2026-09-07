@@ -13,7 +13,7 @@ import { telegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
- * E2E-2 (§11.2 L849) — "Two near-identical posts from different sources on the
+ * E2E-2 (§10.2 L963) — "Two near-identical posts from different sources on the
  * same date produce **one** message with two members."
  *
  * What this can and cannot prove. "Near-identical" is a *semantic* claim, and
@@ -21,7 +21,7 @@ import { runPipeline } from "./harness";
  * and places, it does not discover it. So this proves the plumbing — that two
  * items above R46's `MERGE_THRESHOLD` become one message with two members and
  * one Telegram send — while whether real classifications of genuinely similar
- * posts clear it is §11.3's recalibration (R48), which needs the labelled set.
+ * posts clear it is §10.3's recalibration (R48), which needs the labelled set.
  *
  * The control test below is what stops that being a hollow claim: the same two
  * posts naming *different* entities produce two messages and two sends, so the
@@ -64,7 +64,7 @@ const ELSEWHERE = "Brest, Kobryn";
 /**
  * Distinct titles either way, so the two items are never literally the same
  * record: what changes between the two worlds is `properNames`, which §5.2
- * L452 makes the classifier emit and R46 weights at 0.6 — the single field
+ * L454 makes the classifier emit and R46 weights at 0.6 — the single field
  * that decides whether these are one story or two.
  */
 function twoStoryClassifier(sameEvent: boolean): Classifier {
@@ -128,7 +128,7 @@ describe("E2E-2 fixtures", () => {
   });
 });
 
-describe("E2E-2 (§11.2 L849) — the same event", () => {
+describe("E2E-2 (§10.2 L963) — the same event", () => {
   const ABOVE = true;
 
   test("two different sources each contribute one item", async () => {
@@ -156,12 +156,12 @@ describe("E2E-2 (§11.2 L849) — the same event", () => {
     const record = await messages.get(only?.id ?? "");
 
     expect(Object.keys(record?.members ?? {})).toEqual([`source_a/${POST}`, `source_b/${POST}`]);
-    // §2.3 L145's invariant — the cached count and the map agree.
+    // §2.3 L153's invariant — the cached count and the map agree.
     expect(record?.memberCount).toBe(2);
   });
 
   /**
-   * §3.3 L292 groups the publish queue by message id, so a merge that produced
+   * §3.3 L288 groups the publish queue by message id, so a merge that produced
    * two enqueues would still send twice — the member count and the send count
    * are separate claims.
    */
@@ -172,7 +172,7 @@ describe("E2E-2 (§11.2 L849) — the same event", () => {
     expect(run.telegramCalls).toHaveLength(1);
   });
 
-  test("the merged message keeps one id, the first item's (§2.3 L142)", async () => {
+  test("the merged message keeps one id, the first item's (§2.3 L150)", async () => {
     await runPipeline(world(ABOVE));
 
     const [only] = await messages.queryByStatus("published");

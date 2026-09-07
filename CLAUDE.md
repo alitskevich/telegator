@@ -1,8 +1,13 @@
 # Working in this repository
 
-`docs/telegator-design.md` is the authoritative spec. **Do not edit it.** Code
-cites it by section and line (`§3.4 L316`), and a divergence from it is recorded
-as a reconciliation in the comment that makes it, with the reason.
+`docs/telegator.md` is the project's only document. **Part I (§1–§11) is the
+normative spec — do not edit it to match the code.** Code cites it by section
+and line (`§3.4 L316`), and `test/specCitations.test.ts` fails if a citation
+stops resolving, so an edit to Part I means re-pointing every citation into it.
+
+A divergence from Part I is a **reconciliation**: the comment that makes it
+names the number and the reason in a sentence or two, and §25 of the document
+carries the full account. Add a row there when you issue a new number.
 
 ## The four gates
 

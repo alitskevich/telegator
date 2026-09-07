@@ -19,7 +19,7 @@ export interface FakeFetcher extends HttpFetcher {
 /**
  * Serves recorded pages by exact URL.
  *
- * An unregistered URL returns "" rather than throwing, which is §3.1 L195's
+ * An unregistered URL returns "" rather than throwing, which is §3.1 L205's
  * rule for a non-2xx response — and it is how a test models an unreachable
  * source for AC-1.4. Keying on the full URL means a cursored request
  * (`?after=90177`) and an uncursored one are distinct fixtures, which is what
@@ -43,7 +43,7 @@ export interface BotCall {
 }
 
 export interface FakeBotOptions {
-  /** Every call answers `{ok: false, description}` — a §4.2 L381 failure. */
+  /** Every call answers `{ok: false, description}` — a §4.2 L384 failure. */
   readonly failWith?: { readonly description: string };
   /** The first call answers a 429 carrying `retry_after`; later calls succeed. */
   readonly rateLimitFirstCall?: { readonly retryAfter: number };
@@ -55,7 +55,7 @@ export interface FakeBot extends TelegramBot {
 
 /**
  * A Bot API sink that records calls and can fail the way Telegram actually
- * fails: HTTP 200 with `ok: false` (§4.2 L381), never a thrown error and never
+ * fails: HTTP 200 with `ok: false` (§4.2 L384), never a thrown error and never
  * a non-2xx status. A fake that threw would let publish be written with a
  * try/catch and pass, while the real API returned failures it read as success.
  */

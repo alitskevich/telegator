@@ -1,10 +1,10 @@
 import { MATCH_KEY_CAP } from "./constants";
 
 /**
- * The deduplication match key (R46), replacing §6 L495-497's embedding.
+ * The deduplication match key (R46), replacing §6 L512-512's embedding.
  *
- * Built only from the fields §5.2 L443-453 makes the classifier emit in English
- * — `title`, `peoples`, `properNames`, `tags`. §5.3's multilingual embedder
+ * Built only from the fields §5.2 L445-455 makes the classifier emit in English
+ * — `title`, `peoples`, `properNames`, `tags`. §6's multilingual embedder
  * existed to serve `summary` (Belarusian) and `body` (Russian/Ukrainian), which
  * `buildEmbeddingText` concatenated into the vector and which a match key does
  * not need: the classification has already normalised the discriminating
@@ -21,7 +21,7 @@ export interface MatchKey {
 }
 
 /**
- * A structural shape rather than `AnalyzedItem`, so the §11.3 calibration
+ * A structural shape rather than `AnalyzedItem`, so the §10.3 calibration
  * harness can pass records read from its labelled-set file without building a
  * full queue payload — the reason `EmbeddingTextFields` was structural too.
  */
@@ -44,12 +44,12 @@ function sortedSet(values: readonly string[]): string[] {
   return [...new Set(values.filter((value) => value !== ""))].sort().slice(0, MATCH_KEY_CAP);
 }
 
-/** `peoples` and `properNames` are comma-separated by §5.2 L451-452. */
+/** `peoples` and `properNames` are comma-separated by §5.2 L453-454. */
 function splitCommas(value: string | undefined): string[] {
   return value === undefined ? [] : value.split(",").map(canonical);
 }
 
-/** `title` is "three words, English" (§5.2 L443), so whitespace is the separator. */
+/** `title` is "three words, English" (§5.2 L445), so whitespace is the separator. */
 function splitWords(value: string | undefined): string[] {
   return value === undefined ? [] : canonical(value).split(WHITESPACE);
 }
@@ -63,12 +63,10 @@ export function buildMatchKey(fields: MatchKeyFields): MatchKey {
 }
 
 /**
- * R45 — §3.3's merge sets `embedding` to the elementwise mean of the two
- * vectors. With no vector, the union is the equivalent operation: it keeps
- * every discriminating term either input contributed.
- *
- * Commutative and idempotent, which is what lets a replayed merge produce the
- * same bytes as the original (AC-3.7).
+ * R45 — the union, where the rule this replaced took an elementwise mean. It
+ * keeps every discriminating term either input contributed, and is commutative
+ * and idempotent, which is what lets a replayed merge produce the same bytes as
+ * the original (AC-3.7).
  *
  * It is **not associative once `MATCH_KEY_CAP` binds**: capping a union in
  * lexical order discards the tail, so `union(union(a, b), c)` and
@@ -88,8 +86,8 @@ export function unionMatchKeys(a: MatchKey, b: MatchKey): MatchKey {
 }
 
 /**
- * R44 — §7.2 L590–598 stores a dedup match as three projections for the
- * `date-index` (L598). This function reads them back as a `MatchKey` for the
+ * R44 — §7.2 L634–634 stores a dedup match as three projections for the
+ * `date-index` (L634). This function reads them back as a `MatchKey` for the
  * scorer, structurally: the read path never builds a full payload.
  */
 export function matchKeyOf(record: {

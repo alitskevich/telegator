@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * §8.6 L780-786. One Cognito group per role, least privileged first.
+ * §8.6 L829-835. One Cognito group per role, least privileged first.
  *
  * This module — not the CDK stack — is where the list lives. `infra/lib/auth-stack.ts`
  * imports it to name the groups, so the Cognito group names and the dashboard's
@@ -29,7 +29,7 @@ export function isRole(value: unknown): value is Role {
 export interface Principal {
   /** Raw `cognito:groups`. Arbitrary strings — anything unrecognised is ignored. */
   readonly roles: readonly string[];
-  /** §8.6 L788. False for a user who has not been enabled, or has been disabled. */
+  /** §8.6 L839. False for a user who has not been enabled, or has been disabled. */
   readonly enabled: boolean;
 }
 
@@ -40,12 +40,12 @@ function rankOf(value: string): number | undefined {
 
 /**
  * Whether `principal` holds at least `min`, per the cumulative grants of §8.6
- * L784-785 — `editor` is viewer "+", `admin` is editor "+" — so a check is a
+ * L833-834 — `editor` is viewer "+", `admin` is editor "+" — so a check is a
  * floor and not an equality.
  *
- * Rejects, in order: an absent principal (§8.4 L757 re-checks server-side, and an
+ * Rejects, in order: an absent principal (§8.4 L808 re-checks server-side, and an
  * unauthenticated caller must answer `false` rather than throw); a disabled user
- * (§8.6 L788, "rejected at every action" — disabling is the revocation mechanism,
+ * (§8.6 L839, "rejected at every action" — disabling is the revocation mechanism,
  * so it has to outrank group membership, because an operator disabling a
  * compromised admin does not also remove them from the `admin` group); and any
  * group name that is not one of the three, which carries no privilege rather than

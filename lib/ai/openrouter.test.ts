@@ -103,7 +103,7 @@ describe("createOpenRouterClassifier", () => {
     await expect(classifier.classify(ITEM_BODY)).resolves.toEqual(VALID_ITEM);
   });
 
-  it("throws when the response violates NewsItemSchema (§3.2 L239)", async () => {
+  it("throws when the response violates NewsItemSchema (§3.2 L249)", async () => {
     const fake = fakeClassifierClient(async () =>
       textResponse({ ...VALID_ITEM, category: "not-a-real-category" }),
     );
@@ -136,7 +136,7 @@ describe("createOpenRouterClassifier", () => {
     await expect(classifier.classify(ITEM_BODY)).rejects.toThrow();
   });
 
-  it("propagates a provider error unchanged (§3.2 L246)", async () => {
+  it("propagates a provider error unchanged (§3.2 L256)", async () => {
     const providerError = new Error("ThrottlingException");
     const fake = fakeClassifierClient(async () => {
       throw providerError;
@@ -153,7 +153,7 @@ describe("createOpenRouterClassifier", () => {
   /**
    * R50 — under Bedrock a missing credential surfaced from deep inside the AWS
    * credential chain; under OpenRouter it is a wiring fault this adapter can
-   * name itself. §3.2 L246 sends a throw to SQS retry, so an unnamed one would
+   * name itself. §3.2 L256 sends a throw to SQS retry, so an unnamed one would
    * spend six hours of retries filling the DLQ before an operator saw the
    * cause.
    */

@@ -5,12 +5,12 @@ import { parseTelegramPage } from "./parse";
 
 /**
  * Every case runs over the recorded `t.me/s/` markup captured in item 3.1, never
- * over hand-written HTML: §3.1 L197–207 parses a real page, and the two rules
+ * over hand-written HTML: §3.1 L207–218 parses a real page, and the two rules
  * that bit hardest (`<br/>` self-closing, `tgme_widget_message_text
  * js-message_text`) are only visible in the recording.
  *
  * Two cases need markup no recording happens to contain — a chunk with no id
- * (§3.1 L208) and the `&amp;lt;` double-decode hazard (§3.1 L204). Those are
+ * (§3.1 L218) and the `&amp;lt;` double-decode hazard (§3.1 L214). Those are
  * derived by a single substitution into a recorded fixture rather than authored,
  * so the surrounding structure stays live-accurate.
  */
@@ -27,7 +27,7 @@ function onlyPost(name: TelegramFixtureName): ParsedPost {
   return post;
 }
 
-describe("chunking (§3.1 L197)", () => {
+describe("chunking (§3.1 L207)", () => {
   test("yields one post per message wrapper, in page order", () => {
     expect(parseFixture("multiPost").map((post) => post.id)).toEqual([
       "100674",
@@ -50,7 +50,7 @@ describe("chunking (§3.1 L197)", () => {
   });
 
   /**
-   * §3.1 L208 treats a chunk with no id as a zero-yield signal handled by the
+   * §3.1 L218 treats a chunk with no id as a zero-yield signal handled by the
    * orchestrator; the parser's own duty is only never to emit an id-less post.
    */
   test("skips a chunk whose anchors carry no t.me message href", () => {
@@ -62,8 +62,8 @@ describe("chunking (§3.1 L197)", () => {
   });
 });
 
-describe("links and tokenised body (§3.1 L203)", () => {
-  // AC-1.3 (§3.1 L222): two links produce `[…](#1)`, `[…](#2)` and two entries.
+describe("links and tokenised body (§3.1 L213)", () => {
+  // AC-1.3 (§3.1 L232): two links produce `[…](#1)`, `[…](#2)` and two entries.
   test("AC-1.3 a post with two links yields (#1), (#2) and links.length === 2", () => {
     const post = onlyPost("twoLinks");
     expect(post.body).toContain("[first source](#1)");
@@ -77,7 +77,7 @@ describe("links and tokenised body (§3.1 L203)", () => {
 
   test("tokenises anchors carrying target and rel attributes", () => {
     // Live anchors are `<a href="X" target="_blank" rel="noopener">Y</a>`, not
-    // the bare `<a href="X">Y</a>` §3.1 L203 writes.
+    // the bare `<a href="X">Y</a>` §3.1 L213 writes.
     expect(onlyPost("twoLinks").body).toBe(
       "Report cites [first source](#1) and [second source](#2).",
     );
@@ -101,7 +101,7 @@ describe("links and tokenised body (§3.1 L203)", () => {
   });
 });
 
-describe("plain body (§3.1 L204)", () => {
+describe("plain body (§3.1 L214)", () => {
   test("decodes the six named entities", () => {
     const [first] = parseFixture("multiPost");
     if (first === undefined) {
@@ -121,7 +121,7 @@ describe("plain body (§3.1 L204)", () => {
   });
 
   /**
-   * §3.1 L204 lists `&amp;` first, but decoding it first turns `&amp;lt;` into
+   * §3.1 L214 lists `&amp;` first, but decoding it first turns `&amp;lt;` into
    * `&lt;` and then into `<` — inventing markup the channel never wrote.
    */
   test("does not double-decode &amp;lt;", () => {
@@ -142,7 +142,7 @@ describe("plain body (§3.1 L204)", () => {
   });
 });
 
-describe("image (§3.1 L205, R32)", () => {
+describe("image (§3.1 L215, R32)", () => {
   test("takes the photo wrapper's background-image", () => {
     const posts = parseFixture("multiPost");
     const [, , third] = posts;
@@ -167,8 +167,8 @@ describe("image (§3.1 L205, R32)", () => {
   });
 
   /**
-   * R32 regression: read literally, §3.1 L205's "first `background-image:url('X')`"
-   * stores the emoji sprite that precedes the photo, which §3.4 L339 would then
+   * R32 regression: read literally, §3.1 L215's "first `background-image:url('X')`"
+   * stores the emoji sprite that precedes the photo, which §3.4 L342 would then
    * `sendPhoto` as the story's picture.
    */
   test("R32 never returns the emoji sprite that precedes the photo", () => {
@@ -185,7 +185,7 @@ describe("image (§3.1 L205, R32)", () => {
   });
 });
 
-describe("forwardedFrom (§3.1 L206)", () => {
+describe("forwardedFrom (§3.1 L216)", () => {
   test("takes the channel segment from the forwarded-from anchor's href", () => {
     const post = onlyPost("forwarded");
     expect(post.id).toBe("7001");

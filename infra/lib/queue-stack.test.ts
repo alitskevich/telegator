@@ -49,7 +49,7 @@ const ALL_QUEUES = [
 ];
 
 describe("TelegatorQueueStack", () => {
-  /** §7.3 L604-610 — three queues, and "Each has a matching DLQ". */
+  /** §7.3 L642-648 — three queues, and "Each has a matching DLQ". */
   test("declares three queues and three DLQs", () => {
     stackFor().template.resourceCountIs("AWS::SQS::Queue", 6);
   });
@@ -59,16 +59,16 @@ describe("TelegatorQueueStack", () => {
   });
 
   /**
-   * §7.3 L610 — "Message retention: 14 days (the SQS maximum) on every queue
+   * §7.3 L648 — "Message retention: 14 days (the SQS maximum) on every queue
    * **and DLQ**." The DLQ half is the one that matters: a dead-lettered post has
-   * no other record anywhere (§1.3 L49), so its retention is how long an
+   * no other record anywhere (§1.3 L69), so its retention is how long an
    * operator has to replay it.
    */
   test.each(ALL_QUEUES)("%s retains messages for 14 days", (name) => {
     expect(queue(stackFor().template, name)?.MessageRetentionPeriod).toBe(FOURTEEN_DAYS_SECONDS);
   });
 
-  /** §7.3 L618 — visibility is 6x the 300 s function timeout. */
+  /** §7.3 L660 — visibility is 6x the 300 s function timeout. */
   test.each([
     "telegator-dev-analyze",
     "telegator-dev-aggregate.fifo",
@@ -77,7 +77,7 @@ describe("TelegatorQueueStack", () => {
     expect(queue(stackFor().template, name)?.VisibilityTimeout).toBe(VISIBILITY_SECONDS);
   });
 
-  describe("queue types (§7.3 L606-608)", () => {
+  describe("queue types (§7.3 L644-646)", () => {
     test("analyze is Standard, because no item depends on another", () => {
       expect(queue(stackFor().template, "telegator-dev-analyze")?.FifoQueue).toBeUndefined();
     });
@@ -85,7 +85,7 @@ describe("TelegatorQueueStack", () => {
     test.each(["telegator-dev-aggregate.fifo", "telegator-dev-publish.fifo"])(
       "%s is FIFO",
       /**
-       * AC-3.9 (§3.3 L308) and AC-4.6 (§3.4 L354) both rest on this. A FIFO queue
+       * AC-3.9 (§3.3 L304) and AC-4.6 (§3.4 L357) both rest on this. A FIFO queue
        * delivers one message group to a single consumer at a time and deduplicates
        * inside a five-minute window; neither is a property any runtime test can
        * observe, and both are false the moment the queue is Standard.
@@ -104,8 +104,8 @@ describe("TelegatorQueueStack", () => {
     );
 
     /**
-     * The producers always supply an explicit MessageDeduplicationId (§3.2 L242,
-     * §3.3 L293), so content-based deduplication must stay off — enabling it
+     * The producers always supply an explicit MessageDeduplicationId (§3.2 L252,
+     * §3.3 L289), so content-based deduplication must stay off — enabling it
      * would let SQS hash the body instead, and two genuinely different items
      * with identical text would collapse into one.
      */
@@ -120,7 +120,7 @@ describe("TelegatorQueueStack", () => {
     );
   });
 
-  describe("redrive policies (§7.3 L606-608)", () => {
+  describe("redrive policies (§7.3 L644-646)", () => {
     test.each([
       ["telegator-dev-analyze", 3],
       ["telegator-dev-aggregate.fifo", 3],
@@ -146,9 +146,9 @@ describe("TelegatorQueueStack", () => {
     });
   });
 
-  describe("the settle delay (§3.3 L294, §7.3 L608, R19)", () => {
+  describe("the settle delay (§3.3 L290, §7.3 L646, R19)", () => {
     /**
-     * R19: SQS FIFO supports only a queue-level DelaySeconds, so §3.3 L294's
+     * R19: SQS FIFO supports only a queue-level DelaySeconds, so §3.3 L290's
      * per-message settle delay lives here rather than on the producer.
      */
     test("publish carries the settle delay at queue level", () => {
@@ -157,7 +157,7 @@ describe("TelegatorQueueStack", () => {
       );
     });
 
-    test("§12.4 L886 calls 300 s a starting value, so an override reaches the queue", () => {
+    test("§11.4 L1011 calls 300 s a starting value, so an override reaches the queue", () => {
       const { template } = stackFor({ settleDelaySeconds: 60 });
 
       expect(queue(template, "telegator-dev-publish.fifo")?.DelaySeconds).toBe(60);
@@ -171,7 +171,7 @@ describe("TelegatorQueueStack", () => {
     });
   });
 
-  test("names carry the §9.2 L810 environment prefix", () => {
+  test("names carry the §9.2 L864 environment prefix", () => {
     expect(queue(stackFor({ env: "prod" }).template, "telegator-prod-analyze")).toBeDefined();
   });
 

@@ -22,10 +22,10 @@ import { grantTableActions } from "./grants";
 import type { TelegatorQueueStack } from "./queue-stack";
 
 /**
- * §9.1 L802 — the pipeline's five Lambdas. Their triggers, IAM and alarms are
- * item 4.6; this item is the function inventory of §7.5 L645–653.
+ * §9.1 L854 — the pipeline's five Lambdas. Their triggers, IAM and alarms are
+ * item 4.6; this item is the function inventory of §7.5 L683–691.
  *
- * §9.1 L806 puts this stack after Data and Queue, which is why both arrive as
+ * §9.1 L858 puts this stack after Data and Queue, which is why both arrive as
  * props: passing the constructs directly lets CDK emit the exports and imports
  * itself, rather than importing by a hardcoded name that would not exist until
  * the other stack had deployed.
@@ -50,7 +50,7 @@ export interface TelegatorPipelineStackProps extends StackProps {
 /** Every row of §7.5's table gives 300 s. */
 const TIMEOUT = Duration.seconds(300);
 
-/** §7.5 L645 — "All Node.js 22, ARM64, bundled with esbuild." */
+/** §7.5 L683 — "All Node.js 22, ARM64, bundled with esbuild." */
 const RUNTIME = Runtime.NODEJS_22_X;
 
 /**
@@ -81,13 +81,13 @@ interface FunctionSpec {
   readonly entry: string;
   readonly memorySize: number;
   /**
-   * §7.5 L651–652 write "by message group" rather than a number for aggregate
-   * and publish, and §3.3 L260 is explicit that the FIFO group "replaces a
+   * §7.5 L689–690 write "by message group" rather than a number for aggregate
+   * and publish, and §3.3 L270 is explicit that the FIFO group "replaces a
    * blunt reserved-concurrency-of-1". Reserving there would serialise across
    * dates too, undoing the parallelism the groups exist to allow.
    */
   readonly reservedConcurrency?: number;
-  /** §12.5 L887 gives a retention only for analyze. */
+  /** §11.5 L1012 gives a retention only for analyze. */
   readonly logRetention?: RetentionDays;
 }
 
@@ -99,12 +99,12 @@ const SPECS: readonly FunctionSpec[] = [
     entry: "analyze.ts",
     memorySize: 512,
     reservedConcurrency: 5,
-    // §12.5 L887 — 90 days. Not decoration: §7.7 L695 sources §8.5 L771's
+    // §11.5 L1012 — 90 days. Not decoration: §7.7 L735 sources §8.5 L820's
     // category chart from a Logs Insights query over these logs, so retention
     // is a functional setting rather than a cost one.
     logRetention: RetentionDays.THREE_MONTHS,
   },
-  // §7.5 L657 — 1024 MB "because it holds a day of 4 KB vectors plus a 10-item
+  // §7.5 L689 — 1024 MB "because it holds a day of 4 KB vectors plus a 10-item
   // embedding batch". R43 removed the embeddings; the size is left as the spec
   // sets it rather than re-tuned against a workload nothing here can measure.
   { key: "aggregate", name: "aggregate", entry: "aggregate.ts", memorySize: 1024 },
@@ -144,7 +144,7 @@ export class TelegatorPipelineStack extends Stack {
       [ENV_VARS.analyzeDlqUrl]: dlqUrl(queues, "analyze"),
       [ENV_VARS.aggregateDlqUrl]: dlqUrl(queues, "aggregate"),
       [ENV_VARS.publishDlqUrl]: dlqUrl(queues, "publish"),
-      // §7.6 L663 — the bot token. Its ARN is a context parameter rather than
+      // §7.6 L699 — the bot token. Its ARN is a context parameter rather than
       // a lookup: a `Secret.fromLookup` would make synth an authenticated call.
       [ENV_VARS.telegramSecretArn]: secretArn(this, "telegramSecretArn"),
       // §7.6, as revised by R50 — the second secret. Under Bedrock this row read
@@ -155,15 +155,10 @@ export class TelegatorPipelineStack extends Stack {
 
     const built = SPECS.map((spec) => {
       /**
-       * R41 — built before the function and handed to it, rather than declared
-       * beside it.
-       *
-       * `@aws-cdk/aws-lambda:useCdkManagedLogGroup` makes every function declare
-       * its own `/aws/lambda/<name>` group. A second group with that name is
-       * rejected on deploy ("already exists in stack"), and before it collided
-       * it was simply inert — the retention in force was the managed group's
-       * default, never §12.5 L887's 90 days. Passing it in means one group,
-       * owned here, with the retention the category chart depends on.
+       * R41 — built here and handed to the function, because CDK's managed
+       * log group already claims `/aws/lambda/<name>`: a second one is rejected
+       * on deploy, and until it collided it was inert, leaving §11.5 L1012's
+       * 90 days unapplied.
        */
       const logGroup =
         spec.logRetention === undefined
@@ -181,7 +176,7 @@ export class TelegatorPipelineStack extends Stack {
         runtime: RUNTIME,
         architecture: Architecture.ARM_64,
         /**
-         * §8.5 L771's category chart is a Logs Insights query grouping by a
+         * §8.5 L820's category chart is a Logs Insights query grouping by a
          * top-level `category` field, and `lib/logging/logger.ts` writes one
          * JSON object per line for it. `LoggingFormat.JSON` would wrap each
          * record in an envelope and carry ours as a `message` string, so the
@@ -213,9 +208,9 @@ export class TelegatorPipelineStack extends Stack {
   }
 
   /**
-   * §7.3 L606–608's event source mappings, and §7.5 L649's schedule.
+   * §7.3 L644–646's event source mappings, and §7.5 L687's schedule.
    *
-   * Every mapping reports batch item failures (§7.3 L620): without it one
+   * Every mapping reports batch item failures (§7.3 L662): without it one
    * poison message forces the whole batch to retry, which for analyze means
    * re-billing nine successful OpenRouter calls.
    */
@@ -229,17 +224,10 @@ export class TelegatorPipelineStack extends Stack {
     );
 
     /**
-     * R33 — §3.3 L258 and §7.3 L607 both give aggregate a 300 s batching window,
-     * and **AWS does not support one on a FIFO queue**. CDK rejects it at synth
-     * ("Batching window is not supported for FIFO queues"), so `batchSize: 10`
-     * is all that survives.
-     *
-     * The spec has already reasoned about this outcome. §7.4 L640: "Even in the
-     * worst case where a batch arrives as single messages, deduplication still
-     * works — Pass 2 queries stored messages by date, and that is the pass that
-     * does the real work across invocations." So the window was an efficiency
-     * measure, not a correctness one; losing it means smaller batches and more
-     * date-index queries, not missed merges.
+     * R33 — AWS does not support a batching window on a FIFO queue, so
+     * `batchSize: 10` is all that survives. §7.4 L675 has already reasoned about
+     * it: correctness comes from the date-index query, so the loss costs smaller
+     * batches and more queries, not missed merges.
      */
     this.functions.aggregate.addEventSource(
       new SqsEventSource(queues.aggregate, {
@@ -250,7 +238,7 @@ export class TelegatorPipelineStack extends Stack {
 
     this.functions.publish.addEventSource(
       new SqsEventSource(queues.publish, {
-        // §3.4 L314 — one deliberately: each send is rate-limited against
+        // §3.4 L313 — one deliberately: each send is rate-limited against
         // Telegram and the message group already serialises work per message.
         batchSize: 1,
         reportBatchItemFailures: true,
@@ -258,14 +246,12 @@ export class TelegatorPipelineStack extends Stack {
     );
 
     /**
-     * R22 — `events.Rule`, matching §1.2 L32's "One EventBridge rule" and §7.5
-     * L649's `rate()` syntax, rather than the Scheduler §7.1 L572 mentions.
+     * R22 — `events.Rule`, matching §1.2 L52's "One EventBridge rule" and §7.5
+     * L689's `rate()` syntax.
      *
-     * R23 — `enabled` comes from config and defaults to **false in both
-     * environments**. §9.2 L810 disables it in dev, but §9.5 step 4 also deploys
-     * prod disabled and enables it only at step 7 after a 48-hour soak, so a
-     * flag derived from the environment name would make the first prod deploy
-     * start posting immediately.
+     * R23 — `enabled` defaults to **false in both environments**: §9.5 deploys
+     * prod disabled and enables it only after a 48-hour soak, so a flag derived
+     * from the environment name would start posting on the first prod deploy.
      */
     new Rule(this, "ScrapeSchedule", {
       ruleName: config.name("scrape-schedule"),
@@ -275,26 +261,26 @@ export class TelegatorPipelineStack extends Stack {
     });
   }
 
-  /** §7.6 L668–673's per-function grants, plus R24's additions. */
+  /** §7.6 L705–710's per-function grants, plus R24's additions. */
   private grantLeastPrivilege(data: TelegatorDataStack, queues: TelegatorQueueStack): void {
     const { scrape, analyze, aggregate, publish, dlqReplay } = this.functions;
 
-    // §7.6 L668 — scrape reads and writes `sources` and sends to analyze.
-    // §3.1 L187 selects sources with a Query on `status-index`; §3.1 L216
+    // §7.6 L705 — scrape reads and writes `sources` and sends to analyze.
+    // §3.1 L197 selects sources with a Query on `status-index`; §3.1 L226
     // advances the cursor with an UpdateItem. It reads no source by id, creates
     // none and deletes none.
     grantTableActions(data.sources, scrape, "dynamodb:Query", "dynamodb:UpdateItem");
     queues.analyze.grantSendMessages(scrape);
 
-    // §7.6 L669.
+    // §7.6 L706.
     queues.analyze.grantConsumeMessages(analyze);
     queues.aggregate.grantSendMessages(analyze);
     analyze.addToRolePolicy(readSecret(secretArn(this, "openRouterSecretArn")));
 
-    // §7.6 L670.
+    // §7.6 L707.
     queues.aggregate.grantConsumeMessages(aggregate);
     // §6's two passes: `queryByDate` on `date-index`, `get` for R9's base-table
-    // read, then either L539's create (PutItem) or L527's merge (UpdateItem).
+    // read, then either L582's create (PutItem) or L579's merge (UpdateItem).
     grantTableActions(
       data.messages,
       aggregate,
@@ -306,25 +292,22 @@ export class TelegatorPipelineStack extends Stack {
     queues.publish.grantSendMessages(aggregate);
     aggregate.addToRolePolicy(readSecret(secretArn(this, "openRouterSecretArn")));
 
-    // §7.6 L671. Both secrets' ARNs are configuration rather than a lookup, so
+    // §7.6 L708. Both secrets' ARNs are configuration rather than a lookup, so
     // the grants are scoped to those ARN strings rather than to constructs.
     queues.publish.grantConsumeMessages(publish);
     /**
-     * §7.6 L672 says "read/write `messages`", and `grantReadWriteData` matches
-     * that literally — including `DeleteItem` and `BatchWriteItem`. This stage
-     * calls exactly two APIs: `GetItem` for §3.4 L316's load and `UpdateItem`
-     * for L345's result write.
+     * §7.6 L709 says "read/write `messages`", which `grantReadWriteData` would
+     * read as including `DeleteItem`. This stage calls two APIs: `GetItem` for
+     * §3.4 L316's load and `UpdateItem` for L348's result.
      *
-     * The narrow reading is taken because of what the wide one permits. §7.2
-     * makes `messages` the only durable record of a Telegram post — §1.3 L49
-     * says a post that never merges "leaves no row anywhere" — and §8.4 L751
-     * makes even an operator's delete soft for that reason. A stage that never
-     * deletes should not be able to, least of all irrecoverably.
+     * The narrow reading is taken because `messages` is the only durable record
+     * of a post (§1.3 L69), which is why even an operator's delete is soft
+     * (§8.4 L805). A stage that never deletes should not be able to.
      */
     grantTableActions(data.messages, publish, "dynamodb:GetItem", "dynamodb:UpdateItem");
     publish.addToRolePolicy(readSecret(secretArn(this, "telegramSecretArn")));
 
-    // §7.6 L672 — receive on all DLQs, send on all source queues.
+    // §7.6 L709 — receive on all DLQs, send on all source queues.
     for (const dlq of queues.deadLetterQueues) dlq.grantConsumeMessages(dlqReplay);
     for (const queue of [queues.analyze, queues.aggregate, queues.publish]) {
       queue.grantSendMessages(dlqReplay);
@@ -332,7 +315,7 @@ export class TelegatorPipelineStack extends Stack {
 
     /**
      * R24 — §7.6 omits `cloudwatch:PutMetricData`, yet §7.7's twelve counters
-     * cannot be emitted without it and §7.7 L679 makes them the pipeline's
+     * cannot be emitted without it and §7.7 L718 makes them the pipeline's
      * system of record for volume.
      *
      * `PutMetricData` takes no resource-level ARN, so `*` is unavoidable; the
@@ -350,12 +333,12 @@ export class TelegatorPipelineStack extends Stack {
     }
   }
 
-  /** §7.7 L699's five alarms, with the thresholds that section pins. */
+  /** §7.7 L739's five alarms, with the thresholds that section pins. */
   private declareAlarms(config: TelegatorConfig, queues: TelegatorQueueStack): void {
     /**
      * "Any DLQ depth > 0". A dead-lettered post has no other record anywhere
-     * (§1.3 L49), so this is the only signal that one is waiting for an
-     * operator — and §11.4 L876 allows it at most an hour to fire.
+     * (§1.3 L69), so this is the only signal that one is waiting for an
+     * operator — and §10.4 L995 allows it at most an hour to fire.
      */
     queues.deadLetterQueues.forEach((dlq, index) => {
       new Alarm(this, `DeadLetterDepthAlarm${index}`, {
@@ -371,7 +354,7 @@ export class TelegatorPipelineStack extends Stack {
     });
 
     /**
-     * R25 — §7.7 L699 alarms on "SourceStale for any source", but the metric is
+     * R25 — §7.7 L739 alarms on "SourceStale for any source", but the metric is
      * dimensioned by a runtime-discovered `Source` that no alarm can enumerate
      * at synth time, and a lookup would break the credential-free synth gate.
      * Item 3.5 therefore emits it undimensioned as well, and this watches that.
@@ -391,7 +374,7 @@ export class TelegatorPipelineStack extends Stack {
     });
 
     /**
-     * §7.2 L600 — "Alarm at > 500 — the point at which the in-memory comparison
+     * §7.2 L638 — "Alarm at > 500 — the point at which the in-memory comparison
      * assumption (§6) needs revisiting." The migration path is a `date#shard`
      * key or a vector store; this is the tripwire that says when to take it.
      */
@@ -409,7 +392,7 @@ export class TelegatorPipelineStack extends Stack {
       treatMissingData: TreatMissingData.NOT_BREACHING,
     });
 
-    /** §11.4 L874 — "Oldest message < 1 hour under normal load". */
+    /** §10.4 L995 — "Oldest message < 1 hour under normal load". */
     new Alarm(this, "AnalyzeQueueAgeAlarm", {
       alarmName: config.name("analyze-queue-age"),
       metric: queues.analyze.metricApproximateAgeOfOldestMessage({
@@ -422,7 +405,7 @@ export class TelegatorPipelineStack extends Stack {
     });
 
     /**
-     * §7.7 L699 — "Lambda error rate > 10% over 15 minutes".
+     * §7.7 L739 — "Lambda error rate > 10% over 15 minutes".
      *
      * A rate rather than a count, expressed as metric math across all five
      * functions: a count would alarm on one failure in a busy hour, and a
@@ -467,19 +450,11 @@ export class TelegatorPipelineStack extends Stack {
 /**
  * R50 — the model grant, which is no longer a model grant at all.
  *
- * R42 and R49 spent two rounds getting Bedrock's IAM right: the statement had
- * to name `bedrock-mantle:CreateInference` on a *project*, not §7.6 L669's
- * `bedrock:InvokeModel` on a model ARN, because that is the service
- * `AnthropicBedrockMantle` actually signs for. Both are deleted with the
- * provider. This account's Organization disables Bedrock above IAM, so no
- * statement written here could ever have worked (docs/learning.md §9).
- *
- * What replaces them is one `GetSecretValue` on the OpenRouter key, attached to
- * the same two functions. The trade §7.6 records honestly: IAM no longer
- * authorizes the *inference*, only the read of a bearer token that does. Which
- * model that token is spent on is fixed by `CLASSIFIER_MODEL_ID` alone — the
- * same loss of least privilege R42 recorded against the Mantle project ARN, now
- * unavoidable rather than incidental.
+ * One `GetSecretValue` on the OpenRouter key replaces the Bedrock statements of
+ * R42 and R49, which this account's Organization disabled above IAM anyway. The
+ * trade §7.6 L714 records: IAM authorizes the read of the bearer token, not the
+ * inference, so `CLASSIFIER_MODEL_ID` is the only thing fixing which model the
+ * token is spent on.
  */
 function readSecret(resource: string): PolicyStatement {
   return new PolicyStatement({
@@ -502,7 +477,7 @@ function secretArn(scope: Construct, contextKey: string): string {
   if (typeof configured === "string" && configured !== "") return configured;
   // `telegator-*`, not `telegator/*`. The spec writes the secrets as
   // `telegator/telegram-bot-token`, but nothing is named that way: every
-  // deployed secret follows §9.2 L810's `telegator-{env}-{resource}` scheme
+  // deployed secret follows §9.2 L864's `telegator-{env}-{resource}` scheme
   // (`telegator-dev-telegram-token`). A `telegator/*` fallback therefore
   // matched no secret in the account at all — it read as least privilege and
   // was in fact zero privilege, which a deploy cannot notice because the grant
@@ -510,7 +485,7 @@ function secretArn(scope: Construct, contextKey: string): string {
   return `arn:${Aws.PARTITION}:secretsmanager:${Aws.REGION}:${Aws.ACCOUNT_ID}:secret:telegator-*`;
 }
 
-/** §7.3 L610 — "Each has a matching DLQ", in the order the queue stack exposes them. */
+/** §7.3 L648 — "Each has a matching DLQ", in the order the queue stack exposes them. */
 function dlqUrl(queues: TelegatorQueueStack, name: "analyze" | "aggregate" | "publish"): string {
   const index = { analyze: 0, aggregate: 1, publish: 2 }[name];
   const dlq = queues.deadLetterQueues[index];

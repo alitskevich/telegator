@@ -1,5 +1,5 @@
 ---
-description: "Start the Ralph loop that plans and implements Telegator from docs/telegator-design.md"
+description: "Start the Ralph loop that plans and implements Telegator from docs/telegator.md"
 argument-hint: "[max-iterations]  (default 30)"
 allowed-tools: ["Bash", "Read", "Write", "Edit", "Grep", "Glob", "Task", "Skill"]
 ---
@@ -18,7 +18,7 @@ else
   echo "git: ABSENT - Phase 0 will run 'git init' and write .gitignore."
 fi
 echo "--- spec ---"
-[ -f docs/telegator-design.md ] && echo "docs/telegator-design.md: $(wc -l < docs/telegator-design.md) lines" || echo "MISSING - the loop has nothing to build from."
+[ -f docs/telegator.md ] && echo "docs/telegator.md: $(wc -l < docs/telegator.md) lines" || echo "MISSING - the loop has nothing to build from."
 echo "--- ledger ---"
 if [ -f .claude/build-ledger.local.md ]; then
   echo "EXISTS - loop will RESUME from it. Unchecked items:"
@@ -53,8 +53,8 @@ verbatim, which a multi-KB document does not survive.
 
 Two documents govern the loop, and they have different jobs:
 
-- **`docs/telegator-design.md`** is the *product* spec — the AWS + Next.js
-  system to build. The loop reads it and never edits it. It is yours.
+- **`docs/telegator.md`** is the *product* document — Part I is the normative
+  AWS + Next.js spec to build. The loop reads it and never edits it. It is yours.
 - **`ralph-loop-prompt.md`** at the repo root is the *loop* spec — phases,
   engineering bar, verification gates, completion gate. This command only points
   the loop at it.
@@ -64,7 +64,7 @@ Phase 0 dispatches parallel read-only agents over the design doc, runs
 `.claude/build-ledger.local.md` (gitignored). Every later iteration takes one
 ledger item, writes its test first, implements, verifies, and commits — through
 foundations, domain core, the four pipeline stages, CDK stacks, the Next.js
-dashboard, cross-cutting work, code review, §11 acceptance, and finally
+dashboard, cross-cutting work, code review, §10 acceptance, and finally
 `README.md` and `CLAUDE.md`.
 
 ## What the loop cannot do here
@@ -72,8 +72,8 @@ dashboard, cross-cutting work, code review, §11 acceptance, and finally
 This machine has no `aws` CLI, no `cdk` CLI, no AWS credentials, and no Docker.
 The loop knows this and builds inside it: `cdk synth` is the infra gate,
 `cdk deploy` is forbidden, and tests run against in-memory fakes rather than
-DynamoDB Local. Criteria that genuinely need running infrastructure — §11.3's
-similarity-threshold recalibration and §11.4's non-functional targets — come
+DynamoDB Local. Criteria that genuinely need running infrastructure — §10.3's
+threshold recalibration and §10.4's non-functional targets — come
 back BLOCKED with reasons rather than falsely passing. Deploying is your call,
 with credentials, after the loop finishes.
 
@@ -84,7 +84,7 @@ with credentials, after the loop finishes.
   strike one out. The next iteration reads it fresh.
 - **Change the rules:** edit `ralph-loop-prompt.md`. It is re-read every
   iteration.
-- **Change the product:** edit `docs/telegator-design.md`, then add a ledger
+- **Change the product:** edit `docs/telegator.md`, then add a ledger
   item for what that change implies. The loop will not re-plan on its own.
 - **Resume:** if the iteration cap is hit, run `/plan-and-implement` again. The
   ledger survives, so the loop picks up where it stopped rather than re-planning.

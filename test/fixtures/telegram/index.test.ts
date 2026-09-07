@@ -3,7 +3,7 @@ import { CHUNK_MARKER, telegramFixture, telegramFixtureNames } from "./index";
 
 /**
  * These fixtures were built from markup observed on a live `t.me/s/` page, not
- * imagined. §4.1 L371 calls the scraper "the system's most fragile dependency"
+ * imagined. §4.1 L374 calls the scraper "the system's most fragile dependency"
  * because it depends on four literal CSS class names, so a fixture that merely
  * looks plausible would let the parser pass here and fail in production.
  *
@@ -23,11 +23,11 @@ describe("the captured markup", () => {
     ]);
   });
 
-  test("uses the exact chunk marker §3.1 L197 splits on", () => {
+  test("uses the exact chunk marker §3.1 L207 splits on", () => {
     expect(CHUNK_MARKER).toBe('<div class="tgme_widget_message_wrap js-widget_message_wrap">');
   });
 
-  test("puts page chrome before the first marker, which §3.1 L197 discards", () => {
+  test("puts page chrome before the first marker, which §3.1 L207 discards", () => {
     const html = telegramFixture("multiPost");
 
     expect(html.indexOf(CHUNK_MARKER)).toBeGreaterThan(0);
@@ -57,7 +57,7 @@ describe("the captured markup", () => {
     expect(telegramFixture("multiPost")).not.toContain("<br>");
   });
 
-  test("carries the six HTML entities §3.1 L204 decodes", () => {
+  test("carries the six HTML entities §3.1 L214 decodes", () => {
     const html = telegramFixture("multiPost");
 
     for (const entity of ["&amp;", "&lt;", "&gt;", "&quot;", "&#39;", "&nbsp;"]) {
@@ -87,7 +87,7 @@ describe("the captured markup", () => {
    * The finding that made capturing real markup worth it. Exactly three classes
    * carry a background-image on a live page — `emoji`,
    * `tgme_widget_message_photo_wrap` and `tgme_widget_message_video_thumb` — and
-   * an emoji can precede the photo. §3.1 L206 says to take the *first*
+   * an emoji can precede the photo. §3.1 L216 says to take the *first*
    * `background-image:url('X')`, which on such a post is an emoji sprite.
    */
   test("emojiBeforePhoto puts an emoji sprite ahead of the real photo", () => {

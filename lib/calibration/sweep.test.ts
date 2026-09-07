@@ -26,7 +26,7 @@ function labelledPairs(): LabelledKeyPair[] {
   ];
 }
 
-describe("sweepBands — §11.3 steps 2-4, rewritten (R48)", () => {
+describe("sweepBands — §10.3 steps 2-4, rewritten (R48)", () => {
   // Brief's Step 1 fixtures, verbatim.
   test("sweeps both thresholds and never proposes distinct above merge (R48)", () => {
     const rows = sweepBands(labelledPairs(), { step: 0.05 });
@@ -140,7 +140,7 @@ describe("sweepBands — §11.3 steps 2-4, rewritten (R48)", () => {
 
   /**
    * 0.03 walks 0.00 … 0.99 and never evaluates 1.00, silently dropping the
-   * endpoint §11.3's original 1-D sweep always included.
+   * endpoint §10.3's original 1-D sweep always included.
    */
   test("rejects a step that does not divide the range, so 1.00 is never skipped", () => {
     expect(() => sweepBands(labelledPairs(), { step: 0.03 })).toThrow(/divide/i);

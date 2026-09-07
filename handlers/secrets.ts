@@ -4,15 +4,12 @@ import { requireEnv } from "./env";
 /**
  * Reading a Secrets Manager string once per container.
  *
- * §7.6 L663 keeps the Telegram bot token here, and R50 put the OpenRouter API
- * key beside it. Three handlers now need the same fetch-once-then-cache
- * behaviour, so it is written once: item 3.12 deliberately left caching to the
- * caller, and the caller is always a Lambda entry point whose container
- * lifetime is the natural cache scope.
+ * §7.6 L699's two secrets, read by three handlers, so the fetch-once-then-cache
+ * behaviour is written once. The caller is always a Lambda entry point, whose
+ * container lifetime is the natural cache scope.
  *
- * The cache lives in the closure, not in a module-level variable, so two
- * readers in one container (aggregate holds no second secret today, but publish
- * and a future stage might) cannot overwrite each other's value.
+ * The cache lives in the closure rather than a module-level variable, so two
+ * readers in one container cannot overwrite each other's value.
  */
 
 export type SecretReader = () => Promise<string>;

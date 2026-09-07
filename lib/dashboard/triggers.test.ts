@@ -95,9 +95,9 @@ const deps = () => ({
   revalidate: (path: string) => revalidated.push(path),
 });
 
-describe("runScraper — §8.4 L752", () => {
+describe("runScraper — §8.4 L803", () => {
   /**
-   * §8.2 L734 — "manual triggers call `lambda:InvokeFunction` on the deployed
+   * §8.2 L777 — "manual triggers call `lambda:InvokeFunction` on the deployed
    * function, so 'run this now' executes the exact deployed artefact". Importing
    * the stage instead would run the dashboard's own copy of it.
    */
@@ -130,7 +130,7 @@ describe("runScraper — §8.4 L752", () => {
   });
 });
 
-describe("replayDlq — §8.4 L754", () => {
+describe("replayDlq — §8.4 L806", () => {
   test("invokes the replay handler with the operator's choice", async () => {
     signedInAs("admin");
     lambdaResult = { replayed: 4, failed: 0 };
@@ -167,9 +167,9 @@ describe("replayDlq — §8.4 L754", () => {
   });
 });
 
-describe("republishMessage — §8.4 L753", () => {
+describe("republishMessage — §8.4 L804", () => {
   /**
-   * The ordering the ledger names. §3.4 L316 has the publish stage load the
+   * The ordering the ledger names. §3.4 L315 has the publish stage load the
    * message and drop anything not in `topublish`; a request that arrived before
    * the status write landed would be silently discarded, and the operator would
    * see a button that did nothing.
@@ -239,7 +239,7 @@ describe("republishMessage — §8.4 L753", () => {
   });
 });
 
-describe("exportTable — §8.4 L755", () => {
+describe("exportTable — §8.4 L801", () => {
   test("a viewer may export", async () => {
     signedInAs("viewer");
     expect(await exportTable({ table: "sources" }, deps())).toContain("channel-a");
@@ -251,14 +251,14 @@ describe("exportTable — §8.4 L755", () => {
     );
   });
 
-  test("the header row is §8.3 L741's source columns", async () => {
+  test("the header row is §8.3 L786's source columns", async () => {
     signedInAs("viewer");
     const [header] = (await exportTable({ table: "sources" }, deps())).split("\n");
 
     expect(header).toBe("id,status,tgChannel,category,teaser,lastCount,lastResult,zeroYieldRuns");
   });
 
-  test("the header row is §8.3 L742's message columns", async () => {
+  test("the header row is §8.3 L787's message columns", async () => {
     signedInAs("viewer");
     const [header] = (await exportTable({ table: "messages" }, deps())).split("\n");
 
@@ -346,7 +346,7 @@ describe("publishPending — R53", () => {
   });
 
   /**
-   * The whole point of the trigger: §7.3 L608 gives the publish queue a
+   * The whole point of the trigger: §7.3 L646 gives the publish queue a
    * queue-level `DelaySeconds 300` and FIFO has no per-message delay, so
    * anything enqueued waits five minutes. Only an invoke is "now".
    */
@@ -371,7 +371,7 @@ describe("publishPending — R53", () => {
   });
 
   /**
-   * §3.4 L183 reports a failed send in `batchItemFailures` rather than throwing,
+   * §3 L191 reports a failed send in `batchItemFailures` rather than throwing,
    * so a stage that failed answers HTTP 200 with a summary. Counting only thrown
    * invokes would show an operator three publishes when one never sent.
    */

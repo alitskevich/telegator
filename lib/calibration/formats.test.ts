@@ -96,7 +96,7 @@ describe("toKeyPairs", () => {
 
   /**
    * Throws rather than dropping the pair. A silently dropped pair would shrink
-   * the labelled set below what §11.3 step 1 requires without telling anyone.
+   * the labelled set below what §10.3 step 1 requires without telling anyone.
    */
   test("throws naming a referenced item that is missing, on either side", () => {
     expect(() => toKeyPairs([{ a: "x/1", b: "x/9", label: "same" }], items)).toThrow(/x\/9/);
@@ -185,7 +185,7 @@ describe("toCurveCsv", () => {
     bandFraction: 0.25,
   });
 
-  test("writes the header §11.3 step 6 records", () => {
+  test("writes the header §10.3 step 6 records", () => {
     expect(toCurveCsv([]).split("\n")[0]).toBe(CURVE_HEADER);
     expect(CURVE_HEADER).toBe(
       "distinctThreshold,mergeThreshold,autoMergePrecision,autoSplitRecall,bandFraction",

@@ -56,7 +56,7 @@ const draw = (props: Partial<Parameters<typeof SourcesTable>[0]> = {}) =>
 
 const rowFor = (id: string) => screen.getByTestId(`row-${id}`);
 
-describe("SourcesTable — §8.3 L741", () => {
+describe("SourcesTable — §8.3 L786", () => {
   test("shows every column the section lists", () => {
     draw();
 
@@ -79,7 +79,7 @@ describe("SourcesTable — §8.3 L741", () => {
     expect(screen.getAllByTestId(/^row-/)).toHaveLength(2);
   });
 
-  describe("search (§8.3 L744)", () => {
+  describe("search (§8.3 L790)", () => {
     test("filters to matching rows", () => {
       draw();
       fireEvent.change(screen.getByLabelText("Search"), { target: { value: "sports" } });
@@ -104,7 +104,7 @@ describe("SourcesTable — §8.3 L741", () => {
     });
 
     /**
-     * §8.3 L744 — "across visible columns". `lastUpdated` is not one, so it must
+     * §8.3 L790 — "across visible columns". `lastUpdated` is not one, so it must
      * not match; the operator would see a row with nothing in it that explains
      * why.
      */
@@ -138,7 +138,7 @@ describe("SourcesTable — §8.3 L741", () => {
     });
 
     /**
-     * §2.1 L107 — `lastCount` and the other scrape-owned fields are read-only
+     * §2.1 L115 — `lastCount` and the other scrape-owned fields are read-only
      * here, matching the allowlist the action enforces. A field the server will
      * reject must not look editable.
      */
@@ -189,7 +189,7 @@ describe("SourcesTable — §8.3 L741", () => {
     });
   });
 
-  describe("Scrape now (§8.4 L752)", () => {
+  describe("Scrape now (§8.4 L803)", () => {
     test("invokes the trigger and reports what it processed", async () => {
       draw();
       fireEvent.click(screen.getByRole("button", { name: "Scrape now" }));
@@ -199,9 +199,9 @@ describe("SourcesTable — §8.3 L741", () => {
     });
   });
 
-  describe("role gates (§8.6 L782-786)", () => {
+  describe("role gates (§8.6 L831-835)", () => {
     /**
-     * The server re-checks every action (§8.4 L757), so hiding a control is
+     * The server re-checks every action (§8.4 L808), so hiding a control is
      * courtesy rather than security — but showing a viewer a Save button that
      * always fails is worse than not showing it.
      */
@@ -220,7 +220,7 @@ describe("SourcesTable — §8.3 L741", () => {
       expect(screen.queryByRole("button", { name: "Scrape now" })).toBeNull();
     });
 
-    /** §8.4 L755 — export is `viewer`, so it is always available. */
+    /** §8.4 L801 — export is `viewer`, so it is always available. */
     test("a viewer may still export", () => {
       draw({ canEdit: false, canAdmin: false });
       expect(screen.getByRole("button", { name: "Export" })).toBeDefined();
@@ -236,8 +236,8 @@ describe("SourcesTable — §8.3 L741", () => {
 /**
  * Column filter and sort.
  *
- * *Reconciliation.* §8.3 L744 specifies the cross-column search and nothing
- * more; §8.1 L713 records that filtering and sorting were expected to be server
+ * *Reconciliation.* §8.3 L790 specifies the cross-column search and nothing
+ * more; §8.1 L755 records that filtering and sorting were expected to be server
  * round-trips once the offline layer went. Both run here on the rows the page
  * already holds — the same set the search has always run over.
  */

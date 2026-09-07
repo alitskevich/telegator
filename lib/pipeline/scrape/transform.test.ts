@@ -7,7 +7,7 @@ import { transformPost } from "./transform";
 
 const DATE = "2026-08-29";
 
-/** Parsed rather than written out, so the counter defaults of §2.1 L107–111 fill in. */
+/** Parsed rather than written out, so the counter defaults of §2.1 L115–119 fill in. */
 const makeSource = (overrides: Partial<Source> = {}): Source =>
   SourceSchema.parse({
     id: "yigal_levin",
@@ -25,18 +25,18 @@ const makePost = (overrides: Partial<TransformInput> = {}): TransformInput => ({
   ...overrides,
 });
 
-describe("transformPost — id (§3.1 L212)", () => {
+describe("transformPost — id (§3.1 L222)", () => {
   test("builds the composite `{sourceId}/{messageId}`", () => {
     const item = transformPost(makePost({ id: "999" }), makeSource({ id: "nexta_live" }), DATE);
     expect(item.id).toBe("nexta_live/999");
   });
 
-  test("rejects a message id that is not digits, per ItemIdSchema (§2.4 L173)", () => {
+  test("rejects a message id that is not digits, per ItemIdSchema (§2.4 L183)", () => {
     expect(() => transformPost(makePost({ id: "not-a-number" }), makeSource(), DATE)).toThrow();
   });
 });
 
-describe("transformPost — teaser stripping (§3.1 L212)", () => {
+describe("transformPost — teaser stripping (§3.1 L222)", () => {
   test("removes every occurrence of the teaser, not just the first", () => {
     const post = makePost({ body: "SUB Explosions SUB reported SUB" });
     expect(transformPost(post, makeSource({ teaser: "SUB" }), DATE).body).toBe(
@@ -62,7 +62,7 @@ describe("transformPost — teaser stripping (§3.1 L212)", () => {
   });
 
   /**
-   * The parse step of §3.1 L203 has already replaced `<a href="X">Y</a>` with
+   * The parse step of §3.1 L213 has already replaced `<a href="X">Y</a>` with
    * `[Y](#N)`, so an operator teaser written as raw HTML cannot match.
    */
   test("matches the tokenised body, so a teaser containing a link does not match", () => {
@@ -79,7 +79,7 @@ describe("transformPost — teaser stripping (§3.1 L212)", () => {
   });
 });
 
-describe("transformPost — stamped source fields (§3.1 L212)", () => {
+describe("transformPost — stamped source fields (§3.1 L222)", () => {
   test("copies tgChannel, category and tags from the source", () => {
     const item = transformPost(makePost(), makeSource(), DATE);
     expect(item.tgChannel).toBe("telegator_news");
@@ -95,13 +95,13 @@ describe("transformPost — stamped source fields (§3.1 L212)", () => {
     expect(item.tags).toBeUndefined();
   });
 
-  /** §2.2 L127 — the scrape date, supplied by the caller so a run shares one key. */
+  /** §2.2 L135 — the scrape date, supplied by the caller so a run shares one key. */
   test("stamps the date passed in, not a clock reading", () => {
     expect(transformPost(makePost(), makeSource(), "2020-01-02").date).toBe("2020-01-02");
   });
 });
 
-describe("transformPost — kind (§2.2 L130, §3.1 L212)", () => {
+describe("transformPost — kind (§2.2 L138, §3.1 L222)", () => {
   test("`post` for an ordinary post", () => {
     expect(transformPost(makePost(), makeSource(), DATE).kind).toBe("post");
   });
@@ -124,7 +124,7 @@ describe("transformPost — kind (§2.2 L130, §3.1 L212)", () => {
     expect(transformPost(post, makeSource({ teaser: "Subscribe!" }), DATE).kind).toBe("empty");
   });
 
-  /** §3.1 L212 names `forward` before `empty`; the order is normative. */
+  /** §3.1 L222 names `forward` before `empty`; the order is normative. */
   test("`forward` wins over `empty` for a forwarded post with a blank body", () => {
     const post = makePost({ body: "   ", forwardedFrom: "nexta_live" });
     expect(transformPost(post, makeSource(), DATE).kind).toBe("forward");
@@ -136,7 +136,7 @@ describe("transformPost — kind (§2.2 L130, §3.1 L212)", () => {
   });
 });
 
-describe("transformPost — carried-through fields (§2.2 L120–130)", () => {
+describe("transformPost — carried-through fields (§2.2 L128–138)", () => {
   test("carries links and image unchanged", () => {
     const links = [
       { id: 1, href: "https://example.test/a" },
@@ -167,7 +167,7 @@ describe("transformPost — schema conformance", () => {
     expect(() => ScrapedItemSchema.parse(item)).not.toThrow();
   });
 
-  test("rejects a date that is not a YYYY-MM-DD key (§2.2 L127)", () => {
+  test("rejects a date that is not a YYYY-MM-DD key (§2.2 L135)", () => {
     expect(() => transformPost(makePost(), makeSource(), "29-08-2026")).toThrow();
   });
 });

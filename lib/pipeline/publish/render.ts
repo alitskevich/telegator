@@ -3,23 +3,23 @@ import { MEMBER_RENDER_LIMIT } from "../../domain/message";
 import { escapeHtml } from "./escape";
 
 /**
- * Stage 4's member renderer (§3.4 L318–321).
+ * Stage 4's member renderer (§3.4 L317–320).
  *
  * The rendered block is the only place a member's denormalized `summary` and
- * `links` (§2.3 L156–163) become visible, and it is produced fresh on every
- * publish — including the edit path of §3.4 L336 — so the output must depend on
+ * `links` (§2.3 L166–173) become visible, and it is produced fresh on every
+ * publish — including the edit path of §3.4 L338 — so the output must depend on
  * the record alone, never on map iteration order or a locale.
  */
 
-/** `[text](#N)` — §2.2 L122's inline-link token, as it survives into `summary`. */
+/** `[text](#N)` — §2.2 L130's inline-link token, as it survives into `summary`. */
 const LINK_TOKEN = /\[([^\]]*)\]\(#(\d+)\)/g;
 
 /**
- * §3.4 L319 — resolve each `[text](#N)` against *this* member's links.
+ * §3.4 L317 — resolve each `[text](#N)` against *this* member's links.
  *
  * `text` arrives already HTML-escaped, and `href` is escaped here, since it
  * lands inside an attribute. An unresolved N degrades to the plain text
- * (AC-4.4, L352) rather than leaving the token visible.
+ * (AC-4.4, L355) rather than leaving the token visible.
  */
 function substituteLinks(escapedSummary: string, links: MemberBlock["links"]): string {
   return escapedSummary.replaceAll(LINK_TOKEN, (_match, text: string, id: string) => {
@@ -31,7 +31,7 @@ function substituteLinks(escapedSummary: string, links: MemberBlock["links"]): s
 
 /**
  * One member block: `🔘 {summary} - <a href="https://t.me/{itemId}">@{channel}</a>`
- * (§3.4 L321). `{content}` in the spec is the summary after L319's substitution;
+ * (§3.4 L320). `{content}` in the spec is the summary after L317's substitution;
  * `MemberBlock` has no field of that name.
  */
 export function renderMember(itemId: string, block: MemberBlock): string {
@@ -42,11 +42,11 @@ export function renderMember(itemId: string, block: MemberBlock): string {
 }
 
 /**
- * §3.4 L318 — members sorted by `ts` ascending, first `MEMBER_RENDER_LIMIT`,
+ * §3.4 L317 — members sorted by `ts` ascending, first `MEMBER_RENDER_LIMIT`,
  * one block per line.
  *
  * The item-id tiebreak is a recorded decision beyond the spec: one aggregate
- * batch can stamp several members with the same clock reading (§3.3 L285), and
+ * batch can stamp several members with the same clock reading (§3.3 L281), and
  * `ts` alone would then leave their order to `Object.entries`. A reordering
  * changes the rendered bytes, so AC-3.7's byte-identical replay — and the
  * "no visible change" contract of an idempotent edit (AC-4.6) — depends on the

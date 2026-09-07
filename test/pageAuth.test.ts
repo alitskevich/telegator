@@ -35,7 +35,7 @@ function pageFiles(): string[] {
   return walk(appRoot);
 }
 
-describe("every page authorises (§8.6 L790)", () => {
+describe("every page authorises (§8.6 L841)", () => {
   /** The rule is worthless if it is scanning nothing. */
   test("finds the pages", () => {
     const pages = pageFiles().map((path) => relative(repoRoot, path));
@@ -45,7 +45,7 @@ describe("every page authorises (§8.6 L790)", () => {
   });
 
   /**
-   * §8.6 L783 gives `viewer` "Read all pages" — which is a grant to a role, not
+   * §8.6 L832 gives `viewer` "Read all pages" — which is a grant to a role, not
    * to the public. Every page therefore needs at least that check before it
    * renders anything.
    */
@@ -59,7 +59,7 @@ describe("every page authorises (§8.6 L790)", () => {
 
   /**
    * A page that authorised for a role above `viewer` would be a different bug —
-   * hiding a page §8.6 L783 says viewers read — so the minimum is pinned too.
+   * hiding a page §8.6 L832 says viewers read — so the minimum is pinned too.
    */
   test("the page-level minimum is viewer", () => {
     const wrong = pageFiles()
@@ -89,7 +89,7 @@ describe("every page authorises (§8.6 L790)", () => {
   });
 
   /**
-   * §8.2 L722's Cognito callbacks are the one route that must stay reachable
+   * §8.2 L764's Cognito callbacks are the one route that must stay reachable
    * unauthenticated — it is where a session comes from. Asserting it is not a
    * page keeps the rule above from being "fixed" later by exempting things.
    */

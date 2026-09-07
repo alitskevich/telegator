@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * The boundaries of §8.6 L780's Cognito hosted UI. Each is an interface with an
+ * The boundaries of §8.6 L829's Cognito hosted UI. Each is an interface with an
  * in-memory fake because every one of them is a network call, and no test in
  * this build touches the network.
  */
@@ -30,7 +30,7 @@ export interface TokenSet {
   readonly expiresIn: number;
 }
 
-/** §8.2 L722 — `api/auth/[...]/route.ts`, the authorization-code exchange. */
+/** §8.2 L764 — `api/auth/[...]/route.ts`, the authorization-code exchange. */
 export interface TokenEndpoint {
   exchangeAuthorizationCode(code: string, redirectUri: string): Promise<TokenSet>;
 }
@@ -41,7 +41,7 @@ export interface IdTokenVerifier {
 }
 
 /**
- * §8.6 L788 — "a new user is created **disabled** ... a disabled user is
+ * §8.6 L839 — "a new user is created **disabled** ... a disabled user is
  * rejected at every action".
  *
  * A port rather than a cookie field, because the whole point of the rule is that

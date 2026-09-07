@@ -4,8 +4,10 @@ Reads Telegram news channels, deduplicates and categorises the posts with
 Claude via OpenRouter, and publishes merged digests back to Telegram. An operator dashboard
 curates sources, reviews messages and replays failures.
 
-The full design is [`docs/telegator-design.md`](docs/telegator-design.md) — the
-authoritative spec. This file points at it and does not summarise it.
+Everything is in one document: [`docs/telegator.md`](docs/telegator.md) — the
+normative specification (Part I), a guide to every AWS service it uses
+(Part II), and the register of decisions, reconciliations and traps behind both
+(Part III). This file points at it and does not summarise it.
 
 ## The pipeline
 
@@ -14,7 +16,7 @@ EventBridge ──▶ scrape ──▶ analyze queue ──▶ analyze ──▶
   (30 min)        │                            │              │
                   │ t.me/s/{channel}           │ Claude       ▼
                   ▼                            ▼          aggregate ──▶ publish queue
-              sources table              (classify, drop)   (Cohere embed,        │
+              sources table              (classify, drop)   (match key,        │
                                                              dedupe, merge)       ▼
                                                                  │            publish
                                                           messages table ◀────  (Telegram)

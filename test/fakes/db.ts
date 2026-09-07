@@ -60,7 +60,7 @@ export interface FakeMessageRepo extends MessageRepo {
 }
 
 /**
- * An in-memory `messages` table that honours the GSI projections of §7.2 L598.
+ * An in-memory `messages` table that honours the GSI projections of §7.2 L634.
  *
  * The projections are enforced, not simulated loosely: `queryByDate` returns
  * `DedupCandidate` and `queryByStatus` returns `MessageListItem`, both parsed

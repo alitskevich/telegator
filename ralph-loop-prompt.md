@@ -1,4 +1,4 @@
-# Ralph Prompt — Build Telegator from `docs/telegator-design.md`
+# Ralph Prompt — Build Telegator from `docs/telegator.md`
 
 You are running inside a Ralph loop. Every iteration feeds you the same pointer
 prompt, and you arrive with no memory of the last one. **This file is your only
@@ -6,12 +6,12 @@ memory of intent; the ledger is your only memory of progress.** Read both, in
 full, before doing anything else.
 
 Repository: `~/Projects/telegator`
-Specification: `docs/telegator-design.md` (the user's — read it, never edit it)
+Specification: `docs/telegator.md` (the user's — read it, never edit it)
 Ledger: `.claude/build-ledger.local.md` (gitignored — never commit it)
 
 ## Mission
 
-Build the system `docs/telegator-design.md` describes: a Telegram news pipeline
+Build the system `docs/telegator.md` describes: a Telegram news pipeline
 on AWS (SQS, Lambda, DynamoDB) with Claude via OpenRouter and a Next.js operator
 dashboard, to the acceptance criteria in §11 — verified **locally**. Then write
 `README.md` and `CLAUDE.md` so they describe the repo that now exists.
@@ -159,7 +159,7 @@ No code. Produce the ledger, and nothing else.
    `.gitignore` covering `node_modules/`, `.next/`, `cdk.out/`, `dist/`,
    `.env*`, and `.claude/*.local.md`. Commit that as the repo's first commit —
    this is the one Phase 0 commit permitted.
-2. Read `docs/telegator-design.md` **in full**. It is 888 lines and every
+2. Read `docs/telegator.md` **in full**. It is ~1600 lines and every
    section is load-bearing.
 3. Use **`superpowers:dispatching-parallel-agents`**: one read-only agent per
    spec area — domain model (§2), pipeline stages (§3–4), AI contract and dedup

@@ -10,12 +10,12 @@ import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
 import { TableHead } from "./TableHead";
 
 /**
- * §8.3 L742 — "Status tabs; table of id, title, category, status, date,
+ * §8.3 L787 — "Status tabs; table of id, title, category, status, date,
  * tgChannel, `memberCount`, with an expandable member list rendered from the
- * `members` map; inline edit; **Re-publish**; export", plus L744's search.
+ * `members` map; inline edit; **Re-publish**; export", plus L790's search.
  */
 
-/** R37 — the three fields §8.4 L749 will accept for a message. */
+/** R37 — the three fields §8.4 L797 will accept for a message. */
 const EDITABLE: ReadonlySet<string> = new Set(MESSAGE_WRITABLE_FIELDS);
 
 /** R53 — what `publishPending` answers: one send attempted per pending message. */
@@ -35,7 +35,7 @@ export interface MessagesTableProps {
   readonly onSave: (id: string, delta: Record<string, string>) => Promise<void>;
   readonly onRepublish: (messageId: string) => Promise<void>;
   readonly onLoadMembers: (messageId: string) => Promise<MemberRow[]>;
-  /** §8.4 L751 — `editor`, and soft: the record survives, R16 hides it. */
+  /** §8.4 L799 — `editor`, and soft: the record survives, R16 hides it. */
   readonly onDelete: (ids: string[]) => Promise<void>;
   readonly onExport?: () => Promise<string>;
   /** R53 — `admin` only, and only the `topublish` tab has a backlog to drain. */
@@ -51,7 +51,7 @@ export function MessagesTable(props: MessagesTableProps) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   const visible = useMemo(() => {
-    // §8.3 L744 — across the columns on screen, and only those.
+    // §8.3 L790 — across the columns on screen, and only those.
     const matched = filterByKeyword([...props.rows], keyword, MESSAGE_COLUMNS);
     // Then the per-column boxes narrow that, and the sort orders what survives.
     return sortRows(filterByColumn(matched, columnFilters, MESSAGE_COLUMNS), sort);
@@ -74,7 +74,7 @@ export function MessagesTable(props: MessagesTableProps) {
     <>
       <h1 className="page-title">Messages</h1>
 
-      {/* §8.2 L722 — the tab is `?status=`, so each is a link and the current
+      {/* §8.2 L764 — the tab is `?status=`, so each is a link and the current
           one survives a reload, a bookmark and a shared URL. */}
       <nav className="tabs">
         {MESSAGE_STATUSES.map((status) => (
@@ -173,7 +173,7 @@ export function MessagesTable(props: MessagesTableProps) {
  *
  * The count is reported rather than assumed: `publishPending` answers with what
  * the stage actually sent, and a failure there is a Telegram error the operator
- * has to see. §3.4 L142 reports one in the summary instead of throwing, so a
+ * has to see. §3 L191 reports one in the summary instead of throwing, so a
  * silent button would look identical to a successful one.
  */
 function PublishNow({
@@ -313,7 +313,7 @@ function MessageRow({
             {members === undefined ? (
               <p className="empty">Loading members…</p>
             ) : members.length === 0 ? (
-              // §6 L539's create branch writes one member, so an empty map means
+              // §6 L582's create branch writes one member, so an empty map means
               // this record predates the member write or was hand-made.
               <p className="empty">No members recorded</p>
             ) : (
