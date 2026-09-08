@@ -36,3 +36,14 @@ export function toDateKey(epochMs: number): DateKey {
 export function todayKey(clock: Clock): DateKey {
   return toDateKey(clock.now());
 }
+
+/**
+ * target-table#5.3 — an epoch-millisecond instant as an ISO timestamp.
+ *
+ * Beside `toDateKey` because it is the same conversion at a different
+ * precision, and UTC for the same reason: one place decides what instant a
+ * number names, so two parts of the build cannot disagree.
+ */
+export function toIsoTimestamp(epochMs: number): string {
+  return new Date(epochMs).toISOString();
+}

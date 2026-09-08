@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { fixedClock } from "../../test/fakes/clock";
-import { DateKeySchema, toDateKey, todayKey } from "./date";
+import { DateKeySchema, toDateKey, todayKey, toIsoTimestamp } from "./date";
 
 const utc = (y: number, m: number, d: number, h = 0, min = 0, s = 0): number =>
   Date.UTC(y, m - 1, d, h, min, s);
@@ -73,4 +73,21 @@ describe("DateKeySchema", () => {
       expect(DateKeySchema.safeParse(bad).success).toBe(false);
     },
   );
+});
+
+describe("toIsoTimestamp — target-table#5.3", () => {
+  test("TT-15: the epoch is 1970-01-01T00:00:00.000Z", () => {
+    expect(toIsoTimestamp(0)).toBe("1970-01-01T00:00:00.000Z");
+  });
+
+  /** D3 — the same shape `sources.lastResult` already carries. */
+  test("TT-15: formats in UTC with milliseconds, whatever the host timezone", () => {
+    expect(toIsoTimestamp(utc(2026, 9, 8, 10, 30, 15))).toBe("2026-09-08T10:30:15.000Z");
+  });
+
+  test("agrees with toDateKey on the day it names", () => {
+    const at = utc(2026, 9, 8, 23, 59, 59);
+
+    expect(toIsoTimestamp(at).slice(0, 10)).toBe(toDateKey(at));
+  });
 });
