@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { FakeCookieJar, FakeUserStatusReader } from "../../test/fakes/auth";
 import { manualClock } from "../../test/fakes/clock";
-import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db";
+import { fakeMessageRepo, fakeSourceRepo, fakeTargetRepo } from "../../test/fakes/db";
 import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "../auth/session";
 import type { Message } from "../domain/message";
 import type { Source } from "../domain/source";
@@ -10,6 +10,7 @@ import {
   loadMembers,
   MESSAGE_WRITABLE_FIELDS,
   SOURCE_WRITABLE_FIELDS,
+  TARGET_WRITABLE_FIELDS,
   upsertRecord,
 } from "./records";
 
@@ -50,6 +51,7 @@ let key: Uint8Array;
 let revalidated: string[];
 let sources: ReturnType<typeof fakeSourceRepo>;
 let messages: ReturnType<typeof fakeMessageRepo>;
+let targets: ReturnType<typeof fakeTargetRepo>;
 const clock = manualClock(NOW);
 
 beforeEach(() => {
@@ -59,6 +61,7 @@ beforeEach(() => {
   revalidated = [];
   sources = fakeSourceRepo([source("channel-a")]);
   messages = fakeMessageRepo([message(1), message(2)]);
+  targets = fakeTargetRepo([{ id: "a", type: "telegram_channel" }]);
 });
 
 function signedInAs(...roles: string[]) {
@@ -74,6 +77,7 @@ function signedInAs(...roles: string[]) {
 const deps = () => ({
   sources,
   messages,
+  targets,
   auth: { jar, key, clock, status },
   revalidate: (path: string) => revalidated.push(path),
 });
@@ -402,5 +406,70 @@ describe("loadMembers — R26", () => {
     await expect(loadMembers({ messageId: "example/99" }, deps())).rejects.toThrow(
       /no such message/,
     );
+  });
+});
+
+describe("upsertRecord on targets — target-table#3.2", () => {
+  test("TT-19: an editor may set a messageTemplate on an existing row", async () => {
+    signedInAs("editor");
+
+    await upsertRecord(
+      { table: "targets", id: "a", delta: { messageTemplate: "{header}\n\n{body}" } },
+      deps(),
+    );
+
+    await expect(targets.get("a")).resolves.toMatchObject({
+      messageTemplate: "{header}\n\n{body}",
+    });
+    expect(revalidated).toContain("/targets");
+  });
+
+  test("TT-19: a create supplies the schema's defaults", async () => {
+    signedInAs("editor");
+
+    await upsertRecord(
+      { table: "targets", id: "fresh", delta: { messageTemplate: "{body}" } },
+      deps(),
+    );
+
+    await expect(targets.get("fresh")).resolves.toEqual({
+      id: "fresh",
+      type: "telegram_channel",
+      messageTemplate: "{body}",
+    });
+  });
+
+  test.each([
+    { lastPostedDate: "2026-09-08T10:00:00.000Z" },
+    { lastPostedMessageId: "chan_a/1" },
+    {},
+  ])("TT-19: rejects the delta %o", async (delta) => {
+    signedInAs("editor");
+
+    await expect(upsertRecord({ table: "targets", id: "a", delta }, deps())).rejects.toThrow();
+  });
+
+  test("TT-19: a viewer may not write a target", async () => {
+    signedInAs("viewer");
+
+    await expect(
+      upsertRecord({ table: "targets", id: "a", delta: { messageTemplate: "{body}" } }, deps()),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  /** Plan ruling P1 — one allowlist, read by the schema and by the table alike. */
+  test("TARGET_WRITABLE_FIELDS is exactly what the schema accepts", () => {
+    expect([...TARGET_WRITABLE_FIELDS].sort()).toEqual(["messageTemplate", "type"]);
+  });
+});
+
+describe("deleteRecords on targets — §8.4 L810", () => {
+  test("TT-20: an editor soft-deletes a target", async () => {
+    signedInAs("editor");
+
+    await deleteRecords({ table: "targets", ids: ["a"] }, deps());
+
+    await expect(targets.listAll()).resolves.toEqual([]);
+    expect(revalidated).toContain("/targets");
   });
 });

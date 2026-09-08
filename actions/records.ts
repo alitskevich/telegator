@@ -8,7 +8,7 @@ import {
   type RecordActionDeps,
   upsertRecord as upsertRecordCore,
 } from "../lib/dashboard/records";
-import { authContext, messages, sources } from "./context";
+import { authContext, messages, sources, targets } from "./context";
 
 /**
  * §8.4 L808-810. Thin wrappers: every rule — the `editor` check, the writable
@@ -17,7 +17,7 @@ import { authContext, messages, sources } from "./context";
  */
 
 async function deps(): Promise<RecordActionDeps> {
-  return { sources, messages, auth: await authContext(), revalidate: revalidatePath };
+  return { sources, messages, targets, auth: await authContext(), revalidate: revalidatePath };
 }
 
 export async function upsertRecord(input: unknown): Promise<void> {

@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { type RequireRoleDeps, requireRole } from "../auth/session";
-import type { MessageRepo, SourceRepo } from "../db/ports";
+import type { MessageRepo, SourceRepo, TargetRepo } from "../db/ports";
 import { ItemIdSchema } from "../domain/ids";
 import type { MemberBlock } from "../domain/message";
 import { SourceSchema } from "../domain/source";
+import { TargetConfigInput, TargetSchema } from "../domain/target";
 
 /**
  * §8.4 L808-810 — `upsertRecord` and `deleteRecords`, both `editor`.
@@ -13,7 +14,7 @@ import { SourceSchema } from "../domain/source";
  * same shape as the Lambda entry points over `lib/pipeline/`.
  */
 
-export const TABLES = ["sources", "messages"] as const;
+export const TABLES = ["sources", "messages", "targets"] as const;
 export type TableName = (typeof TABLES)[number];
 
 /**
@@ -40,6 +41,17 @@ export const SOURCE_WRITABLE_FIELDS = ["status", "target", "category", "tags", "
  */
 export const MESSAGE_WRITABLE_FIELDS = ["title", "category", "tgChannel"] as const;
 
+/**
+ * target-table#2.2's operator-writable columns — the two `lastPosted*` fields
+ * are publish's mirror (D7) and editing one would make the table lie about a
+ * post that did happen. `id` is the key.
+ *
+ * The list the table's editable cells read; the schema that validates a write
+ * is `TargetConfigInput`, so there is one allowlist rather than two (plan
+ * ruling P1).
+ */
+export const TARGET_WRITABLE_FIELDS = ["type", "messageTemplate"] as const;
+
 /** Every operator-writable field is a string, so one shape covers both tables. */
 const writableDelta = <T extends readonly [string, ...string[]]>(fields: T) =>
   z
@@ -65,6 +77,11 @@ const UpsertInputSchema = z.discriminatedUnion("table", [
     id: z.string().min(1),
     delta: writableDelta(MESSAGE_WRITABLE_FIELDS),
   }),
+  z.object({
+    table: z.literal("targets"),
+    id: z.string().min(1),
+    delta: TargetConfigInput,
+  }),
 ]);
 
 const DeleteInputSchema = z.object({
@@ -76,13 +93,18 @@ const DeleteInputSchema = z.object({
 export interface RecordActionDeps {
   readonly sources: SourceRepo;
   readonly messages: MessageRepo;
+  readonly targets: TargetRepo;
   readonly auth: RequireRoleDeps;
   /** `revalidatePath` in production; injected so this module never imports Next. */
   readonly revalidate: (path: string) => void;
 }
 
-const repoFor = (table: TableName, deps: RecordActionDeps) =>
-  table === "sources" ? deps.sources : deps.messages;
+/** The repository each table's soft delete goes to. */
+const repoFor = (table: TableName, deps: RecordActionDeps) => {
+  if (table === "sources") return deps.sources;
+  if (table === "targets") return deps.targets;
+  return deps.messages;
+};
 
 /** §8.2's route tree — the page whose data this write invalidates. */
 const pathFor = (table: TableName) => `/${table}`;
@@ -106,6 +128,24 @@ export async function upsertRecord(input: unknown, deps: RecordActionDeps): Prom
     if (existing === undefined) throw new Error(`no such message: ${id}`);
 
     await deps.messages.patch(id, delta);
+    deps.revalidate(pathFor(table));
+    return;
+  }
+
+  if (table === "targets") {
+    const existing = await deps.targets.get(id);
+
+    if (existing === undefined) {
+      /**
+       * target-table#3.2's "add". A bare `UpdateItem` would create a row with
+       * no `type`, which fails `TargetSchema` on the very next read; the schema
+       * supplies the default here instead.
+       */
+      await deps.targets.put(TargetSchema.parse({ id, ...delta }));
+    } else {
+      await deps.targets.patch(id, delta);
+    }
+
     deps.revalidate(pathFor(table));
     return;
   }

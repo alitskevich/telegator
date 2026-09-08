@@ -10,7 +10,15 @@ import {
   runScraper as runScraperCore,
   type TriggerDeps,
 } from "../lib/dashboard/triggers";
-import { authContext, functions, lambda, messages, publishQueue, sources } from "./context";
+import {
+  authContext,
+  functions,
+  lambda,
+  messages,
+  publishQueue,
+  sources,
+  targets,
+} from "./context";
 
 /**
  * §8.4 L814-812. Thin wrappers: the role gates, the input validation and the
@@ -25,6 +33,7 @@ async function deps(): Promise<TriggerDeps> {
     functions,
     messages,
     sources,
+    targets,
     publishQueue,
     revalidate: revalidatePath,
   };

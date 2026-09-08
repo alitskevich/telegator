@@ -1,4 +1,4 @@
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 
@@ -41,5 +41,18 @@ describe("repository layout", () => {
 
   test("there is no src/ — §8.2 puts library code under lib/", () => {
     expect(isDirectory("src")).toBe(false);
+  });
+});
+
+describe("the nav (target-table#3.2)", () => {
+  /** A page nothing links to is a page nobody finds. */
+  test("TT-22: lists Targets between Sources and Messages", () => {
+    const layout = readFileSync(resolve(repoRoot, "app/layout.tsx"), "utf8");
+    const order = ["/sources", "/targets", "/messages"].map((href) =>
+      layout.indexOf(`href: "${href}"`),
+    );
+
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 });

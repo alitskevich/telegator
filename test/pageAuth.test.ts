@@ -37,11 +37,12 @@ function pageFiles(): string[] {
 
 describe("every page authorises (§8.6 L873)", () => {
   /** The rule is worthless if it is scanning nothing. */
-  test("finds the pages", () => {
+  test("TT-22: finds the pages, including /targets", () => {
     const pages = pageFiles().map((path) => relative(repoRoot, path));
 
     expect(pages).toContain("app/page.tsx");
-    expect(pages.length).toBeGreaterThanOrEqual(4);
+    expect(pages).toContain("app/targets/page.tsx");
+    expect(pages.length).toBeGreaterThanOrEqual(5);
   });
 
   /**

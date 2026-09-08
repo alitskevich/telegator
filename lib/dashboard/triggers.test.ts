@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { FakeCookieJar, FakeUserStatusReader } from "../../test/fakes/auth";
 import { manualClock } from "../../test/fakes/clock";
-import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db";
+import { fakeMessageRepo, fakeSourceRepo, fakeTargetRepo } from "../../test/fakes/db";
 import { fakeQueueProducer } from "../../test/fakes/queues";
 import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "../auth/session";
 import type { LambdaInvoker } from "../aws/lambda";
 import type { Message } from "../domain/message";
 import type { Source } from "../domain/source";
-import { SOURCE_COLUMNS } from "../ui/columns";
+import { SOURCE_COLUMNS, TARGET_COLUMNS } from "../ui/columns";
 import { exportTable, publishPending, replayDlq, republishMessage, runScraper } from "./triggers";
 
 const NOW = 1_770_000_000_000;
@@ -50,6 +50,7 @@ let invocations: { functionName: string; payload: unknown }[];
 let lambdaResult: unknown;
 let messages: ReturnType<typeof fakeMessageRepo>;
 let sources: ReturnType<typeof fakeSourceRepo>;
+let targets: ReturnType<typeof fakeTargetRepo>;
 let publishQueue: ReturnType<typeof fakeQueueProducer>;
 let revalidated: string[];
 const clock = manualClock(NOW);
@@ -69,6 +70,7 @@ beforeEach(() => {
   lambdaResult = {};
   messages = fakeMessageRepo([message(1), message(2, { status: "error" })]);
   sources = fakeSourceRepo([source("channel-a"), source("channel-b", { status: "paused" })]);
+  targets = fakeTargetRepo([{ id: "a", type: "telegram_channel" }]);
   publishQueue = fakeQueueProducer();
   revalidated = [];
 });
@@ -94,6 +96,7 @@ const deps = () => ({
   },
   messages,
   sources,
+  targets,
   publishQueue,
   revalidate: (path: string) => revalidated.push(path),
 });
@@ -356,6 +359,24 @@ describe("exportTable — §8.4 L812", () => {
   test("an unknown table is rejected", async () => {
     signedInAs("viewer");
     await expect(exportTable({ table: "items" }, deps())).rejects.toThrow();
+  });
+});
+
+describe("exportTable on targets — §8.4 L812", () => {
+  test("TT-20: emits the TARGET_COLUMNS header", async () => {
+    signedInAs("viewer");
+
+    const csv = await exportTable({ table: "targets" }, deps());
+
+    expect(csv.split("\n")[0]).toBe(TARGET_COLUMNS.join(","));
+  });
+
+  test("TT-20: one row per live target", async () => {
+    signedInAs("viewer");
+
+    const csv = await exportTable({ table: "targets" }, deps());
+
+    expect(csv.split("\n")).toHaveLength(2);
   });
 });
 

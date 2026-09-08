@@ -24,6 +24,7 @@ import { systemClock } from "../lib/clock";
 import { cachedCategoryLogReader, cachedMetricReader } from "../lib/dashboard/cache";
 import { createMessageRepo } from "../lib/db/messages";
 import { createSourceRepo } from "../lib/db/sources";
+import { createTargetRepo } from "../lib/db/targets";
 import { createSqsDlqInspector } from "../lib/queues/inspect";
 import { createSqsDlqPurger } from "../lib/queues/purge";
 import { createSqsQueueProducer } from "../lib/queues/sqs";
@@ -72,6 +73,10 @@ export const sources = createSourceRepo({
 export const messages = createMessageRepo({
   client: documents,
   tableName: requireEnv(ENV_VARS.messagesTable),
+});
+export const targets = createTargetRepo({
+  client: documents,
+  tableName: requireEnv(ENV_VARS.targetsTable),
 });
 
 /** Adapts Next's request-scoped cookie store to the `CookieJar` port. */

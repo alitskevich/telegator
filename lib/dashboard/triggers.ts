@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type RequireRoleDeps, requireRole } from "../auth/session";
 import type { LambdaInvoker } from "../aws/lambda";
 import type { Clock } from "../clock";
-import type { MessageRepo, SourceRepo } from "../db/ports";
+import type { MessageRepo, SourceRepo, TargetRepo } from "../db/ports";
 import { ItemIdSchema } from "../domain/ids";
 import { MESSAGE_STATUSES } from "../domain/message";
 import {
@@ -11,7 +11,7 @@ import {
   type QueueProducer,
   REPLAYABLE_QUEUES,
 } from "../queues/ports";
-import { MESSAGE_COLUMNS, SOURCE_COLUMNS } from "../ui/columns";
+import { MESSAGE_COLUMNS, SOURCE_COLUMNS, TARGET_COLUMNS } from "../ui/columns";
 import { toCsv } from "../ui/csv";
 
 /**
@@ -35,6 +35,7 @@ export interface TriggerDeps {
   };
   readonly messages: MessageRepo;
   readonly sources: SourceRepo;
+  readonly targets: TargetRepo;
   readonly publishQueue: QueueProducer;
   readonly revalidate: (path: string) => void;
 }
@@ -191,9 +192,13 @@ export async function publishPending(
  * Re-exported under their export-facing names; defined in `lib/ui/columns.ts`
  * so the page and the export cannot show different columns.
  */
-export { MESSAGE_COLUMNS as MESSAGE_EXPORT_COLUMNS, SOURCE_COLUMNS as SOURCE_EXPORT_COLUMNS };
+export {
+  MESSAGE_COLUMNS as MESSAGE_EXPORT_COLUMNS,
+  SOURCE_COLUMNS as SOURCE_EXPORT_COLUMNS,
+  TARGET_COLUMNS as TARGET_EXPORT_COLUMNS,
+};
 
-const ExportInputSchema = z.object({ table: z.enum(["sources", "messages"]) });
+const ExportInputSchema = z.object({ table: z.enum(["sources", "messages", "targets"]) });
 
 /**
  * §8.4 L812 — `exportTable`, `viewer`.
@@ -209,6 +214,12 @@ export async function exportTable(input: unknown, deps: TriggerDeps): Promise<st
 
   if (table === "sources") {
     return toCsv(await deps.sources.listAll(), SOURCE_COLUMNS);
+  }
+
+  if (table === "targets") {
+    // target-table#3.2 — the same columns the page shows, so an export matches
+    // the table it was taken from.
+    return toCsv(await deps.targets.listAll(), TARGET_COLUMNS);
   }
 
   // `status-index` is partitioned by status, so "every message" is the union of

@@ -28,3 +28,18 @@ export const MESSAGE_COLUMNS = [
   "tgChannel",
   "memberCount",
 ] as const;
+
+/**
+ * target-table#7 — the Targets table.
+ *
+ * `messageTemplate` is last because it is by far the widest, and the two
+ * `lastPosted*` columns sit beside `type` where an operator scanning the table
+ * reads them together.
+ */
+export const TARGET_COLUMNS = [
+  "id",
+  "type",
+  "lastPostedDate",
+  "lastPostedMessageId",
+  "messageTemplate",
+] as const;
