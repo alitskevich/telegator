@@ -54,7 +54,7 @@ Every loop, in order:
      one).
    - **E · Empty**: none of the above. Go to *Completion*.
 3. **Do that one phase** (definitions below). Not two.
-4. **Verify** with the gates,
+4. **Verify** with the gates — once per wave in phase C, once before the commit in phase D,
 5. **Commit** — one commit per phase, `<type>(<slug>): <what changed>`.
 6. **Log** one line to `log.md`, then stop the loop. The log is
    gitignored and never enters a commit; write it after the commit, once the
@@ -104,6 +104,8 @@ three. Execute the wave as the `executing-tasks` reference says: one fresh
 implementer per task in parallel, none of them running git, then one commit
 per task by you, one review per task, at most three fix rounds each, then
 rulings and the Result in each task file. A wave of one is the common case.
+Run the Verification Gates once per wave, after the fix rounds and before the tick commit; the task commits inside the wave are not gated one by one, the wave is.
+
 The `test-driven-development` reference governs every step. If the task
 reveals work the plan lacks, add a new task file with the next number and a
 row in the overview; do not absorb it.
@@ -126,18 +128,14 @@ The draft is already there as `done/<slug>.draft.md`. If the repository has a `p
 
 ## Verification Gates
 
-Before every commit in phases C and D, run the gates command the loop brief gives, then every command in the block below. Every line must exit 0.
+Run every command in the block below from the repository root: once per wave in phase C, after the fix rounds and before the `chore(<slug>)` tick commit, and once in phase D before archiving. Every line must exit 0.
 
 ```bash
-# project-specific gates, one command per line
+npm run typecheck && npm run test && npm run lint && npm run build
 npx cdk synth
 ```
 
-The gates script moves to the repository root itself. It runs `npm run gates` when
-`package.json` defines a `gates` script; otherwise every `typecheck`, `test`,
-`lint` and `build` script it defines, in that order, stopping at the first
-failure. Add a project-specific gate by appending its command to the block
-above; every line must exit 0.
+The first line was compiled from `package.json` when `run` rendered this contract: `npm run gates` when that script exists, otherwise every `typecheck`, `test`, `lint` and `build` script it defines, chained with `&&` in that order so it stops at the first failure. `run` never rewrites this file, so edit that line when `package.json` changes. Add a project-specific gate by appending its command to the block.
 
 No completion claim without fresh evidence. A gate that has not run this
 loop has not passed; a partial run does not stand for the whole. Run each
