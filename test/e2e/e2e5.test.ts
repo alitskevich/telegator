@@ -43,7 +43,7 @@ const ALONE = "source_c";
 const source = (id: string): Source => ({
   id,
   status: "ok",
-  tgChannel: "telegator_news",
+  target: "telegator_news",
   category: "politics",
   lastCount: 0,
   lastUpdated: 0,

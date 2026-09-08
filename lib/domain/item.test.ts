@@ -12,7 +12,7 @@ const scraped = {
   id: "yigal_levin/12345",
   body: "Explosions reported in [the capital](#1)",
   links: [{ id: 1, href: "https://example.test/a" }],
-  tgChannel: "telegator_news",
+  target: "telegator_news",
   date: "2026-08-29",
   category: "geopolitics",
   tags: "war,politics",
@@ -72,9 +72,9 @@ describe("ScrapedItemSchema (Stage A, §2.2 L130-140)", () => {
     expect(ScrapedItemSchema.parse({ ...scraped, status: "legacy" })).not.toHaveProperty("status");
   });
 
-  /** §3.3 L286 reads `item.tgChannel ?? "telegator_news"`, so absence is expected. */
-  test("allows an absent tgChannel", () => {
-    const { tgChannel: _omitted, ...rest } = scraped;
+  /** multi-target#3.3 reads `item.target ?? "telegator_news"`, so absence is expected. */
+  test("allows an absent target", () => {
+    const { target: _omitted, ...rest } = scraped;
 
     expect(ScrapedItemSchema.safeParse(rest).success).toBe(true);
   });

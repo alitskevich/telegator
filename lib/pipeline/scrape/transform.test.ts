@@ -12,7 +12,7 @@ const makeSource = (overrides: Partial<Source> = {}): Source =>
   SourceSchema.parse({
     id: "yigal_levin",
     status: "ok",
-    tgChannel: "telegator_news",
+    target: "telegator_news",
     category: "geopolitics",
     tags: "war,politics",
     ...overrides,
@@ -80,17 +80,17 @@ describe("transformPost — teaser stripping (§3.1 L224)", () => {
 });
 
 describe("transformPost — stamped source fields (§3.1 L224)", () => {
-  test("copies tgChannel, category and tags from the source", () => {
-    const item = transformPost(makePost(), makeSource(), DATE);
-    expect(item.tgChannel).toBe("telegator_news");
+  test("MT-4: copies target, category and tags from the source", () => {
+    const item = transformPost(makePost(), makeSource({ target: "a, @b" }), DATE);
+    expect(item.target).toBe("a, @b");
     expect(item.category).toBe("geopolitics");
     expect(item.tags).toBe("war,politics");
   });
 
-  test("leaves them absent when the source does not curate them", () => {
-    const source = makeSource({ tgChannel: undefined, category: undefined, tags: undefined });
+  test("MT-4: leaves them absent when the source does not curate them", () => {
+    const source = makeSource({ target: undefined, category: undefined, tags: undefined });
     const item = transformPost(makePost(), source, DATE);
-    expect(item.tgChannel).toBeUndefined();
+    expect(item.target).toBeUndefined();
     expect(item.category).toBeUndefined();
     expect(item.tags).toBeUndefined();
   });

@@ -188,14 +188,14 @@ describe("skippedDimensions — R31: the dimension name is `Reason`, capital R",
 });
 
 describe("normalizeAnalyzed — §3.2 L256", () => {
-  test("AI fields overwrite the scrape defaults, scrape identity fields survive", () => {
+  test("MT-5: AI fields overwrite the scrape defaults, scrape identity fields (target included) survive", () => {
     const analyzed = normalizeAnalyzed(
-      scraped({ id: "chan/7", category: "operator-default", tgChannel: "news" }),
+      scraped({ id: "chan/7", category: "operator-default", target: "a,b" }),
       classified({ category: "war", title: "Front line moves" }),
     );
 
     expect(analyzed.id).toBe("chan/7");
-    expect(analyzed.tgChannel).toBe("news");
+    expect(analyzed.target).toBe("a,b");
     expect(analyzed.category).toBe("war");
     expect(analyzed.title).toBe("Front line moves");
   });

@@ -4,7 +4,7 @@ import { SOURCE_STATUS_OK, SourceConfigInput, SourceCursorUpdate, SourceSchema }
 const seedRecord = {
   id: "yigal_levin",
   status: "ok",
-  tgChannel: "telegator_news",
+  target: "telegator_news",
   category: "geopolitics",
   tags: "war,politics",
   teaser: "Subscribe to our channel",
@@ -134,5 +134,23 @@ describe("SourceCursorUpdate", () => {
 
   test("rejects an operator-written field, so scrape cannot overwrite curation", () => {
     expect(SourceCursorUpdate.safeParse({ category: "war" }).success).toBe(false);
+  });
+});
+
+describe("target — multi-target#2.2 (R54)", () => {
+  test("MT-3: a stored tgChannel is stripped and does not become target", () => {
+    const parsed = SourceSchema.parse({ id: "yigal_levin", tgChannel: "x" });
+
+    expect(parsed).not.toHaveProperty("tgChannel");
+    expect(parsed.target).toBeUndefined();
+  });
+
+  test("MT-3: SourceConfigInput accepts target and rejects tgChannel", () => {
+    expect(SourceConfigInput.parse({ target: "a, @b" })).toEqual({ target: "a, @b" });
+    expect(SourceConfigInput.safeParse({ tgChannel: "a" }).success).toBe(false);
+  });
+
+  test("target is carried verbatim — a list is not parsed here (D1)", () => {
+    expect(SourceSchema.parse({ ...seedRecord, target: "a, @b" }).target).toBe("a, @b");
   });
 });

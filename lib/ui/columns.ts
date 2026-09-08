@@ -6,11 +6,11 @@
  * columns differed from the table it was taken from would be quietly wrong.
  */
 
-/** §8.3 L797 — the Sources table. */
+/** §8.3 L797 — the Sources table; `target` replaces `tgChannel` (multi-target#3.6, R54). */
 export const SOURCE_COLUMNS = [
   "id",
   "status",
-  "tgChannel",
+  "target",
   "category",
   "teaser",
   "lastCount",

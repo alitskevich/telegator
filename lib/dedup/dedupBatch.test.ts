@@ -300,7 +300,7 @@ describe("create branch (§6 L584-584)", () => {
 
   test("defaults tgChannel to telegator_news, and keeps an explicit one", async () => {
     const a = item("chan_a/1", SAME_EVENT);
-    const b = item("chan_b/2", { ...OTHER_EVENT, tgChannel: "other_news" });
+    const b = item("chan_b/2", { ...OTHER_EVENT, target: "other_news" });
     const result = await dedupBatch([a, b], deps());
 
     const channels = result.writes.map((w) => (w.kind === "create" ? w.message.tgChannel : ""));

@@ -37,7 +37,7 @@ const source = (id: string): Source => ({
   status: "ok",
   // Both feed the same digest channel, which is what makes one merged message
   // the right outcome rather than a coincidence of the fixtures.
-  tgChannel: "telegator_news",
+  target: "telegator_news",
   category: "politics",
   lastCount: 0,
   lastUpdated: 0,

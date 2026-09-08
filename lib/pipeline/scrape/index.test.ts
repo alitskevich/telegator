@@ -63,7 +63,7 @@ function source(fields: Record<string, unknown>): Source {
   return SourceSchema.parse({
     id: CHANNEL,
     status: SOURCE_STATUS_OK,
-    tgChannel: "target",
+    target: "target",
     // Long overdue, so selection (§3.1 L202) never gets in the way of what a
     // test is actually asserting.
     lastUpdated: NOW - COLD_INTERVAL_MS,
@@ -398,7 +398,7 @@ describe("runScrape — enqueue", () => {
 
     const bodies = h.queue.sent.map((message) => JSON.parse(message.body));
     expect(bodies).toHaveLength(1);
-    expect(bodies[0]).toMatchObject({ id: `${CHANNEL}/11`, kind: "post", tgChannel: "target" });
+    expect(bodies[0]).toMatchObject({ id: `${CHANNEL}/11`, kind: "post", target: "target" });
     // §2.2 L137 — the Standard analyze queue carries no group id.
     expect(h.queue.sent[0]?.messageGroupId).toBeUndefined();
   });

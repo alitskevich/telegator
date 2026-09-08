@@ -36,7 +36,13 @@ const field = {
   status: z.string().optional(),
 
   // Operator-curated (§2.1 L111–114).
-  tgChannel: z.string().optional(),
+  /**
+   * multi-target#2.2 (R54) — the target list this source publishes to: target
+   * ids joined by `TARGET_SEPARATOR`, carried verbatim (D1). Replaces
+   * `tgChannel` (§2.1 L111); a stored `tgChannel` is an orphan the strip
+   * removes, like the orphan `embedding` of R43.
+   */
+  target: z.string().optional(),
   category: z.string().optional(),
   tags: z.string().optional(),
   teaser: z.string().optional(),
@@ -82,7 +88,7 @@ export type Source = z.infer<typeof SourceSchema>;
 export const SourceConfigInput = z
   .object({
     status: field.status,
-    tgChannel: field.tgChannel,
+    target: field.target,
     category: field.category,
     tags: field.tags,
     teaser: field.teaser,

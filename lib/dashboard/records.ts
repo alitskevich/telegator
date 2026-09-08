@@ -23,14 +23,9 @@ export type TableName = (typeof TABLES)[number];
  * reason the omission is enforced rather than trusted: §2.1 L115 calls it "the
  * sole duplicate-suppression mechanism", so an operator editing it silently
  * re-scrapes or skips a range of history with no error anywhere.
+ * `target` replaces `tgChannel` (multi-target#2.2, R54).
  */
-export const SOURCE_WRITABLE_FIELDS = [
-  "status",
-  "tgChannel",
-  "category",
-  "tags",
-  "teaser",
-] as const;
+export const SOURCE_WRITABLE_FIELDS = ["status", "target", "category", "tags", "teaser"] as const;
 
 /**
  * §8.3 L798's descriptive columns — R37.

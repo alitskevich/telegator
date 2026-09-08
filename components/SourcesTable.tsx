@@ -9,7 +9,7 @@ import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
 import { TableHead } from "./TableHead";
 
 /**
- * §8.3 L797 — "Table of id, status, tgChannel, category, `teaser`, lastCount,
+ * §8.3 L797 — "Table of id, status, target, category, `teaser`, lastCount,
  * lastResult, `zeroYieldRuns`; inline edit; add; delete; export; **Scrape now**
  * trigger", with L801's search.
  *

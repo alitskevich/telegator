@@ -47,7 +47,7 @@ const scraped = (id: string): ScrapedItem => ({
   links: [],
   date: DATE,
   kind: "post",
-  tgChannel: "telegator_news",
+  target: "telegator_news",
   category: "politics",
 });
 

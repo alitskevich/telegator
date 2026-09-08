@@ -152,7 +152,7 @@ export function normalizeTags(aiTags: string | undefined, sourceTags: string | u
  * The AI fields overwrite the scrape defaults — §2.2 L138 lets a source carry an
  * operator's arbitrary category until AI supplies a real one — while `tags` is
  * merged rather than replaced, and the scrape identity fields (`id`, `links`,
- * `image`, `tgChannel`, `date`, `kind`) pass through untouched. Returns a fresh
+ * `image`, `target`, `date`, `kind`) pass through untouched. Returns a fresh
  * object; neither input is mutated.
  */
 export function normalizeAnalyzed(scraped: ScrapedItem, ai: NewsItem): AnalyzedItem {

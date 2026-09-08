@@ -19,7 +19,7 @@ const SUB = "e4f1a2b3-0000-4000-8000-000000000001";
 const source = (id: string): Source => ({
   id,
   status: "ok",
-  tgChannel: "@target",
+  target: "@target",
   category: "politics",
   lastCount: 4,
   lastUpdated: NOW,
@@ -144,11 +144,22 @@ describe("upsertRecord — §8.4 L808", () => {
     test("the source allowlist is §2.1's operator column", () => {
       expect([...SOURCE_WRITABLE_FIELDS]).toEqual([
         "status",
-        "tgChannel",
+        "target",
         "category",
         "tags",
         "teaser",
       ]);
+    });
+
+    test("MT-18: a source delta may name target, never tgChannel", async () => {
+      signedInAs("editor");
+
+      await upsertRecord({ table: "sources", id: "channel-a", delta: { target: "a, @b" } }, deps());
+      expect((await sources.get("channel-a"))?.target).toBe("a, @b");
+
+      await expect(
+        upsertRecord({ table: "sources", id: "channel-a", delta: { tgChannel: "x" } }, deps()),
+      ).rejects.toThrow(/writable|unrecognized|unknown/i);
     });
 
     /**
@@ -280,12 +291,12 @@ describe('upsertRecord as add — §8.3 L797\'s "add"', () => {
     signedInAs("editor");
 
     await upsertRecord(
-      { table: "sources", id: "channel-new", delta: { status: "ok", tgChannel: "@t" } },
+      { table: "sources", id: "channel-new", delta: { status: "ok", target: "@t" } },
       deps(),
     );
 
     const created = await sources.get("channel-new");
-    expect(created).toMatchObject({ id: "channel-new", status: "ok", tgChannel: "@t" });
+    expect(created).toMatchObject({ id: "channel-new", status: "ok", target: "@t" });
     expect(created?.lastCount).toBe(0);
     expect(created?.zeroYieldRuns).toBe(0);
   });

@@ -252,7 +252,9 @@ export async function dedupBatch(
             country: item.country,
             location: item.location,
             peoples: item.peoples,
-            tgChannel: item.tgChannel ?? DEFAULT_TG_CHANNEL,
+            // multi-target#3.3 — the message field keeps its name (D2); its
+            // value is the item's target list, verbatim (D1).
+            tgChannel: item.target ?? DEFAULT_TG_CHANNEL,
           }
         : {
             ...state,
@@ -270,7 +272,9 @@ export async function dedupBatch(
             country: item.country,
             location: item.location,
             peoples: item.peoples,
-            tgChannel: item.tgChannel ?? DEFAULT_TG_CHANNEL,
+            // multi-target#3.3 — the message field keeps its name (D2); its
+            // value is the item's target list, verbatim (D1).
+            tgChannel: item.target ?? DEFAULT_TG_CHANNEL,
           };
 
     deps.metrics.count(state === undefined ? "MessagesCreated" : "MessagesMerged", 1);

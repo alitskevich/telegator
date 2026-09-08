@@ -14,7 +14,7 @@ const scraped = {
   id: "yigal_levin/12345",
   body: "Explosions reported",
   links: [],
-  tgChannel: "telegator_news",
+  target: "telegator_news",
   date: "2026-08-29",
   category: "geopolitics",
   tags: "war",

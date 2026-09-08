@@ -9,7 +9,7 @@ import type { Source } from "../../domain/source";
  * Stage A item payload (§2.2 L130–140).
  *
  * "Per post: `id = \"{sourceId}/{messageId}\"`; strip the source's `teaser` from
- * the body; stamp `tgChannel`, `category`, `tags`, `date` = today; set `kind` to
+ * the body; stamp `target`, `category`, `tags`, `date` = today; set `kind` to
  * `forward` (if forwarded), `empty` (blank body) or `post`."
  */
 
@@ -105,8 +105,9 @@ export function transformPost(post: TransformInput, source: Source, date: DateKe
     image: post.image,
     forwardedFrom: post.forwardedFrom,
     // Stamped from the source; §2.2 L138 lets the analyze stage overwrite
-    // `category` and merge `tags`.
-    tgChannel: source.tgChannel,
+    // `category` and merge `tags`. `target` (multi-target#3.1) passes through
+    // untouched all the way to publish.
+    target: source.target,
     category: source.category,
     tags: source.tags,
     date,

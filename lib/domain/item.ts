@@ -34,8 +34,8 @@ export const ScrapedItemSchema = z.object({
   links: z.array(LinkSchema).default([]),
   image: z.string().optional(),
   forwardedFrom: z.string().optional(),
-  /** Copied from the source; §3.3 L286 falls back to `telegator_news` when absent. */
-  tgChannel: z.string().optional(),
+  /** The source's `target`, verbatim (multi-target#2.3); §3.3 falls back to `telegator_news` when absent. */
+  target: z.string().optional(),
   date: DateKeySchema,
   /** The source default, overwritten by AI (§2.2 L138) — an open string, since an
    * operator's default need not be one of §5.4's categories. */

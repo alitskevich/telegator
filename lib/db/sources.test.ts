@@ -26,7 +26,7 @@ const repoWith = (s: ReturnType<typeof stub>) =>
 const stored = {
   id: "yigal_levin",
   status: "ok",
-  tgChannel: "telegator_news",
+  target: "telegator_news",
   category: "geopolitics",
   tags: "war",
   teaser: "Subscribe",

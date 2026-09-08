@@ -7,6 +7,7 @@ import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "
 import type { LambdaInvoker } from "../aws/lambda";
 import type { Message } from "../domain/message";
 import type { Source } from "../domain/source";
+import { SOURCE_COLUMNS } from "../ui/columns";
 import { exportTable, publishPending, replayDlq, republishMessage, runScraper } from "./triggers";
 
 const NOW = 1_770_000_000_000;
@@ -15,7 +16,7 @@ const SUB = "e4f1a2b3-0000-4000-8000-000000000001";
 const source = (id: string, extra: Partial<Source> = {}): Source => ({
   id,
   status: "ok",
-  tgChannel: "@target",
+  target: "@target",
   category: "politics",
   lastCount: 4,
   lastUpdated: NOW,
@@ -251,11 +252,24 @@ describe("exportTable — §8.4 L812", () => {
     );
   });
 
-  test("the header row is §8.3 L797's source columns", async () => {
+  test("MT-17: the header row is the sources columns, target in tgChannel's old place", async () => {
     signedInAs("viewer");
     const [header] = (await exportTable({ table: "sources" }, deps())).split("\n");
 
-    expect(header).toBe("id,status,tgChannel,category,teaser,lastCount,lastResult,zeroYieldRuns");
+    expect(header).toBe("id,status,target,category,teaser,lastCount,lastResult,zeroYieldRuns");
+  });
+
+  test("MT-17: SOURCE_COLUMNS is the export header", () => {
+    expect([...SOURCE_COLUMNS]).toEqual([
+      "id",
+      "status",
+      "target",
+      "category",
+      "teaser",
+      "lastCount",
+      "lastResult",
+      "zeroYieldRuns",
+    ]);
   });
 
   test("the header row is §8.3 L798's message columns", async () => {

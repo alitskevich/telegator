@@ -7,7 +7,7 @@ import { SourcesTable } from "./SourcesTable";
 const source = (id: string, extra: Partial<Source> = {}): Source => ({
   id,
   status: "ok",
-  tgChannel: "@target",
+  target: "@target",
   category: "politics",
   teaser: "Subscribe now",
   lastCount: 4,
@@ -63,7 +63,7 @@ describe("SourcesTable — §8.3 L797", () => {
     for (const column of [
       "id",
       "status",
-      "tgChannel",
+      "target",
       "category",
       "teaser",
       "lastCount",
@@ -77,6 +77,16 @@ describe("SourcesTable — §8.3 L797", () => {
   test("renders a row per source", () => {
     draw();
     expect(screen.getAllByTestId(/^row-/)).toHaveLength(2);
+  });
+
+  test("MT-19: the target column is inline-editable and saves { target }", () => {
+    draw();
+    const row = rowFor("yigal_levin");
+
+    fireEvent.change(within(row).getByLabelText("target"), { target: { value: "a, @b" } });
+    fireEvent.click(within(row).getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith("yigal_levin", { target: "a, @b" });
   });
 
   describe("search (§8.3 L801)", () => {

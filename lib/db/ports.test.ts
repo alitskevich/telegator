@@ -4,7 +4,7 @@ import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db";
 const source = {
   id: "yigal_levin",
   status: "ok",
-  tgChannel: "telegator_news",
+  target: "telegator_news",
   category: "geopolitics",
   tags: "war",
   teaser: "",
