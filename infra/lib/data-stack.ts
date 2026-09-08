@@ -24,6 +24,11 @@ export interface TelegatorDataStackProps extends StackProps {
  * Leaving `members` unprojected is what forces R26: §8.3's expandable member
  * list has to be a lazy base-table read, because this index will never return
  * the map.
+ *
+ * `posts` (multi-target#2.4) is deliberately absent, and so is the sources
+ * column `target`: nothing on the dashboard reads a post id, and adding either
+ * here would be a projection change — two deploys and a dedup blackout (§7.2
+ * L638). `data-stack.test.ts` MT-16 pins both.
  */
 const MESSAGE_LIST_ATTRIBUTES = [
   "title",

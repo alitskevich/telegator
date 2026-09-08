@@ -136,6 +136,22 @@ describe("TelegatorDataStack", () => {
     });
 
     /**
+     * multi-target#2.4, D2 — the post map is base-table only, and the renamed
+     * source column never reaches the messages table at all. A projection change
+     * is accepted by `cdk diff` and refused by DynamoDB (§7.2 L638), so this is
+     * the only place the invariant can fail loudly (multi-target#15.3).
+     */
+    test("MT-16: neither index projects posts or target", () => {
+      const template = templateFor();
+
+      for (const name of ["status-index", "date-index"]) {
+        const projected = index(template, name)?.Projection?.NonKeyAttributes ?? [];
+        expect(projected).not.toContain("posts");
+        expect(projected).not.toContain("target");
+      }
+    });
+
+    /**
      * R44 — §7.2 L636 called this "the one query that needs vectors". There are
      * no vectors now: the projection carries the match key R46 scores on and
      * `memberIds` instead, and still excludes `members`.
