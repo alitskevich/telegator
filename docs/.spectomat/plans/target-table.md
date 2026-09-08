@@ -63,16 +63,16 @@ One file per task under `docs/.spectomat/plans/target-table/`, from `templates/t
 | --- | --- | --- | --- | --- | --- |
 | 1 | `task-01-target-schema.md` | `TargetSchema`, `TargetConfigInput`, `toIsoTimestamp` | TT-1, TT-2, TT-15 | — | [x] |
 | 2 | `task-02-template-renderer.md` | `lib/pipeline/publish/template.ts` | TT-3, TT-4, TT-5, TT-6 | — | [x] |
-| 3 | `task-03-target-repo.md` | `TargetRepo`, the fake, the DynamoDB adapter | TT-16 | 1 | [ ] |
+| 3 | `task-03-target-repo.md` | `TargetRepo`, the fake, the DynamoDB adapter | TT-16 | 1 | [x] |
 | 4 | `task-04-targets-table-infra.md` | the table, the env var, the two grants | TT-17, TT-18 | — | [ ] |
-| 5 | `task-05-assemble-template.md` | `assembleMessage`'s fourth argument | TT-7, TT-8, TT-9 | 2 | [ ] |
+| 5 | `task-05-assemble-template.md` | `assembleMessage`'s fourth argument | TT-7, TT-8, TT-9 | 2 | [x] |
 | 6 | `task-06-publish-target-row.md` | the publish loop, the handler, the e2e harness | TT-10, TT-11, TT-12, TT-13, TT-14 | 1, 3, 4, 5 | [ ] |
 | 7 | `task-07-targets-dashboard.md` | `/targets`: columns, actions, table, page, nav | TT-19, TT-20, TT-21, TT-22 | 1, 3, 4 | [ ] |
 | 8 | `task-08-e2e-and-docs.md` | the end-to-end criteria and §25's two rows | TT-E2E-1, TT-E2E-2 | 6, 7 | [ ] |
 
 Expected waves: **W1** = 1, 2, 4 · **W2** = 3, 5 · **W3** = 6, 7 · **W4** = 8.
 
-Actual waves: **W1** = 1, 2 (Task 4 held out, see the ruling below) · remainder unchanged.
+Actual waves: **W1** = 1, 2 · **W2** = 3, 5 (Task 4 held out of both, see the rulings below) · remainder unchanged.
 
 ## Coverage
 
@@ -118,3 +118,5 @@ Planning rulings (phase B), each a divergence from the spec's letter that the bu
 
 (appended by executing-tasks for decisions that cross tasks: `- Task N · <decision> — <why> — <cost if wrong>`)
 - Wave 1 · Task 4 held out of wave 1 and left for a later wave although it is ready and file-disjoint — its Files `infra/lib/app-stack.ts` and `infra/lib/app-stack.test.ts` carry the repository owner's uncommitted, gate-green `docs/telegator.md` §25 R57 work (DLQ purge), and an implementer editing them would force that work into a factory commit or lose it — cost if wrong: Task 4 slips one wave; Tasks 6 and 7 both depend on it.
+- Wave 2 · Task 4 held out a second time although ready and, on paper, file-disjoint — at wave start its `infra/lib/app-stack.ts` and `app-stack.test.ts` still carried the repository owner's uncommitted work, so an implementer there would again have swept that work into a factory commit; the owner's session committed it as `7addb67 "upui"` while this wave ran, which clears the collision for the next wave — cost if wrong: Task 4 slips a second wave and is now the only thing blocking Tasks 6 and 7.
+- Wave 2 · Part of Tasks 3 and 5 rode into the concurrent session's tree-wide commit `7addb67 "upui"` and history was not rewritten; the factory's commits `09c654d` and `a7938c8` carry the remainder, and each task's diff was reviewed over `de5d99d..HEAD` restricted to its Files — rewriting another session's commit in a shared tree is worse than a split trail — cost if wrong: two tasks whose content spans two commits each.

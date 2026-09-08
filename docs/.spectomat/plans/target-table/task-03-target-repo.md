@@ -38,7 +38,7 @@ The `targets` table has a port, an in-memory fake that creates a row on `recordL
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — create `lib/db/targets.test.ts`:
+- [x] **Step 1: Write the failing test** — create `lib/db/targets.test.ts`:
 
 ```ts
 import type {
@@ -211,8 +211,8 @@ describe("createTargetRepo — target-table#6", () => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run lib/db/targets.test.ts`, fails with `Failed to resolve import "./targets"`.
-- [ ] **Step 3: Minimal implementation** — three edits.
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run lib/db/targets.test.ts`, fails with `Failed to resolve import "./targets"`.
+- [x] **Step 3: Minimal implementation** — three edits.
 
   (a) append to `lib/db/ports.ts`, after `SourceRepo`, and add `import type { Target } from "../domain/target";` beside the existing domain type imports:
 
@@ -442,9 +442,18 @@ export function fakeTargetRepo(
 }
 ```
 
-- [ ] **Step 4: Run it, expect PASS** — same command; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0.
-- [ ] **Step 5: Commit** — message `feat(target-table): TargetRepo port, fake and DynamoDB adapter (TT-16)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — same command; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0.
+- [x] **Step 5: Commit** — message `feat(target-table): TargetRepo port, fake and DynamoDB adapter (TT-16)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
+- The seven Minor review findings are parked, not fixed — `lib/db/ports.ts:13`'s "two table boundaries" header sentence, `NOT_DELETED` being a third copy of the filter string, the `listAll` test name overstating its assertion, `put`'s `toMatchObject({ Item: { id: "a" } })` being loose, the fake's `listAll` returning stored objects by reference, the fake's `patch` throwing on an unknown id where the adapter would create the row, and `fakeTargetRepo` having no test of its own — every one of them is either prescribed verbatim by the task's own code blocks or an exact copy of the `fakeSourceRepo` convention the Constraints told the implementer to mirror; changing them here would make the two repos diverge — cost if wrong: the ports header stays stale one more task and the filter string has three homes.
+- Part of this task's content rode into a concurrent session's tree-wide commit `7addb67 "upui"`, which ran mid-wave and swept the then-uncommitted `lib/db/ports.ts` and `lib/db/targets.ts` into itself; the factory's own commit `09c654d` carries the remainder (`test/fakes/db.ts`, `lib/db/targets.test.ts`). History was not rewritten — the same call the multi-target Task 8 ruling made for commit `8526d6a` — so the task's diff spans `de5d99d..HEAD` rather than one commit, and the reviewer was given that range — cost if wrong: `git log` for this task reads across two commits, one of them not the factory's.
+
 ## Result
+
+- Commits: `7addb67` (partial, concurrent session's) + `09c654d` (`feat(target-table): TargetRepo port, fake and DynamoDB adapter (TT-16)`)
+- Covers: TT-16
+- Focused tests: `lib/db/targets.test.ts` 11/11
+- Review: spec ✅ quality ✅ — 0 Critical, 0 Important, 7 Minor parked as rulings; 0 fix rounds
+- Wave gates: tsc 0, tests 1714/1714 (112 files), biome 268 clean, next build 0, cdk synth 0

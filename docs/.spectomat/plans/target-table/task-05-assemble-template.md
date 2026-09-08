@@ -30,7 +30,7 @@
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — append to `lib/pipeline/publish/assemble.test.ts`. Reuse whatever message factory the file already defines; the block below assumes a helper `message(over)` returning a parsed `Message` and, where it needs one, builds its own literal.
+- [x] **Step 1: Write the failing test** — append to `lib/pipeline/publish/assemble.test.ts`. Reuse whatever message factory the file already defines; the block below assumes a helper `message(over)` returning a parsed `Message` and, where it needs one, builds its own literal.
 
 ```ts
 describe("assembleMessage with a template — target-table#5.1 (R57)", () => {
@@ -133,8 +133,8 @@ describe("assembleMessage with a template — target-table#5.1 (R57)", () => {
 
   No new imports are needed: `TELEGRAM_MESSAGE_LIMIT`, `MEMBER_RENDER_LIMIT`, `SUMMARY_MAX_LENGTH`, `assembleMessage`, `message`, `member` and `memberBlockCount` are all already in scope in this file.
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run lib/pipeline/publish/assemble.test.ts`, fails with `Expected 3 arguments, but got 4` at typecheck and with the templated text equalling the plain one at runtime.
-- [ ] **Step 3: Minimal implementation** — in `lib/pipeline/publish/assemble.ts`, add `import { renderTemplate } from "./template";` and replace the `compose` / `fitToLimit` pair and the body of `assembleMessage`:
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run lib/pipeline/publish/assemble.test.ts`, fails with `Expected 3 arguments, but got 4` at typecheck and with the templated text equalling the plain one at runtime.
+- [x] **Step 3: Minimal implementation** — in `lib/pipeline/publish/assemble.ts`, add `import { renderTemplate } from "./template";` and replace the `compose` / `fitToLimit` pair and the body of `assembleMessage`:
 
 ```ts
 /**
@@ -240,9 +240,18 @@ export function assembleMessage(
 ): AssembledMessage {
 ```
 
-- [ ] **Step 4: Run it, expect PASS** — same command, then `npx vitest run lib/pipeline/publish` for the neighbours; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0.
-- [ ] **Step 5: Commit** — message `feat(target-table): assembleMessage composes with a per-target template (TT-7 – TT-9)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — same command, then `npx vitest run lib/pipeline/publish` for the neighbours; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0.
+- [x] **Step 5: Commit** — message `feat(target-table): assembleMessage composes with a per-target template (TT-7 – TT-9)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
+- The five Minor review findings are parked, not fixed — the duplicated `fullMembers()` helper, the second `MANY_TAGS` shadowing the first by name, the report's "7 cases" undercount against the diff's 9, `PHOTO_SUPPRESSION_LIMIT` crossing untested on the template path, and a `{hashtags}`-without-`{body}` template degenerating to the unshortenable case — the two test-structure ones reproduce the task's own Step 1 snippet verbatim, the report count is prose not code, and the two untested edges are behaviours the Constraints call correct rather than defects — cost if wrong: two helpers stay duplicated in one file and two edges rest on the ladder's general proof instead of a case each.
+- Part of this task's content rode into a concurrent session's tree-wide commit `7addb67 "upui"`, which ran mid-wave and swept the then-uncommitted `lib/pipeline/publish/assemble.test.ts` into itself; the factory's own commit `a7938c8` carries `lib/pipeline/publish/assemble.ts`. History was not rewritten — the same call the multi-target Task 8 ruling made for commit `8526d6a` — so the task's diff spans `de5d99d..HEAD` rather than one commit, and the reviewer was given that range — cost if wrong: `git log` for this task reads across two commits, one of them not the factory's.
+
 ## Result
+
+- Commits: `7addb67` (partial, concurrent session's) + `a7938c8` (`feat(target-table): assembleMessage composes with a per-target template (TT-7 – TT-9)`)
+- Covers: TT-7, TT-8, TT-9
+- Focused tests: `lib/pipeline/publish/assemble.test.ts` 29/29; `lib/pipeline/publish` 137/137
+- Review: spec ✅ quality ✅ — 0 Critical, 0 Important, 5 Minor parked as rulings; 0 fix rounds
+- Wave gates: tsc 0, tests 1714/1714 (112 files), biome 268 clean, next build 0, cdk synth 0
