@@ -10,11 +10,11 @@ import { z } from "zod";
  * forces the classifier into `other`, degrading §3.2's routing silently.
  */
 export const CATEGORIES = [
-  "art",
+  "art&fashion",
   "crime",
-  "culture",
+  "culture&history",
   "news-digest",
-  "economics",
+  "economics&finance",
   "education",
   "energy",
   "entertainment",
