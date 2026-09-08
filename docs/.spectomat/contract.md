@@ -130,6 +130,7 @@ Before every commit in phases C and D:
 
 ```bash
 bash "/Users/alex/Projects/spectomat/scripts/gates.sh"
+npx cdk synth
 ```
 
 The script moves to the repository root itself. It runs `npm run gates` when
