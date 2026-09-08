@@ -35,7 +35,7 @@
 | `components/SourcesTable.tsx` | comment only; column list comes from `SOURCE_COLUMNS` | Task 2 (modify) |
 | every test fixture naming `tgChannel` on a Source / ScrapedItem / AnalyzedItem | renamed to `target` | Task 2 (modify) |
 | `lib/domain/message.ts` | `PostSchema`, `posts` map with default `{}`; `MessageListItemSchema` omits it | Task 3 (modify) |
-| typed `Message` literals in `lib/dashboard/*.test.ts` | gain `posts: {}` | Task 3 (modify) |
+| typed `Message` literals in `lib/dashboard/*.test.ts` and `lib/db/ports.test.ts` | gain `posts: {}` | Task 3 (modify) |
 | `infra/lib/data-stack.test.ts` | MT-16 guard | Task 4 (modify) |
 | `infra/lib/data-stack.ts` | comment: `posts`/`target` deliberately unprojected | Task 4 (modify) |
 | `lib/db/ports.ts` | `PublishResult = {id, ts}`, `PostsRecord`, `MessageRepo.recordPosts` | Task 5 (modify) |
@@ -116,6 +116,8 @@ Planning rulings (phase B), each a divergence from the spec's letter that the bu
 
 - Wave 1 · `lib/ai/categories.ts` is restored to §5.4 L494-501's `art&fashion`, `culture&history`, `economics&finance` (commit 34174ff) — 4ce7756 had shortened the three values in code only, so `npm test` failed at HEAD on `lib/ai/categories.test.ts` and no commit in this plan could pass the gates; Part I is normative and no §25 row records the shortening — cost if wrong: the three enum values the owner may have meant to shorten come back, a three-line revert plus an R-row.
 - Wave 1 · an uncommitted `"gates": "echo 'gates'"` script in `package.json` was discarded at orient — it belonged to no task, and a `gates` script is what `gates.sh` runs in place of typecheck/test/lint/build, so a stub silences every gate — cost if wrong: one line to re-add.
+- Wave 2 · a second stray `gates` script (`tsc --noEmit && vitest run && biome check .`) appeared in `package.json` during the wave and rode into cb793fe; removed in a9e2a09 — same reason as wave 1: it would replace the four gates with three, dropping `next build` and `npx cdk synth` — cost if wrong: one line to re-add.
+- Wave 2 · `lib/db/ports.test.ts` joins Task 3's Files: its `Message` fixture feeds `putNew(message: Message)`, so the `posts` default made `tsc` red there too — cost if wrong: none; a fixture line.
 - Wave 1 · Task 2's Step 4 audit grep may print the `lib/domain/source.ts` doc comment that Step 3 dictates — the comment is the task's own text — cost if wrong: none.
 
 (appended by executing-tasks for decisions that cross tasks: `- Task N · <decision> — <why> — <cost if wrong>`)

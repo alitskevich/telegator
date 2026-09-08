@@ -35,7 +35,7 @@ A message carries `posts: { canonicalTargetId → { tgId, tgAt } }`, defaulting 
 
 ## Steps
 
-- [ ] **Step 1: Write the failing tests** — append to `lib/domain/message.test.ts` (add `PostSchema` to the import from `./message`):
+- [x] **Step 1: Write the failing tests** — append to `lib/domain/message.test.ts` (add `PostSchema` to the import from `./message`):
 
 ```ts
 describe("posts — multi-target#2.4 (R55)", () => {
@@ -109,8 +109,8 @@ and next to `"merging into a published message resets it to topublish and keeps 
   });
 ```
 
-- [ ] **Step 2: Run them, expect FAIL** — `npx vitest run lib/domain/message.test.ts lib/dedup/dedupBatch.test.ts` fails: `PostSchema` is not exported; `posts` is undefined on the parsed record.
-- [ ] **Step 3: Minimal implementation**
+- [x] **Step 2: Run them, expect FAIL** — `npx vitest run lib/domain/message.test.ts lib/dedup/dedupBatch.test.ts` fails: `PostSchema` is not exported; `posts` is undefined on the parsed record.
+- [x] **Step 3: Minimal implementation**
 
 `lib/domain/message.ts` — after `MemberBlockSchema` / `MemberBlock` (line 43):
 
@@ -167,17 +167,16 @@ In `MessageListItemSchema.omit({...})` add `posts: true,` after `memberIds: true
 
 Typed fixtures — add `posts: {},` after `memberIds: [],` in the `message` helper of `lib/dashboard/overview.test.ts`, `lib/dashboard/triggers.test.ts`, `lib/dashboard/records.test.ts`, `lib/dashboard/computations.test.ts`. (`components/MessagesTable.test.tsx` builds `MessageListItem`, which omits `posts`: untouched.)
 
-- [ ] **Step 4: Run it, expect PASS** — `npx vitest run lib/domain/message.test.ts lib/dedup/dedupBatch.test.ts`; then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0. `tsc` is the one that catches a typed fixture still missing `posts`.
-- [ ] **Step 5: Commit** — message `feat(multi-target): posts map on MessageSchema, aggregate writes {} (MT-6, MT-15)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — `npx vitest run lib/domain/message.test.ts lib/dedup/dedupBatch.test.ts`; then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0. `tsc` is the one that catches a typed fixture still missing `posts`.
+- [x] **Step 5: Commit** — message `feat(multi-target): posts map on MessageSchema, aggregate writes {} (MT-6, MT-15)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
-(appended by executing-tasks: `- <decision> — <why> — <cost if wrong>`)
+- `lib/db/ports.test.ts` gains `posts: {}` on its typed `Message` fixture although the task's Files did not list it — `repo.putNew(message)` takes a full `Message`, so `tsc` was red without it; the same one-line pattern as the four dashboard fixtures — cost if wrong: one line to revert.
+- Reviewer Minor, parked: the plan's file table did not name `lib/db/ports.test.ts`; recorded in the overview's Rulings instead of re-planning.
 
 ## Result
 
-(filled by executing-tasks when the task is done)
-
-- Commits: <base7>..<head7>
-- Tests: <n>/<n> (<files>)
-- Review: spec ✅ · quality: <clean | K parked>
+- Commits: 37950ea..dde71c9
+- Tests: 1599/1599 (107 files)
+- Review: spec ✅ · quality: 1 parked (Minor, the Files-list gap above)

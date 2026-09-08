@@ -31,7 +31,7 @@
 
 ## Steps
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `lib/seed/sources.test.ts` — line 9 `tgChannel: "@target",` → `target: "@target",`; in the key list at lines 31-45 replace `"tgChannel",` with `"target",`; append inside `describe("toSeedSource — §9.4 L965 as a migration", …)`:
 
@@ -95,8 +95,8 @@ describe("legacyTargetPatch — multi-target#3.7, #8.2", () => {
 });
 ```
 
-- [ ] **Step 2: Run them, expect FAIL** — `npx vitest run lib/seed`: `targets` cannot be resolved; `seeded.target` is undefined.
-- [ ] **Step 3: Minimal implementation**
+- [x] **Step 2: Run them, expect FAIL** — `npx vitest run lib/seed`: `targets` cannot be resolved; `seeded.target` is undefined.
+- [x] **Step 3: Minimal implementation**
 
 `lib/seed/sources.ts` — remove `"tgChannel",` from `TEXT_FIELDS` (the array becomes `category`, `tags`, `teaser`, `lastItemId`, `lastResult`), and after the `TEXT_FIELDS` loop add:
 
@@ -243,17 +243,15 @@ await main().catch((error: unknown) => {
 
 `package.json` — in `scripts`, after `"cursors:now"`, add `"migrate:targets": "tsx scripts/migrate-targets.ts",`.
 
-- [ ] **Step 4: Run it, expect PASS** — `npx vitest run lib/seed`; `npx tsc --noEmit` covers the script (it is inside the project's `include`; if `tsc` reports the script's `output.Items` as possibly untyped, narrow the way `lib/db/sources.ts` `listAll` does: `"Items" in output ? (output.Items ?? []) : []`); then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0.
-- [ ] **Step 5: Commit** — message `feat(multi-target): seed maps tgChannel to target; migrate-targets script (MT-20, MT-21)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — `npx vitest run lib/seed`; `npx tsc --noEmit` covers the script (it is inside the project's `include`; if `tsc` reports the script's `output.Items` as possibly untyped, narrow the way `lib/db/sources.ts` `listAll` does: `"Items" in output ? (output.Items ?? []) : []`); then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0.
+- [x] **Step 5: Commit** — message `feat(multi-target): seed maps tgChannel to target; migrate-targets script (MT-20, MT-21)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
-(appended by executing-tasks: `- <decision> — <why> — <cost if wrong>`)
+- A stray `"gates": "tsc --noEmit && vitest run && biome check ."` script had entered `package.json` beside `migrate:targets` and was committed in cb793fe; removed in fix round 1 (a9e2a09) — a `gates` script is what the factory's runner uses instead of typecheck/test/lint/build, and this one dropped `next build` and `npx cdk synth`; it belonged to no task's Files, as in wave 1's ruling — cost if wrong: one line to re-add.
 
 ## Result
 
-(filled by executing-tasks when the task is done)
-
-- Commits: <base7>..<head7>
-- Tests: <n>/<n> (<files>)
-- Review: spec ✅ · quality: <clean | K parked>
+- Commits: dde71c9..a9e2a09 (cb793fe + fix round 1 a9e2a09)
+- Tests: 1599/1599 (107 files)
+- Review: spec ✅ (round 1 resolved the one Extra) · quality: clean
