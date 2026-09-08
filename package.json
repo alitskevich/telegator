@@ -9,6 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "gates": "tsc --noEmit && vitest run && biome check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "biome check .",
@@ -17,6 +18,7 @@
     "deploy": "tsx scripts/deploy.ts --execute",
     "scrape": "tsx scripts/scrape.ts",
     "cursors:now": "tsx scripts/set-cursors-now.ts",
+    "migrate:targets": "tsx scripts/migrate-targets.ts",
     "smoke:openrouter": "export OPENROUTER_API_KEY=$(cat .orkey) &&tsx scripts/smoke-openrouter.ts",
     "dev": "next dev",
     "build": "next build",

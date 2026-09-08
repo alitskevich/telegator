@@ -6,7 +6,7 @@ import { seedSourcesFrom, toSeedSource } from "./sources";
 const exported = (extra: Record<string, unknown> = {}) => ({
   id: "yigal_levin",
   status: "ok",
-  tgChannel: "@target",
+  target: "@target",
   category: "politics",
   tags: "war,politics",
   teaser: "Subscribe now",
@@ -40,7 +40,7 @@ describe("toSeedSource — §9.4 L965 as a migration", () => {
         "status",
         "tags",
         "teaser",
-        "tgChannel",
+        "target",
       ].sort(),
     );
   });
@@ -149,6 +149,28 @@ describe("toSeedSource — §9.4 L965 as a migration", () => {
 
   test("rejects a row whose id is not a string", () => {
     expect(() => toSeedSource(exported({ id: 42 }))).toThrow(/id/);
+  });
+
+  describe("target — multi-target#3.7 (R54)", () => {
+    test("MT-20: a legacy export's tgChannel seeds as target", () => {
+      const seeded = toSeedSource(exported({ target: undefined, tgChannel: "x" }));
+
+      expect(seeded.target).toBe("x");
+      expect("tgChannel" in seeded).toBe(false);
+    });
+
+    test("MT-20: with both present, target wins and tgChannel is ignored", () => {
+      const seeded = toSeedSource(exported({ target: "a,b", tgChannel: "x" }));
+
+      expect(seeded.target).toBe("a,b");
+      expect("tgChannel" in seeded).toBe(false);
+    });
+
+    test("neither present seeds no target", () => {
+      expect("target" in toSeedSource(exported({ target: undefined, tgChannel: undefined }))).toBe(
+        false,
+      );
+    });
   });
 });
 

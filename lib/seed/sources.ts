@@ -15,14 +15,7 @@ import type { Source } from "../domain/source";
  */
 
 /** §2.1 L110-114's operator fields, plus the scrape cursor. Everything else is dropped. */
-const TEXT_FIELDS = [
-  "tgChannel",
-  "category",
-  "tags",
-  "teaser",
-  "lastItemId",
-  "lastResult",
-] as const;
+const TEXT_FIELDS = ["category", "tags", "teaser", "lastItemId", "lastResult"] as const;
 
 function text(value: unknown): string | undefined {
   if (typeof value === "string" && value !== "") return value;
@@ -76,6 +69,15 @@ export function toSeedSource(row: unknown): Source {
     const value = text(source[field]);
     if (value !== undefined) seeded[field] = value;
   }
+
+  /**
+   * multi-target#3.7 (R54) — the export predates the rename, so its `tgChannel`
+   * is the target list; a row that already carries `target` keeps it. Written
+   * under the new name only: a `tgChannel` attribute on a seeded row would be an
+   * orphan `SourceSchema` strips on every read.
+   */
+  const target = text(source.target) ?? text(source.tgChannel);
+  if (target !== undefined) seeded.target = target;
 
   /**
    * `zeroYieldRuns` is deliberately absent. §2.4 gives it a read-side default of
