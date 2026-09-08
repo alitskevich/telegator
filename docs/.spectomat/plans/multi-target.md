@@ -58,16 +58,16 @@
 
 One file per task under `docs/.spectomat/plans/multi-target/`, from `templates/task.md`, executed in this order. Tasks with no dependency between them and disjoint Files run in parallel as one wave.
 
-| # | File | Component | Covers | Depends on |
-| --- | --- | --- | --- | --- |
-| 1 | `task-01-target-parser.md` | `lib/domain/target.ts` | MT-1, MT-2 | — |
-| 2 | `task-02-rename-target.md` | the `tgChannel` → `target` rename on source and item, end to end | MT-3, MT-4, MT-5, MT-17, MT-18, MT-19 | — |
-| 3 | `task-03-post-map.md` | `posts` on `MessageSchema`; aggregate create writes `{}` | MT-6, MT-15 | 2 |
-| 4 | `task-04-projection-guard.md` | `status-index` projects neither `posts` nor `target` | MT-16 | — |
-| 5 | `task-05-publish-per-target.md` | ports, fakes, adapter, `assembleMessage`, the publish loop, E2E-4 | MT-7, MT-8, MT-9, MT-10, MT-11, MT-12, MT-13, MT-14, MT-23, MT-E2E-2 | 1, 3 |
-| 6 | `task-06-republish-ts.md` | `republishMessage` bumps `ts`; `TriggerDeps.clock` | MT-22 | 3 |
-| 7 | `task-07-seed-migration.md` | seed mapping, `legacyTargetPatch`, `scripts/migrate-targets.ts` | MT-20, MT-21 | 2 |
-| 8 | `task-08-e2e-and-docs.md` | MT-E2E-1; base spec §25 R54/R55 and §33 row; comment audit | MT-E2E-1 | 5, 7 |
+| # | File | Component | Covers | Depends on | Done |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `task-01-target-parser.md` | `lib/domain/target.ts` | MT-1, MT-2 | — | ✅ |
+| 2 | `task-02-rename-target.md` | the `tgChannel` → `target` rename on source and item, end to end | MT-3, MT-4, MT-5, MT-17, MT-18, MT-19 | — | ✅ |
+| 3 | `task-03-post-map.md` | `posts` on `MessageSchema`; aggregate create writes `{}` | MT-6, MT-15 | 2 | ✅ |
+| 4 | `task-04-projection-guard.md` | `status-index` projects neither `posts` nor `target` | MT-16 | — | ✅ |
+| 5 | `task-05-publish-per-target.md` | ports, fakes, adapter, `assembleMessage`, the publish loop, E2E-4 | MT-7, MT-8, MT-9, MT-10, MT-11, MT-12, MT-13, MT-14, MT-23, MT-E2E-2 | 1, 3 | ✅ |
+| 6 | `task-06-republish-ts.md` | `republishMessage` bumps `ts`; `TriggerDeps.clock` | MT-22 | 3 | ✅ |
+| 7 | `task-07-seed-migration.md` | seed mapping, `legacyTargetPatch`, `scripts/migrate-targets.ts` | MT-20, MT-21 | 2 | ✅ |
+| 8 | `task-08-e2e-and-docs.md` | MT-E2E-1; base spec §25 R54/R55 and §33 row; comment audit | MT-E2E-1 | 5, 7 | — |
 
 Expected waves: **W1** = 1, 2, 4 · **W2** = 3 · **W3** = 5, 6, 7 · **W4** = 8.
 
@@ -119,5 +119,7 @@ Planning rulings (phase B), each a divergence from the spec's letter that the bu
 - Wave 2 · a second stray `gates` script (`tsc --noEmit && vitest run && biome check .`) appeared in `package.json` during the wave and rode into cb793fe; removed in a9e2a09 — same reason as wave 1: it would replace the four gates with three, dropping `next build` and `npx cdk synth` — cost if wrong: one line to re-add.
 - Wave 2 · `lib/db/ports.test.ts` joins Task 3's Files: its `Message` fixture feeds `putNew(message: Message)`, so the `posts` default made `tsc` red there too — cost if wrong: none; a fixture line.
 - Wave 1 · Task 2's Step 4 audit grep may print the `lib/domain/source.ts` doc comment that Step 3 dictates — the comment is the task's own text — cost if wrong: none.
+
+- Wave 3 · a rejected target and an unrecorded post in the same publish invocation acknowledge the record (`unrecorded` wins the outcome precedence, Task 5 Step 3 verbatim) — reporting would redeliver and re-send the post that is live on Telegram but missing from `posts`, duplicating it; the rejected target waits for the next republish and its error log names it — cost if wrong: one target unsent until an operator republishes.
 
 (appended by executing-tasks for decisions that cross tasks: `- Task N · <decision> — <why> — <cost if wrong>`)

@@ -27,7 +27,7 @@ The dashboard's re-publish sets `status: topublish` **and** `ts: clock.now()`, s
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — in `lib/dashboard/triggers.test.ts`, add `clock,` to the object returned by the `deps()` helper (the module-level `const clock = manualClock(NOW)` already exists at line 53), and add inside `describe("republishMessage — §8.4 L815", …)`:
+- [x] **Step 1: Write the failing test** — in `lib/dashboard/triggers.test.ts`, add `clock,` to the object returned by the `deps()` helper (the module-level `const clock = manualClock(NOW)` already exists at line 53), and add inside `describe("republishMessage — §8.4 L815", …)`:
 
 ```ts
   /**
@@ -47,8 +47,8 @@ The dashboard's re-publish sets `status: topublish` **and** `ts: clock.now()`, s
   });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run lib/dashboard/triggers.test.ts`: `after?.ts` is `NOW - 5000`. (`npx tsc --noEmit` also flags `clock` as an unknown property of `TriggerDeps`.)
-- [ ] **Step 3: Minimal implementation**
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run lib/dashboard/triggers.test.ts`: `after?.ts` is `NOW - 5000`. (`npx tsc --noEmit` also flags `clock` as an unknown property of `TriggerDeps`.)
+- [x] **Step 3: Minimal implementation**
 
 `lib/dashboard/triggers.ts` — add `import type { Clock } from "../clock";`; in `TriggerDeps` add:
 
@@ -69,12 +69,12 @@ and extend the function's doc comment with one sentence: `multi-target#3.5 adds 
 
 `actions/triggers.ts` — add `import { systemClock } from "../lib/clock";` and `clock: systemClock,` to the object `deps()` returns.
 
-- [ ] **Step 4: Run it, expect PASS** — `npx vitest run lib/dashboard test/boundaries.test.ts`; then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0.
-- [ ] **Step 5: Commit** — message `feat(multi-target): republish bumps ts so every post is re-sent (MT-22)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — `npx vitest run lib/dashboard test/boundaries.test.ts`; then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0.
+- [x] **Step 5: Commit** — message `feat(multi-target): republish bumps ts so every post is re-sent (MT-22)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
-(appended by executing-tasks: `- <decision> — <why> — <cost if wrong>`)
+- Reviewer's Minor finding — the MT-22 test asserts both `after?.ts === clock.now()` and `after?.ts === NOW`, which is redundant while the clock is not advanced — parked: the two lines are verbatim from this task file's Step 1, and the pair documents that the value comes from the injected clock rather than a literal — cost if wrong: one redundant assertion.
 
 ## Result
 

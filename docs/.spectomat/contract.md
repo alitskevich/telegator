@@ -98,7 +98,8 @@ Run the skill's self-review. No code in this phase.
 ### C · Plan → Wave
 
 In the alphabetically first plan with open work, take the **wave**: every
-task file whose `Depends on` tasks are all closed and whose Files are
+task file whose `Depends on` tasks are all closed — all steps ticked in their
+own task files, not the overview's `Done` column — and whose Files are
 pairwise disjoint with the others in the wave, lowest numbers first, at most
 three. Execute the wave as the `executing-tasks` reference says: one fresh
 implementer per task in parallel, none of them running git, then one commit

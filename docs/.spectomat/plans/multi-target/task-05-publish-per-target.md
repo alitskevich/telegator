@@ -49,7 +49,7 @@ Publish sends a message to every target in its list, skips targets whose post is
 
 ## Steps
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `lib/pipeline/publish/posts.test.ts` (new):
 
@@ -446,8 +446,8 @@ describe("multi-target#5.1 — once per target", () => {
 
 (The `as EditMessageTextArgs` and `as { chatId: string }` narrowings are the form this file already uses at lines 176-177.)
 
-- [ ] **Step 2: Run them, expect FAIL** — `npx tsc --noEmit` errors on `recordPosts`, `assembleMessage` arity and `failChatIds`; `npx vitest run lib/pipeline/publish lib/db test/e2e/e2e4.test.ts` fails the new tests.
-- [ ] **Step 3: Minimal implementation**
+- [x] **Step 2: Run them, expect FAIL** — `npx tsc --noEmit` errors on `recordPosts`, `assembleMessage` arity and `failChatIds`; `npx vitest run lib/pipeline/publish lib/db test/e2e/e2e4.test.ts` fails the new tests.
+- [x] **Step 3: Minimal implementation**
 
 `lib/db/ports.ts` — import `Post` from `../domain/message`; replace lines 62-68 and the `markPublished` line:
 
@@ -892,12 +892,12 @@ async function withRetry(
 }
 ```
 
-- [ ] **Step 4: Run it, expect PASS** — `npx vitest run lib/pipeline/publish lib/db test/e2e`; then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0. `test/acceptance.test.ts` must still find `AC-4.1`, `AC-4.5`, `AC-4.6`, `AC-4.7` named in `index.test.ts` — the renamed tests above keep those prefixes.
-- [ ] **Step 5: Commit** — message `feat(multi-target): publish once per target with a recorded post map (MT-7..MT-14, MT-23, MT-E2E-2)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — `npx vitest run lib/pipeline/publish lib/db test/e2e`; then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0. `test/acceptance.test.ts` must still find `AC-4.1`, `AC-4.5`, `AC-4.6`, `AC-4.7` named in `index.test.ts` — the renamed tests above keep those prefixes.
+- [x] **Step 5: Commit** — message `feat(multi-target): publish once per target with a recorded post map (MT-7..MT-14, MT-23, MT-E2E-2)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
-(appended by executing-tasks: `- <decision> — <why> — <cost if wrong>`)
+- Reviewer's Important finding — when one target is rejected (`ok: false`) and a *different* target's send goes unrecorded in the same invocation, `unrecorded` wins the precedence and the record is acknowledged, so the rejected target waits for the next republish — **parked, not fixed**: the two lines are verbatim from this task file (Step 3), and the precedence is the safe one, because reporting would redeliver and re-send the unrecorded post, which is live on Telegram but absent from `posts`, creating a duplicate — cost if wrong: one rejected target stays unsent until an operator republishes, with an error log naming it.
 
 ## Result
 
