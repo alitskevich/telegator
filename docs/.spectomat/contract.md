@@ -132,8 +132,14 @@ The draft is already there as `done/<slug>.draft.md`. If the repository has a `p
 Run every command in the block below from the repository root: once per wave in phase C, after the fix rounds and before the `chore(<slug>)` tick commit, and once in phase D before archiving. Every line must exit 0.
 
 ```bash
-npm run gates
+npm run gates && npm run build
+npx cdk synth
 ```
+
+`npm run gates` is `typecheck && test && lint` — three of the four gates
+`CLAUDE.md` requires. `npm run build` and `npx cdk synth` are the other two and
+must stay in this block: `CLAUDE.md` §32.1 says all four pass before any commit,
+not three. Add a project-specific gate by appending its command here.
 
 No completion claim without fresh evidence. A gate that has not run this
 loop has not passed; a partial run does not stand for the whole. Run each

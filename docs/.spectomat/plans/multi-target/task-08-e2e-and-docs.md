@@ -28,7 +28,7 @@ The whole pipeline over fakes sends one seeded post to both of a source's target
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — append to `test/e2e/e2e1.test.ts`:
+- [x] **Step 1: Write the failing test** — append to `test/e2e/e2e1.test.ts`:
 
 ```ts
 /**
@@ -103,8 +103,8 @@ describe("MT-E2E-1 (multi-target#9.2)", () => {
 
 `twoLinks` is the single-post fixture `e2e4.test.ts` uses; `multiPost` would give three messages and blur the count.
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run test/e2e/e2e1.test.ts`; if Tasks 2 and 5 are in place this passes on first run — that is the intended proof, not a defect. Either way read the output before moving on.
-- [ ] **Step 3: The ledger rows and the audit**
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run test/e2e/e2e1.test.ts`; if Tasks 2 and 5 are in place this passes on first run — that is the intended proof, not a defect. Either way read the output before moving on.
+- [x] **Step 3: The ledger rows and the audit**
 
 `docs/telegator.md` §25 — append after the `R53` row:
 
@@ -135,17 +135,24 @@ grep -rn --include='*.ts' --include='*.tsx' "tgChannel" lib components handlers 
 
 Every hit must be about the **message** field, the migration, or the seed's legacy mapping. Expected files: `lib/domain/message.ts`, `lib/dedup/dedupBatch.ts` (message field), `lib/dashboard/records.ts` (`MESSAGE_WRITABLE_FIELDS`), `lib/ui/columns.ts` (`MESSAGE_COLUMNS`), `components/MessagesTable.tsx`, `lib/pipeline/publish/*`, `infra/lib/data-stack.ts`, `lib/seed/sources.ts`, `lib/seed/targets.ts`, `scripts/migrate-targets.ts`, and test files. A hit that still describes a source or item field is rewritten to say `target`, in place.
 
-- [ ] **Step 4: Run it, expect PASS** — the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0, `test/specCitations.test.ts` included.
-- [ ] **Step 5: Commit** — message `docs(multi-target): E2E-1 over two targets; R54/R55 and migrate:targets in the base spec (MT-E2E-1)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0, `test/specCitations.test.ts` included.
+- [x] **Step 5: Commit** — message `docs(multi-target): E2E-1 over two targets; R54/R55 and migrate:targets in the base spec (MT-E2E-1)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
-(appended by executing-tasks: `- <decision> — <why> — <cost if wrong>`)
+- Review · **Important** (`package.json:12`, `docs/.spectomat/contract.md:135`) is ruled on, not fixed in package.json: the owner's own commit `8526d6a` added a `gates` script (`typecheck && test && lint`) and rewrote the contract's gate block to a bare `npm run gates`, dropping `next build` and `npx cdk synth`. `CLAUDE.md` §32.1 requires all four, and the contract forbids weakening a gate, so the contract block is restored to `npm run gates && npm run build` + `npx cdk synth` with a sentence saying why; `package.json` is the shipped project's file and the factory leaves the owner's script as written — cost if wrong: the owner re-edits one line of contract.md.
+- This wave's four gates were run whole and separately before the tick — `npm run gates` 0, `npm run build` 0, `npx cdk synth` 0 — so no gate was actually skipped despite the weakened block.
+- The task's three files were committed by the owner's hand-made `8526d6a "up"` while the implementer was still working, mixed with `contract.md`, `package.json` and `next-env.d.ts`. History is not rewritten and no duplicate `docs(multi-target)` commit is made: the content is on record, verified intact against the task's verbatim blocks — cost if wrong: the trail reads `up` instead of the task's Step 5 message.
+- `next-env.d.ts` flipped back to the `next build` variant after the gates and was discarded (`git checkout --`), leaving the owner's committed `next dev` variant — it belongs to no task and flips per command.
+- Review · **Minor** parked: R54's pointer `docs/.spectomat/done/multi-target.spec.md` is correct by design — phase D moves `specs/multi-target.md` there, and the row already says "(or `specs/` while it is being built)".
+- Review · **Minor** parked: plan rulings P5 and P6 have no §11 row. Out of this task's scope (Tasks 5 and 7 issued them) and §11's rows are the divergences from the spec's *letter*; P5 and P6 add behaviour the spec did not forbid — cost if wrong: a reader of `lib/seed/targets.ts:15` resolves "P5" from the plan overview instead of the spec.
+- Review · **Minor** parked: the three MT-E2E-1 cases each rebuild the world and re-run `runPipeline` (~17 ms total) — the block is the task's verbatim text and independent assertions are worth the repeat.
 
 ## Result
 
-(filled by executing-tasks when the task is done)
-
-- Commits: <base7>..<head7>
-- Tests: <n>/<n> (<files>)
-- Review: spec ✅ · quality: <clean | K parked>
+- Commits: 3bb6ca6..8526d6a — this task's three files ride in `8526d6a "up"`, a
+  commit the repository owner made by hand while the implementer was still
+  working; no dedicated `docs(multi-target): …` commit exists. `chore(multi-target):
+  wave 08 ticked` carries the task file and the contract's gate block.
+- Tests: 1621/1621 (108 files)
+- Review: spec ✅ · quality ✅ · 1 Important ruled on, 3 Minor parked

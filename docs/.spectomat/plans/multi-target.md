@@ -67,7 +67,7 @@ One file per task under `docs/.spectomat/plans/multi-target/`, from `templates/t
 | 5 | `task-05-publish-per-target.md` | ports, fakes, adapter, `assembleMessage`, the publish loop, E2E-4 | MT-7, MT-8, MT-9, MT-10, MT-11, MT-12, MT-13, MT-14, MT-23, MT-E2E-2 | 1, 3 | ✅ |
 | 6 | `task-06-republish-ts.md` | `republishMessage` bumps `ts`; `TriggerDeps.clock` | MT-22 | 3 | ✅ |
 | 7 | `task-07-seed-migration.md` | seed mapping, `legacyTargetPatch`, `scripts/migrate-targets.ts` | MT-20, MT-21 | 2 | ✅ |
-| 8 | `task-08-e2e-and-docs.md` | MT-E2E-1; base spec §25 R54/R55 and §33 row; comment audit | MT-E2E-1 | 5, 7 | — |
+| 8 | `task-08-e2e-and-docs.md` | MT-E2E-1; base spec §25 R54/R55 and §33 row; comment audit | MT-E2E-1 | 5, 7 | ✅ |
 
 Expected waves: **W1** = 1, 2, 4 · **W2** = 3 · **W3** = 5, 6, 7 · **W4** = 8.
 
@@ -121,5 +121,8 @@ Planning rulings (phase B), each a divergence from the spec's letter that the bu
 - Wave 1 · Task 2's Step 4 audit grep may print the `lib/domain/source.ts` doc comment that Step 3 dictates — the comment is the task's own text — cost if wrong: none.
 
 - Wave 3 · a rejected target and an unrecorded post in the same publish invocation acknowledge the record (`unrecorded` wins the outcome precedence, Task 5 Step 3 verbatim) — reporting would redeliver and re-send the post that is live on Telegram but missing from `posts`, duplicating it; the rejected target waits for the next republish and its error log names it — cost if wrong: one target unsent until an operator republishes.
+
+- Wave 4 · the contract's Verification Gates block is restored to `npm run gates && npm run build` + `npx cdk synth` — the owner's commit `8526d6a` had reduced it to a bare `npm run gates`, which is `typecheck && test && lint` only, while `CLAUDE.md` §32.1 requires all four; `package.json`'s `gates` script is the owner's and stays as written — cost if wrong: one line of contract.md.
+- Wave 4 · Task 8's three files ride in the owner's hand-made commit `8526d6a "up"`, not a `docs(multi-target)` commit — the edits landed mid-task and history is not rewritten — cost if wrong: the trail reads `up`.
 
 (appended by executing-tasks for decisions that cross tasks: `- Task N · <decision> — <why> — <cost if wrong>`)
