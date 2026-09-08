@@ -89,11 +89,7 @@ type Compose = (blocks: readonly string[], hashtagLine: string) => string;
  * §3.4 L327–334's layout, plus R12's hashtag line — after the member blocks,
  * separated by a blank line, because metadata trails content.
  */
-function builtInCompose(
-  header: string,
-  blocks: readonly string[],
-  hashtagLine: string,
-): string {
+function builtInCompose(header: string, blocks: readonly string[], hashtagLine: string): string {
   const body = [header, "", ...blocks].join(BLOCK_SEPARATOR);
 
   return hashtagLine === "" ? body : `${body}${BLANK_LINE}${hashtagLine}`;
