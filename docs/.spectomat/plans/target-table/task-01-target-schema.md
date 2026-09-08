@@ -39,7 +39,7 @@
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — append to `lib/domain/target.test.ts` (and add `TargetConfigInput`, `TargetSchema`, `TARGET_TYPES`, `DEFAULT_TARGET_TYPE` to the existing `./target` import):
+- [x] **Step 1: Write the failing test** — append to `lib/domain/target.test.ts` (and add `TargetConfigInput`, `TargetSchema`, `TARGET_TYPES`, `DEFAULT_TARGET_TYPE` to the existing `./target` import):
 
 ```ts
 describe("TargetSchema — target-table#2.2", () => {
@@ -129,8 +129,8 @@ describe("toIsoTimestamp — target-table#5.3", () => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run lib/domain/target.test.ts lib/domain/date.test.ts`, fails with `No "TargetSchema" export is defined on the "./target" mock`-style resolution errors (`TargetSchema is not a function` / `toIsoTimestamp is not a function`).
-- [ ] **Step 3: Minimal implementation** — append to `lib/domain/target.ts`, and add `import { z } from "zod";` as the first import:
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run lib/domain/target.test.ts lib/domain/date.test.ts`, fails with `No "TargetSchema" export is defined on the "./target" mock`-style resolution errors (`TargetSchema is not a function` / `toIsoTimestamp is not a function`).
+- [x] **Step 3: Minimal implementation** — append to `lib/domain/target.ts`, and add `import { z } from "zod";` as the first import:
 
 ```ts
 /**
@@ -208,9 +208,20 @@ export function toIsoTimestamp(epochMs: number): string {
 }
 ```
 
-- [ ] **Step 4: Run it, expect PASS** — same command; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0.
-- [ ] **Step 5: Commit** — message `feat(target-table): targets row schema and toIsoTimestamp (TT-1, TT-2, TT-15)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — same command; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0.
+- [x] **Step 5: Commit** — message `feat(target-table): targets row schema and toIsoTimestamp (TT-1, TT-2, TT-15)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
+- Wave ran as Tasks 1+2 only; Task 4 was held out although it is ready and disjoint from both — its Files `infra/lib/app-stack.ts` and `infra/lib/app-stack.test.ts` carry the repository owner's uncommitted §25 R57 work, and an implementer editing them would force that work into a factory commit — cost if wrong: Task 4 slips one wave.
+- Reviewer Minor parked: `TargetConfigInput.safeParse({ messageTemplate: undefined })` succeeds under zod 4.5.2, so an explicit-`undefined` key defeats plan ruling P1's non-empty refinement — JSON serialisation drops such keys before a server action sees one, and the refinement is the task's verbatim text; Task 7 owns the dashboard write path and is where a guard would belong — cost if wrong: one empty upsert reaches the repo and writes nothing.
+- Reviewer Minor parked: `DEFAULT_TARGET_TYPE` restates the literal instead of deriving from `TARGET_TYPES[0]` — the task prescribes the wording and `lib/domain/target.test.ts`'s `toContain` case pins the two together — cost if wrong: none.
+- Reviewer Minor parked: no test asserts `TargetSchema` strips unknown keys (it does), the deliberate contrast with `TargetConfigInput.strict()`; `SourceSchema` has the same gap — cost if wrong: none.
+- Reviewer Minor parked: `deleted` is the only field in the object without a doc comment — cost if wrong: none.
+
 ## Result
+
+- Commit: `434df17` — `feat(target-table): targets row schema and toIsoTimestamp (TT-1, TT-2, TT-15)`
+- Files: `lib/domain/target.ts`, `lib/domain/target.test.ts`, `lib/domain/date.ts`, `lib/domain/date.test.ts` (all modified, appends only)
+- Review: spec ✅ / quality ✅, 0 Critical, 0 Important, 4 Minor (all parked above), 0 fix rounds
+- Gates (whole wave, after the fix rounds): `npm run gates` 0 — tsc 0, tests 1686/1686 in 111 files, biome 265 files clean; `npm run build` 0; `npx cdk synth` 0

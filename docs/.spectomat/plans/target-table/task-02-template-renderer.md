@@ -35,7 +35,7 @@ A pure module substitutes `{placeholder}` tokens in an operator-authored templat
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — create `lib/pipeline/publish/template.test.ts`:
+- [x] **Step 1: Write the failing test** — create `lib/pipeline/publish/template.test.ts`:
 
 ```ts
 import { describe, expect, test } from "vitest";
@@ -144,8 +144,8 @@ describe("renderTemplate — target-table#5.2", () => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run lib/pipeline/publish/template.test.ts`, fails with `Failed to resolve import "./template"`.
-- [ ] **Step 3: Minimal implementation** — create `lib/pipeline/publish/template.ts`:
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run lib/pipeline/publish/template.test.ts`, fails with `Failed to resolve import "./template"`.
+- [x] **Step 3: Minimal implementation** — create `lib/pipeline/publish/template.ts`:
 
 ```ts
 import type { Message } from "../../domain/message";
@@ -243,9 +243,19 @@ export function renderTemplate(template: string, values: TemplateValues): string
 }
 ```
 
-- [ ] **Step 4: Run it, expect PASS** — same command; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0.
-- [ ] **Step 5: Commit** — message `feat(target-table): message template renderer (TT-3 – TT-6)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — same command; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0.
+- [x] **Step 5: Commit** — message `feat(target-table): message template renderer (TT-3 – TT-6)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
+- Reviewer Minor parked: `TEMPLATE_PLACEHOLDER` is an exported `/g` regex and so carries a mutable `lastIndex`; both current uses (`String.replaceAll`, `String.match`) reset it, and the spec pins the pattern rather than the instance — cost if wrong: a future consumer calling `.exec()`/`.test()` on the shared instance gets alternating results.
+- Reviewer Minor parked: the escaping test proves only `&`, not `<`, `>` or `"`; the test body is the task's verbatim text, so the gap is the brief's, not the implementation's — cost if wrong: an unescaped-tag regression in `{title}` would pass.
+- Reviewer Minor parked: a comment in `template.test.ts` cites TT-7, which Task 5 covers; no TT-criteria audit test exists (`test/acceptance.test.ts` audits `AC-x.y` only) — cost if wrong: a false coverage claim if such an audit is ever added.
+- Formatting deviation accepted: biome collapsed `TemplateMessage` to one line — behaviour-neutral, and `biome check` is a gate — cost if wrong: none.
+
 ## Result
+
+- Commit: `f218972` — `feat(target-table): message template renderer (TT-3 – TT-6)`
+- Files: `lib/pipeline/publish/template.ts`, `lib/pipeline/publish/template.test.ts` (both created)
+- Review: spec ✅ / quality ✅, 0 Critical, 0 Important, 3 Minor + 1 formatting note (all parked above), 0 fix rounds
+- Gates (whole wave, after the fix rounds): `npm run gates` 0 — tsc 0, tests 1686/1686 in 111 files, biome 265 files clean; `npm run build` 0; `npx cdk synth` 0

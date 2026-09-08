@@ -61,8 +61,8 @@ One file per task under `docs/.spectomat/plans/target-table/`, from `templates/t
 
 | # | File | Component | Covers | Depends on | Done |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `task-01-target-schema.md` | `TargetSchema`, `TargetConfigInput`, `toIsoTimestamp` | TT-1, TT-2, TT-15 | — | [ ] |
-| 2 | `task-02-template-renderer.md` | `lib/pipeline/publish/template.ts` | TT-3, TT-4, TT-5, TT-6 | — | [ ] |
+| 1 | `task-01-target-schema.md` | `TargetSchema`, `TargetConfigInput`, `toIsoTimestamp` | TT-1, TT-2, TT-15 | — | [x] |
+| 2 | `task-02-template-renderer.md` | `lib/pipeline/publish/template.ts` | TT-3, TT-4, TT-5, TT-6 | — | [x] |
 | 3 | `task-03-target-repo.md` | `TargetRepo`, the fake, the DynamoDB adapter | TT-16 | 1 | [ ] |
 | 4 | `task-04-targets-table-infra.md` | the table, the env var, the two grants | TT-17, TT-18 | — | [ ] |
 | 5 | `task-05-assemble-template.md` | `assembleMessage`'s fourth argument | TT-7, TT-8, TT-9 | 2 | [ ] |
@@ -71,6 +71,8 @@ One file per task under `docs/.spectomat/plans/target-table/`, from `templates/t
 | 8 | `task-08-e2e-and-docs.md` | the end-to-end criteria and §25's two rows | TT-E2E-1, TT-E2E-2 | 6, 7 | [ ] |
 
 Expected waves: **W1** = 1, 2, 4 · **W2** = 3, 5 · **W3** = 6, 7 · **W4** = 8.
+
+Actual waves: **W1** = 1, 2 (Task 4 held out, see the ruling below) · remainder unchanged.
 
 ## Coverage
 
@@ -115,3 +117,4 @@ Planning rulings (phase B), each a divergence from the spec's letter that the bu
 - Plan · **P6** The end-to-end criteria live in `test/e2e/targets.test.ts`, not an `e2eN.test.ts` — `e2e1`…`e2e7` are named for base §10.2's E2E-1…E2E-7, and an `e2e8` would claim a number that section does not issue — cost if wrong: a file name.
 
 (appended by executing-tasks for decisions that cross tasks: `- Task N · <decision> — <why> — <cost if wrong>`)
+- Wave 1 · Task 4 held out of wave 1 and left for a later wave although it is ready and file-disjoint — its Files `infra/lib/app-stack.ts` and `infra/lib/app-stack.test.ts` carry the repository owner's uncommitted, gate-green `docs/telegator.md` §25 R57 work (DLQ purge), and an implementer editing them would force that work into a factory commit or lose it — cost if wrong: Task 4 slips one wave; Tasks 6 and 7 both depend on it.
