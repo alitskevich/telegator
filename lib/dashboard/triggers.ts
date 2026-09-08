@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type RequireRoleDeps, requireRole } from "../auth/session";
 import type { LambdaInvoker } from "../aws/lambda";
+import type { Clock } from "../clock";
 import type { MessageRepo, SourceRepo } from "../db/ports";
 import { ItemIdSchema } from "../domain/ids";
 import { MESSAGE_STATUSES } from "../domain/message";
@@ -23,6 +24,8 @@ import { toCsv } from "../ui/csv";
 
 export interface TriggerDeps {
   readonly auth: RequireRoleDeps;
+  /** multi-target#3.5 — `republishMessage` stamps `ts` so every post goes stale (D4). */
+  readonly clock: Clock;
   readonly lambda: LambdaInvoker;
   readonly functions: {
     readonly scrape: string;
@@ -81,6 +84,7 @@ const RepublishInputSchema = z.object({ messageId: ItemIdSchema });
  * §3.4 L317 has the publish stage load the message and drop anything not in
  * `topublish`. A request that arrived before the status write landed would be
  * silently discarded, and the operator would see a button that did nothing.
+ * multi-target#3.5 adds the `ts` bump.
  */
 export async function republishMessage(input: unknown, deps: TriggerDeps): Promise<void> {
   await requireRole("admin", deps.auth);
@@ -94,7 +98,9 @@ export async function republishMessage(input: unknown, deps: TriggerDeps): Promi
     throw new Error(`no such message: ${messageId}`);
   }
 
-  await deps.messages.patch(messageId, { status: "topublish" });
+  // multi-target#3.5 — `ts` too: a recorded post is current while
+  // `post.tgAt >= ts` (D4), so the status alone would republish nothing.
+  await deps.messages.patch(messageId, { status: "topublish", ts: deps.clock.now() });
   await deps.publishQueue.send([publishQueueMessage(messageId)]);
 
   deps.revalidate("/messages");

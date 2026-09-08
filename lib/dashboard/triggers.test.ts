@@ -85,6 +85,7 @@ function signedInAs(...roles: string[]) {
 
 const deps = () => ({
   auth: { jar, key, clock, status },
+  clock,
   lambda,
   functions: {
     scrape: "telegator-scrape",
@@ -238,6 +239,22 @@ describe("republishMessage — §8.4 L815", () => {
     signedInAs("admin");
     await republishMessage({ messageId: "example/1" }, deps());
     expect(revalidated).toEqual(["/messages"]);
+  });
+
+  /**
+   * multi-target#3.5 — every recorded post is current while `post.tgAt >=
+   * message.ts` (D4), so without this bump a republish would send nothing.
+   */
+  test("MT-22: sets topublish and stamps ts with the clock", async () => {
+    signedInAs("admin");
+    await messages.putNew(message(3, { ts: NOW - 5_000 }));
+
+    await republishMessage({ messageId: "example/3" }, deps());
+
+    const after = await messages.get("example/3");
+    expect(after?.status).toBe("topublish");
+    expect(after?.ts).toBe(clock.now());
+    expect(after?.ts).toBe(NOW);
   });
 });
 

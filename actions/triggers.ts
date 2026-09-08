@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { systemClock } from "../lib/clock";
 import {
   exportTable as exportTableCore,
   publishPending as publishPendingCore,
@@ -19,6 +20,7 @@ import { authContext, functions, lambda, messages, publishQueue, sources } from 
 async function deps(): Promise<TriggerDeps> {
   return {
     auth: await authContext(),
+    clock: systemClock,
     lambda,
     functions,
     messages,
