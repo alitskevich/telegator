@@ -30,7 +30,7 @@ A pure module turns a comma-separated target list into canonical ids, and resolv
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — create `lib/domain/target.test.ts`:
+- [x] **Step 1: Write the failing test** — create `lib/domain/target.test.ts`:
 
 ```ts
 import { describe, expect, test } from "vitest";
@@ -75,8 +75,8 @@ describe("resolveTargets — multi-target#5.3", () => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run lib/domain/target.test.ts`, fails with "Failed to resolve import "./target"".
-- [ ] **Step 3: Minimal implementation** — create `lib/domain/target.ts`:
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run lib/domain/target.test.ts`, fails with "Failed to resolve import "./target"".
+- [x] **Step 3: Minimal implementation** — create `lib/domain/target.ts`:
 
 ```ts
 import { DEFAULT_TG_CHANNEL } from "./message";
@@ -118,17 +118,15 @@ export function resolveTargets(value: string | undefined): string[] {
 }
 ```
 
-- [ ] **Step 4: Run it, expect PASS** — same command; then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0.
-- [ ] **Step 5: Commit** — message `feat(multi-target): target-list parser (MT-1, MT-2)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — same command; then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0.
+- [x] **Step 5: Commit** — message `feat(multi-target): target-list parser (MT-1, MT-2)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
-(appended by executing-tasks: `- <decision> — <why> — <cost if wrong>`)
+- Minor, parked: `parseTargets` dedups with `out.includes(id)`, O(n²) over the list — a target list is a handful of ids; a `Set` buys nothing here — cost if wrong: none at realistic sizes.
 
 ## Result
 
-(filled by executing-tasks when the task is done)
-
-- Commits: <base7>..<head7>
-- Tests: <n>/<n> (<files>)
-- Review: spec ✅ · quality: <clean | K parked>
+- Commits: 34174ff..f97ee68 (f97ee68)
+- Tests: 1583/1583 (106 files); lib/domain/target.test.ts 8/8
+- Review: spec ✅ · quality: clean (1 minor parked)

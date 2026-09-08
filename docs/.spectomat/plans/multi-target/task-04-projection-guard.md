@@ -26,7 +26,7 @@ A CDK assertion pins that the synthesised `status-index` (and `date-index`) on `
 
 ## Steps
 
-- [ ] **Step 1: Write the test** — in `infra/lib/data-stack.test.ts`, inside `describe("messages", …)` directly after the test `"status-index projects what §8.3 L798 and §8.5 L832 render (R27)"`:
+- [x] **Step 1: Write the test** — in `infra/lib/data-stack.test.ts`, inside `describe("messages", …)` directly after the test `"status-index projects what §8.3 L798 and §8.5 L832 render (R27)"`:
 
 ```ts
   /**
@@ -46,8 +46,8 @@ A CDK assertion pins that the synthesised `status-index` (and `date-index`) on `
   });
 ```
 
-- [ ] **Step 2: Run it, expect PASS — then prove it bites** — `npx vitest run infra/lib/data-stack.test.ts` passes (the template already satisfies the guard). Temporarily add `"posts",` to `MESSAGE_LIST_ATTRIBUTES` in `infra/lib/data-stack.ts`, run again, see `MT-16` fail, and revert that one line. A guard that cannot fail proves nothing.
-- [ ] **Step 3: Minimal implementation** — the comment on `MESSAGE_LIST_ATTRIBUTES` in `infra/lib/data-stack.ts` (lines 17-27) gains one paragraph, nothing else changes:
+- [x] **Step 2: Run it, expect PASS — then prove it bites** — `npx vitest run infra/lib/data-stack.test.ts` passes (the template already satisfies the guard). Temporarily add `"posts",` to `MESSAGE_LIST_ATTRIBUTES` in `infra/lib/data-stack.ts`, run again, see `MT-16` fail, and revert that one line. A guard that cannot fail proves nothing.
+- [x] **Step 3: Minimal implementation** — the comment on `MESSAGE_LIST_ATTRIBUTES` in `infra/lib/data-stack.ts` (lines 17-27) gains one paragraph, nothing else changes:
 
 ```ts
  *
@@ -57,17 +57,15 @@ A CDK assertion pins that the synthesised `status-index` (and `date-index`) on `
  * L638). `data-stack.test.ts` MT-16 pins both.
 ```
 
-- [ ] **Step 4: Run it, expect PASS** — `npx vitest run infra/lib/data-stack.test.ts`; then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0.
-- [ ] **Step 5: Commit** — message `test(multi-target): status-index projects neither posts nor target (MT-16)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — `npx vitest run infra/lib/data-stack.test.ts`; then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0.
+- [x] **Step 5: Commit** — message `test(multi-target): status-index projects neither posts nor target (MT-16)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
-(appended by executing-tasks: `- <decision> — <why> — <cost if wrong>`)
+- Minor, parked: the test title carries the `MT-16:` prefix while its siblings do not — the task's Step 1 dictates the string and `test/acceptance.test.ts`-style audits find criteria by id — cost if wrong: none.
 
 ## Result
 
-(filled by executing-tasks when the task is done)
-
-- Commits: <base7>..<head7>
-- Tests: <n>/<n> (<files>)
-- Review: spec ✅ · quality: <clean | K parked>
+- Commits: 0304416..09e0dad (09e0dad)
+- Tests: 1583/1583 (106 files); infra/lib/data-stack.test.ts 20/20
+- Review: spec ✅ · quality: clean (1 minor parked)

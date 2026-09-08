@@ -62,7 +62,7 @@ Fixture-only renames (a Source, ScrapedItem or AnalyzedItem literal):
 
 ## Steps
 
-- [ ] **Step 1: Write the failing tests** — six edits, one per criterion:
+- [x] **Step 1: Write the failing tests** — six edits, one per criterion:
 
 `lib/domain/source.test.ts` — change line 7 `tgChannel: "telegator_news",` to `target: "telegator_news",` and append at the end of the file:
 
@@ -159,8 +159,8 @@ and rename that test to `"MT-17: the header row is the sources columns, target i
   });
 ```
 
-- [ ] **Step 2: Run them, expect FAIL** — `npx tsc --noEmit` reports `target` does not exist on `Source` / `ScrapedItem` (excess-property errors in the fixtures); `npx vitest run lib/domain/source.test.ts lib/pipeline/scrape/transform.test.ts lib/dashboard/records.test.ts lib/dashboard/triggers.test.ts components/SourcesTable.test.tsx` fails MT-3, MT-4, MT-17, MT-18, MT-19.
-- [ ] **Step 3: Minimal implementation** — the production edits, then the fixture renames:
+- [x] **Step 2: Run them, expect FAIL** — `npx tsc --noEmit` reports `target` does not exist on `Source` / `ScrapedItem` (excess-property errors in the fixtures); `npx vitest run lib/domain/source.test.ts lib/pipeline/scrape/transform.test.ts lib/dashboard/records.test.ts lib/dashboard/triggers.test.ts components/SourcesTable.test.tsx` fails MT-3, MT-4, MT-17, MT-18, MT-19.
+- [x] **Step 3: Minimal implementation** — the production edits, then the fixture renames:
 
 `lib/domain/source.ts` line 39:
 
@@ -209,7 +209,7 @@ and line 85 `tgChannel: field.tgChannel,` → `target: field.target,`.
 
 Fixture renames — in each file listed under *Fixture-only renames* replace `tgChannel:` with `target:` **on the Source / ScrapedItem / AnalyzedItem literal only**: `lib/domain/item.test.ts` (line 15, and lines 75-77 become `const { target: _omitted, ...rest } = scraped;` with the test title `"allows an absent target"` and its comment citing `multi-target#3.3`), `lib/dedup/dedupBatch.test.ts:303` (`{ ...OTHER_EVENT, target: "other_news" }`), `lib/pipeline/scrape/index.test.ts:66` and `:401` (`target: "target"` in both), `lib/queues/ports.test.ts:17`, `lib/db/ports.test.ts:7`, `lib/db/sources.test.ts:29`, and the source literals in `test/e2e/e2e1.test.ts`, `e2e2.test.ts:40`, `e2e3.test.ts:39`, `e2e4.test.ts` (`source()` helper), `e2e5.test.ts:46`; the `ScrapedItem` literals in `e2e6.test.ts:50` and `e2e7.test.ts:38`.
 
-- [ ] **Step 4: Run it, expect PASS** — `npx vitest run` green; then this audit must print **only** message-side hits (`lib/domain/message.ts`, `lib/dedup/dedupBatch.ts` message field, `lib/dashboard/records.ts` `MESSAGE_WRITABLE_FIELDS`, `lib/ui/columns.ts` `MESSAGE_COLUMNS`, `components/MessagesTable.tsx`, `lib/pipeline/publish/*`, `infra/lib/data-stack.ts`, `lib/seed/sources.ts`, and message fixtures in tests):
+- [x] **Step 4: Run it, expect PASS** — `npx vitest run` green; then this audit must print **only** message-side hits (`lib/domain/message.ts`, `lib/dedup/dedupBatch.ts` message field, `lib/dashboard/records.ts` `MESSAGE_WRITABLE_FIELDS`, `lib/ui/columns.ts` `MESSAGE_COLUMNS`, `components/MessagesTable.tsx`, `lib/pipeline/publish/*`, `infra/lib/data-stack.ts`, `lib/seed/sources.ts`, and message fixtures in tests):
 
 ```bash
 grep -rn --include='*.ts' --include='*.tsx' "tgChannel" lib/domain/source.ts lib/domain/item.ts lib/pipeline/scrape lib/pipeline/analyze components/SourcesTable.tsx lib/db/sources.ts
@@ -217,16 +217,15 @@ grep -rn --include='*.ts' --include='*.tsx' "tgChannel" lib/domain/source.ts lib
 
 must print nothing. Then the full gates: `npx tsc --noEmit && npx vitest run && npx biome check . && npx cdk synth` all exit 0.
 
-- [ ] **Step 5: Commit** — message `feat(multi-target): rename sources.tgChannel and item.tgChannel to target (MT-3, MT-4, MT-5, MT-17, MT-18, MT-19)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 5: Commit** — message `feat(multi-target): rename sources.tgChannel and item.tgChannel to target (MT-3, MT-4, MT-5, MT-17, MT-18, MT-19)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
-(appended by executing-tasks: `- <decision> — <why> — <cost if wrong>`)
+- Step 4's audit grep prints one line, `lib/domain/source.ts:42`, the doc comment Step 3 dictates verbatim ("Replaces `tgChannel` …"); the audit's "must print nothing" is over-strict and the comment stands — a comment naming the old column is the only hit, so the substance (no live `tgChannel` read on the source/item side) holds — cost if wrong: none.
+- Minor, parked: the same doc comment names `tgChannel` twice — it is documentation of the rename, which is what a reader grepping for the old name needs — cost if wrong: none.
 
 ## Result
 
-(filled by executing-tasks when the task is done)
-
-- Commits: <base7>..<head7>
-- Tests: <n>/<n> (<files>)
-- Review: spec ✅ · quality: <clean | K parked>
+- Commits: f97ee68..0304416 (0304416)
+- Tests: 1583/1583 (106 files); the six criteria files 163/163
+- Review: spec ✅ · quality: clean (1 minor parked)

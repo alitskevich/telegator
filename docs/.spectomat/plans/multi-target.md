@@ -114,4 +114,8 @@ Planning rulings (phase B), each a divergence from the spec's letter that the bu
 - Plan · **P5** `legacyTargetPatch` treats an empty-string `target` as absent and patches it — an operator who cleared `target` before the migration ran has a row the old code still published from `tgChannel`; copying keeps that behaviour — cost if wrong: one dry-run line an operator can veto.
 - Plan · **P6** `test/fakes/telegram.ts` gains `failChatIds?: readonly string[]` (every call to one of these chat ids answers `ok: false`) — MT-11 needs one target to fail while another succeeds, which `failWith` cannot express — cost if wrong: none.
 
+- Wave 1 · `lib/ai/categories.ts` is restored to §5.4 L494-501's `art&fashion`, `culture&history`, `economics&finance` (commit 34174ff) — 4ce7756 had shortened the three values in code only, so `npm test` failed at HEAD on `lib/ai/categories.test.ts` and no commit in this plan could pass the gates; Part I is normative and no §25 row records the shortening — cost if wrong: the three enum values the owner may have meant to shorten come back, a three-line revert plus an R-row.
+- Wave 1 · an uncommitted `"gates": "echo 'gates'"` script in `package.json` was discarded at orient — it belonged to no task, and a `gates` script is what `gates.sh` runs in place of typecheck/test/lint/build, so a stub silences every gate — cost if wrong: one line to re-add.
+- Wave 1 · Task 2's Step 4 audit grep may print the `lib/domain/source.ts` doc comment that Step 3 dictates — the comment is the task's own text — cost if wrong: none.
+
 (appended by executing-tasks for decisions that cross tasks: `- Task N · <decision> — <why> — <cost if wrong>`)
