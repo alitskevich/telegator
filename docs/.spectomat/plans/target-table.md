@@ -68,7 +68,7 @@ One file per task under `docs/.spectomat/plans/target-table/`, from `templates/t
 | 5 | `task-05-assemble-template.md` | `assembleMessage`'s fourth argument | TT-7, TT-8, TT-9 | 2 | [x] |
 | 6 | `task-06-publish-target-row.md` | the publish loop, the handler, the e2e harness | TT-10, TT-11, TT-12, TT-13, TT-14 | 1, 3, 4, 5 | [x] |
 | 7 | `task-07-targets-dashboard.md` | `/targets`: columns, actions, table, page, nav | TT-19, TT-20, TT-21, TT-22 | 1, 3, 4 | [x] |
-| 8 | `task-08-e2e-and-docs.md` | the end-to-end criteria and §25's two rows | TT-E2E-1, TT-E2E-2 | 6, 7 | [ ] |
+| 8 | `task-08-e2e-and-docs.md` | the end-to-end criteria and §25's two rows | TT-E2E-1, TT-E2E-2 | 6, 7 | [x] |
 | 9 | `task-09-reconciliation-renumber.md` | the shipped comments' R56/R57 → R58/R59 | — (a correction) | 1, 2, 3, 5 | [x] |
 
 Expected waves: **W1** = 1, 2, 4 · **W2** = 3, 5 · **W3** = 6, 7 · **W4** = 8.
@@ -128,3 +128,5 @@ Planning rulings (phase B), each a divergence from the spec's letter that the bu
 - Wave 4 · Tasks 6, 7 and 9 ran as one wave of three — the first wave of this plan to reach the cap. Their Files are pairwise disjoint and every dependency was closed, so the only shared cost was one gate run — cost if wrong: none.
 - Wave 4 · The overview's `Done` column had Task 4 unticked although its task file was fully closed by wave 3; corrected in this wave's tick. Readiness is judged on the task files, never this column, so nothing was mis-scheduled — cost if wrong: a reader of the overview alone believes a closed task is open.
 - Wave 4 · `.env.local.example` gains `TELEGATOR_TARGETS_TABLE` in **Task 8**, not in Task 7 that exposed the gap: `actions/context.ts` now builds the targets repo at module scope, so a clone whose `.env.local` predates this build fails `npm run build` at page-data collection. No task's Files listed the example file; Task 8 already owns this build's documentation, so it takes the line — cost if wrong: one line of local setup documentation lands a wave later than the code that needs it.
+- Wave 5 · The spec §11 row recording D12's supersession keeps the id `D12` rather than a fresh `P7` — §11's `Id` column names the decision the row is about, and a new id would hide the link to the decision a reader arrives from — cost if wrong: one cell.
+- Wave 5 · Task 8's Step 2 passed on the first run: Tasks 6 and 7 had already wired every production path the two end-to-end criteria exercise, so Task 8 added no `lib/` code, only the test and the three documents. The task file anticipated this outcome and asked for it to be recorded rather than a failure manufactured — cost if wrong: none.

@@ -33,7 +33,7 @@ One traversal of the whole pipeline over fakes proves that a source publishing t
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — create `test/e2e/targets.test.ts`:
+- [x] **Step 1: Write the failing test** — create `test/e2e/targets.test.ts`:
 
 ```ts
 import { beforeEach, describe, expect, test } from "vitest";
@@ -187,8 +187,8 @@ describe("TT-E2E-2 — the registry fills itself", () => {
 
   If the run's message ids or chat ids do not match, read the fixture through `telegramFixture("multiPost")` and adjust the expectations to what the pipeline actually produces — never loosen an assertion to `expect.anything()`. `chatIdFor` prefixes a bare id with `@` (`lib/telegram/ports.ts`), so a target `a` sends to chat id `"@a"`.
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run test/e2e/targets.test.ts`. Before the implementation below it fails only if the wiring from Tasks 6 and 7 is incomplete; run it first and record what it says. If it passes immediately, that is the signal that Task 6 already covers it end to end — say so in the Result rather than inventing a failure.
-- [ ] **Step 3: Minimal implementation** — the code exists; this step writes the record.
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run test/e2e/targets.test.ts`. Before the implementation below it fails only if the wiring from Tasks 6 and 7 is incomplete; run it first and record what it says. If it passes immediately, that is the signal that Task 6 already covers it end to end — say so in the Result rather than inventing a failure.
+- [x] **Step 3: Minimal implementation** — the code exists; this step writes the record.
 
   (a) `docs/telegator.md` §25 — two rows appended after `R55`, before the blank line preceding `## 26`:
 
@@ -205,7 +205,7 @@ describe("TT-E2E-2 — the registry fills itself", () => {
 
   and one row each for P2 (build order), P3 (`PipelineWorld.targets` optional), P4 (`fakeTargetRepo`'s failure injections), P5 (TT-18's grant half in `pipeline-events.test.ts`), P6 (`test/e2e/targets.test.ts`'s name), copied from the plan's Rulings section with the same reasoning.
 
-- [ ] **Step 3b: Document the third table's env var** — add, in `.env.local.example`'s
+- [x] **Step 3b: Document the third table's env var** — add, in `.env.local.example`'s
   `── Data (§7.2) ──` block directly under `TELEGATOR_MESSAGES_TABLE`:
 
   ```
@@ -219,9 +219,19 @@ describe("TT-E2E-2 — the registry fills itself", () => {
   holds names, never secrets, and `telegator-dev-targets` is what
   `config.name("targets")` produces in the dev stack.
 
-- [ ] **Step 4: Run it, expect PASS** — `npx vitest run test/e2e test/specCitations.test.ts test/acceptance.test.ts`; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0. `test/specCitations.test.ts` is the one that proves the two new §25 rows did not break a line citation.
-- [ ] **Step 5: Commit** — message `feat(target-table): end-to-end template and registry criteria, §25 R58/R59 (TT-E2E-1, TT-E2E-2)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — `npx vitest run test/e2e test/specCitations.test.ts test/acceptance.test.ts`; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0. `test/specCitations.test.ts` is the one that proves the two new §25 rows did not break a line citation.
+- [x] **Step 5: Commit** — message `feat(target-table): end-to-end template and registry criteria, §25 R58/R59 (TT-E2E-1, TT-E2E-2)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
+- The spec §11 row that records D12's supersession keeps the id `D12` rather than taking a fresh `P7` — §11's `Id` column carries the id of the decision or ruling the row is about, and the supersession is about D12 itself; a new id would hide the connection to the decision a reader arrives from — cost if wrong: one cell.
+- Step 2 was run and the new file passed on the first run: Tasks 6 and 7 had already wired `PipelineWorld.targets`, `readTarget`, the per-target template and `recordLastPost`, so no production code was left for this task. The task file anticipated this ("If it passes immediately, that is the signal that Task 6 already covers it end to end"), so the pass is recorded rather than a failure manufactured — cost if wrong: none; the criteria are asserted either way.
+- Reviewer verdict: spec compliance OK, quality OK, 0 Critical, 0 Important, 0 Minor. No fix round was needed.
+
 ## Result
+
+- Commit: `00aeda1` — `feat(target-table): end-to-end template and registry criteria, §25 R58/R59 (TT-E2E-1, TT-E2E-2)`; range `39d8ea2..00aeda1`. No fix rounds.
+- Files: created `test/e2e/targets.test.ts` (6 tests); appended R58 and R59 to `docs/telegator.md` §25 (Part I untouched); filled `docs/.spectomat/specs/target-table.md` §11 with 7 rows (D12's supersession plus P1-P6); added `TELEGATOR_TARGETS_TABLE=telegator-dev-targets` to `.env.local.example`.
+- The line-citation grep `grep -rnoE "§(2[6-9]|3[0-9])(\.[0-9]+)? L[0-9]+"` over `*.ts`/`*.tsx` was re-run before writing and still matches nothing, so the two-row shift broke no citation; `test/specCitations.test.ts` passes.
+- Gates, all five, run once for the wave after the review: `tsc` 0, `vitest` 1757/1757 across 114 files, `biome check` 272 files clean, `next build` 0 (routes include `/targets`), `cdk synth` 0.
+- Review: spec compliance OK, quality OK — 0 Critical, 0 Important, 0 Minor.
