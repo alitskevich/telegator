@@ -444,6 +444,13 @@ Filled during the build. One row per divergence from Part I of this file.
 
 | Id | Sections | Contradiction | Reading built to |
 | --- | --- | --- | --- |
+| D12 | §10 D12, base §25 | D12 reserved **R56**/**R57** for this build's two rows, but the repository owner's own §25 work (the select-all toolbars, the DLQ "Cleanup all") took those two numbers first, in the time between this spec's draft and this build. | The table row is **R58** (the registry, base §2, §7.2, §8.2, §8.3, §8.4, §9.1, §29) and the per-target template is **R59** (base §3.4); D12's reasoning stands, only the numbers move. |
+| P1 | §2.2, §7 | §2.2 names `TargetConfigInput` and §7 names `TARGET_WRITABLE_FIELDS`, and §9.1 TT-2 requires the schema to reject `{}` — two allowlists, one of which would type `type` as a free string. | `TargetConfigInput` carries the non-empty refinement and is the schema `upsertRecord` validates the `targets` delta with; `TARGET_WRITABLE_FIELDS` is the list the table's editable cells read, pinned against it by a test. |
+| P2 | §16 | §16 step 6 puts the infrastructure after the ports-and-fakes step, in build order. | The infrastructure is split out as its own task and runs first, since it depends on nothing; `lib/db/targets.ts` joins the ports-and-fakes task, because a `PublishDeps.targets` with no stack behind it would break `handlers/publish.ts` in the commit that adds it. |
+| P3 | §5.3 | A `PublishDeps.targets` required by publish implies every harness world that runs the pipeline must supply one. | `test/e2e/harness.ts`'s `PipelineWorld.targets` is **optional**, defaulting to a fresh `fakeTargetRepo()` inside `runPipeline` — editing all seven existing `test/e2e/*.test.ts` files for a fake none of them asserts on is not worth doing. |
+| P4 | §5.3 | TT-11 and TT-13 need one target's read or mirror write to fail while the rest of the run succeeds, which a data-only fake cannot express. | `fakeTargetRepo` takes an options bag `{ failGet?, failRecordLastPost? }` listing the ids whose call throws. |
+| P5 | §9.1 TT-18 | §9.1 names `infra/lib/pipeline-stack.test.ts` for TT-18's grant half. | The grant half is asserted in `infra/lib/pipeline-events.test.ts`, where `statementsByFunction` — the only helper that maps an IAM statement to the function it belongs to — is already defined; the env-var half stays in `pipeline-stack.test.ts`. |
+| P6 | §9.2 | Nothing in Part I names a file for the end-to-end criteria. | `test/e2e/targets.test.ts`, not an `e2eN.test.ts` — `e2e1`…`e2e7` are named for base §10.2's E2E-1…E2E-7, and an `e2e8` would claim a number that section does not issue. |
 
 # Part II — Building it
 
