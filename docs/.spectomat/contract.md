@@ -122,8 +122,7 @@ git mv plans/<slug>.md  done/<slug>.plan.md
 git mv plans/<slug>     done/<slug>
 ```
 
-The draft is already there as `done/<slug>.draft.md`. Log the phase with the
-gate numbers.
+The draft is already there as `done/<slug>.draft.md`. If the repository has a `package.json`, set its patch version to the slug's `NNN` as an integer (`003-x` → `<major>.<minor>.3`), keeping major and minor: `npm version --no-git-tag-version <major>.<minor>.<N>`. Commit the moves and the version bump together. Log the phase with the gate numbers and the new version.
 
 ## Verification Gates
 
