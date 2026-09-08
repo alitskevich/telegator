@@ -3,7 +3,7 @@ import { escapeHtml } from "./escape";
 
 /**
  * target-table#5.2 — a target's own message layout, as a pure substitution
- * (R57).
+ * (R59).
  *
  * A total function of the template and the values handed to it: no clock, no
  * network, no map iteration. That is what keeps the byte-identical replay and

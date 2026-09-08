@@ -299,7 +299,7 @@ describe("assembleMessage — overflow (recorded rule, §3.4 L340 gives no trunc
   });
 });
 
-describe("assembleMessage with a template — target-table#5.1 (R57)", () => {
+describe("assembleMessage with a template — target-table#5.1 (R59)", () => {
   const TEMPLATE = "<b>LIVE</b>\n{header}\n\n{body}\n\n{hashtags}";
 
   /** Enough tokens that the hashtag line alone overflows a full body. */

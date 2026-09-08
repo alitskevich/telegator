@@ -5,7 +5,7 @@ import { softDeleteCommand, updateAttributes } from "./patch";
 import type { LastPost, TargetRepo } from "./ports";
 
 /**
- * The DynamoDB adapter for `targets` (target-table#2.2, R56).
+ * The DynamoDB adapter for `targets` (target-table#2.2, R58).
  *
  * The `DocumentSender` port is shared with the other two repositories rather
  * than duplicated — all three speak to the same client.

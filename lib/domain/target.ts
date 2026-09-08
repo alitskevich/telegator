@@ -38,7 +38,7 @@ export function resolveTargets(value: string | undefined): string[] {
 }
 
 /**
- * target-table#2.2 — the kinds of destination a row can be (D2, R56).
+ * target-table#2.2 — the kinds of destination a row can be (D2, R58).
  *
  * An enum with one member rather than an open string: the draft says
  * "`telegram_channel` only at the moment", which is an enum that will grow, and

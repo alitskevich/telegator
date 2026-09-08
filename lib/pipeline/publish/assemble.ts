@@ -79,7 +79,7 @@ export function buildHeader(source: HeaderSource): string {
 /**
  * How one candidate text is built from the blocks that survived the ladder.
  *
- * A parameter rather than a branch inside `fitToLimit` (R57): the shortening
+ * A parameter rather than a branch inside `fitToLimit` (R59): the shortening
  * order is a property of the *message*, not of the layout, so both paths get
  * the same ladder and a template cannot quietly acquire a different one.
  */
@@ -173,7 +173,7 @@ export function assembleMessage(
   });
 
   /**
-   * target-table#5.1 — the target's own layout, when it has one (D6, R57).
+   * target-table#5.1 — the target's own layout, when it has one (D6, R59).
    *
    * An absent, empty or whitespace-only template is no template: the built-in
    * path runs byte for byte, so a target with no row publishes exactly what it

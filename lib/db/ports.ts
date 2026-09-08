@@ -52,7 +52,7 @@ export interface LastPost {
 }
 
 /**
- * The `targets` registry (target-table#2.2, R56).
+ * The `targets` registry (target-table#2.2, R58).
  *
  * No `query`: the table carries no index (D8), and offering one would invite a
  * caller to assume an access pattern the table cannot serve.
