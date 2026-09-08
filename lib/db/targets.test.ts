@@ -109,10 +109,9 @@ describe("createTargetRepo — target-table#6", () => {
       "lastPostedDate",
       "lastPostedMessageId",
     ]);
-    expect(Object.values(input.ExpressionAttributeValues as Record<string, string>).sort()).toEqual([
-      "2026-09-08T10:00:00.000Z",
-      "chan_a/1",
-    ]);
+    expect(Object.values(input.ExpressionAttributeValues as Record<string, string>).sort()).toEqual(
+      ["2026-09-08T10:00:00.000Z", "chan_a/1"],
+    );
   });
 
   /** D5 — no condition, so the UpdateItem creates the row the registry lacked. */

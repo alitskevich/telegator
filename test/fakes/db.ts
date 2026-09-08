@@ -162,7 +162,6 @@ export function fakeMessageRepo(initial: readonly Message[] = []): FakeMessageRe
   };
 }
 
-
 export interface FakeTargetRepo extends TargetRepo {
   readonly writeCount: number;
 }
