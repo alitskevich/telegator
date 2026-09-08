@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { fixedClock } from "../../../test/fakes/clock";
-import { fakeMessageRepo } from "../../../test/fakes/db";
+import { fakeMessageRepo, fakeTargetRepo } from "../../../test/fakes/db";
 import { recordingSink } from "../../../test/fakes/logging";
 import { recordingMetrics } from "../../../test/fakes/metrics";
 import { fakeBot } from "../../../test/fakes/telegram";
 import type { MessageRepo } from "../../db/ports";
+import { toIsoTimestamp } from "../../domain/date";
 import { type Message, MessageSchema } from "../../domain/message";
+import { type Target, TargetSchema } from "../../domain/target";
 import { createLogger } from "../../logging/logger";
 import { type PublishDeps, runPublish } from "./index";
 
@@ -38,16 +40,21 @@ beforeEach(() => {
   sink = recordingSink();
 });
 
-function deps(stored: readonly Message[], bot = fakeBot()) {
+function deps(
+  stored: readonly Message[],
+  bot = fakeBot(),
+  targets: ReturnType<typeof fakeTargetRepo> = fakeTargetRepo(),
+) {
   const messages = fakeMessageRepo(stored);
   const built: PublishDeps = {
     messages,
+    targets,
     bot,
     metrics,
     clock: fixedClock(NOW),
     logger: createLogger(sink),
   };
-  return { messages, bot, deps: built };
+  return { messages, bot, targets, deps: built };
 }
 
 const record = (id: string) => ({
@@ -263,6 +270,7 @@ describe("runPublish when the status write fails after a successful send", () =>
     return {
       deps: {
         messages: repo,
+        targets: fakeTargetRepo(),
         bot,
         metrics,
         clock: fixedClock(NOW),
@@ -556,5 +564,139 @@ describe("multi-target#5.1 — once per target", () => {
     await runPublish([record("chan_a/1")], d);
 
     expect(Object.keys((await messages.get("chan_a/1"))?.posts ?? {})).toEqual(["a"]);
+  });
+});
+
+describe("the target registry — target-table#5.3", () => {
+  const targetRow = (id: string, over: Partial<Target> = {}): Target =>
+    TargetSchema.parse({ id, ...over });
+
+  /** `sendPhoto` carries a `caption`, the other two a `text`; narrowed, never cast. */
+  const textsOf = (bot: ReturnType<typeof fakeBot>) =>
+    bot.calls.map((call) => ("text" in call.args ? call.args.text : call.args.caption));
+
+  test("TT-10: two targets with different templates produce two different texts", async () => {
+    const registry = fakeTargetRepo([
+      targetRow("a", { messageTemplate: "<b>A</b>\n{body}" }),
+      targetRow("b", { messageTemplate: "<i>B</i>\n{body}" }),
+    ]);
+    const { bot, deps: d } = deps(
+      [message({ id: "chan_a/1", tgChannel: "a,b" })],
+      fakeBot(),
+      registry,
+    );
+
+    await runPublish([record("chan_a/1")], d);
+
+    const texts = textsOf(bot);
+    expect(texts).toHaveLength(2);
+    expect(texts[0]?.startsWith("<b>A</b>\n")).toBe(true);
+    expect(texts[1]?.startsWith("<i>B</i>\n")).toBe(true);
+  });
+
+  test("TT-11: a target with no row publishes with no template", async () => {
+    const { bot, deps: d } = deps([message({ id: "chan_a/1", tgChannel: "a" })]);
+
+    const result = await runPublish([record("chan_a/1")], d);
+
+    expect(result.batchItemFailures).toEqual([]);
+    expect(bot.calls).toHaveLength(1);
+    expect(sink.lines.join("\n")).toContain("target has no row");
+  });
+
+  test("TT-11: a soft-deleted row publishes with no template", async () => {
+    const registry = fakeTargetRepo([
+      targetRow("a", { messageTemplate: "<b>A</b>\n{body}", deleted: true }),
+    ]);
+    const { bot, deps: d } = deps(
+      [message({ id: "chan_a/1", tgChannel: "a" })],
+      fakeBot(),
+      registry,
+    );
+
+    const result = await runPublish([record("chan_a/1")], d);
+
+    expect(result.batchItemFailures).toEqual([]);
+    expect(textsOf(bot)[0]?.startsWith("<b>A</b>")).toBe(false);
+    expect(sink.lines.join("\n")).toContain("target row is deleted");
+  });
+
+  test("TT-11: a get that throws publishes with no template and does not fail the record", async () => {
+    const registry = fakeTargetRepo([], { failGet: ["a"] });
+    const { bot, deps: d } = deps(
+      [message({ id: "chan_a/1", tgChannel: "a" })],
+      fakeBot(),
+      registry,
+    );
+
+    const result = await runPublish([record("chan_a/1")], d);
+
+    expect(result.batchItemFailures).toEqual([]);
+    expect(bot.calls).toHaveLength(1);
+    expect(sink.lines.join("\n")).toContain("target row unreadable");
+  });
+
+  test("TT-12: the mirror is written after the send, with the clock and the message id", async () => {
+    const registry = fakeTargetRepo();
+    const { deps: d } = deps([message({ id: "chan_a/1", tgChannel: "a" })], fakeBot(), registry);
+
+    await runPublish([record("chan_a/1")], d);
+
+    await expect(registry.get("a")).resolves.toMatchObject({
+      id: "a",
+      type: "telegram_channel",
+      lastPostedDate: toIsoTimestamp(NOW),
+      lastPostedMessageId: "chan_a/1",
+    });
+  });
+
+  test("TT-13: a throwing recordLastPost is a warning, not a failure", async () => {
+    const registry = fakeTargetRepo([], { failRecordLastPost: ["a"] });
+    const { messages, deps: d } = deps(
+      [message({ id: "chan_a/1", tgChannel: "a" })],
+      fakeBot(),
+      registry,
+    );
+
+    const result = await runPublish([record("chan_a/1")], d);
+
+    expect(result.batchItemFailures).toEqual([]);
+    await expect(messages.get("chan_a/1")).resolves.toMatchObject({ status: "published" });
+    expect(sink.lines.join("\n")).toContain("target row not updated");
+  });
+
+  test("TT-14: a skipped current post writes no mirror", async () => {
+    const registry = fakeTargetRepo();
+    const { bot, deps: d } = deps(
+      [
+        message({
+          id: "chan_a/1",
+          tgChannel: "a",
+          ts: 1_000,
+          posts: { a: { tgId: "4711", tgAt: 2_000 } },
+        }),
+      ],
+      fakeBot(),
+      registry,
+    );
+
+    await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls).toEqual([]);
+    expect(registry.writeCount).toBe(0);
+  });
+
+  test("TT-14: a rejected send writes no mirror", async () => {
+    const registry = fakeTargetRepo();
+    const { deps: d } = deps(
+      [message({ id: "chan_a/1", tgChannel: "a" })],
+      fakeBot({ failWith: { description: "chat not found" } }),
+      registry,
+    );
+
+    const result = await runPublish([record("chan_a/1")], d);
+
+    expect(result.batchItemFailures).toHaveLength(1);
+    expect(registry.writeCount).toBe(0);
   });
 });

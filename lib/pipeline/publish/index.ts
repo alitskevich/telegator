@@ -1,7 +1,8 @@
 import type { Clock } from "../../clock";
-import type { MessageRepo } from "../../db/ports";
+import type { MessageRepo, TargetRepo } from "../../db/ports";
+import { toIsoTimestamp } from "../../domain/date";
 import type { Message, Post } from "../../domain/message";
-import { resolveTargets } from "../../domain/target";
+import { resolveTargets, type Target } from "../../domain/target";
 import type { Logger } from "../../logging/logger";
 import type { MetricSink } from "../../metrics/ports";
 import { PublishQueuePayloadSchema } from "../../queues/ports";
@@ -24,6 +25,8 @@ export interface PublishRecord {
 
 export interface PublishDeps {
   readonly messages: MessageRepo;
+  /** target-table#5.3 — the per-target registry: read before assembly, mirrored after. */
+  readonly targets: TargetRepo;
   readonly bot: TelegramBot;
   readonly metrics: MetricSink;
   readonly clock: Clock;
@@ -180,7 +183,10 @@ async function publishTargets(
     // D4 — a current post is skipped: Telegram rejects an edit that changes nothing.
     if (existing !== undefined && isCurrent(existing, stored)) continue;
 
-    const assembled = assembleMessage(stored, target, existing?.tgId);
+    // target-table#5.3 — never throws; a target with no usable row simply has
+    // no template, and the send proceeds (D5).
+    const row = await readTarget(deps, target);
+    const assembled = assembleMessage(stored, target, existing?.tgId, row?.messageTemplate);
     const response = await send(deps.bot, assembled, existing?.tgId);
 
     if (!response.ok) {
@@ -222,12 +228,75 @@ async function publishTargets(
       continue;
     }
 
+    // target-table#5.3 — after the durable record, never before (D7). A crash
+    // between the two leaves `messages` correct and only the mirror stale.
+    await recordLastPost(deps, messageId, target);
+
     deps.metrics.count(existing === undefined ? "MessagesPublished" : "MessagesEdited", 1);
     deps.logger.info("published", { messageId, target, method: assembled.method });
   }
 
   if (unrecorded) return "unrecorded";
   return rejected ? "rejected" : "published";
+}
+
+/**
+ * target-table#5.3 — the target's row, or nothing.
+ *
+ * Three ways to have no template, each logged with its own reason: no row, a
+ * soft-deleted row, and a read that failed. None of them fails the record — D5
+ * makes this table a registry rather than an allowlist, because an allowlist
+ * turns a forgotten row into silent non-publication, the one failure no metric
+ * would show.
+ */
+async function readTarget(deps: PublishDeps, target: string): Promise<Target | undefined> {
+  let row: Target | undefined;
+
+  try {
+    row = await deps.targets.get(target);
+  } catch (error) {
+    deps.logger.warn("target row unreadable", {
+      target,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+
+  if (row === undefined) {
+    deps.logger.info("target has no row", { target });
+    return undefined;
+  }
+
+  if (row.deleted === true) {
+    deps.logger.info("target row is deleted", { target });
+    return undefined;
+  }
+
+  return row;
+}
+
+/**
+ * target-table#5.3 — the mirror, best effort (D7).
+ *
+ * Not routed through `withRetry`: that ladder exists for the two writes that
+ * make a post durable, and its result decides whether the record is reported.
+ * This one is a convenience for an operator reading the table — reporting it
+ * would resend nothing (every post is already current) and would loop the
+ * message to the DLQ over a cosmetic write.
+ */
+async function recordLastPost(deps: PublishDeps, messageId: string, target: string): Promise<void> {
+  try {
+    await deps.targets.recordLastPost(target, {
+      lastPostedDate: toIsoTimestamp(deps.clock.now()),
+      lastPostedMessageId: messageId,
+    });
+  } catch (error) {
+    deps.logger.warn("target row not updated", {
+      messageId,
+      target,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 /**

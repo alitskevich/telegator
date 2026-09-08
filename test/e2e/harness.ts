@@ -7,7 +7,12 @@ import { runAnalyze } from "../../lib/pipeline/analyze/index";
 import { runPublish } from "../../lib/pipeline/publish/index";
 import { runScrape } from "../../lib/pipeline/scrape/index";
 import type { QueueMessage } from "../../lib/queues/ports";
-import type { FakeMessageRepo, FakeSourceRepo } from "../fakes/db";
+import {
+  type FakeMessageRepo,
+  type FakeSourceRepo,
+  type FakeTargetRepo,
+  fakeTargetRepo,
+} from "../fakes/db";
 import { recordingSink } from "../fakes/logging";
 import { recordingMetrics } from "../fakes/metrics";
 import { fakeQueueProducer } from "../fakes/queues";
@@ -35,6 +40,14 @@ export interface PipelineWorld {
   readonly bot: FakeBot;
   readonly clock: Clock;
   readonly band?: Band;
+  /**
+   * target-table#5.3 — the target registry.
+   *
+   * Optional: a run that does not care about templates gets a fresh empty one,
+   * which is the no-template path it would have taken anyway. A criterion that
+   * asserts on the rows supplies its own and reads them back.
+   */
+  readonly targets?: FakeTargetRepo;
 }
 
 export interface PipelineRun {
@@ -107,6 +120,7 @@ export async function runPipeline(world: PipelineWorld): Promise<PipelineRun> {
 
   await runPublish(asRecords(publishQueue.sent, "publish"), {
     messages: world.messages,
+    targets: world.targets ?? fakeTargetRepo(),
     bot: world.bot,
     metrics,
     clock: world.clock,

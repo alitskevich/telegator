@@ -3,6 +3,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { systemClock } from "../lib/clock";
 import { createMessageRepo } from "../lib/db/messages";
+import { createTargetRepo } from "../lib/db/targets";
 import { createLogger, stdoutSink } from "../lib/logging/logger";
 import { createCloudWatchMetrics, withMetricFlush } from "../lib/metrics/cloudwatch";
 import { type PublishResultSummary, runPublish } from "../lib/pipeline/publish/index";
@@ -39,10 +40,17 @@ function buildDeps() {
     logger: createLogger(stdoutSink),
   });
 
+  const documents = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
   return {
     messages: createMessageRepo({
-      client: DynamoDBDocumentClient.from(new DynamoDBClient({})),
+      client: documents,
       tableName: requireEnv(ENV_VARS.messagesTable),
+    }),
+    // target-table#5.3 — the same client: one connection pool for both tables.
+    targets: createTargetRepo({
+      client: documents,
+      tableName: requireEnv(ENV_VARS.targetsTable),
     }),
     bot: createTelegramBot({
       http: createHttpPost(),
