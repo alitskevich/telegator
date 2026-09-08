@@ -79,7 +79,7 @@ export class TelegatorDataStack extends Stack {
   public readonly sources: Table;
   /** §2.3 — the only durable record of a Telegram post. */
   public readonly messages: Table;
-  /** target-table#2.2 (R56) — one row per publish destination. */
+  /** target-table#2.2 (R58) — one row per publish destination. */
   public readonly targets: Table;
 
   constructor(scope: Construct, id: string, props: TelegatorDataStackProps) {
@@ -139,7 +139,7 @@ export class TelegatorDataStack extends Stack {
     });
 
     /**
-     * target-table#2.2 — the registry (R56).
+     * target-table#2.2 — the registry (R58).
      *
      * §7.2 L629's "two tables" becomes three: a target is not a source, and
      * §7.2's own reasoning holds — nothing is co-queried across them, so

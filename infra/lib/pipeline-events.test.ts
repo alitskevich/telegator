@@ -311,8 +311,13 @@ describe("IAM (§7.6 L707-712, R24)", () => {
 
     // One resource per table, and no index ARN: the targets table has no GSI.
     const resources = dynamo.flatMap((statement) => [statement.Resource].flat());
+    const serialised = JSON.stringify(resources);
     expect(resources).toHaveLength(2);
-    expect(JSON.stringify(resources)).not.toContain("/index/");
+    // Named, because "two resources" alone is satisfied by a grant on any
+    // second table.
+    expect(serialised).toContain("MessagesTable");
+    expect(serialised).toContain("TargetsTable");
+    expect(serialised).not.toContain("/index/");
   });
 
   /** Named individually, because a set equality can be satisfied by a later edit. */

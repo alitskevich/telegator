@@ -39,7 +39,7 @@ const table = (t: Template, name: string) =>
   )?.Properties;
 
 describe("TelegatorDataStack", () => {
-  test("declares the three tables: §7.2 L629's two, plus targets (R56)", () => {
+  test("declares the three tables: §7.2 L629's two, plus targets (R58)", () => {
     templateFor().resourceCountIs("AWS::DynamoDB::Table", 3);
   });
 
@@ -242,7 +242,7 @@ describe("TelegatorDataStack", () => {
     expect(stack.messages.node.id).toBe("MessagesTable");
   });
 
-  describe("targets (target-table#2.2, R56)", () => {
+  describe("targets (target-table#2.2, R58)", () => {
     test("TT-17: is keyed by id, bills per request and is retained", () => {
       const properties = table(templateFor(), "telegator-dev-targets");
 

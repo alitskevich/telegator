@@ -436,7 +436,20 @@ describe("TelegatorAppStack", () => {
       );
 
       expect(tables.size).toBe(3);
-      expect([...tables].join(" ")).toContain("TargetsTable");
+
+      /**
+       * And the four actions on `targets` specifically. The ARN count alone
+       * would pass a narrower grant: a single-action grant on `targets` would
+       * not merge with `sources`, so it would still contribute a third ARN.
+       */
+      const onTargets = dynamo.filter((statement) =>
+        JSON.stringify(statement.Resource).includes("TargetsTable"),
+      );
+
+      expect(onTargets).toHaveLength(1);
+      expect(new Set(actionsOf(onTargets[0] ?? {}))).toEqual(
+        new Set(["dynamodb:GetItem", "dynamodb:Scan", "dynamodb:PutItem", "dynamodb:UpdateItem"]),
+      );
     });
   });
 
