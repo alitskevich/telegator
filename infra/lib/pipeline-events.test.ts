@@ -318,6 +318,24 @@ describe("IAM (§7.6 L707-712, R24)", () => {
     expect(serialised).toContain("MessagesTable");
     expect(serialised).toContain("TargetsTable");
     expect(serialised).not.toContain("/index/");
+
+    /**
+     * And both actions on `targets` specifically. Everything above is a union
+     * or a count: a grant of `GetItem` alone on `targets` shares too little
+     * with the `messages` statement to be merged, so it would leave two
+     * statements, two resources, both table names, and the same union — and
+     * would silently break the `lastPosted*` mirror write.
+     */
+    for (const name of ["MessagesTable", "TargetsTable"]) {
+      const perTable = dynamo.filter((statement) =>
+        JSON.stringify(statement.Resource).includes(name),
+      );
+
+      expect(perTable).toHaveLength(1);
+      expect(new Set([perTable[0]?.Action].flat().map(String))).toEqual(
+        new Set(["dynamodb:GetItem", "dynamodb:UpdateItem"]),
+      );
+    }
   });
 
   /** Named individually, because a set equality can be satisfied by a later edit. */
