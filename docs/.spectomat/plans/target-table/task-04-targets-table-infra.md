@@ -15,7 +15,7 @@
 - The app role is granted `dynamodb:GetItem`, `dynamodb:Scan`, `dynamodb:PutItem`, `dynamodb:UpdateItem` on `targets` — the same four it holds on `sources`, so the role's total action set is unchanged.
 - Use `grantTableActions` from `./grants`, never `grantReadWriteData`: that helper also grants `DeleteItem` and `BatchWriteItem`, and no consumer in this build hard-deletes a row.
 - No CDK context lookup (`fromLookup`, `valueFromLookup`) — `cdk synth` must stay credential-free.
-- Code cites this spec as `target-table#<section>`, **never** with `§`. Criteria are `TT-n`, never `AC-x.y`. Do not add any new `§x.y Lnnn` citation; comments may name **R56**, the reconciliation Task 8 writes into `docs/telegator.md` §25.
+- Code cites this spec as `target-table#<section>`, **never** with `§`. Criteria are `TT-n`, never `AC-x.y`. Do not add any new `§x.y Lnnn` citation; comments may name **R58**, the reconciliation Task 8 writes into `docs/telegator.md` §25 (wave 3 ruling: the spec's D12 said R56, which the repository owner's own §25 work already holds).
 - Relative imports carry no extension. No `any`, no suppression. No test touches the network.
 - Gates before commit: `npm run gates`, `npm run build`, `npx cdk synth`.
 
@@ -36,7 +36,7 @@
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — four edits.
+- [x] **Step 1: Write the failing test** — four edits.
 
   (a) `handlers/env.test.ts` — add one row to the `toEqual` object in "names every variable the stacks must supply", after `messagesTable`:
 
@@ -148,8 +148,8 @@
     });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run handlers/env.test.ts infra/lib/data-stack.test.ts infra/lib/pipeline-stack.test.ts infra/lib/pipeline-events.test.ts infra/lib/app-stack.test.ts`, fails on the table count (`Expected 3 resources of type AWS::DynamoDB::Table but found 2`) and on `TELEGATOR_TARGETS_TABLE` being undefined.
-- [ ] **Step 3: Minimal implementation** — four edits.
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run handlers/env.test.ts infra/lib/data-stack.test.ts infra/lib/pipeline-stack.test.ts infra/lib/pipeline-events.test.ts infra/lib/app-stack.test.ts`, fails on the table count (`Expected 3 resources of type AWS::DynamoDB::Table but found 2`) and on `TELEGATOR_TARGETS_TABLE` being undefined.
+- [x] **Step 3: Minimal implementation** — four edits.
 
   (a) `handlers/env.ts` — one row in `ENV_VARS`, after `messagesTable`:
 
@@ -225,9 +225,27 @@
     );
 ```
 
-- [ ] **Step 4: Run it, expect PASS** — same command; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0. `npx cdk synth` is the one that proves the stack still assembles credential-free.
-- [ ] **Step 5: Commit** — message `feat(target-table): targets table, env var and grants (TT-17, TT-18)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — same command; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0. `npx cdk synth` is the one that proves the stack still assembles credential-free.
+- [x] **Step 5: Commit** — message `feat(target-table): targets table, env var and grants (TT-17, TT-18)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
 ## Result
+
+- Task 4 is **R58**, not the spec D12's **R56** — `docs/telegator.md:1576` already defines R56 as the tables' select-all toolbars and `:1577` defines R57 as the DLQ "Cleanup all", both the repository owner's own work, landed while this plan was being written. R58 is the table, R59 the per-target template; the five comments this task shipped were re-pointed in fix round 1, and the six references Tasks 1, 2, 3 and 5 already committed are swept by the new Task 9 — cost if wrong: two numbers in §25 and a comment sweep.
+- Step 1(e)'s literal `expect(dynamo).toHaveLength(3)` is unreachable and was replaced — `@aws-cdk/aws-iam:minimizePolicies` is `true` in `cdk.json:49`, and the app role's `sources` and `targets` grants carry identical action sets, so IAM policy minimization merges them into one statement over two resources and the role synthesises **two** DynamoDB statements, not three. The replacement asserts the count of distinct table ARNs is 3 *and* pins the `targets` statement's own action set to the four the task requires — cost if wrong: none; the weaker form was caught in review and strengthened in fix round 1.
+- Review round 1 Minor 5 (`data-stack.test.ts` "exposes both tables to the stacks that consume them" is stale for three tables) and Minor 6 (a test named "…and is retained" whose body asserts only `KeySchema` and `BillingMode`) are **parked**: the second is the task's own verbatim text, and both are naming, not coverage — retention is pinned by the very next test — cost if wrong: two test names a later reader has to look past.
+- Review round 1 Minor 4 (`pipeline-events.test.ts`'s action-set assertion duplicates the pre-existing test at `:284`) is **parked**: the duplication is the task's prescribed text, and the two now differ — the pre-existing one pins the union, the new one pins each table — cost if wrong: one redundant assertion.
+- Review round 2 Minor 1 (`toContain("MessagesTable"/"TargetsTable")` is subsumed by the per-table `toHaveLength(1)`) and Minor 2 (one `test` carries three separable claims) are **parked**: the redundancy buys a clearer first failure message, and step 1(d) prescribed the single test — cost if wrong: a coarser failure name.
+
+## Result
+
+**Commits:** `2fc87f6` (implementation) · `6274429` (fix round 1: R58 renumber, per-table action set on the app role) · `147143e` (fix round 2: per-table action set for publish). Range `197088a..147143e`, restricted to this task's nine Files.
+
+**Covers:** TT-17 (four tests: key schema and billing, retention, no GSI, no PITR) and TT-18 (three tests: the env var on every pipeline function, publish's two actions per table, the app role's four on `targets`), plus one row in `handlers/env.test.ts` and three widened `test.each` arrays.
+
+**Tests:** focused run 136 passed; full suite 1723 passed across 112 files.
+
+**Gates:** `npm run gates` (tsc 0, 1723/1723, biome 268 clean), `npm run build` 0, `npx cdk synth` 0 — the numbers in the wave's log line are from the controller's own run after the fix rounds.
+
+**Review:** round 1 spec ✅ quality ✅ with 2 Important (both fixed) and 4 Minor (parked); round 2 spec ✅ quality ✅ with 2 Minor (parked). Both fix rounds were verified by mutation — the reviewer's failure scenario was reproduced, the new assertion watched go red, and the implementation restored.

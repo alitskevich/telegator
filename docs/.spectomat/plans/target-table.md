@@ -5,7 +5,7 @@
 ## Global Constraints
 
 - Code cites this spec as `target-table#<section>` (e.g. `target-table#5.3`), **never** with `§` — `test/specCitations.test.ts` resolves every `§` against `docs/telegator.md` and fails on one it cannot find. Criteria are `TT-n` / `TT-E2E-n`; never write `AC-x.y` for them — `test/acceptance.test.ts` rejects ids the base spec does not declare. Base-spec citations already present in a file stay as they are; do not invent new `§x.y Lnnn` citations.
-- `docs/telegator.md` Part I (§1–§11) is never edited. Divergences are rows in its §25 under **R56** (the table itself) and **R57** (the per-target template in assembly) — written by Task 8 only. Comments written before Task 8 may name R56/R57.
+- `docs/telegator.md` Part I (§1–§11) is never edited. Divergences are rows in its §25 under **R58** (the table itself) and **R59** (the per-target template in assembly) — written by Task 8 only. Comments written before Task 8 may name R58/R59. (Wave 3 ruling: the spec's D12 said R56/R57; the repository owner's queues work took both numbers in `docs/telegator.md` §25 first.)
 - `TARGET_TYPES` is `["telegram_channel"] as const` and `DEFAULT_TARGET_TYPE` is `"telegram_channel"`, both owned by `lib/domain/target.ts`. `TargetSchema` defaults `type` to `DEFAULT_TARGET_TYPE`.
 - `TEMPLATE_PLACEHOLDER` is `/\{([a-zA-Z]+)\}/g` and `MAX_CONSECUTIVE_NEWLINES` is `2`, both owned by `lib/pipeline/publish/template.ts`. An unknown placeholder renders as `""`. There is **no** default template string: no template means the built-in layout, byte for byte (D6).
 - `{header}`, `{body}` and `{hashtags}` are already-rendered HTML and are not escaped. `{title}`, `{category}`, `{country}` (uppercased) and `{location}` go through `escapeHtml`. `{date}` is not escaped — `DateKeySchema` admits digits and hyphens only.
@@ -52,7 +52,7 @@
 | `app/targets/page.tsx` | the page (TT-22) | Task 7 |
 | `app/layout.tsx`, `test/layout.test.ts`, `test/pageAuth.test.ts` | the nav link and its guards (TT-22) | Task 7 (modify) |
 | `test/e2e/targets.test.ts` | TT-E2E-1, TT-E2E-2 | Task 8 |
-| `docs/telegator.md` | §25 rows R56 and R57 | Task 8 (modify) |
+| `docs/telegator.md` | §25 rows R58 and R59 | Task 8 (modify) |
 | `docs/.spectomat/specs/target-table.md` | §11 reconciliations table, filled from the plan rulings | Task 8 (modify) |
 
 ## Tasks
@@ -69,10 +69,11 @@ One file per task under `docs/.spectomat/plans/target-table/`, from `templates/t
 | 6 | `task-06-publish-target-row.md` | the publish loop, the handler, the e2e harness | TT-10, TT-11, TT-12, TT-13, TT-14 | 1, 3, 4, 5 | [ ] |
 | 7 | `task-07-targets-dashboard.md` | `/targets`: columns, actions, table, page, nav | TT-19, TT-20, TT-21, TT-22 | 1, 3, 4 | [ ] |
 | 8 | `task-08-e2e-and-docs.md` | the end-to-end criteria and §25's two rows | TT-E2E-1, TT-E2E-2 | 6, 7 | [ ] |
+| 9 | `task-09-reconciliation-renumber.md` | the shipped comments' R56/R57 → R58/R59 | — (a correction) | 1, 2, 3, 5 | [ ] |
 
 Expected waves: **W1** = 1, 2, 4 · **W2** = 3, 5 · **W3** = 6, 7 · **W4** = 8.
 
-Actual waves: **W1** = 1, 2 · **W2** = 3, 5 (Task 4 held out of both, see the rulings below) · remainder unchanged.
+Actual waves: **W1** = 1, 2 · **W2** = 3, 5 (Task 4 held out of both, see the rulings below) · **W3** = 4 · remainder unchanged, with Task 9 added in wave 3 and free to ride any later wave.
 
 ## Coverage
 
@@ -105,6 +106,8 @@ Every criterion id in the spec, and the task that covers it. A criterion with no
 | TT-E2E-1 | 8 |
 | TT-E2E-2 | 8 |
 
+Task 9 covers no criterion: it is a correction the plan lacked, added in wave 3 under the ruling below.
+
 ## Rulings
 
 Planning rulings (phase B), each a divergence from the spec's letter that the build must follow; Task 8 copies P1–P6 into the spec's §11 table.
@@ -120,3 +123,5 @@ Planning rulings (phase B), each a divergence from the spec's letter that the bu
 - Wave 1 · Task 4 held out of wave 1 and left for a later wave although it is ready and file-disjoint — its Files `infra/lib/app-stack.ts` and `infra/lib/app-stack.test.ts` carry the repository owner's uncommitted, gate-green `docs/telegator.md` §25 R57 work (DLQ purge), and an implementer editing them would force that work into a factory commit or lose it — cost if wrong: Task 4 slips one wave; Tasks 6 and 7 both depend on it.
 - Wave 2 · Task 4 held out a second time although ready and, on paper, file-disjoint — at wave start its `infra/lib/app-stack.ts` and `app-stack.test.ts` still carried the repository owner's uncommitted work, so an implementer there would again have swept that work into a factory commit; the owner's session committed it as `7addb67 "upui"` while this wave ran, which clears the collision for the next wave — cost if wrong: Task 4 slips a second wave and is now the only thing blocking Tasks 6 and 7.
 - Wave 2 · Part of Tasks 3 and 5 rode into the concurrent session's tree-wide commit `7addb67 "upui"` and history was not rewritten; the factory's commits `09c654d` and `a7938c8` carry the remainder, and each task's diff was reviewed over `de5d99d..HEAD` restricted to its Files — rewriting another session's commit in a shared tree is worse than a split trail — cost if wrong: two tasks whose content spans two commits each.
+- Wave 3 · The build's two reconciliation numbers are **R58** (the table) and **R59** (the per-target template), not the spec D12's R56/R57 — the repository owner's own work took R56 (the select-all toolbars) and R57 (the DLQ "Cleanup all") in `docs/telegator.md` §25 while this plan was being written, so Task 8 would have collided head-on and five comments already pointed a reader at the wrong row. Task 4's comments were corrected in its fix round; the six references Tasks 1, 2, 3 and 5 already committed are swept by the new Task 9 — cost if wrong: two numbers in §25 and a comment sweep.
+- Wave 3 · Task 4 ran alone. Tasks 6 and 7 both depend on it and 9 did not yet exist, so the wave had one member — cost if wrong: none.
