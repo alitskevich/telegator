@@ -9,7 +9,6 @@
     "node": ">=22"
   },
   "scripts": {
-    "gates": "tsc --noEmit && vitest run && biome check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "biome check .",
