@@ -8,6 +8,7 @@ import { filterByColumn, filterByKeyword } from "../lib/ui/filter";
 import { allSelected, toggleSelectAll } from "../lib/ui/selection";
 import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
 import { TableHead } from "./TableHead";
+import { useDeleteSelected } from "./useDeleteSelected";
 
 /**
  * §8.3 L797 — "Table of id, status, target, category, `teaser`, lastCount,
@@ -49,13 +50,15 @@ export function SourcesTable(props: SourcesTableProps) {
     return sortRows(filterByColumn(matched, columnFilters, SOURCE_COLUMNS), sort);
   }, [props.rows, keyword, columnFilters, sort]);
 
-  /** R57 — what "all" means here: the rows the filters and sort left on screen. */
+  /** R56 — what "all" means here: the rows the filters and sort left on screen. */
   const visibleIds = visible.map((row) => row.id);
 
   /** The edge columns this table renders itself, for `TableHead` to span. */
   const leading = props.canEdit ? ["select"] : [];
   const trailing = props.canEdit ? ["actions"] : [];
   const columnCount = SOURCE_COLUMNS.length + leading.length + trailing.length;
+
+  const remove = useDeleteSelected(props.onDelete, () => setSelected(new Set()));
 
   const toggle = (id: string) => {
     setSelected((current) => {
@@ -99,7 +102,7 @@ export function SourcesTable(props: SourcesTableProps) {
             >
               Add
             </button>
-            {/* R57 — see `lib/ui/selection`: an empty table has nothing to
+            {/* R56 — see `lib/ui/selection`: an empty table has nothing to
                 select, and a live button there would read as broken. */}
             <button
               type="button"
@@ -110,14 +113,17 @@ export function SourcesTable(props: SourcesTableProps) {
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (selected.size === 0) return;
-                void props.onDelete([...selected]);
-                setSelected(new Set());
-              }}
+              disabled={remove.deleting}
+              aria-busy={remove.deleting}
+              onClick={() => remove.run([...selected])}
             >
-              Delete selected
+              {remove.deleting ? "Deleting…" : "Delete selected"}
             </button>
+            {remove.error === "" ? null : (
+              <p className="notice notice-error" role="alert">
+                {remove.error}
+              </p>
+            )}
           </>
         ) : null}
 

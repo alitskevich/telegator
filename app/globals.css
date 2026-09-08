@@ -359,6 +359,17 @@ a:hover {
   font-size: 12px;
 }
 
+/* A failed delete is an answer, not a status: it has to read differently. */
+.notice-error {
+  color: var(--error);
+}
+
+/* The toolbar button reports its own work, so the label must not reflow. */
+button[aria-busy="true"] {
+  cursor: progress;
+  opacity: 0.7;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;

@@ -38,7 +38,7 @@ describe("toggleSelectAll", () => {
   });
 
   /**
-   * R57 — the result is the visible ids, not the union with what was already
+   * R56 — the result is the visible ids, not the union with what was already
    * selected. The button sits beside "Delete selected", so carrying a row the
    * filters have hidden into the new selection would delete it unseen.
    */

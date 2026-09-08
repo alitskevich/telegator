@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { MemberRow } from "../lib/dashboard/records";
 import type { MessageListItem } from "../lib/domain/message";
@@ -253,15 +253,19 @@ describe("MessagesTable — §8.3 L798", () => {
     /**
      * The rows come back from the server without the deleted ones (R16), so a
      * selection kept across that render would address ids the table no longer
-     * shows.
+     * shows. It clears on the answer rather than on the click: a delete that
+     * rejects has to leave the selection behind for the retry.
      */
-    test("clears the selection after deleting", () => {
+    test("clears the selection once the delete succeeds", async () => {
       draw();
       fireEvent.click(screen.getByLabelText("Select example/1"));
 
       const trigger = deleteButton();
       if (trigger !== null) fireEvent.click(trigger);
-      expect(screen.getByLabelText<HTMLInputElement>("Select example/1").checked).toBe(false);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText<HTMLInputElement>("Select example/1").checked).toBe(false);
+      });
     });
 
     test("a viewer sees neither the checkboxes nor the button", () => {
@@ -408,61 +412,137 @@ describe("filter and sort — the header row", () => {
     const cell = panel.closest("td");
     expect(cell?.getAttribute("colspan")).toBe("10");
   });
+});
 
-  /**
-   * R57 — §8.3 L798 lists this table's toolbar and names no select-all;
-   * `lib/ui/selection` carries the account.
-   */
-  describe("select all (R57)", () => {
-    const selectAll = () => screen.getByRole("button", { name: "Select all" });
+/**
+ * R56 — §8.3 L798 lists this table's toolbar and names no select-all;
+ * `lib/ui/selection` carries the account.
+ */
+describe("select all (R56)", () => {
+  const selectAll = () => screen.getByRole("button", { name: "Select all" });
 
-    test("selects every row on screen", () => {
-      draw();
-      fireEvent.click(selectAll());
-      fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+  test("selects every row on screen", () => {
+    draw();
+    fireEvent.click(selectAll());
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
 
-      expect(onDelete).toHaveBeenCalledWith(["example/1", "example/2"]);
+    expect(onDelete).toHaveBeenCalledWith(["example/1", "example/2"]);
+  });
+
+  test("ticks every checkbox on screen", () => {
+    draw();
+    fireEvent.click(selectAll());
+
+    expect(screen.getByLabelText<HTMLInputElement>("Select example/1").checked).toBe(true);
+    expect(screen.getByLabelText<HTMLInputElement>("Select example/2").checked).toBe(true);
+  });
+
+  /** The rows a filter hid are not on screen, so they are not part of "all". */
+  test("selects only what the search left visible", () => {
+    draw();
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "sports" } });
+    fireEvent.click(selectAll());
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+
+    expect(onDelete).toHaveBeenCalledWith(["example/2"]);
+  });
+
+  test("offers a clear once every visible row is selected", () => {
+    draw();
+    fireEvent.click(selectAll());
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+
+    expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  /** An empty table has nothing to select, and a live button would look broken. */
+  test("is disabled when the filters empty the table", () => {
+    draw();
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "no such message" } });
+
+    expect(selectAll().hasAttribute("disabled")).toBe(true);
+  });
+
+  test("a viewer does not see it", () => {
+    draw({ canEdit: false, canAdmin: false });
+
+    expect(screen.queryByRole("button", { name: "Select all" })).toBeNull();
+  });
+});
+
+/**
+ * The delete is a round trip. Until it answers there was nothing on screen to
+ * say so, and the promise was discarded — a rejection left the click looking
+ * exactly like a success that removed nothing.
+ */
+describe("Delete selected — in flight", () => {
+  const deferred = () => {
+    let settle!: (outcome: "resolve" | "reject") => void;
+    const promise = new Promise<void>((resolve, reject) => {
+      settle = (outcome) => (outcome === "resolve" ? resolve() : reject(new Error("boom")));
     });
+    return { promise, settle };
+  };
 
-    test("ticks every checkbox on screen", () => {
-      draw();
-      fireEvent.click(selectAll());
+  const selectOne = () => {
+    draw();
+    fireEvent.click(screen.getByLabelText("Select example/1"));
+  };
 
-      expect(screen.getByLabelText<HTMLInputElement>("Select example/1").checked).toBe(true);
-      expect(screen.getByLabelText<HTMLInputElement>("Select example/2").checked).toBe(true);
+  test("says it is working and refuses a second click while in flight", async () => {
+    const gate = deferred();
+    onDelete.mockReturnValueOnce(gate.promise);
+    selectOne();
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+
+    const busy = screen.getByRole("button", { name: /Deleting/ });
+    expect(busy.hasAttribute("disabled")).toBe(true);
+    expect(busy.getAttribute("aria-busy")).toBe("true");
+
+    fireEvent.click(busy);
+    expect(onDelete).toHaveBeenCalledTimes(1);
+
+    gate.settle("resolve");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Delete selected" })).toBeDefined();
     });
+  });
 
-    /** The rows a filter hid are not on screen, so they are not part of "all". */
-    test("selects only what the search left visible", () => {
-      draw();
-      fireEvent.change(screen.getByLabelText("Search"), { target: { value: "sports" } });
-      fireEvent.click(selectAll());
-      fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+  /** Clearing before the server answers throws away the retry. */
+  test("clears the selection only once the delete succeeds", async () => {
+    selectOne();
+    expect(screen.getByLabelText<HTMLInputElement>("Select example/1").checked).toBe(true);
 
-      expect(onDelete).toHaveBeenCalledWith(["example/2"]);
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText<HTMLInputElement>("Select example/1").checked).toBe(false);
     });
+  });
 
-    test("offers a clear once every visible row is selected", () => {
-      draw();
-      fireEvent.click(selectAll());
-      fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
-      fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+  test("reports a failure and keeps the selection to retry", async () => {
+    onDelete.mockRejectedValueOnce(new Error("not authorised"));
+    selectOne();
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
 
-      expect(onDelete).not.toHaveBeenCalled();
-    });
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("not authorised");
+    expect(screen.getByLabelText<HTMLInputElement>("Select example/1").checked).toBe(true);
+    expect(screen.getByRole("button", { name: "Delete selected" }).hasAttribute("disabled")).toBe(
+      false,
+    );
+  });
 
-    /** An empty table has nothing to select, and a live button would look broken. */
-    test("is disabled when the filters empty the table", () => {
-      draw();
-      fireEvent.change(screen.getByLabelText("Search"), { target: { value: "no such message" } });
+  test("clears a previous failure when the next delete starts", async () => {
+    onDelete.mockRejectedValueOnce(new Error("not authorised"));
+    selectOne();
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    await screen.findByRole("alert");
 
-      expect(selectAll().hasAttribute("disabled")).toBe(true);
-    });
-
-    test("a viewer does not see it", () => {
-      draw({ canEdit: false, canAdmin: false });
-
-      expect(screen.queryByRole("button", { name: "Select all" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
     });
   });
 });

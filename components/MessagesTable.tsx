@@ -9,6 +9,7 @@ import { filterByColumn, filterByKeyword } from "../lib/ui/filter";
 import { allSelected, toggleSelectAll } from "../lib/ui/selection";
 import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
 import { TableHead } from "./TableHead";
+import { useDeleteSelected } from "./useDeleteSelected";
 
 /**
  * §8.3 L798 — "Status tabs; table of id, title, category, status, date,
@@ -58,6 +59,8 @@ export function MessagesTable(props: MessagesTableProps) {
     return sortRows(filterByColumn(matched, columnFilters, MESSAGE_COLUMNS), sort);
   }, [props.rows, keyword, columnFilters, sort]);
 
+  const remove = useDeleteSelected(props.onDelete, () => setSelected(new Set()));
+
   const toggle = (id: string) => {
     setSelected((current) => {
       const next = new Set(current);
@@ -66,7 +69,7 @@ export function MessagesTable(props: MessagesTableProps) {
     });
   };
 
-  /** R57 — what "all" means here: the rows the filters and sort left on screen. */
+  /** R56 — what "all" means here: the rows the filters and sort left on screen. */
   const visibleIds = visible.map((message) => message.id);
 
   /** The edge columns this table renders itself, for `TableHead` to span. */
@@ -106,7 +109,7 @@ export function MessagesTable(props: MessagesTableProps) {
 
         {props.canEdit ? (
           <>
-            {/* R57 — see `lib/ui/selection`: an empty table has nothing to
+            {/* R56 — see `lib/ui/selection`: an empty table has nothing to
                 select, and a live button there would read as broken. */}
             <button
               type="button"
@@ -117,17 +120,17 @@ export function MessagesTable(props: MessagesTableProps) {
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (selected.size === 0) return;
-                void props.onDelete([...selected]);
-                // The rows come back without the deleted ones (R16), so a
-                // selection kept across that render would address ids the table
-                // no longer shows.
-                setSelected(new Set());
-              }}
+              disabled={remove.deleting}
+              aria-busy={remove.deleting}
+              onClick={() => remove.run([...selected])}
             >
-              Delete selected
+              {remove.deleting ? "Deleting…" : "Delete selected"}
             </button>
+            {remove.error === "" ? null : (
+              <p className="notice notice-error" role="alert">
+                {remove.error}
+              </p>
+            )}
           </>
         ) : null}
 
