@@ -3,6 +3,7 @@ import { chatIdFor, TELEGRAM_MESSAGE_LIMIT } from "../../telegram/ports";
 import { escapeHtml } from "./escape";
 import { buildHashtagLine } from "./hashtags";
 import { renderMembers } from "./render";
+import { renderTemplate } from "./template";
 
 /**
  * §3.4 L324–347 — message assembly and the send-mode decision, as pure
@@ -76,10 +77,23 @@ export function buildHeader(source: HeaderSource): string {
 }
 
 /**
+ * How one candidate text is built from the blocks that survived the ladder.
+ *
+ * A parameter rather than a branch inside `fitToLimit` (R57): the shortening
+ * order is a property of the *message*, not of the layout, so both paths get
+ * the same ladder and a template cannot quietly acquire a different one.
+ */
+type Compose = (blocks: readonly string[], hashtagLine: string) => string;
+
+/**
  * §3.4 L327–334's layout, plus R12's hashtag line — after the member blocks,
  * separated by a blank line, because metadata trails content.
  */
-function compose(header: string, blocks: readonly string[], hashtagLine: string): string {
+function builtInCompose(
+  header: string,
+  blocks: readonly string[],
+  hashtagLine: string,
+): string {
   const body = [header, "", ...blocks].join(BLOCK_SEPARATOR);
 
   return hashtagLine === "" ? body : `${body}${BLANK_LINE}${hashtagLine}`;
@@ -96,21 +110,26 @@ function compose(header: string, blocks: readonly string[], hashtagLine: string)
  * blocks. Hashtags are derived metadata and are reconstructible from the record;
  * a member block is the only surviving rendering of a scraped post (§1.3 L63).
  * Content outlives metadata.
+ *
+ * A template that names neither `{body}` nor `{hashtags}` cannot be shortened:
+ * every rung returns the same string and the Bot API rejects it (§3.4 L350).
+ * That is the designed outcome — silently truncating an operator's own text
+ * would be worse than a loud rejection.
  */
-function fitToLimit(header: string, blocks: readonly string[], hashtagLine: string): string {
-  const withHashtags = compose(header, blocks, hashtagLine);
+function fitToLimit(compose: Compose, blocks: readonly string[], hashtagLine: string): string {
+  const withHashtags = compose(blocks, hashtagLine);
   if (withHashtags.length <= TELEGRAM_MESSAGE_LIMIT) return withHashtags;
 
-  const withoutHashtags = compose(header, blocks, "");
+  const withoutHashtags = compose(blocks, "");
   if (withoutHashtags.length <= TELEGRAM_MESSAGE_LIMIT) return withoutHashtags;
 
   for (let count = blocks.length - 1; count >= MIN_RENDERED_MEMBERS; count -= 1) {
-    const candidate = compose(header, blocks.slice(0, count), "");
+    const candidate = compose(blocks.slice(0, count), "");
     if (candidate.length <= TELEGRAM_MESSAGE_LIMIT) return candidate;
   }
 
   // Nothing fits. Emit the floor and let the Bot API reject it (§3.4 L350).
-  return compose(header, blocks.slice(0, MIN_RENDERED_MEMBERS), "");
+  return compose(blocks.slice(0, MIN_RENDERED_MEMBERS), "");
 }
 
 /** §4.2 L382 — the three methods, and only these three. */
@@ -133,28 +152,49 @@ export interface AssembledMessage {
  * (multi-target#5.1), the pacing and the retry (L348); this function owns only
  * what to send. `tgId` is the post this target already has, from `postFor`
  * (multi-target#5.2) — the record's own frozen `tgId` is never read here.
+ *
+ * `template` is that target's own `messageTemplate` (target-table#5.1); absent,
+ * empty or whitespace-only leaves the built-in layout untouched, byte for byte.
  */
 export function assembleMessage(
   message: Message,
   target: string,
   tgId: string | undefined,
+  template?: string,
 ): AssembledMessage {
   const rendered = renderMembers(message.members);
   const blocks = rendered === "" ? [] : rendered.split(BLOCK_SEPARATOR);
 
-  const text = fitToLimit(
-    buildHeader(message),
-    blocks,
-    buildHashtagLine({
-      category: message.category,
-      location: message.location,
-      peoples: message.peoples,
-      tags: message.tags,
-      title: message.title,
-      date: message.date,
-      ts: message.ts,
-    }),
-  );
+  const header = buildHeader(message);
+  const hashtagLine = buildHashtagLine({
+    category: message.category,
+    location: message.location,
+    peoples: message.peoples,
+    tags: message.tags,
+    title: message.title,
+    date: message.date,
+    ts: message.ts,
+  });
+
+  /**
+   * target-table#5.1 — the target's own layout, when it has one (D6, R57).
+   *
+   * An absent, empty or whitespace-only template is no template: the built-in
+   * path runs byte for byte, so a target with no row publishes exactly what it
+   * published the day before.
+   */
+  const compose: Compose =
+    template === undefined || template.trim() === ""
+      ? (blocks_, hashtags) => builtInCompose(header, blocks_, hashtags)
+      : (blocks_, hashtags) =>
+          renderTemplate(template, {
+            header,
+            body: blocks_.join(BLOCK_SEPARATOR),
+            hashtags,
+            message,
+          });
+
+  const text = fitToLimit(compose, blocks, hashtagLine);
 
   const chatId = chatIdFor(target);
   /** §3.4 L347 — "link preview disabled when the message has a title or image". */

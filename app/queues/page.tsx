@@ -1,4 +1,4 @@
-import { inspectDlq, queuePageDeps } from "../../actions/queues";
+import { inspectDlq, purgeDlq, queuePageDeps } from "../../actions/queues";
 import { replayDlq } from "../../actions/triggers";
 import { QueuesPanel } from "../../components/QueuesPanel";
 import { hasRole } from "../../lib/auth/roles";
@@ -35,12 +35,18 @@ export default async function QueuesPage() {
     return replayDlq({ queueName, max });
   }
 
+  async function purge(queueName: string) {
+    "use server";
+    return purgeDlq({ queueName });
+  }
+
   return (
     <QueuesPanel
       rows={rows}
       canAdmin={hasRole({ roles: session.roles, enabled: true }, "admin")}
       onInspect={inspect}
       onReplay={replay}
+      onPurge={purge}
     />
   );
 }

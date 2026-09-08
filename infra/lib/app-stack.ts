@@ -279,10 +279,17 @@ export class TelegatorAppStack extends Stack {
       queue.grant(this.appRole, "sqs:GetQueueAttributes");
     }
 
-    // R24 — §8.2 L776's "DLQ inspection" reads message bodies, which
-    // GetQueueAttributes cannot do.
+    /**
+     * R24 — §8.2 L776's "DLQ inspection" reads message bodies, which
+     * GetQueueAttributes cannot do.
+     *
+     * R57 adds `PurgeQueue`, and only here: the grant is per dead-letter queue,
+     * so nothing in this stack can purge a *source* queue and discard work still
+     * in flight. §7.6 L712 grants the role no queue write at all, so both
+     * actions are recorded divergences rather than transcribed ones.
+     */
     for (const dlq of queues.deadLetterQueues) {
-      dlq.grant(this.appRole, "sqs:GetQueueAttributes", "sqs:ReceiveMessage");
+      dlq.grant(this.appRole, "sqs:GetQueueAttributes", "sqs:ReceiveMessage", "sqs:PurgeQueue");
     }
 
     // R24 — §8.4 L815's republishMessage "sets `topublish`, enqueues", and §7.6

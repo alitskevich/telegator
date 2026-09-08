@@ -5,6 +5,7 @@ import { SOURCE_WRITABLE_FIELDS } from "../lib/dashboard/records";
 import type { Source } from "../lib/domain/source";
 import { SOURCE_COLUMNS } from "../lib/ui/columns";
 import { filterByColumn, filterByKeyword } from "../lib/ui/filter";
+import { allSelected, toggleSelectAll } from "../lib/ui/selection";
 import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
 import { TableHead } from "./TableHead";
 
@@ -47,6 +48,9 @@ export function SourcesTable(props: SourcesTableProps) {
     // Then the per-column boxes narrow that, and the sort orders what survives.
     return sortRows(filterByColumn(matched, columnFilters, SOURCE_COLUMNS), sort);
   }, [props.rows, keyword, columnFilters, sort]);
+
+  /** R57 — what "all" means here: the rows the filters and sort left on screen. */
+  const visibleIds = visible.map((row) => row.id);
 
   /** The edge columns this table renders itself, for `TableHead` to span. */
   const leading = props.canEdit ? ["select"] : [];
@@ -94,6 +98,15 @@ export function SourcesTable(props: SourcesTableProps) {
               }}
             >
               Add
+            </button>
+            {/* R57 — see `lib/ui/selection`: an empty table has nothing to
+                select, and a live button there would read as broken. */}
+            <button
+              type="button"
+              disabled={visibleIds.length === 0}
+              onClick={() => setSelected(toggleSelectAll(visibleIds, selected))}
+            >
+              {allSelected(visibleIds, selected) ? "Clear selection" : "Select all"}
             </button>
             <button
               type="button"

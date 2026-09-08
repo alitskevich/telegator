@@ -8,6 +8,7 @@ import type {
   Post,
 } from "../domain/message";
 import type { Source, SourceCursor } from "../domain/source";
+import type { Target } from "../domain/target";
 
 /**
  * The two table boundaries, as interfaces.
@@ -41,6 +42,33 @@ export interface SourceRepo {
   /** §8.4 L808 — an operator edit, attribute-level. The caller validates the delta. */
   patch(id: string, delta: Readonly<Record<string, unknown>>): Promise<void>;
   /** §8.4 L810 — soft delete. The row survives; R16 hides it from reads. */
+  softDelete(ids: readonly string[]): Promise<void>;
+}
+
+/** target-table#5.3 — the two mirror fields publish writes after a send (D3, D4). */
+export interface LastPost {
+  readonly lastPostedDate: string;
+  readonly lastPostedMessageId: string;
+}
+
+/**
+ * The `targets` registry (target-table#2.2, R56).
+ *
+ * No `query`: the table carries no index (D8), and offering one would invite a
+ * caller to assume an access pattern the table cannot serve.
+ */
+export interface TargetRepo {
+  /** target-table#5.3 — publish's per-target read. Soft-deleted rows come back too. */
+  get(id: string): Promise<Target | undefined>;
+  /** §8.3 L797's table, as for sources: a Scan, soft-deleted rows filtered. */
+  listAll(): Promise<Target[]>;
+  /** §8.4 L808 — an operator create. */
+  put(target: Target): Promise<void>;
+  /** §8.4 L808 — an operator edit, attribute-level. The caller validates the delta. */
+  patch(id: string, delta: Readonly<Record<string, unknown>>): Promise<void>;
+  /** target-table#5.3 — the two mirror fields, creating the row if absent (D5). */
+  recordLastPost(id: string, post: LastPost): Promise<void>;
+  /** §8.4 L810 — soft delete. The row survives; `listAll` hides it. */
   softDelete(ids: readonly string[]): Promise<void>;
 }
 

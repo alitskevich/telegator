@@ -7,9 +7,11 @@ import { QueuesPanel } from "./QueuesPanel";
 
 type InspectFn = (queueName: string) => Promise<DlqMessage[]>;
 type ReplayFn = (queueName: string, max: number) => Promise<{ replayed: number }>;
+type PurgeFn = (queueName: string) => Promise<{ discarded: number }>;
 
 let onInspect: ReturnType<typeof vi.fn<InspectFn>>;
 let onReplay: ReturnType<typeof vi.fn<ReplayFn>>;
+let onPurge: ReturnType<typeof vi.fn<PurgeFn>>;
 
 const MESSAGES: DlqMessage[] = [
   { messageId: "m1", body: '{"id":"example/1"}', receiveCount: 3 },
@@ -25,12 +27,22 @@ const rows: QueueRow[] = [
 beforeEach(() => {
   onInspect = vi.fn<InspectFn>(async () => MESSAGES);
   onReplay = vi.fn<ReplayFn>(async () => ({ replayed: 2 }));
+  onPurge = vi.fn<PurgeFn>(async () => ({ discarded: 2 }));
 });
 
 afterEach(cleanup);
 
 const draw = (props: Partial<Parameters<typeof QueuesPanel>[0]> = {}) =>
-  render(<QueuesPanel rows={rows} canAdmin onInspect={onInspect} onReplay={onReplay} {...props} />);
+  render(
+    <QueuesPanel
+      rows={rows}
+      canAdmin
+      onInspect={onInspect}
+      onReplay={onReplay}
+      onPurge={onPurge}
+      {...props}
+    />,
+  );
 
 const queue = (name: string) => screen.getByTestId(`queue-${name}`);
 
@@ -131,6 +143,67 @@ describe("QueuesPanel — §8.2 L776", () => {
 
       expect(screen.queryByRole("button", { name: "Replay" })).toBeNull();
       expect(within(queue("analyze")).getByRole("button", { name: "Inspect" })).toBeDefined();
+    });
+  });
+
+  describe("cleanup all (R57)", () => {
+    const cleanupButton = (name: string) =>
+      within(queue(name)).getByRole("button", { name: "Cleanup all" });
+
+    /** Two non-empty DLQs, so "armed" can be shown to be per-card. */
+    const twoFull: QueueRow[] = [
+      { name: "analyze", depth: 4, dlqDepth: 2, dlqUrl: "dlq/analyze" },
+      { name: "publish", depth: 1, dlqDepth: 5, dlqUrl: "dlq/publish" },
+    ];
+
+    /**
+     * A purge cannot be undone — §1.3 L69 makes the DLQ a dead-lettered post's
+     * last copy — and the control sits next to Replay, so one press must not be
+     * enough.
+     */
+    test("one press does not purge", () => {
+      draw();
+      fireEvent.click(cleanupButton("analyze"));
+
+      expect(onPurge).not.toHaveBeenCalled();
+    });
+
+    /** The confirmation names the count, so an operator confirms a number. */
+    test("the armed label names how many are about to go", () => {
+      draw();
+      fireEvent.click(cleanupButton("analyze"));
+
+      expect(within(queue("analyze")).getByRole("button", { name: /delete 2/ })).toBeDefined();
+    });
+
+    test("a second press purges that queue and reports the count", async () => {
+      draw();
+      fireEvent.click(cleanupButton("analyze"));
+      fireEvent.click(within(queue("analyze")).getByRole("button", { name: /delete 2/ }));
+
+      expect(onPurge).toHaveBeenCalledWith("analyze");
+      expect(await screen.findByText(/discarded 2/i)).toBeDefined();
+    });
+
+    /** Arming one card must not arm another; each queue is a separate decision. */
+    test("arming one queue leaves the others disarmed", () => {
+      draw({ rows: twoFull });
+      fireEvent.click(cleanupButton("analyze"));
+
+      expect(within(queue("publish")).getByRole("button", { name: "Cleanup all" })).toBeDefined();
+    });
+
+    /** Nothing to clean up, so nothing to offer. */
+    test("offers no cleanup for an empty DLQ", () => {
+      draw();
+      expect(within(queue("aggregate")).queryByRole("button", { name: /cleanup/i })).toBeNull();
+    });
+
+    /** §8.4 L817's replay is `admin`; destroying the messages cannot be less. */
+    test("a viewer sees no cleanup control", () => {
+      draw({ canAdmin: false });
+
+      expect(screen.queryByRole("button", { name: /cleanup/i })).toBeNull();
     });
   });
 });

@@ -290,6 +290,32 @@ describe("TelegatorAppStack", () => {
       expect(receives).toContain("sqs:ReceiveMessage");
     });
 
+    /** R57 — "Cleanup all" discards a DLQ the operator has judged unrecoverable. */
+    test("may purge, which the DLQ cleanup requires", () => {
+      const actions = policyStatements(templateFor()).flatMap(actionsOf);
+
+      expect(actions).toContain("sqs:PurgeQueue");
+    });
+
+    /**
+     * R57 — the grant is per dead-letter queue and must stay there. Purging a
+     * *source* queue would discard posts still in flight, and §1.3 L69 means
+     * nothing recovers them. Asserted through the DLQ statement's own shape,
+     * because the resources are cross-stack import tokens rather than names:
+     * `sqs:ReceiveMessage` is granted on the DLQs and nowhere else, so a purge
+     * that appears without it is a purge on something that is not a DLQ.
+     */
+    test("may purge only the queues it may receive from", () => {
+      const purges = policyStatements(templateFor()).filter((statement) =>
+        actionsOf(statement).includes("sqs:PurgeQueue"),
+      );
+
+      expect(purges.length).toBeGreaterThan(0);
+      for (const statement of purges) {
+        expect(actionsOf(statement)).toContain("sqs:ReceiveMessage");
+      }
+    });
+
     /**
      * R34 revises R24, narrowing rather than relaxing it: §8.6 L871 requires
      * that a disabled user is rejected at every action, and enforcing that needs

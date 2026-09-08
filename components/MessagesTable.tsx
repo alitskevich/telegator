@@ -6,6 +6,7 @@ import { MESSAGE_WRITABLE_FIELDS } from "../lib/dashboard/records";
 import { MESSAGE_STATUSES, type MessageListItem, type MessageStatus } from "../lib/domain/message";
 import { MESSAGE_COLUMNS } from "../lib/ui/columns";
 import { filterByColumn, filterByKeyword } from "../lib/ui/filter";
+import { allSelected, toggleSelectAll } from "../lib/ui/selection";
 import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
 import { TableHead } from "./TableHead";
 
@@ -65,6 +66,9 @@ export function MessagesTable(props: MessagesTableProps) {
     });
   };
 
+  /** R57 — what "all" means here: the rows the filters and sort left on screen. */
+  const visibleIds = visible.map((message) => message.id);
+
   /** The edge columns this table renders itself, for `TableHead` to span. */
   const leading = props.canEdit ? ["select", "expand"] : ["expand"];
   const trailing = props.canEdit || props.canAdmin ? ["actions"] : [];
@@ -101,19 +105,30 @@ export function MessagesTable(props: MessagesTableProps) {
         </label>
 
         {props.canEdit ? (
-          <button
-            type="button"
-            onClick={() => {
-              if (selected.size === 0) return;
-              void props.onDelete([...selected]);
-              // The rows come back without the deleted ones (R16), so a
-              // selection kept across that render would address ids the table
-              // no longer shows.
-              setSelected(new Set());
-            }}
-          >
-            Delete selected
-          </button>
+          <>
+            {/* R57 — see `lib/ui/selection`: an empty table has nothing to
+                select, and a live button there would read as broken. */}
+            <button
+              type="button"
+              disabled={visibleIds.length === 0}
+              onClick={() => setSelected(toggleSelectAll(visibleIds, selected))}
+            >
+              {allSelected(visibleIds, selected) ? "Clear selection" : "Select all"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (selected.size === 0) return;
+                void props.onDelete([...selected]);
+                // The rows come back without the deleted ones (R16), so a
+                // selection kept across that render would address ids the table
+                // no longer shows.
+                setSelected(new Set());
+              }}
+            >
+              Delete selected
+            </button>
+          </>
         ) : null}
 
         <button type="button" onClick={() => void props.onExport?.()}>

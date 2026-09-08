@@ -1573,6 +1573,8 @@ Numbers are permanent. `R6` was never issued.
 | **R53** | §8.4 | "Publish now" is `admin` only, offered only on the `topublish` tab, and capped server-side rather than trusting the caller's number. |
 | **R54** | §2.1, §3.1, §8.3, §8.4, §9.4 | `sources.tgChannel` is `sources.target`, a **comma-separated list** of target ids carried verbatim into the item payload as `target` and into `messages.tgChannel`, whose name is kept because it sits in the `status-index` projection (§7.2 L638). A stored `tgChannel` on a source is an orphan the schema strips; `scripts/migrate-targets.ts` copies it across before deploy. The full account is `docs/.spectomat/done/multi-target.spec.md` (or `specs/` while it is being built). |
 | **R55** | §2.3, §3.3, §3.4, §8.4 | Publish sends **once per target**: `messages.posts` maps each canonical target id to its `{tgId, tgAt}`, written whole after every send; `tgId`/`tgAt` are frozen legacy fields read only by the first-target fallback. A post is current when `tgAt >= ts` and is skipped; a rejected send fails the record so the redelivery sends to the rest; a sent-but-unrecorded post is acknowledged. `republishMessage` bumps `ts` so every post is re-sent. Base table only; no projection changes. |
+| **R56** | §8.3 | Both tables' toolbars gain a **select all**, which §8.3 L797-798 does not list: a bulk delete over a narrowed table is what the per-column filters were added to produce, and a checkbox per row is the only way to address one. "All" is the rows the filters and sort left on screen, and the click **replaces** the selection rather than adding to it — the button sits beside "Delete selected", so a selection made before a filter narrowed the table would otherwise delete rows the operator cannot see. A second click clears; an empty table disables it. The set arithmetic is `lib/ui/selection`, shared by both tables. |
+| **R57** | §8.4, §7.6 | **"Cleanup all"** — `purgeDlq(queueName) => {discarded}`, `admin`. §8.4 lists no such action and §7.6 L712 grants the dashboard role no queue write, yet §3.5's replay is the only exit a DLQ has: a backlog that will never drain cleanly — a poison payload, a batch a later scrape superseded — keeps §7.7's depth alarm lit for good, and an operator learns to ignore the one signal that means act. It is one `PurgeQueue` call with no pipeline behind it, so it runs from the dashboard's own SQS client like §8.2 L776's inspection rather than through the replay Lambda, and `sqs:PurgeQueue` is granted **per dead-letter queue only**. Irreversible in a way replay is not (§1.3 L69 makes the DLQ the last copy), so the panel arms on one press and fires on a second, and the confirmation names the count. |
 
 ## 26. Traps this project actually hit
 
@@ -1792,6 +1794,7 @@ The one place any of these is written. Each is a named constant in code, and
 | `MAX_BATCH_SIZE` | 10 | §7.3 |
 | `SETTLE_DELAY_SECONDS` | 300 | §11.4 |
 | `SQS_MAX_DELAY_SECONDS` | 900 | SQS's own ceiling on the above |
+| `PURGE_COOLDOWN_SECONDS` | 60 | SQS's own limit on `PurgeQueue`, §25 R57 — one per queue per minute |
 | photo suppression threshold | 1012 characters | §25, R13 — **not** the 1024 caption limit |
 | `TELEGRAM_MESSAGE_LIMIT` | 4096 | §4.2 |
 | `TELEGRAM_CAPTION_LIMIT` | 1024 | §4.2 |

@@ -408,4 +408,61 @@ describe("filter and sort — the header row", () => {
     const cell = panel.closest("td");
     expect(cell?.getAttribute("colspan")).toBe("10");
   });
+
+  /**
+   * R57 — §8.3 L798 lists this table's toolbar and names no select-all;
+   * `lib/ui/selection` carries the account.
+   */
+  describe("select all (R57)", () => {
+    const selectAll = () => screen.getByRole("button", { name: "Select all" });
+
+    test("selects every row on screen", () => {
+      draw();
+      fireEvent.click(selectAll());
+      fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+
+      expect(onDelete).toHaveBeenCalledWith(["example/1", "example/2"]);
+    });
+
+    test("ticks every checkbox on screen", () => {
+      draw();
+      fireEvent.click(selectAll());
+
+      expect(screen.getByLabelText<HTMLInputElement>("Select example/1").checked).toBe(true);
+      expect(screen.getByLabelText<HTMLInputElement>("Select example/2").checked).toBe(true);
+    });
+
+    /** The rows a filter hid are not on screen, so they are not part of "all". */
+    test("selects only what the search left visible", () => {
+      draw();
+      fireEvent.change(screen.getByLabelText("Search"), { target: { value: "sports" } });
+      fireEvent.click(selectAll());
+      fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+
+      expect(onDelete).toHaveBeenCalledWith(["example/2"]);
+    });
+
+    test("offers a clear once every visible row is selected", () => {
+      draw();
+      fireEvent.click(selectAll());
+      fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+      fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+
+      expect(onDelete).not.toHaveBeenCalled();
+    });
+
+    /** An empty table has nothing to select, and a live button would look broken. */
+    test("is disabled when the filters empty the table", () => {
+      draw();
+      fireEvent.change(screen.getByLabelText("Search"), { target: { value: "no such message" } });
+
+      expect(selectAll().hasAttribute("disabled")).toBe(true);
+    });
+
+    test("a viewer does not see it", () => {
+      draw({ canEdit: false, canAdmin: false });
+
+      expect(screen.queryByRole("button", { name: "Select all" })).toBeNull();
+    });
+  });
 });

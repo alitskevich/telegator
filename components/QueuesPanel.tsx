@@ -19,6 +19,8 @@ export interface QueuesPanelProps {
   readonly canAdmin: boolean;
   readonly onInspect: (queueName: string) => Promise<DlqMessage[]>;
   readonly onReplay: (queueName: string, max: number) => Promise<{ replayed: number }>;
+  /** R57 — discards the DLQ outright. Irreversible, so it is armed before it fires. */
+  readonly onPurge: (queueName: string) => Promise<{ discarded: number }>;
 }
 
 export function QueuesPanel(props: QueuesPanelProps) {
@@ -39,10 +41,25 @@ function QueueCard({
   canAdmin,
   onInspect,
   onReplay,
+  onPurge,
 }: { row: QueueRow } & Omit<QueuesPanelProps, "rows">) {
   const [messages, setMessages] = useState<DlqMessage[] | undefined>(undefined);
   const [max, setMax] = useState(String(DEFAULT_REPLAY_MAX));
   const [notice, setNotice] = useState("");
+  /**
+   * R57 — the cleanup is armed by one press and fired by a second.
+   *
+   * A purge cannot be undone: §1.3 L69 makes the DLQ a dead-lettered post's last
+   * copy, so a misplaced click next to "Replay" would destroy the only thing
+   * replay could ever have recovered. The second label names the count, so an
+   * operator confirms a number rather than a verb.
+   *
+   * The armed *depth* is held rather than a flag, so a card that revalidates to
+   * a different number disarms itself: a stale "delete 12" over a queue now
+   * holding 3 would confirm a count that is no longer the one being destroyed.
+   */
+  const [armedAt, setArmedAt] = useState<number | undefined>(undefined);
+  const armed = armedAt === row.dlqDepth;
 
   const replayMax = Number(max);
 
@@ -86,6 +103,23 @@ function QueueCard({
               }}
             >
               Replay
+            </button>
+
+            <button
+              type="button"
+              className="queue-danger"
+              onClick={() => {
+                if (!armed) {
+                  setArmedAt(row.dlqDepth);
+                  return;
+                }
+                setArmedAt(undefined);
+                void onPurge(row.name).then(({ discarded }) => {
+                  setNotice(`Discarded ${discarded}`);
+                });
+              }}
+            >
+              {armed ? `Confirm — delete ${row.dlqDepth}` : "Cleanup all"}
             </button>
           </>
         ) : null}

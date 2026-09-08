@@ -25,6 +25,7 @@ import { cachedCategoryLogReader, cachedMetricReader } from "../lib/dashboard/ca
 import { createMessageRepo } from "../lib/db/messages";
 import { createSourceRepo } from "../lib/db/sources";
 import { createSqsDlqInspector } from "../lib/queues/inspect";
+import { createSqsDlqPurger } from "../lib/queues/purge";
 import { createSqsQueueProducer } from "../lib/queues/sqs";
 
 /**
@@ -137,3 +138,6 @@ export const dlqUrls = {
 
 /** §8.2 L776 — reads DLQ bodies without consuming them. */
 export const dlqInspector = createSqsDlqInspector(sqs);
+
+/** R57 — discards a DLQ an operator has judged unrecoverable. */
+export const dlqPurger = createSqsDlqPurger(sqs);

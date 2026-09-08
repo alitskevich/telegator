@@ -298,3 +298,100 @@ describe("assembleMessage — overflow (recorded rule, §3.4 L340 gives no trunc
     expect(memberBlockCount(assembled.text)).toBe(MEMBER_RENDER_LIMIT);
   });
 });
+
+describe("assembleMessage with a template — target-table#5.1 (R57)", () => {
+  const TEMPLATE = "<b>LIVE</b>\n{header}\n\n{body}\n\n{hashtags}";
+
+  /** Enough tokens that the hashtag line alone overflows a full body. */
+  const MANY_TAGS = Array.from({ length: 200 }, (_, i) => `templatetag${i}`).join(",");
+
+  function fullMembers(): Record<string, MemberBlock> {
+    const members: Record<string, MemberBlock> = {};
+    for (let i = 0; i < MEMBER_RENDER_LIMIT; i += 1) {
+      members[`chan/${i + 1}`] = member({ summary: "a".repeat(SUMMARY_MAX_LENGTH), ts: i });
+    }
+    return members;
+  }
+
+  test("TT-7: no template is byte-identical to the pre-template result", () => {
+    const stored = message();
+
+    expect(assembleMessage(stored, "b", undefined, undefined).text).toBe(
+      assembleMessage(stored, "b", undefined).text,
+    );
+  });
+
+  /** D6 — an empty or whitespace-only template is no template at all. */
+  test.each(["", "   ", "\n"])("TT-7: %o is treated as no template", (template) => {
+    const stored = message();
+
+    expect(assembleMessage(stored, "b", undefined, template).text).toBe(
+      assembleMessage(stored, "b", undefined).text,
+    );
+  });
+
+  test("TT-8: a template decides the text and nothing else", () => {
+    const stored = message({ image: "https://example.test/p.jpg" });
+
+    const plain = assembleMessage(stored, "b", undefined);
+    const templated = assembleMessage(stored, "b", undefined, TEMPLATE);
+
+    expect(templated.text).not.toBe(plain.text);
+    expect(templated.text.startsWith("<b>LIVE</b>\n")).toBe(true);
+    expect(templated.chatId).toBe(plain.chatId);
+    expect(templated.method).toBe(plain.method);
+    expect(templated.photo).toBe(plain.photo);
+    expect(templated.disableWebPagePreview).toBe(plain.disableWebPagePreview);
+  });
+
+  test("TT-8: a tgId still makes it an edit, template or not", () => {
+    const templated = assembleMessage(message(), "b", "4711", TEMPLATE);
+
+    expect(templated.method).toBe("editMessageText");
+    expect(templated.photo).toBeUndefined();
+  });
+
+  test("TT-9: overflow drops {hashtags} first, and every member block survives", () => {
+    const stored = message({ tags: MANY_TAGS, members: fullMembers() });
+    const template = "{body}\n\n{hashtags}";
+
+    // Precondition: it is the hashtag line that pushes this over the limit.
+    expect(assembleMessage(stored, "b", undefined, "{body}").text.length).toBeLessThanOrEqual(
+      TELEGRAM_MESSAGE_LIMIT,
+    );
+
+    const assembled = assembleMessage(stored, "b", undefined, template);
+
+    expect(assembled.text.length).toBeLessThanOrEqual(TELEGRAM_MESSAGE_LIMIT);
+    expect(assembled.text).not.toContain("#templatetag0");
+    expect(memberBlockCount(assembled.text)).toBe(MEMBER_RENDER_LIMIT);
+  });
+
+  test("TT-9: then reduces member blocks, never below one", () => {
+    // A long literal in the template inflates the text past what dropping the
+    // hashtag line alone could recover, so the ladder reaches its third rung.
+    const stored = message({ tags: MANY_TAGS, members: fullMembers() });
+    const assembled = assembleMessage(
+      stored,
+      "b",
+      undefined,
+      `${"l".repeat(1500)}\n{body}\n\n{hashtags}`,
+    );
+
+    expect(assembled.text.length).toBeLessThanOrEqual(TELEGRAM_MESSAGE_LIMIT);
+    expect(assembled.text).not.toContain("#templatetag0");
+    expect(memberBlockCount(assembled.text)).toBeGreaterThan(0);
+    expect(memberBlockCount(assembled.text)).toBeLessThan(MEMBER_RENDER_LIMIT);
+  });
+
+  /**
+   * A template naming neither `{body}` nor `{hashtags}` cannot be shortened.
+   * The ladder returns the same over-limit string on every rung and the Bot API
+   * rejects it — the designed outcome, not a truncation to hide.
+   */
+  test("TT-9: an unshortenable template is emitted over the limit rather than cut", () => {
+    const literal = "z".repeat(TELEGRAM_MESSAGE_LIMIT + 1);
+
+    expect(assembleMessage(message(), "b", undefined, literal).text).toBe(literal);
+  });
+});

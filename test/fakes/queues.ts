@@ -7,6 +7,7 @@ import type {
   SendFailure,
   SendResult,
 } from "../../lib/queues/ports";
+import type { DlqPurger } from "../../lib/queues/purge";
 
 export interface FakeQueueProducer extends QueueProducer {
   /** Every message handed to `send`, flattened across calls, in order. */
@@ -109,5 +110,18 @@ export class FakeDlqInspector implements DlqInspector {
   async peek(queueUrl: string): Promise<DlqMessage[]> {
     this.asked.push(queueUrl);
     return [...(this.contents.get(queueUrl) ?? [])];
+  }
+}
+
+/** An in-memory DLQ purger for R57's cleanup. */
+export class FakeDlqPurger implements DlqPurger {
+  /** Queue urls purged, in order. */
+  readonly purged: string[] = [];
+  /** Set to fail the next purge, as SQS does inside its 60 s cooldown. */
+  error: Error | undefined = undefined;
+
+  async purge(queueUrl: string): Promise<void> {
+    if (this.error !== undefined) throw this.error;
+    this.purged.push(queueUrl);
   }
 }

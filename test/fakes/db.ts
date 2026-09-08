@@ -1,9 +1,11 @@
 import type {
+  LastPost,
   MemberMerge,
   MessageRepo,
   PostsRecord,
   PublishResult,
   SourceRepo,
+  TargetRepo,
 } from "../../lib/db/ports";
 import {
   type DedupCandidate,
@@ -14,6 +16,7 @@ import {
   type MessageStatus,
 } from "../../lib/domain/message";
 import type { Source, SourceCursor } from "../../lib/domain/source";
+import { type Target, TargetSchema } from "../../lib/domain/target";
 
 export interface FakeSourceRepo extends SourceRepo {
   readonly writeCount: number;
@@ -155,6 +158,78 @@ export function fakeMessageRepo(initial: readonly Message[] = []): FakeMessageRe
       writeCount++;
       // D5 — the whole map replaces the stored one, as `SET posts = :posts` does.
       rows.set(id, { ...existing, posts: structuredClone(posts) });
+    },
+  };
+}
+
+
+export interface FakeTargetRepo extends TargetRepo {
+  readonly writeCount: number;
+}
+
+/**
+ * The failure injections target-table#5.3's three no-template cases need.
+ *
+ * A data-only fake cannot express "this one id's read throws while the rest of
+ * the run succeeds", which is exactly the case D5 exists to survive.
+ */
+export interface FakeTargetRepoOptions {
+  readonly failGet?: readonly string[];
+  readonly failRecordLastPost?: readonly string[];
+}
+
+/**
+ * An in-memory `targets` table (target-table#2.2).
+ *
+ * `recordLastPost` creates the row when there is none and parses the result
+ * through `TargetSchema`, because that is what the real `UpdateItem` plus the
+ * schema's `type` default do together — a fake that stored a typeless row would
+ * hide the reason the default exists.
+ */
+export function fakeTargetRepo(
+  initial: readonly Target[] = [],
+  options: FakeTargetRepoOptions = {},
+): FakeTargetRepo {
+  const rows = new Map(initial.map((target) => [target.id, { ...target }]));
+  let writeCount = 0;
+
+  return {
+    get writeCount() {
+      return writeCount;
+    },
+    get: async (id: string) => {
+      if (options.failGet?.includes(id) === true) {
+        throw new Error(`targets.get failed for ${id}`);
+      }
+      const row = rows.get(id);
+      return row === undefined ? undefined : { ...row };
+    },
+    listAll: async () => [...rows.values()].filter((row) => row.deleted !== true),
+    put: async (target: Target) => {
+      writeCount++;
+      rows.set(target.id, { ...target });
+    },
+    patch: async (id: string, delta: Readonly<Record<string, unknown>>) => {
+      const existing = rows.get(id);
+      if (existing === undefined) throw new Error(`no such target: ${id}`);
+      writeCount++;
+      rows.set(id, { ...existing, ...delta } as Target);
+    },
+    recordLastPost: async (id: string, post: LastPost) => {
+      if (options.failRecordLastPost?.includes(id) === true) {
+        throw new Error(`targets.recordLastPost failed for ${id}`);
+      }
+      writeCount++;
+      rows.set(id, TargetSchema.parse({ ...(rows.get(id) ?? { id }), ...post }));
+    },
+    softDelete: async (ids: readonly string[]) => {
+      for (const id of ids) {
+        const existing = rows.get(id);
+        if (existing !== undefined) {
+          writeCount++;
+          rows.set(id, { ...existing, deleted: true });
+        }
+      }
     },
   };
 }
