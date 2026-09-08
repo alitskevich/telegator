@@ -35,7 +35,7 @@ Publish reads each target's row before it assembles, composes with that row's `m
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — two edits to `lib/pipeline/publish/index.test.ts`.
+- [x] **Step 1: Write the failing test** — two edits to `lib/pipeline/publish/index.test.ts`.
 
   (a) extend the `deps` helper so every existing test keeps a registry, and the new ones can supply their own:
 
@@ -200,8 +200,8 @@ describe("the target registry — target-table#5.3", () => {
 
   Add to the file's imports: `fakeTargetRepo` from `../../../test/fakes/db`, `toIsoTimestamp` from `../../domain/date`, and `{ type Target, TargetSchema }` from `../../domain/target`. `fakeBot`'s failure option is `failWith: { description: string }` (`test/fakes/telegram.ts`); `failChatIds: readonly string[]` is the per-chat-id form, if a test ever needs one target to fail while another succeeds.
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run lib/pipeline/publish/index.test.ts`, fails at typecheck with `Property 'targets' is missing in type … but required in type 'PublishDeps'` once the port is required, and at runtime with the two texts being identical.
-- [ ] **Step 3: Minimal implementation** — three edits.
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run lib/pipeline/publish/index.test.ts`, fails at typecheck with `Property 'targets' is missing in type … but required in type 'PublishDeps'` once the port is required, and at runtime with the two texts being identical.
+- [x] **Step 3: Minimal implementation** — three edits.
 
   (a) `lib/pipeline/publish/index.ts` — add the imports (`toIsoTimestamp` from `../../domain/date`, `type Target` from `../../domain/target`, `TargetRepo` beside the existing `MessageRepo` type import), one field on `PublishDeps`:
 
@@ -336,9 +336,34 @@ function buildDeps() {
 
   with `fakeTargetRepo` imported as a value and `FakeTargetRepo` as a type from `../fakes/db`.
 
-- [ ] **Step 4: Run it, expect PASS** — `npx vitest run lib/pipeline/publish test/e2e`; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0.
-- [ ] **Step 5: Commit** — message `feat(target-table): publish reads the target row and mirrors the last post (TT-10 – TT-14)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — `npx vitest run lib/pipeline/publish test/e2e`; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0.
+- [x] **Step 5: Commit** — message `feat(target-table): publish reads the target row and mirrors the last post (TT-10 – TT-14)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
+- Wave 4 · `recordLastPost` is **not** routed through `withRetry` — that ladder's
+  `write` parameter is `"posts" | "status"`, both durable-record writes whose
+  result decides `batchItemFailures`; the mirror is cosmetic and a retry there
+  would delay a batch for a value nothing reads back — cost if wrong: a mirror
+  write lost to one transient DynamoDB error, visible only as a stale
+  `lastPostedDate` on the row.
+- Wave 4 · Reviewer Minor parked: `recordLastPost`'s signature sits on one line
+  rather than the multi-line form the task's snippet showed — Biome's formatter
+  chose it and `biome check` is clean; hand-matching a print-width rule is not
+  worth a fix round — cost if wrong: none.
+- Wave 4 · Reviewer Minor parked: Step 2's "expect a typecheck failure" state was
+  never materialised on its own because the implementer applied Step 1's edits
+  (a) and (b) in one pass; the runtime failures the step predicts were observed
+  instead (6 failed / 33 passed before the implementation) — cost if wrong: none;
+  the red-then-green evidence exists, just not in the typecheck channel.
+
 ## Result
+
+Commits `6840a26` (single commit, no fix rounds), over base `7f8f2b8`.
+Review: spec ✅, quality ✅ — 0 Critical, 0 Important, 2 Minor, both parked above.
+Gates for the wave, run once at `4f20d96` before the tick: tsc 0, vitest
+1751/1751 in 113 files, biome 271 files clean, `next build` 0 (`/targets`
+compiled), `cdk synth` 0. Focused evidence: `npx vitest run
+lib/pipeline/publish/index.test.ts` 39/39, `npx vitest run lib/pipeline/publish
+test/e2e` 209/209.
+TT-10 – TT-14 all covered and green.

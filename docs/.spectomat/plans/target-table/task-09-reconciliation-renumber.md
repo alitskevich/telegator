@@ -52,24 +52,23 @@ and are correct. Do not touch them: `lib/ui/selection.ts`, `lib/ui/selection.tes
 
 ## Steps
 
-- [ ] **Step 1: Locate every reference** — `grep -rn "R5[67]" lib/` and keep only
+- [x] **Step 1: Locate every reference** — `grep -rn "R5[67]" lib/` and keep only
   the six lines in the Files list above. Confirm the count is exactly six lines
   across six files (`assemble.ts` contributes two).
-- [ ] **Step 2: Rewrite them** — `R56` → `R58` in `lib/domain/target.ts`,
+- [x] **Step 2: Rewrite them** — `R56` → `R58` in `lib/domain/target.ts`,
   `lib/db/ports.ts`, `lib/db/targets.ts`; `R57` → `R59` in
   `lib/pipeline/publish/template.ts`, `lib/pipeline/publish/assemble.ts` (both)
   and `lib/pipeline/publish/assemble.test.ts`.
-- [ ] **Step 3: Prove nothing else moved** — the diff touches only comment bodies
+- [x] **Step 3: Prove nothing else moved** — the diff touches only comment bodies
   and one `describe` string; `grep -rn "R5[67]" lib/` returns only the owner's
   files listed under "Why this task exists".
-- [ ] **Step 4: Run the gates** — `npm run gates && npm run build && npx cdk synth`
+- [x] **Step 4: Run the gates** — `npm run gates && npm run build && npx cdk synth`
   all exit 0. The test count is unchanged from the previous wave.
-- [ ] **Step 5: Commit** — message `docs(target-table): point the shipped comments at R58/R59`;
+- [x] **Step 5: Commit** — message `docs(target-table): point the shipped comments at R58/R59`;
   the controller stages this task's Files and commits — an implementer subagent
   never runs git
 
 ## Rulings
-
 - Wave 3 · The build's reconciliations are **R58** (the table) and **R59** (the
   per-target template), not the spec D12's R56/R57 — both of those numbers were
   taken by the repository owner's select-all and DLQ-purge work in
@@ -81,4 +80,17 @@ and are correct. Do not touch them: `lib/ui/selection.ts`, `lib/ui/selection.tes
   ruling — cost if wrong: a reader of a closed task file meets a number the
   source no longer carries, and finds this task's Rulings one grep away.
 
+- Wave 4 · Seven lines moved, not six: `lib/pipeline/publish/assemble.ts`
+  carries two `R57` occurrences and the task's own Files list says so, while its
+  Step 1 sentence counts files. The count in Step 1 is the defect, not the
+  edit — cost if wrong: none; a post-commit grep confirms `R56`/`R57` now
+  survive only in the repository owner's select-all and DLQ-purge files.
+
 ## Result
+
+Commit `4f20d96` (single commit, no fix rounds), over base `7f8f2b8`.
+Review: spec ✅, quality ✅ — 0 Critical, 0 Important, 0 Minor.
+6 files, +7/-7, comment bodies and one `describe` title only.
+Gates for the wave, run once at `4f20d96` before the tick: tsc 0, vitest
+1751/1751 in 113 files, biome 271 files clean, `next build` 0, `cdk synth` 0.
+Covers no criterion: it is the correction the plan lacked.

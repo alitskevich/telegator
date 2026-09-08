@@ -24,6 +24,7 @@ One traversal of the whole pipeline over fakes proves that a source publishing t
 - Create: `test/e2e/targets.test.ts`
 - Modify: `docs/telegator.md` (§25's table only)
 - Modify: `docs/.spectomat/specs/target-table.md` (§11's table only)
+- Modify: `.env.local.example` (one line in the Data block)
 
 ## Interfaces
 
@@ -203,6 +204,20 @@ describe("TT-E2E-2 — the registry fills itself", () => {
 ```
 
   and one row each for P2 (build order), P3 (`PipelineWorld.targets` optional), P4 (`fakeTargetRepo`'s failure injections), P5 (TT-18's grant half in `pipeline-events.test.ts`), P6 (`test/e2e/targets.test.ts`'s name), copied from the plan's Rulings section with the same reasoning.
+
+- [ ] **Step 3b: Document the third table's env var** — add, in `.env.local.example`'s
+  `── Data (§7.2) ──` block directly under `TELEGATOR_MESSAGES_TABLE`:
+
+  ```
+  TELEGATOR_TARGETS_TABLE=telegator-dev-targets
+  ```
+
+  Nothing else in that file changes. Wave 4 ruling: `actions/context.ts` now
+  builds the targets repo at module scope, so without this line a clone whose
+  `.env.local` predates this build fails `npm run build` at page-data collection
+  with `missing required environment variable TELEGATOR_TARGETS_TABLE`. The file
+  holds names, never secrets, and `telegator-dev-targets` is what
+  `config.name("targets")` produces in the dev stack.
 
 - [ ] **Step 4: Run it, expect PASS** — `npx vitest run test/e2e test/specCitations.test.ts test/acceptance.test.ts`; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0. `test/specCitations.test.ts` is the one that proves the two new §25 rows did not break a line citation.
 - [ ] **Step 5: Commit** — message `feat(target-table): end-to-end template and registry criteria, §25 R58/R59 (TT-E2E-1, TT-E2E-2)`; the controller stages this task's Files and commits — an implementer subagent never runs git

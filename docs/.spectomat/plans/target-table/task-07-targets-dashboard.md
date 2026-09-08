@@ -39,7 +39,7 @@ An operator can see every target row, create one, edit its `type` and `messageTe
 
 ## Steps
 
-- [ ] **Step 1: Write the failing test** — four edits.
+- [x] **Step 1: Write the failing test** — four edits.
 
   (a) `lib/dashboard/records.test.ts` — add `fakeTargetRepo` to the fakes import, `TARGET_WRITABLE_FIELDS` to the `./records` import, a `let targets` beside `sources`, `targets = fakeTargetRepo([{ id: "a", type: "telegram_channel" }]);` in `beforeEach`, `targets` in the `deps()` object, and this describe:
 
@@ -263,8 +263,8 @@ describe("the nav (target-table#3.2)", () => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL** — `npx vitest run lib/dashboard components/TargetsTable.test.tsx test/layout.test.ts test/pageAuth.test.ts`, fails with `Failed to resolve import "./TargetsTable"` and `Invalid discriminator value. Expected 'sources' | 'messages'`.
-- [ ] **Step 3: Minimal implementation** — six edits.
+- [x] **Step 2: Run it, expect FAIL** — `npx vitest run lib/dashboard components/TargetsTable.test.tsx test/layout.test.ts test/pageAuth.test.ts`, fails with `Failed to resolve import "./TargetsTable"` and `Invalid discriminator value. Expected 'sources' | 'messages'`.
+- [x] **Step 3: Minimal implementation** — six edits.
 
   (a) `lib/ui/columns.ts` — append:
 
@@ -664,9 +664,38 @@ export default async function TargetsPage() {
   { href: "/targets", label: "Targets" },
 ```
 
-- [ ] **Step 4: Run it, expect PASS** — `npx vitest run lib/dashboard components test/layout.test.ts test/pageAuth.test.ts test/boundaries.test.ts`; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0. `npm run build` is the gate that proves the new route compiles — no unit test bundles `app/`.
-- [ ] **Step 5: Commit** — message `feat(target-table): the /targets dashboard page (TT-19 – TT-22)`; the controller stages this task's Files and commits — an implementer subagent never runs git
+- [x] **Step 4: Run it, expect PASS** — `npx vitest run lib/dashboard components test/layout.test.ts test/pageAuth.test.ts test/boundaries.test.ts`; then the full gates: `npm run gates && npm run build && npx cdk synth` all exit 0. `npm run build` is the gate that proves the new route compiles — no unit test bundles `app/`.
+- [x] **Step 5: Commit** — message `feat(target-table): the /targets dashboard page (TT-19 – TT-22)`; the controller stages this task's Files and commits — an implementer subagent never runs git
 
 ## Rulings
 
+- Wave 4 · The nested ternary in the cell body was lifted into an `EditableCell`
+  component in the same file, as the task's Step 3(e) pre-authorised, because
+  Biome's `noNestedTernary` rejected the snippet as written — cost if wrong:
+  none; same markup, same aria-labels, and a suppression was the only
+  alternative, which the gates forbid.
+- Wave 4 · Reviewer Minor parked: `EditableCell` indexes the row with
+  `row[column as keyof Target]`, a type assertion the task's Constraints ban.
+  The snippet the task supplied contains it, and both shipped sibling tables
+  (`SourcesTable`, `MessagesTable`) already use the identical idiom; making this
+  one table the exception would leave three tables with two conventions — cost
+  if wrong: one assertion, removable in a later sweep over all three tables.
+- Wave 4 · `.env.local.example` is missing `TELEGATOR_TARGETS_TABLE`, so a fresh
+  clone's `npm run build` fails at page-data collection now that
+  `actions/context.ts` builds the repo at module scope. The file is in no task's
+  Files list; the gap is assigned to Task 8, which already owns this build's
+  documentation, and appears there as a sixth step — cost if wrong: a developer
+  with a stale `.env.local` meets one clear "missing required environment
+  variable" message.
+
 ## Result
+
+Commits `30a6f6e` (single commit, no fix rounds), over base `7f8f2b8`.
+Review: spec ✅, quality ✅ — 0 Critical, 0 Important, 2 Minor, both parked above.
+14 files, +606/-17, exactly the Files list.
+Gates for the wave, run once at `4f20d96` before the tick: tsc 0, vitest
+1751/1751 in 113 files, biome 271 files clean, `next build` 0 (`/targets` is a
+dynamic route in the build output), `cdk synth` 0. Focused evidence: `npx vitest
+run lib/dashboard components test/layout.test.ts test/pageAuth.test.ts
+test/boundaries.test.ts` 290/290.
+TT-19 – TT-22 all covered and green.

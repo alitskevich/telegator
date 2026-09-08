@@ -64,16 +64,16 @@ One file per task under `docs/.spectomat/plans/target-table/`, from `templates/t
 | 1 | `task-01-target-schema.md` | `TargetSchema`, `TargetConfigInput`, `toIsoTimestamp` | TT-1, TT-2, TT-15 | — | [x] |
 | 2 | `task-02-template-renderer.md` | `lib/pipeline/publish/template.ts` | TT-3, TT-4, TT-5, TT-6 | — | [x] |
 | 3 | `task-03-target-repo.md` | `TargetRepo`, the fake, the DynamoDB adapter | TT-16 | 1 | [x] |
-| 4 | `task-04-targets-table-infra.md` | the table, the env var, the two grants | TT-17, TT-18 | — | [ ] |
+| 4 | `task-04-targets-table-infra.md` | the table, the env var, the two grants | TT-17, TT-18 | — | [x] |
 | 5 | `task-05-assemble-template.md` | `assembleMessage`'s fourth argument | TT-7, TT-8, TT-9 | 2 | [x] |
-| 6 | `task-06-publish-target-row.md` | the publish loop, the handler, the e2e harness | TT-10, TT-11, TT-12, TT-13, TT-14 | 1, 3, 4, 5 | [ ] |
-| 7 | `task-07-targets-dashboard.md` | `/targets`: columns, actions, table, page, nav | TT-19, TT-20, TT-21, TT-22 | 1, 3, 4 | [ ] |
+| 6 | `task-06-publish-target-row.md` | the publish loop, the handler, the e2e harness | TT-10, TT-11, TT-12, TT-13, TT-14 | 1, 3, 4, 5 | [x] |
+| 7 | `task-07-targets-dashboard.md` | `/targets`: columns, actions, table, page, nav | TT-19, TT-20, TT-21, TT-22 | 1, 3, 4 | [x] |
 | 8 | `task-08-e2e-and-docs.md` | the end-to-end criteria and §25's two rows | TT-E2E-1, TT-E2E-2 | 6, 7 | [ ] |
-| 9 | `task-09-reconciliation-renumber.md` | the shipped comments' R56/R57 → R58/R59 | — (a correction) | 1, 2, 3, 5 | [ ] |
+| 9 | `task-09-reconciliation-renumber.md` | the shipped comments' R56/R57 → R58/R59 | — (a correction) | 1, 2, 3, 5 | [x] |
 
 Expected waves: **W1** = 1, 2, 4 · **W2** = 3, 5 · **W3** = 6, 7 · **W4** = 8.
 
-Actual waves: **W1** = 1, 2 · **W2** = 3, 5 (Task 4 held out of both, see the rulings below) · **W3** = 4 · remainder unchanged, with Task 9 added in wave 3 and free to ride any later wave.
+Actual waves: **W1** = 1, 2 · **W2** = 3, 5 (Task 4 held out of both, see the rulings below) · **W3** = 4 · **W4** = 6, 7, 9 · **W5** = 8.
 
 ## Coverage
 
@@ -125,3 +125,6 @@ Planning rulings (phase B), each a divergence from the spec's letter that the bu
 - Wave 2 · Part of Tasks 3 and 5 rode into the concurrent session's tree-wide commit `7addb67 "upui"` and history was not rewritten; the factory's commits `09c654d` and `a7938c8` carry the remainder, and each task's diff was reviewed over `de5d99d..HEAD` restricted to its Files — rewriting another session's commit in a shared tree is worse than a split trail — cost if wrong: two tasks whose content spans two commits each.
 - Wave 3 · The build's two reconciliation numbers are **R58** (the table) and **R59** (the per-target template), not the spec D12's R56/R57 — the repository owner's own work took R56 (the select-all toolbars) and R57 (the DLQ "Cleanup all") in `docs/telegator.md` §25 while this plan was being written, so Task 8 would have collided head-on and five comments already pointed a reader at the wrong row. Task 4's comments were corrected in its fix round; the six references Tasks 1, 2, 3 and 5 already committed are swept by the new Task 9 — cost if wrong: two numbers in §25 and a comment sweep.
 - Wave 3 · Task 4 ran alone. Tasks 6 and 7 both depend on it and 9 did not yet exist, so the wave had one member — cost if wrong: none.
+- Wave 4 · Tasks 6, 7 and 9 ran as one wave of three — the first wave of this plan to reach the cap. Their Files are pairwise disjoint and every dependency was closed, so the only shared cost was one gate run — cost if wrong: none.
+- Wave 4 · The overview's `Done` column had Task 4 unticked although its task file was fully closed by wave 3; corrected in this wave's tick. Readiness is judged on the task files, never this column, so nothing was mis-scheduled — cost if wrong: a reader of the overview alone believes a closed task is open.
+- Wave 4 · `.env.local.example` gains `TELEGATOR_TARGETS_TABLE` in **Task 8**, not in Task 7 that exposed the gap: `actions/context.ts` now builds the targets repo at module scope, so a clone whose `.env.local` predates this build fails `npm run build` at page-data collection. No task's Files listed the example file; Task 8 already owns this build's documentation, so it takes the line — cost if wrong: one line of local setup documentation lands a wave later than the code that needs it.
