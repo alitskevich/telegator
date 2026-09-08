@@ -258,6 +258,7 @@ describe("§3.3 aggregate consumer", () => {
       patch: (id, delta) => base.patch(id, delta),
       softDelete: (ids) => base.softDelete(ids),
       markPublished: (published) => base.markPublished(published),
+      recordPosts: (posts) => base.recordPosts(posts),
     };
     const h = harness({ messages: observing });
 
@@ -386,6 +387,7 @@ describe("§3.3 aggregate consumer", () => {
       patch: (id, delta) => base.patch(id, delta),
       softDelete: (ids) => base.softDelete(ids),
       markPublished: (published) => base.markPublished(published),
+      recordPosts: (posts) => base.recordPosts(posts),
     };
     const h = harness({ messages: failing });
 

@@ -327,14 +327,30 @@ describe("createMessageRepo writes", () => {
     });
   });
 
-  test("markPublished records the status, Telegram id and timestamps", async () => {
+  test("MT-23: markPublished sets only status and ts", async () => {
     const s = stub();
 
-    await repoWith(s).markPublished({ id: ITEM_ID, tgId: "4711", tgAt: 9, ts: 9 });
+    await repoWith(s).markPublished({ id: ITEM_ID, ts: 9 });
 
-    const values = s.input()?.ExpressionAttributeValues as Record<string, unknown>;
-    expect(Object.values(values)).toContain("published");
-    expect(Object.values(values)).toContain("4711");
+    const input = s.input();
+    expect(input?.Key).toEqual({ id: ITEM_ID });
+    expect(input?.UpdateExpression).toBe("SET #status = :status, #ts = :ts");
+    expect(input?.ExpressionAttributeValues).toEqual({ ":status": "published", ":ts": 9 });
+  });
+
+  /** D5 — the whole map, so a row that never had one is created rather than failed on. */
+  test("MT-23: recordPosts issues one UpdateItem setting the whole post map", async () => {
+    const s = stub();
+    const posts = { a: { tgId: "1", tgAt: 5 }, b: { tgId: "2", tgAt: 6 } };
+
+    await repoWith(s).recordPosts({ id: ITEM_ID, posts });
+
+    expect(s.commands).toHaveLength(1);
+    const input = s.input();
+    expect(input?.Key).toEqual({ id: ITEM_ID });
+    expect(input?.UpdateExpression).toBe("SET #posts = :posts");
+    expect(input?.ExpressionAttributeNames).toEqual({ "#posts": "posts" });
+    expect(input?.ExpressionAttributeValues).toEqual({ ":posts": posts });
   });
 });
 

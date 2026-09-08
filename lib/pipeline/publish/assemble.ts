@@ -126,12 +126,19 @@ export interface AssembledMessage {
 }
 
 /**
- * §3.4 L324–347 — the whole publish payload decision for one message.
+ * §3.4 L324–347 — the whole publish payload decision for one message on one
+ * target (multi-target#3.4).
  *
- * The stage that calls this owns the status check (L317), the pacing and the
- * retry (L348); this function owns only what to send.
+ * The stage that calls this owns the status check (L317), the target loop
+ * (multi-target#5.1), the pacing and the retry (L348); this function owns only
+ * what to send. `tgId` is the post this target already has, from `postFor`
+ * (multi-target#5.2) — the record's own frozen `tgId` is never read here.
  */
-export function assembleMessage(message: Message): AssembledMessage {
+export function assembleMessage(
+  message: Message,
+  target: string,
+  tgId: string | undefined,
+): AssembledMessage {
   const rendered = renderMembers(message.members);
   const blocks = rendered === "" ? [] : rendered.split(BLOCK_SEPARATOR);
 
@@ -149,14 +156,14 @@ export function assembleMessage(message: Message): AssembledMessage {
     }),
   );
 
-  const chatId = chatIdFor(message.tgChannel);
+  const chatId = chatIdFor(target);
   /** §3.4 L347 — "link preview disabled when the message has a title or image". */
   const disableWebPagePreview = hasValue(message.title) || hasValue(message.image);
 
   // §3.4 L345 — a `tgId` makes this an edit (AC-4.1, L354), and an edit never
   // carries a photo: Telegram's editMessageText cannot change media, so a photo
   // here would be a second post rather than an update.
-  if (hasValue(message.tgId)) {
+  if (hasValue(tgId)) {
     return { text, method: "editMessageText", disableWebPagePreview, chatId };
   }
 

@@ -47,6 +47,8 @@ export interface FakeBotOptions {
   readonly failWith?: { readonly description: string };
   /** The first call answers a 429 carrying `retry_after`; later calls succeed. */
   readonly rateLimitFirstCall?: { readonly retryAfter: number };
+  /** Every call to one of these chat ids answers `{ok: false}`; the rest succeed (plan ruling P6). */
+  readonly failChatIds?: readonly string[];
 }
 
 export interface FakeBot extends TelegramBot {
@@ -64,9 +66,9 @@ export function fakeBot(options: FakeBotOptions = {}): FakeBot {
   let nextMessageId = 1000;
   let rateLimited = options.rateLimitFirstCall !== undefined;
 
-  const respond = (): TelegramResponse => {
-    if (options.failWith !== undefined) {
-      return { ok: false, description: options.failWith.description };
+  const respond = (chatId: string): TelegramResponse => {
+    if (options.failWith !== undefined || options.failChatIds?.includes(chatId) === true) {
+      return { ok: false, description: options.failWith?.description ?? "chat not found" };
     }
 
     if (rateLimited && options.rateLimitFirstCall !== undefined) {
@@ -86,15 +88,15 @@ export function fakeBot(options: FakeBotOptions = {}): FakeBot {
     calls,
     sendMessage: async (args) => {
       calls.push({ method: "sendMessage", args });
-      return respond();
+      return respond(args.chatId);
     },
     sendPhoto: async (args) => {
       calls.push({ method: "sendPhoto", args });
-      return respond();
+      return respond(args.chatId);
     },
     editMessageText: async (args) => {
       calls.push({ method: "editMessageText", args });
-      return respond();
+      return respond(args.chatId);
     },
   };
 }

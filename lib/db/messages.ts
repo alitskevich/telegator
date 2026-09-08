@@ -20,7 +20,7 @@ import {
   type MessageStatus,
 } from "../domain/message";
 import { softDeleteCommand, updateAttributes } from "./patch";
-import type { MemberMerge, MessageRepo, PublishResult } from "./ports";
+import type { MemberMerge, MessageRepo, PostsRecord, PublishResult } from "./ports";
 
 /**
  * The DynamoDB adapter for `messages` (§2.3, §7.2 L634).
@@ -232,25 +232,32 @@ export function createMessageRepo(options: MessageRepoOptions): MessageRepo {
       );
     },
 
-    /** §3.4 L350 — the result write after a successful send or edit. */
-    markPublished: async ({ id, tgId, tgAt, ts }: PublishResult): Promise<void> => {
+    /** multi-target#6 — status and `ts` only; `tgId`/`tgAt` are frozen (R55). */
+    markPublished: async ({ id, ts }: PublishResult): Promise<void> => {
       await client.send(
         new UpdateCommand({
           TableName: tableName,
           Key: { id },
-          UpdateExpression: "SET #status = :status, #tgId = :tgId, #tgAt = :tgAt, #ts = :ts",
-          ExpressionAttributeNames: {
-            "#status": "status",
-            "#tgId": "tgId",
-            "#tgAt": "tgAt",
-            "#ts": "ts",
-          },
-          ExpressionAttributeValues: {
-            ":status": "published",
-            ":tgId": tgId,
-            ":tgAt": tgAt,
-            ":ts": ts,
-          },
+          UpdateExpression: "SET #status = :status, #ts = :ts",
+          ExpressionAttributeNames: { "#status": "status", "#ts": "ts" },
+          ExpressionAttributeValues: { ":status": "published", ":ts": ts },
+        }),
+      );
+    },
+
+    /**
+     * multi-target#6, D5 — the whole map. A nested `SET #posts.#t` would fail on
+     * a row that has no map yet, and the FIFO group serialises writers per
+     * message, so replacing the map races nothing.
+     */
+    recordPosts: async ({ id, posts }: PostsRecord): Promise<void> => {
+      await client.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: { id },
+          UpdateExpression: "SET #posts = :posts",
+          ExpressionAttributeNames: { "#posts": "posts" },
+          ExpressionAttributeValues: { ":posts": posts },
         }),
       );
     },

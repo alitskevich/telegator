@@ -1,4 +1,10 @@
-import type { MemberMerge, MessageRepo, PublishResult, SourceRepo } from "../../lib/db/ports";
+import type {
+  MemberMerge,
+  MessageRepo,
+  PostsRecord,
+  PublishResult,
+  SourceRepo,
+} from "../../lib/db/ports";
 import {
   type DedupCandidate,
   DedupCandidateSchema,
@@ -137,11 +143,18 @@ export function fakeMessageRepo(initial: readonly Message[] = []): FakeMessageRe
         members: { ...existing.members, ...members },
       });
     },
-    markPublished: async ({ id, tgId, tgAt, ts }: PublishResult) => {
+    markPublished: async ({ id, ts }: PublishResult) => {
       const existing = rows.get(id);
       if (existing === undefined) throw new Error(`no such message: ${id}`);
       writeCount++;
-      rows.set(id, { ...existing, status: "published", tgId, tgAt, ts });
+      rows.set(id, { ...existing, status: "published", ts });
+    },
+    recordPosts: async ({ id, posts }: PostsRecord) => {
+      const existing = rows.get(id);
+      if (existing === undefined) throw new Error(`no such message: ${id}`);
+      writeCount++;
+      // D5 — the whole map replaces the stored one, as `SET posts = :posts` does.
+      rows.set(id, { ...existing, posts: structuredClone(posts) });
     },
   };
 }

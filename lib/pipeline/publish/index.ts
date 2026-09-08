@@ -1,13 +1,16 @@
 import type { Clock } from "../../clock";
 import type { MessageRepo } from "../../db/ports";
+import type { Message, Post } from "../../domain/message";
+import { resolveTargets } from "../../domain/target";
 import type { Logger } from "../../logging/logger";
 import type { MetricSink } from "../../metrics/ports";
 import { PublishQueuePayloadSchema } from "../../queues/ports";
 import type { TelegramBot, TelegramResponse } from "../../telegram/ports";
 import { type AssembledMessage, assembleMessage } from "./assemble";
+import { isCurrent, postFor } from "./posts";
 
 /**
- * §3.4 — the publish consumer.
+ * §3.4 — the publish consumer, once per target (multi-target#3.4, #5.1; R55).
  *
  * Batch size is 1 (§3.4 L313), deliberately: each send is rate-limited against
  * Telegram and the FIFO message group already serialises work per message. This
@@ -109,20 +112,8 @@ export async function runPublish(
       continue;
     }
 
-    /**
-     * §8.4 L810's soft delete, honoured before the status check.
-     *
-     * *Reconciliation.* §3.4 L317 gates this stage on `status` alone, and
-     * `softDelete` writes `deleted` without touching it — so a message an
-     * operator deleted from the dashboard was still posted if its publish job
-     * was already on the queue. R16 hides a deleted message from every read the
-     * dashboard makes, so the operator could neither see it coming nor tell it
-     * had happened.
-     *
-     * Acknowledged rather than failed, for the same reason as a missing
-     * message: a retry finds it deleted too, so failing would loop until the
-     * redrive policy gave up and fill §3.5's DLQ with posts nobody wants sent.
-     */
+    // §8.4 L810's soft delete, honoured before the status check (R16): a
+    // deleted message is acknowledged, since a retry finds it deleted too.
     if (stored.deleted === true) {
       deps.logger.info("publish skipped: message is deleted", { messageId });
       continue;
@@ -130,100 +121,138 @@ export async function runPublish(
 
     /**
      * §3.4 L317 — "If `status !== 'topublish'`, acknowledge and exit — the work
-     * was superseded."
-     *
-     * This is also the guard that actually protects Telegram from a duplicate
-     * send. SQS's 5-minute FIFO deduplication window is a floor, not a lock, so
-     * a second delivery can arrive; AC-4.6 is a property of SQS, but this check
-     * is ours and is what makes a leaked duplicate harmless.
+     * was superseded." Also the guard that protects Telegram from a duplicate
+     * delivery: SQS's 5-minute FIFO window is a floor, not a lock (AC-4.6).
      */
     if (stored.status !== PUBLISHABLE_STATUS) {
       deps.logger.info("publish superseded", { messageId, status: stored.status });
       continue;
     }
 
-    const assembled = assembleMessage(stored);
-    const wasEdit = assembled.method === "editMessageText";
-    const response = await send(deps.bot, assembled, stored.tgId);
+    const outcome = await publishTargets(messageId, stored, deps);
 
-    if (!response.ok) {
-      // §4.2 L386 — `ok` is the error signal, not the HTTP status. Reporting the
-      // record sends it back through SQS retry and ultimately to the DLQ (§3.4
-      // L350). Crucially, no status or tgId is written: a tgId that does not
-      // exist on Telegram would turn every future publish into an edit of
-      // nothing.
-      deps.metrics.count("TelegramApiErrors", 1, { Method: assembled.method });
-      deps.logger.error("telegram rejected the send", {
-        messageId,
-        method: assembled.method,
-        description: response.description,
-      });
+    if (outcome === "unrecorded") {
+      /**
+       * D6 — a post is live and its record did not land. ACKNOWLEDGED: a
+       * redelivery would find no post for that target and send it again, the
+       * duplicate §9.5 L978 exists to prevent. The error log named the target
+       * and the tgId, which is the only handle an operator has on the post.
+       */
+      continue;
+    }
+
+    if (outcome === "rejected") {
+      // multi-target#3.4 step 4 — reported so SQS redelivers. The targets that
+      // succeeded are recorded and current, so the redelivery sends to the rest.
       batchItemFailures.push({ itemIdentifier: record.messageId });
       continue;
     }
 
-    const now = deps.clock.now();
-    // §2.3 L161 — an edit keeps the id it is editing; a first send takes the
-    // one Telegram just issued.
-    const tgId = stored.tgId ?? String(response.result?.message_id ?? "");
-
-    const recorded = await recordPublished(deps, { id: messageId, tgId, tgAt: now, ts: now });
-
-    if (!recorded) {
-      /**
-       * The post is live on Telegram and the status write will not land.
-       *
-       * The message is ACKNOWLEDGED, not reported. Reporting it returns it to
-       * SQS, and a redelivery finds `status: topublish` with no stored `tgId` —
-       * so §3.4 L317's guard passes, `assembleMessage` picks `sendMessage`
-       * again, and subscribers get a second post that no future edit can reach.
-       * That is the outcome §9.5 L978 calls out as the thing that must never
-       * happen. §3.4's "Failure → throw" is about a failure to publish; this
-       * publish succeeded, and only its bookkeeping did not.
-       *
-       * The trade is deliberate: a duplicate is visible to every subscriber and
-       * unrecoverable, while an unrecorded post is one record an operator can
-       * repair — provided they can find it, which is why the tgId is logged.
-       */
-      deps.logger.error("published but not recorded", {
-        messageId,
-        tgId,
-        method: assembled.method,
-        // Named so the log line says what to do, not merely what broke.
-        action: "message is live on Telegram; set status and tgId by hand",
-      });
-      continue;
-    }
-
-    deps.metrics.count(wasEdit ? "MessagesEdited" : "MessagesPublished", 1);
-    deps.logger.info("published", { messageId, method: assembled.method });
+    /**
+     * multi-target#5.1 — every target has a current post. Plan ruling P3: if
+     * this write fails after its retries the record is REPORTED, unlike an
+     * unrecorded post — a redelivery here is safe, because every post is
+     * recorded and current, so it skips them all and retries only this write.
+     */
+    const published = await withRetry(deps, messageId, "status", () =>
+      deps.messages.markPublished({ id: messageId, ts: deps.clock.now() }),
+    );
+    if (!published) batchItemFailures.push({ itemIdentifier: record.messageId });
   }
 
   return { batchItemFailures };
 }
 
-/**
- * Write the publish result, retrying a transient failure.
- *
- * Returns `false` rather than throwing, because the caller's decision is not
- * "did this fail" but "is the post already live" — and the answer to that is
- * yes in every path that reaches here.
- */
-async function recordPublished(
+type TargetsOutcome = "published" | "rejected" | "unrecorded";
+
+/** multi-target#5.1 — the per-target loop, in list order. */
+async function publishTargets(
+  messageId: string,
+  stored: Message,
   deps: PublishDeps,
-  result: { id: string; tgId: string; tgAt: number; ts: number },
+): Promise<TargetsOutcome> {
+  const posts: Record<string, Post> = { ...stored.posts };
+  let rejected = false;
+  let unrecorded = false;
+
+  for (const target of resolveTargets(stored.tgChannel)) {
+    const existing = postFor(stored, posts, target);
+    // D4 — a current post is skipped: Telegram rejects an edit that changes nothing.
+    if (existing !== undefined && isCurrent(existing, stored)) continue;
+
+    const assembled = assembleMessage(stored, target, existing?.tgId);
+    const response = await send(deps.bot, assembled, existing?.tgId);
+
+    if (!response.ok) {
+      // §4.2 L386 — `ok` is the error signal, not the HTTP status. Nothing is
+      // written for this target: a tgId that does not exist on Telegram would
+      // turn every future publish into an edit of nothing.
+      deps.metrics.count("TelegramApiErrors", 1, { Method: assembled.method });
+      deps.logger.error("telegram rejected the send", {
+        messageId,
+        target,
+        method: assembled.method,
+        description: response.description,
+      });
+      rejected = true;
+      continue;
+    }
+
+    // §2.3 L161 — an edit keeps the id it is editing; a first send takes the
+    // one Telegram just issued.
+    const tgId = existing?.tgId ?? String(response.result?.message_id ?? "");
+    posts[target] = { tgId, tgAt: deps.clock.now() };
+
+    // D5 — the whole map after every send, so a later rejection leaves the
+    // successes on record and the redelivery skips them.
+    const recorded = await withRetry(deps, messageId, "posts", () =>
+      deps.messages.recordPosts({ id: messageId, posts }),
+    );
+
+    if (!recorded) {
+      deps.logger.error("published but not recorded", {
+        messageId,
+        target,
+        tgId,
+        method: assembled.method,
+        // Named so the log line says what to do, not merely what broke.
+        action: "post is live on Telegram; set posts[target] by hand",
+      });
+      unrecorded = true;
+      continue;
+    }
+
+    deps.metrics.count(existing === undefined ? "MessagesPublished" : "MessagesEdited", 1);
+    deps.logger.info("published", { messageId, target, method: assembled.method });
+  }
+
+  if (unrecorded) return "unrecorded";
+  return rejected ? "rejected" : "published";
+}
+
+/**
+ * Retry a transient write failure. Returns `false` rather than throwing,
+ * because the caller's decision is not "did this fail" but "is the post
+ * already live" — and the answer to that is yes in every path that reaches here.
+ */
+async function withRetry(
+  deps: PublishDeps,
+  messageId: string,
+  write: "posts" | "status",
+  attempt: () => Promise<void>,
 ): Promise<boolean> {
   const wait = deps.wait ?? sleep;
 
-  for (let attempt = 1; attempt <= STATUS_WRITE_ATTEMPTS; attempt += 1) {
+  for (let n = 1; n <= STATUS_WRITE_ATTEMPTS; n += 1) {
     try {
-      await deps.messages.markPublished(result);
+      await attempt();
       return true;
     } catch (error) {
-      if (attempt === STATUS_WRITE_ATTEMPTS) {
-        deps.logger.warn("status write exhausted its retries", {
-          messageId: result.id,
-          attempts: attempt,
+      if (n === STATUS_WRITE_ATTEMPTS) {
+        deps.logger.warn("write exhausted its retries", {
+          messageId,
+          write,
+          attempts: n,
           error: error instanceof Error ? error.message : String(error),
         });
         return false;
@@ -231,7 +260,7 @@ async function recordPublished(
 
       // A throttled table is the case this exists for, and an immediate retry
       // arrives while it is still throttled.
-      await wait(STATUS_WRITE_BACKOFF_MS * attempt);
+      await wait(STATUS_WRITE_BACKOFF_MS * n);
     }
   }
 

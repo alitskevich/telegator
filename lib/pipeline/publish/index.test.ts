@@ -67,7 +67,7 @@ describe("runPublish", () => {
 
   /** AC-4.1: "A message with `tgId` triggers an edit, not a new post." */
   test("AC-4.1: a message with tgId triggers an edit, not a new post", async () => {
-    const { bot, deps: d } = deps([message({ id: "chan_a/1", tgId: "4711", tgAt: 900 })]);
+    const { bot, deps: d } = deps([message({ id: "chan_a/1", ts: 1000, tgId: "4711", tgAt: 900 })]);
 
     await runPublish([record("chan_a/1")], d);
 
@@ -141,24 +141,28 @@ describe("runPublish", () => {
     expect(after?.tgId).toBeUndefined();
   });
 
-  test("records the Telegram id, timestamp and published status on success", async () => {
+  test("records the post under the target, then the published status", async () => {
     const { messages, deps: d } = deps([message({ id: "chan_a/1" })]);
 
     await runPublish([record("chan_a/1")], d);
     const after = await messages.get("chan_a/1");
 
     expect(after?.status).toBe("published");
-    expect(after?.tgId).toBeDefined();
-    expect(after?.tgAt).toBe(NOW);
+    expect(after?.posts.telegator_news?.tgId).toBeDefined();
+    expect(after?.posts.telegator_news?.tgAt).toBe(NOW);
     expect(after?.ts).toBe(NOW);
+    // The legacy pair is frozen (multi-target#2.4): never written again.
+    expect(after?.tgId).toBeUndefined();
   });
 
   test("an edit preserves the original tgId rather than issuing a new one", async () => {
-    const { messages, deps: d } = deps([message({ id: "chan_a/1", tgId: "4711" })]);
+    const { messages, deps: d } = deps([
+      message({ id: "chan_a/1", ts: 1000, tgId: "4711", tgAt: 900 }),
+    ]);
 
     await runPublish([record("chan_a/1")], d);
 
-    expect((await messages.get("chan_a/1"))?.tgId).toBe("4711");
+    expect((await messages.get("chan_a/1"))?.posts.telegator_news?.tgId).toBe("4711");
   });
 
   test("counts a first send and an edit as different metrics (§7.7 L731)", async () => {
@@ -167,7 +171,7 @@ describe("runPublish", () => {
     expect(metrics.get("MessagesPublished")).toBe(1);
     expect(metrics.get("MessagesEdited")).toBe(0);
 
-    const second = deps([message({ id: "chan_b/2", tgId: "4711" })]);
+    const second = deps([message({ id: "chan_b/2", ts: 1000, tgId: "4711", tgAt: 900 })]);
     await runPublish([record("chan_b/2")], second.deps);
     expect(metrics.get("MessagesEdited")).toBe(1);
   });
@@ -228,9 +232,9 @@ describe("runPublish when the status write fails after a successful send", () =>
   /**
    * The window item 7.3 found. §3.4 L350 sends first and records second, so a
    * transient DynamoDB failure between the two leaves a live Telegram post with
-   * `status: topublish` and no `tgId` — and on redelivery §3.4 L317's guard sees
-   * `topublish`, `assembleMessage` sees no `tgId`, and Telegram gets a SECOND
-   * post that no future edit can ever reach.
+   * `status: topublish` and no recorded post — and on redelivery §3.4 L317's
+   * guard sees `topublish`, `postFor` sees nothing recorded, and Telegram gets a
+   * SECOND post that no future edit can ever reach.
    */
   function failingRepo(stored: readonly Message[], failures: number) {
     const base = fakeMessageRepo(stored);
@@ -242,10 +246,10 @@ describe("runPublish when the status write fails after a successful send", () =>
         get attempts() {
           return attempts;
         },
-        markPublished: async (result: Parameters<typeof base.markPublished>[0]) => {
+        recordPosts: async (posts: Parameters<typeof base.recordPosts>[0]) => {
           attempts += 1;
           if (attempts <= failures) throw new Error("ProvisionedThroughputExceededException");
-          await base.markPublished(result);
+          await base.recordPosts(posts);
         },
       },
       base,
@@ -283,14 +287,7 @@ describe("runPublish when the status write fails after a successful send", () =>
     expect((await failing.base.get("chan_a/1"))?.status).toBe("published");
   });
 
-  /**
-   * When the write cannot be made to land, the message is ACKNOWLEDGED rather
-   * than reported as a failure. Reporting it guarantees a redelivery, and a
-   * redelivery into this state guarantees a second live post — the one outcome
-   * §9.5 L978 and §3.4 exist to prevent. The post succeeded; only the
-   * bookkeeping failed, so the queue's work is done.
-   */
-  test("acknowledges rather than guaranteeing a duplicate", async () => {
+  test("MT-12: a post that cannot be recorded is acknowledged and the status stays", async () => {
     const stored = [message({ id: "chan_a/1" })];
     const failing = failingRepo(stored, 99);
     const { deps: d, bot } = depsWith(failing.repo);
@@ -299,16 +296,14 @@ describe("runPublish when the status write fails after a successful send", () =>
 
     expect(bot.calls).toHaveLength(1);
     expect(summary.batchItemFailures).toEqual([]);
+    expect(failing.attempts).toBe(3);
+    const after = await failing.base.get("chan_a/1");
+    expect(after?.status).toBe("topublish");
+    expect(after?.posts).toEqual({});
   });
 
-  /**
-   * Acknowledging only defends the invariant if the inconsistency is loud. §7.7
-   * L720 makes CloudWatch the system of record, and this is a state no metric
-   * counts — so the log line must carry the tgId, which is the only handle an
-   * operator has on the orphaned post.
-   */
-  test("logs the tgId so the orphaned post can be reconciled", async () => {
-    const stored = [message({ id: "chan_a/1" })];
+  test("MT-12: the error log names the target and the tgId so the post can be reconciled", async () => {
+    const stored = [message({ id: "chan_a/1", tgChannel: "a" })];
     const failing = failingRepo(stored, 99);
     const { deps: d } = depsWith(failing.repo);
 
@@ -319,6 +314,7 @@ describe("runPublish when the status write fails after a successful send", () =>
       .filter((line) => line.level === "error");
 
     expect(errors).toHaveLength(1);
+    expect(errors[0]?.target).toBe("a");
     expect(errors[0]?.tgId).toBeDefined();
     expect(String(errors[0]?.messageId)).toBe("chan_a/1");
   });
@@ -336,7 +332,9 @@ describe("runPublish when the status write fails after a successful send", () =>
 
   /** An edit that fails to record is the same story and takes the same path. */
   test("an edit whose write fails is acknowledged too", async () => {
-    const stored = [message({ id: "chan_a/1", tgId: "555", status: "topublish" })];
+    const stored = [
+      message({ id: "chan_a/1", ts: 1000, tgId: "555", tgAt: 1, status: "topublish" }),
+    ];
     const failing = failingRepo(stored, 99);
     const { deps: d, bot } = depsWith(failing.repo);
 
@@ -344,6 +342,35 @@ describe("runPublish when the status write fails after a successful send", () =>
 
     expect(bot.calls).toHaveLength(1);
     expect(summary.batchItemFailures).toEqual([]);
+  });
+
+  /**
+   * Plan ruling P3. Every post is recorded and current, so a redelivery is
+   * safe: it sends nothing and retries only the status write. Reporting the
+   * record is what makes the message heal itself.
+   */
+  test("a status write that fails after every post is recorded reports the record", async () => {
+    const base = fakeMessageRepo([message({ id: "chan_a/1" })]);
+    let statusWrites = 0;
+    const repo: MessageRepo = {
+      ...base,
+      markPublished: async (result) => {
+        statusWrites += 1;
+        if (statusWrites <= 3) throw new Error("ProvisionedThroughputExceededException");
+        await base.markPublished(result);
+      },
+    };
+    const { deps: d, bot } = depsWith(repo);
+
+    const first = await runPublish([record("chan_a/1")], d);
+    expect(first.batchItemFailures).toEqual([{ itemIdentifier: "sqs-chan_a/1" }]);
+    expect(bot.calls).toHaveLength(1);
+    expect((await base.get("chan_a/1"))?.status).toBe("topublish");
+
+    const second = await runPublish([record("chan_a/1")], d);
+    expect(second.batchItemFailures).toEqual([]);
+    expect(bot.calls).toHaveLength(1);
+    expect((await base.get("chan_a/1"))?.status).toBe("published");
   });
 });
 
@@ -418,9 +445,116 @@ describe("AC-4.6 — the guard that survives a duplicate delivery", () => {
     const { deps: d, messages, bot } = deps(stored);
 
     await runPublish([record("chan_a/1")], d);
-    await messages.patch("chan_a/1", { status: "topublish" });
+    // §6 L593 — a merge stamps `ts: now`, which is what makes the recorded
+    // post stale under multi-target D4; the status alone would be skipped.
+    await messages.patch("chan_a/1", { status: "topublish", ts: NOW + 1 });
     await runPublish([record("chan_a/1")], d);
 
     expect(bot.calls.map((call) => call.method)).toEqual(["sendMessage", "editMessageText"]);
+  });
+});
+
+describe("multi-target#5.1 — once per target", () => {
+  test("MT-7: a list of two targets sends twice, in order, and records both posts", async () => {
+    const { bot, messages, deps: d } = deps([message({ id: "chan_a/1", tgChannel: "a,b" })]);
+
+    const result = await runPublish([record("chan_a/1")], d);
+
+    expect(result.batchItemFailures).toEqual([]);
+    expect(bot.calls.map((c) => c.method)).toEqual(["sendMessage", "sendMessage"]);
+    expect(bot.calls.map((c) => c.args.chatId)).toEqual(["@a", "@b"]);
+    const after = await messages.get("chan_a/1");
+    expect(Object.keys(after?.posts ?? {})).toEqual(["a", "b"]);
+    expect(after?.status).toBe("published");
+  });
+
+  test("MT-8: a target whose post is current is skipped; only the others are sent", async () => {
+    const { bot, deps: d } = deps([
+      message({
+        id: "chan_a/1",
+        tgChannel: "a,b",
+        ts: 1000,
+        posts: { a: { tgId: "11", tgAt: 1000 } },
+      }),
+    ]);
+
+    await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls.map((c) => c.args.chatId)).toEqual(["@b"]);
+  });
+
+  test("MT-9: a stale post is edited with its own tgId, and never carries a photo", async () => {
+    const { bot, deps: d } = deps([
+      message({
+        id: "chan_a/1",
+        tgChannel: "a",
+        ts: 1000,
+        image: "https://e.by/p.jpg",
+        posts: { a: { tgId: "11", tgAt: 900 } },
+      }),
+    ]);
+
+    await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls).toHaveLength(1);
+    expect(bot.calls[0]?.method).toBe("editMessageText");
+    expect(bot.calls[0]?.args).toMatchObject({ chatId: "@a", messageId: "11" });
+  });
+
+  test("MT-10: a legacy tgId with no posts is edited on the first target only", async () => {
+    const {
+      bot,
+      messages,
+      deps: d,
+    } = deps([message({ id: "chan_a/1", tgChannel: "a,b", ts: 1000, tgId: "4711", tgAt: 900 })]);
+
+    await runPublish([record("chan_a/1")], d);
+
+    expect(bot.calls.map((c) => c.method)).toEqual(["editMessageText", "sendMessage"]);
+    expect(bot.calls[0]?.args).toMatchObject({ chatId: "@a", messageId: "4711" });
+    expect((await messages.get("chan_a/1"))?.posts.a?.tgId).toBe("4711");
+  });
+
+  test("MT-11: a rejected target fails the record; the redelivery sends only to it", async () => {
+    const bot = fakeBot({ failChatIds: ["@b"] });
+    const { messages, deps: d } = deps([message({ id: "chan_a/1", tgChannel: "a,b" })], bot);
+
+    const first = await runPublish([record("chan_a/1")], d);
+
+    expect(first.batchItemFailures).toEqual([{ itemIdentifier: "sqs-chan_a/1" }]);
+    const between = await messages.get("chan_a/1");
+    expect(between?.status).toBe("topublish");
+    expect(Object.keys(between?.posts ?? {})).toEqual(["a"]);
+
+    const healed = fakeBot();
+    const second = await runPublish([record("chan_a/1")], { ...d, bot: healed });
+
+    expect(second.batchItemFailures).toEqual([]);
+    expect(healed.calls.map((c) => c.args.chatId)).toEqual(["@b"]);
+    expect((await messages.get("chan_a/1"))?.status).toBe("published");
+  });
+
+  test("MT-13: one MessagesPublished per first send and one MessagesEdited per edit", async () => {
+    const { deps: d } = deps([
+      message({
+        id: "chan_a/1",
+        tgChannel: "a,b,c",
+        ts: 1000,
+        posts: { a: { tgId: "11", tgAt: 900 } },
+      }),
+    ]);
+
+    await runPublish([record("chan_a/1")], d);
+
+    expect(metrics.get("MessagesEdited")).toBe(1);
+    expect(metrics.get("MessagesPublished")).toBe(2);
+  });
+
+  test("the map keys are canonical even when the list is not", async () => {
+    const { messages, deps: d } = deps([message({ id: "chan_a/1", tgChannel: " @a , a" })]);
+
+    await runPublish([record("chan_a/1")], d);
+
+    expect(Object.keys((await messages.get("chan_a/1"))?.posts ?? {})).toEqual(["a"]);
   });
 });

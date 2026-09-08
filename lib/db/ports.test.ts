@@ -198,13 +198,23 @@ describe("fakeMessageRepo", () => {
     expect(repo.writeCount).toBe(1);
   });
 
-  test("markPublished records the Telegram id and flips the status", async () => {
+  test("markPublished flips the status and stamps ts, nothing else", async () => {
     const repo = fakeMessageRepo([message]);
 
-    await repo.markPublished({ id: message.id, tgId: "4711", tgAt: 5_000, ts: 5_000 });
+    await repo.markPublished({ id: message.id, ts: 5_000 });
     const stored = await repo.get(message.id);
 
-    expect(stored).toMatchObject({ status: "published", tgId: "4711", tgAt: 5_000 });
+    expect(stored).toMatchObject({ status: "published", ts: 5_000 });
+    expect(stored?.tgId).toBeUndefined();
+  });
+
+  test("recordPosts replaces the whole post map", async () => {
+    const repo = fakeMessageRepo([message]);
+
+    await repo.recordPosts({ id: message.id, posts: { a: { tgId: "1", tgAt: 5 } } });
+    await repo.recordPosts({ id: message.id, posts: { b: { tgId: "2", tgAt: 6 } } });
+
+    expect((await repo.get(message.id))?.posts).toEqual({ b: { tgId: "2", tgAt: 6 } });
   });
 
   test("excludes soft-deleted messages from both queries", async () => {

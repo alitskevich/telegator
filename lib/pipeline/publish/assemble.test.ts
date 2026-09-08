@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest";
 import { SUMMARY_MAX_LENGTH } from "../../domain/item";
 import type { MemberBlock, Message } from "../../domain/message";
-import { MEMBER_RENDER_LIMIT, MemberBlockSchema, MessageSchema } from "../../domain/message";
+import {
+  DEFAULT_TG_CHANNEL,
+  MEMBER_RENDER_LIMIT,
+  MemberBlockSchema,
+  MessageSchema,
+} from "../../domain/message";
+import { resolveTargets } from "../../domain/target";
 import { TELEGRAM_MESSAGE_LIMIT } from "../../telegram/ports";
 import { assembleMessage, buildHeader, PHOTO_SUPPRESSION_LIMIT } from "./assemble";
 import { buildHashtagLine } from "./hashtags";
@@ -47,6 +53,10 @@ function message(overrides: MessageOverrides = {}): Message {
   });
 }
 
+/** The single-target call the pre-map tests were written against. */
+const assemble = (m: Message, tgId?: string) =>
+  assembleMessage(m, resolveTargets(m.tgChannel)[0] ?? DEFAULT_TG_CHANNEL, tgId);
+
 /** `fillers` members at the summary cap, plus one whose summary is the tuning knob. */
 function paddedMembers(fillers: number, pad: number): Record<string, MemberBlock> {
   const members: Record<string, MemberBlock> = {};
@@ -67,12 +77,12 @@ function paddedMembers(fillers: number, pad: number): Record<string, MemberBlock
  */
 function messageOfTextLength(target: number, overrides: MessageOverrides = {}): Message {
   for (let fillers = 0; fillers < MEMBER_RENDER_LIMIT; fillers += 1) {
-    const base = assembleMessage(message({ ...overrides, members: paddedMembers(fillers, 0) }));
+    const base = assemble(message({ ...overrides, members: paddedMembers(fillers, 0) }));
     const pad = target - base.text.length;
 
     if (pad >= 0 && pad <= SUMMARY_MAX_LENGTH) {
       const candidate = message({ ...overrides, members: paddedMembers(fillers, pad) });
-      if (assembleMessage(candidate).text.length === target) return candidate;
+      if (assemble(candidate).text.length === target) return candidate;
     }
   }
 
@@ -134,7 +144,7 @@ describe("buildHeader", () => {
 
 describe("assembleMessage — layout", () => {
   test("§3.4 L327–334 — header, one blank line, then the member blocks", () => {
-    const assembled = assembleMessage(
+    const assembled = assemble(
       message({
         country: "Belarus",
         location: "Minsk",
@@ -163,7 +173,7 @@ describe("assembleMessage — layout", () => {
     });
 
     expect(line).not.toBe("");
-    expect(assembleMessage(record).text.endsWith(`\n\n${line}`)).toBe(true);
+    expect(assemble(record).text.endsWith(`\n\n${line}`)).toBe(true);
   });
 });
 
@@ -172,7 +182,7 @@ describe("assembleMessage — send mode", () => {
     const image = "https://e.by/p.jpg";
     const overLimit = messageOfTextLength(1013, { image });
 
-    const assembled = assembleMessage(overLimit);
+    const assembled = assemble(overLimit);
 
     expect(assembled.text.length).toBe(1013);
     expect(assembled.method).toBe("sendMessage");
@@ -183,7 +193,7 @@ describe("assembleMessage — send mode", () => {
     const image = "https://e.by/p.jpg";
     const atLimit = messageOfTextLength(1012, { image });
 
-    const assembled = assembleMessage(atLimit);
+    const assembled = assemble(atLimit);
 
     expect(assembled.text.length).toBe(1012);
     expect(assembled.method).toBe("sendPhoto");
@@ -195,37 +205,45 @@ describe("assembleMessage — send mode", () => {
   });
 
   test("§3.4 L344 — no tgId and no image is a plain sendMessage", () => {
-    const assembled = assembleMessage(message());
+    const assembled = assemble(message());
 
     expect(assembled.method).toBe("sendMessage");
     expect(assembled.photo).toBeUndefined();
   });
 
   test("AC-4.1 / §3.4 L345 — a tgId edits, and never re-sends the photo", () => {
-    const assembled = assembleMessage(message({ tgId: "4711", image: "https://e.by/p.jpg" }));
+    const assembled = assemble(message({ image: "https://e.by/p.jpg" }), "4711");
 
     expect(assembled.method).toBe("editMessageText");
     expect(assembled.photo).toBeUndefined();
   });
 
-  test("§4.2 L384 — chatId is the target channel with a leading @", () => {
-    expect(assembleMessage(message()).chatId).toBe("@telegator_news");
-    expect(assembleMessage(message({ tgChannel: "other_news" })).chatId).toBe("@other_news");
-    expect(assembleMessage(message({ tgChannel: "@already" })).chatId).toBe("@already");
-  });
-
-  test("§3.4 L347 — link preview is disabled when the message has a title", () => {
-    expect(assembleMessage(message({ title: "Blast in Minsk" })).disableWebPagePreview).toBe(true);
-  });
-
-  test("§3.4 L347 — link preview is disabled when the message has an image", () => {
-    expect(assembleMessage(message({ image: "https://e.by/p.jpg" })).disableWebPagePreview).toBe(
-      true,
+  test("MT-14: the chat id is the target argument, and a tgId argument makes it an edit", () => {
+    expect(assembleMessage(message(), "b", undefined)).toMatchObject({
+      chatId: "@b",
+      method: "sendMessage",
+    });
+    expect(assembleMessage(message(), "@already", undefined).chatId).toBe("@already");
+    expect(assembleMessage(message(), "b", "4711")).toMatchObject({
+      chatId: "@b",
+      method: "editMessageText",
+    });
+    // The record's own legacy id and list no longer decide anything here.
+    expect(assembleMessage(message({ tgId: "4711", tgChannel: "x" }), "b", undefined).method).toBe(
+      "sendMessage",
     );
   });
 
+  test("§3.4 L347 — link preview is disabled when the message has a title", () => {
+    expect(assemble(message({ title: "Blast in Minsk" })).disableWebPagePreview).toBe(true);
+  });
+
+  test("§3.4 L347 — link preview is disabled when the message has an image", () => {
+    expect(assemble(message({ image: "https://e.by/p.jpg" })).disableWebPagePreview).toBe(true);
+  });
+
   test("§3.4 L347 — link preview stays enabled with neither title nor image", () => {
-    expect(assembleMessage(message()).disableWebPagePreview).toBe(false);
+    expect(assemble(message()).disableWebPagePreview).toBe(false);
   });
 });
 
@@ -244,7 +262,7 @@ describe("assembleMessage — overflow (recorded rule, §3.4 L340 gives no trunc
   test("hashtags are dropped first, and every member block survives", () => {
     const record = message({ tags: MANY_TAGS, members: fullMembers() });
     const line = buildHashtagLine({ tags: MANY_TAGS, date: DEFAULT_DATE, ts: DEFAULT_TS });
-    const assembled = assembleMessage(record);
+    const assembled = assemble(record);
 
     // Precondition: the message only overflows *because* R12 appends the line.
     expect(assembled.text.length + line.length).toBeGreaterThan(TELEGRAM_MESSAGE_LIMIT);
@@ -262,7 +280,7 @@ describe("assembleMessage — overflow (recorded rule, §3.4 L340 gives no trunc
       tags: MANY_TAGS,
       members: fullMembers(),
     });
-    const assembled = assembleMessage(record);
+    const assembled = assemble(record);
 
     expect(assembled.text.length).toBeLessThanOrEqual(TELEGRAM_MESSAGE_LIMIT);
     expect(assembled.text).not.toContain("#overflowtag0");
@@ -273,7 +291,7 @@ describe("assembleMessage — overflow (recorded rule, §3.4 L340 gives no trunc
   test("a message that already fits is left exactly as assembled", () => {
     const record = message({ category: "politics", members: fullMembers() });
     const line = buildHashtagLine({ category: "politics", date: DEFAULT_DATE, ts: DEFAULT_TS });
-    const assembled = assembleMessage(record);
+    const assembled = assemble(record);
 
     expect(assembled.text.length).toBeLessThanOrEqual(TELEGRAM_MESSAGE_LIMIT);
     expect(assembled.text.endsWith(`\n\n${line}`)).toBe(true);

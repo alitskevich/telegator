@@ -140,12 +140,14 @@ describe("E2E-4 fixtures", () => {
 });
 
 describe("E2E-4 (§10.2 L997)", () => {
-  test("the first run publishes and stores a tgId", async () => {
+  test("the first run publishes and records a post on the default channel", async () => {
     const { first } = await publishThenMerge();
 
     expect(first.telegramCalls).toHaveLength(1);
     expect(first.telegramCalls[0]?.method).toBe("sendMessage");
-    expect((await messages.get(`${FIRST}/${POST}`))?.tgId).toBeDefined();
+    const stored = await messages.get(`${FIRST}/${POST}`);
+    expect(stored?.posts.telegator_news?.tgId).toBeDefined();
+    expect(stored?.tgId).toBeUndefined();
   });
 
   test("the second item merges rather than creating a message", async () => {
@@ -170,15 +172,33 @@ describe("E2E-4 (§10.2 L997)", () => {
    * fails or rewrites somebody else's post; §2.3 L161 keeps the id an edit is
    * editing precisely so this cannot drift.
    */
-  test("the edit carries the tgId the first send stored", async () => {
+  /** MT-E2E-2 — from `posts` for a message published under the map. */
+  test("MT-E2E-2: the edit carries the tgId the first send recorded in posts", async () => {
     const { first } = await publishThenMerge();
 
     const sent = first.telegramCalls[0]?.args as { chatId: string };
     const edit = bot.calls[1]?.args as EditMessageTextArgs;
-    const stored = (await messages.get(`${FIRST}/${POST}`))?.tgId;
+    const stored = (await messages.get(`${FIRST}/${POST}`))?.posts.telegator_news?.tgId;
 
     expect(edit.messageId).toBe(stored);
     expect(edit.chatId).toBe(sent.chatId);
+  });
+
+  /** MT-E2E-2 — from the frozen `tgId` for a message published before the map. */
+  test("MT-E2E-2: a legacy record with tgId and no posts is edited, not re-posted", async () => {
+    await runPipeline(world());
+    const id = `${FIRST}/${POST}`;
+    const legacyId = (await messages.get(id))?.posts.telegator_news?.tgId ?? "";
+    // Rewrite the record into its pre-map shape.
+    await messages.patch(id, { posts: {}, tgId: legacyId, tgAt: NOW });
+
+    await sources.put(source(SECOND));
+    clock.advance(NEXT_POLL_MS);
+    await runPipeline(world());
+
+    const edit = bot.calls[1]?.args as EditMessageTextArgs;
+    expect(bot.calls.map((call) => call.method)).toEqual(["sendMessage", "editMessageText"]);
+    expect(edit.messageId).toBe(legacyId);
   });
 
   /** The edit replaces the whole message, so it has to carry both members. */

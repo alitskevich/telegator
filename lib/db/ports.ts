@@ -5,6 +5,7 @@ import type {
   MessageListItem,
   MessageMergeAttributes,
   MessageStatus,
+  Post,
 } from "../domain/message";
 import type { Source, SourceCursor } from "../domain/source";
 
@@ -59,12 +60,16 @@ export interface MemberMerge {
   readonly attributes: MessageMergeAttributes;
 }
 
-/** §3.4 L350 — the result write after a successful send or edit. */
+/** multi-target#6 — the status write once every target has a current post. */
 export interface PublishResult {
   readonly id: string;
-  readonly tgId: string;
-  readonly tgAt: number;
   readonly ts: number;
+}
+
+/** multi-target#6, D5 — the whole post map, written after every send. */
+export interface PostsRecord {
+  readonly id: string;
+  readonly posts: Readonly<Record<string, Post>>;
 }
 
 export interface MessageRepo {
@@ -94,7 +99,10 @@ export interface MessageRepo {
    * idempotent and the one that cannot erase a member it never loaded.
    */
   mergeMember(merge: MemberMerge): Promise<void>;
+  /** multi-target#6 — `SET status, ts`; `tgId`/`tgAt` are frozen (R55). */
   markPublished(result: PublishResult): Promise<void>;
+  /** multi-target#6, D5 — `SET posts = :posts`, the whole map. Publish is the only writer. */
+  recordPosts(record: PostsRecord): Promise<void>;
   /** §8.4 L808 — an operator edit, attribute-level. The caller validates the delta. */
   patch(id: string, delta: Readonly<Record<string, unknown>>): Promise<void>;
   /** §8.4 L810 — soft delete. The row survives; R16 hides it from reads. */
