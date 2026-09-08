@@ -634,7 +634,8 @@ function toWrite(state: Pending, ts: number): DedupWrite {
     // is conditional for the merge branch below (R39).
     return {
       kind: "create",
-      message: { id: state.id, members: state.members, ...shared, status: "topublish" },
+      // multi-target#3.3 — the map publish will fill; a merge never names it.
+      message: { id: state.id, members: state.members, posts: {}, ...shared, status: "topublish" },
     };
   }
 

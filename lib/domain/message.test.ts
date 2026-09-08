@@ -8,6 +8,7 @@ import {
   MemberBlockSchema,
   MessageListItemSchema,
   MessageSchema,
+  PostSchema,
 } from "./message";
 
 const block = {
@@ -256,5 +257,39 @@ describe("MessageListItemSchema (the status-index projection, R27)", () => {
     expect(parsed).not.toHaveProperty("keyTitle");
     expect(parsed).not.toHaveProperty("keyTags");
     expect(parsed).not.toHaveProperty("memberIds");
+  });
+});
+
+describe("posts — multi-target#2.4 (R55)", () => {
+  const post = { tgId: "4711", tgAt: 1_772_458_034_502 };
+
+  test("MT-15: a record without posts parses as posts: {}", () => {
+    expect(MessageSchema.parse(message).posts).toEqual({});
+  });
+
+  test("MT-15: a stored post map is kept, keyed by canonical target id", () => {
+    expect(MessageSchema.parse({ ...message, posts: { a: post } }).posts).toEqual({ a: post });
+  });
+
+  test("MT-15: neither projection type carries posts", () => {
+    const stored = { ...message, posts: { a: post } };
+
+    expect(MessageListItemSchema.parse(stored)).not.toHaveProperty("posts");
+    expect(DedupCandidateSchema.parse(stored)).not.toHaveProperty("posts");
+  });
+
+  test("a post needs a string tgId and an integer tgAt", () => {
+    expect(PostSchema.safeParse({ tgId: 4711, tgAt: 1 }).success).toBe(false);
+    expect(PostSchema.safeParse({ tgId: "4711", tgAt: 1.5 }).success).toBe(false);
+    expect(MessageSchema.safeParse({ ...message, posts: { a: { tgId: "1" } } }).success).toBe(
+      false,
+    );
+  });
+
+  test("the legacy tgId/tgAt pair still parses beside the map", () => {
+    const parsed = MessageSchema.parse({ ...message, tgId: "1", tgAt: 5, posts: {} });
+
+    expect(parsed.tgId).toBe("1");
+    expect(parsed.tgAt).toBe(5);
   });
 });

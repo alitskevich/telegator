@@ -39,6 +39,7 @@ const message = (n: number, extra: Partial<Message> = {}): Message => ({
   keyTitle: [],
   keyTags: [],
   memberIds: [],
+  posts: {},
   ...extra,
 });
 

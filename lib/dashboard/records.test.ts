@@ -41,6 +41,7 @@ const message = (n: number): Message => ({
   keyTitle: [],
   keyTags: [],
   memberIds: [],
+  posts: {},
 });
 
 let jar: FakeCookieJar;

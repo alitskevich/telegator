@@ -41,6 +41,7 @@ const message = (n: number, status: Message["status"], ts: number): Message => (
   keyTitle: [],
   keyTags: [],
   memberIds: [],
+  posts: {},
 });
 
 describe("windows", () => {

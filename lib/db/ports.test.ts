@@ -25,6 +25,7 @@ const message = {
   keyTitle: [] as string[],
   keyTags: [] as string[],
   memberIds: [] as string[],
+  posts: {},
   date: "2026-08-29",
   title: "Explosions",
   tgChannel: "telegator_news",

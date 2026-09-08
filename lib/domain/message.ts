@@ -43,6 +43,22 @@ export const MemberBlockSchema = z.object({
 export type MemberBlock = z.infer<typeof MemberBlockSchema>;
 
 /**
+ * multi-target#2.4 — one Telegram post on one target (R55).
+ *
+ * Declared here rather than in `./target`, which imports `DEFAULT_TG_CHANNEL`
+ * from this module: an import back would be a two-module cycle that throws
+ * when `target.ts` is the entry (plan ruling P1).
+ */
+export const PostSchema = z.object({
+  /** Telegram `message_id` on that target. */
+  tgId: z.string(),
+  /** Epoch ms of the send or edit that produced it. */
+  tgAt: z.number().int().nonnegative(),
+});
+
+export type Post = z.infer<typeof PostSchema>;
+
+/**
  * The field list of §2.3 L150–163, closed.
  *
  * R7: §6 L581/L584 build the record as `{...item, …}`, which would also write
@@ -96,7 +112,18 @@ const messageFields = z.object({
 
   tgChannel: z.string().default(DEFAULT_TG_CHANNEL),
 
-  /** Telegram `message_id`. Its presence turns the next publish into an edit (§2.3 L161). */
+  /**
+   * multi-target#2.4 — `{canonicalTargetId → Post}`, written by publish only
+   * (R55). Defaulted so a record written before the map parses. Base table
+   * only: projected on no index (D2), which `data-stack.test.ts` MT-16 pins.
+   */
+  posts: z.record(z.string(), PostSchema).default({}),
+
+  /**
+   * The legacy single-target post (multi-target#2.4). Frozen: no longer
+   * written; read only by publish's fallback (multi-target#5.2) so a message
+   * published before the map is edited rather than posted twice.
+   */
   tgId: z.string().optional(),
   tgAt: z.number().int().nonnegative().optional(),
 
@@ -138,7 +165,8 @@ export type Message = z.infer<typeof MessageSchema>;
  * does not project them, and being `.default([])` fields they would parse as
  * `[]` in production while the in-memory fake — which parses whole base records
  * — handed a caller populated ones. A test would then agree with a page that is
- * empty in production.
+ * empty in production. `posts` is omitted for the same reason (multi-target#2.4):
+ * nothing on the dashboard reads a post id.
  */
 export const MessageListItemSchema = messageFields.omit({
   members: true,
@@ -146,6 +174,7 @@ export const MessageListItemSchema = messageFields.omit({
   keyTitle: true,
   keyTags: true,
   memberIds: true,
+  posts: true,
 });
 
 export type MessageListItem = z.infer<typeof MessageListItemSchema>;

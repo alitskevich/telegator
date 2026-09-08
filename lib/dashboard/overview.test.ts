@@ -30,6 +30,7 @@ const message = (n: number, status: Message["status"] = "published"): Message =>
   keyTitle: [],
   keyTags: [],
   memberIds: [],
+  posts: {},
 });
 
 let metrics: FakeMetricReader;

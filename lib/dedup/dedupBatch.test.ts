@@ -307,6 +307,16 @@ describe("create branch (§6 L584-584)", () => {
     expect(channels).toEqual(["telegator_news", "other_news"]);
   });
 
+  test("MT-6: a create carries the item's target as tgChannel and an empty post map", async () => {
+    const a = item("chan_a/1", { ...SAME_EVENT, target: "a, @b" });
+    const b = item("chan_b/2", OTHER_EVENT);
+    const result = await dedupBatch([a, b], deps());
+
+    const creates = result.writes.flatMap((w) => (w.kind === "create" ? [w.message] : []));
+    expect(creates.map((m) => m.tgChannel)).toEqual(["a, @b", "telegator_news"]);
+    expect(creates.map((m) => m.posts)).toEqual([{}, {}]);
+  });
+
   /** R45 — the key the scorer will read back on the next batch (§7.2 L636). */
   test("stores the item's own match key, and no embedding", async () => {
     const a = item("chan_a/1", SAME_EVENT);
@@ -550,6 +560,26 @@ describe("Pass 2 — stored messages (§6 L572-572)", () => {
     expect(after?.status).toBe("topublish");
     expect(after?.tgId).toBe("4711");
     expect(after?.tgAt).toBe(500);
+  });
+
+  /** multi-target#2.4 — publish owns `posts`; a merge must not name it. */
+  test("a merge never writes posts, so a live post map survives", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const stored = storedMessage({
+      id: "chan_z/9",
+      status: "published",
+      posts: { a: { tgId: "4711", tgAt: 500 } },
+      ...keyOf(SAME_EVENT),
+    });
+    const { repo, deps: d } = repoDeps([stored]);
+
+    const result = await dedupBatch([a], d);
+    const write = result.writes[0];
+    if (write?.kind !== "merge") throw new Error("expected a merge");
+    expect(write.merge.attributes).not.toHaveProperty("posts");
+
+    await repo.mergeMember(write.merge);
+    expect((await repo.get("chan_z/9"))?.posts).toEqual({ a: { tgId: "4711", tgAt: 500 } });
   });
 
   test("a stored message on a different date is never a candidate", async () => {
