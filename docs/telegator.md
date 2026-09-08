@@ -1571,6 +1571,8 @@ Numbers are permanent. `R6` was never issued.
 | **R51** | AC-3.7, §7.2 | Byte-identical replay is guaranteed by an explicit item-id short-circuit over the projected `memberIds`, rather than emerging from idempotent member writes. The wording of AC-3.7 is unchanged; how it holds is not. It has to be identity-based, because §3.3 lets the newest item overwrite the descriptive fields, so a replayed item may no longer resemble the message it belongs to. |
 | **R52** | §9.1 | The app stack also declares the branch its host builds, which §9.1's inventory does not name. A host with no branch has nothing to build and serves nothing. |
 | **R53** | §8.4 | "Publish now" is `admin` only, offered only on the `topublish` tab, and capped server-side rather than trusting the caller's number. |
+| **R54** | §2.1, §3.1, §8.3, §8.4, §9.4 | `sources.tgChannel` is `sources.target`, a **comma-separated list** of target ids carried verbatim into the item payload as `target` and into `messages.tgChannel`, whose name is kept because it sits in the `status-index` projection (§7.2 L638). A stored `tgChannel` on a source is an orphan the schema strips; `scripts/migrate-targets.ts` copies it across before deploy. The full account is `docs/.spectomat/done/multi-target.spec.md` (or `specs/` while it is being built). |
+| **R55** | §2.3, §3.3, §3.4, §8.4 | Publish sends **once per target**: `messages.posts` maps each canonical target id to its `{tgId, tgAt}`, written whole after every send; `tgId`/`tgAt` are frozen legacy fields read only by the first-target fallback. A post is current when `tgAt >= ts` and is skipped; a rejected send fails the record so the redelivery sends to the rest; a sent-but-unrecorded post is acknowledged. `republishMessage` bumps `ts` so every post is re-sent. Base table only; no projection changes. |
 
 ## 26. Traps this project actually hit
 
@@ -1866,6 +1868,7 @@ Everything below is a `scripts/` entry point, run with `tsx`, and the only place
 | `set-cursors-now` | Fast-forwards every cursor to the current head, for a dev environment that should not replay history. |
 | `scrape` | Invokes the deployed scraper, for a manual run outside the schedule. |
 | `smoke:openrouter` | The §32.2 gap-filler: the real adapter and the real SDK against a canned far end. Offline by default; `-- --live` with `OPENROUTER_API_KEY` set makes exactly one real call. |
+| `migrate:targets` | R54's copy of `tgChannel` into `target` on every live source row that lacks it, **before** the deploy that reads `target`. Dry run by default, `--write` to apply; never removes `tgChannel`; idempotent. |
 
 Region and `--env` parsing are shared between all of them, so no two scripts can
 disagree about which environment they are pointed at.

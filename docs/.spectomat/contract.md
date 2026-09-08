@@ -132,11 +132,8 @@ The draft is already there as `done/<slug>.draft.md`. If the repository has a `p
 Run every command in the block below from the repository root: once per wave in phase C, after the fix rounds and before the `chore(<slug>)` tick commit, and once in phase D before archiving. Every line must exit 0.
 
 ```bash
-npm run typecheck && npm run test && npm run lint && npm run build
-npx cdk synth
+npm run gates
 ```
-
-The first line was compiled from `package.json` when `run` rendered this contract: `npm run gates` when that script exists, otherwise every `typecheck`, `test`, `lint` and `build` script it defines, chained with `&&` in that order so it stops at the first failure. `run` never rewrites this file, so edit that line when `package.json` changes. Add a project-specific gate by appending its command to the block.
 
 No completion claim without fresh evidence. A gate that has not run this
 loop has not passed; a partial run does not stand for the whole. Run each

@@ -191,3 +191,72 @@ describe("E2E-1 (§10.2 L994)", () => {
     }
   });
 });
+
+/**
+ * MT-E2E-1 (multi-target#9.2) — "A seeded source with `target: "a,b"` and one
+ * fresh post yields one message and **two** Telegram sends, to `@a` and `@b`."
+ */
+describe("MT-E2E-1 (multi-target#9.2)", () => {
+  const TWO_TARGETS = "a,b";
+
+  const twoTargetWorld = () => {
+    const local = {
+      messages: fakeMessageRepo(),
+      sources: fakeSourceRepo([
+        {
+          id: SOURCE,
+          status: "ok",
+          target: TWO_TARGETS,
+          category: "politics",
+          lastCount: 0,
+          lastUpdated: 0,
+          zeroYieldRuns: 0,
+          lastNonZeroCount: 0,
+        },
+      ]),
+      bot: fakeBot(),
+    };
+    return {
+      ...local,
+      world: {
+        fetcher: fakeFetcher({ [URL]: telegramFixture("twoLinks") }),
+        sources: local.sources,
+        classifier: recordingClassifier(),
+        adjudicator: fakeAdjudicator(() => false),
+        messages: local.messages,
+        bot: local.bot,
+        clock: manualClock(NOW),
+      },
+    };
+  };
+
+  test("one fresh post yields one message record", async () => {
+    const { world: w, messages } = twoTargetWorld();
+
+    await runPipeline(w);
+
+    expect(await messages.countByStatus("published")).toBe(1);
+    expect(await messages.countByStatus("topublish")).toBe(0);
+  });
+
+  test("and two Telegram sends, to @a and @b in list order", async () => {
+    const { world: w } = twoTargetWorld();
+
+    const run = await runPipeline(w);
+
+    expect(run.telegramCalls).toHaveLength(2);
+    expect(run.telegramCalls.map((call) => call.method)).toEqual(["sendMessage", "sendMessage"]);
+    expect(run.telegramCalls.map((call) => call.args.chatId)).toEqual(["@a", "@b"]);
+  });
+
+  test("the message remembers both posts under canonical ids", async () => {
+    const { world: w, messages } = twoTargetWorld();
+
+    await runPipeline(w);
+
+    const [only] = await messages.queryByStatus("published");
+    const stored = only === undefined ? undefined : await messages.get(only.id);
+    expect(stored?.tgChannel).toBe(TWO_TARGETS);
+    expect(Object.keys(stored?.posts ?? {})).toEqual(["a", "b"]);
+  });
+});

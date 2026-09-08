@@ -9,6 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "gates": "npm run typecheck && npm run test && npm run lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "biome check .",

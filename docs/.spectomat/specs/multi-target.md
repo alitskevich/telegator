@@ -389,6 +389,9 @@ Filled during the build. One row per divergence from Part I of this file.
 
 | Id | Sections | Contradiction | Reading built to |
 | --- | --- | --- | --- |
+| P1 | #6, #2.1 | `Post` schema listed under `lib/domain/target.ts`, which must import `DEFAULT_TG_CHANNEL` from `message.ts` — a cycle that throws when `target.ts` is the entry. | `PostSchema` lives in `lib/domain/message.ts`; `target.ts` imports `message.ts`, never the reverse. |
+| P3 | #5.1 | Silent on a failed `markPublished` after every post is recorded. | The record is reported (SQS redelivers); every post is current so the redelivery sends nothing and retries only the status write. |
+| P4 | #6 | No module for `postFor`. | `lib/pipeline/publish/posts.ts` holds `postFor` and `isCurrent`, pure. |
 
 # Part II — Building it
 
