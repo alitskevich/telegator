@@ -1,6 +1,6 @@
 # target-table · Task 6: the publish loop reads the target row and mirrors the last post
 
-**Plan:** docs/.spectomat/plans/target-table.md **Spec:** docs/.spectomat/specs/target-table.md — #3.1, #5.3 **Covers:** TT-10, TT-11, TT-12, TT-13, TT-14 **Depends on:** Task 1, Task 3, Task 4, Task 5
+**Plan:** .spectomat/plans/target-table.md **Spec:** .spectomat/specs/target-table.md — #3.1, #5.3 **Covers:** TT-10, TT-11, TT-12, TT-13, TT-14 **Depends on:** Task 1, Task 3, Task 4, Task 5
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # target-table · Task 8: the end-to-end criteria and §25's two reconciliation rows
 
-**Plan:** docs/.spectomat/plans/target-table.md **Spec:** docs/.spectomat/specs/target-table.md — #9.2, #10 D12, #11 **Covers:** TT-E2E-1, TT-E2E-2 **Depends on:** Task 6, Task 7
+**Plan:** .spectomat/plans/target-table.md **Spec:** .spectomat/specs/target-table.md — #9.2, #10 D12, #11 **Covers:** TT-E2E-1, TT-E2E-2 **Depends on:** Task 6, Task 7
 
 ## Goal
 
@@ -23,7 +23,7 @@ One traversal of the whole pipeline over fakes proves that a source publishing t
 
 - Create: `test/e2e/targets.test.ts`
 - Modify: `docs/telegator.md` (§25's table only)
-- Modify: `docs/.spectomat/specs/target-table.md` (§11's table only)
+- Modify: `.spectomat/specs/target-table.md` (§11's table only)
 - Modify: `.env.local.example` (one line in the Data block)
 
 ## Interfaces
@@ -193,11 +193,11 @@ describe("TT-E2E-2 — the registry fills itself", () => {
   (a) `docs/telegator.md` §25 — two rows appended after `R55`, before the blank line preceding `## 26`:
 
 ```text
-| **R58** | §2, §7.2, §8.2, §8.3, §8.4, §9.1, §29 | A **third table**, `telegator-{env}-targets`, gives every publish destination a row: `id`, `type` (`telegram_channel` today), `lastPostedDate`, `lastPostedMessageId`, `messageTemplate` and the usual soft-delete flag. PK `id`, `PAY_PER_REQUEST`, `RETAIN`, and **no GSI** — tens of rows, one `GetItem` and one `Scan`. It is a **registry, not an allowlist**: a target with no row publishes normally, and publish's own write creates the row, so a forgotten row can never become silent non-publication. Publish mirrors the two `lastPosted*` fields after `recordPosts` and only logs if that write fails; `messages.posts` remains the authority for the edit decision. §8.2's route tree gains `/targets` and §29's map gains `TELEGATOR_TARGETS_TABLE`. The full account is `docs/.spectomat/done/target-table.spec.md` (or `specs/` while it is being built). |
+| **R58** | §2, §7.2, §8.2, §8.3, §8.4, §9.1, §29 | A **third table**, `telegator-{env}-targets`, gives every publish destination a row: `id`, `type` (`telegram_channel` today), `lastPostedDate`, `lastPostedMessageId`, `messageTemplate` and the usual soft-delete flag. PK `id`, `PAY_PER_REQUEST`, `RETAIN`, and **no GSI** — tens of rows, one `GetItem` and one `Scan`. It is a **registry, not an allowlist**: a target with no row publishes normally, and publish's own write creates the row, so a forgotten row can never become silent non-publication. Publish mirrors the two `lastPosted*` fields after `recordPosts` and only logs if that write fails; `messages.posts` remains the authority for the edit decision. §8.2's route tree gains `/targets` and §29's map gains `TELEGATOR_TARGETS_TABLE`. The full account is `.spectomat/done/target-table.spec.md` (or `specs/` while it is being built). |
 | **R59** | §3.4 | A target may carry a `messageTemplate`, and §3.4's composition step then runs through it: literal operator-authored HTML with `{header}`, `{body}`, `{hashtags}`, `{title}`, `{category}`, `{country}`, `{location}` and `{date}` substituted, unknown names rendering empty, and runs of blank lines collapsed. The overflow ladder is unchanged in order — hashtags before member blocks, never below one — but parameterised by the composer, so both paths shorten the same way. A target with no template takes §3.4's built-in layout byte for byte, so there is no default template and nothing changes for a target nobody configured. |
 ```
 
-  (b) `docs/.spectomat/specs/target-table.md` §11 — fill the empty table with the plan's six rulings, e.g.:
+  (b) `.spectomat/specs/target-table.md` §11 — fill the empty table with the plan's six rulings, e.g.:
 
 ```text
 | P1 | §2.2, §7 | §2.2 names `TargetConfigInput` and §7 names `TARGET_WRITABLE_FIELDS`, and §9.1 TT-2 requires the schema to reject `{}` — two allowlists, one of which would type `type` as a free string. | `TargetConfigInput` carries the non-empty refinement and is the schema `upsertRecord` validates the `targets` delta with; `TARGET_WRITABLE_FIELDS` is the list the table's editable cells read, pinned against it by a test. |
@@ -231,7 +231,7 @@ describe("TT-E2E-2 — the registry fills itself", () => {
 ## Result
 
 - Commit: `00aeda1` — `feat(target-table): end-to-end template and registry criteria, §25 R58/R59 (TT-E2E-1, TT-E2E-2)`; range `39d8ea2..00aeda1`. No fix rounds.
-- Files: created `test/e2e/targets.test.ts` (6 tests); appended R58 and R59 to `docs/telegator.md` §25 (Part I untouched); filled `docs/.spectomat/specs/target-table.md` §11 with 7 rows (D12's supersession plus P1-P6); added `TELEGATOR_TARGETS_TABLE=telegator-dev-targets` to `.env.local.example`.
+- Files: created `test/e2e/targets.test.ts` (6 tests); appended R58 and R59 to `docs/telegator.md` §25 (Part I untouched); filled `.spectomat/specs/target-table.md` §11 with 7 rows (D12's supersession plus P1-P6); added `TELEGATOR_TARGETS_TABLE=telegator-dev-targets` to `.env.local.example`.
 - The line-citation grep `grep -rnoE "§(2[6-9]|3[0-9])(\.[0-9]+)? L[0-9]+"` over `*.ts`/`*.tsx` was re-run before writing and still matches nothing, so the two-row shift broke no citation; `test/specCitations.test.ts` passes.
 - Gates, all five, run once for the wave after the review: `tsc` 0, `vitest` 1757/1757 across 114 files, `biome check` 272 files clean, `next build` 0 (routes include `/targets`), `cdk synth` 0.
 - Review: spec compliance OK, quality OK — 0 Critical, 0 Important, 0 Minor.

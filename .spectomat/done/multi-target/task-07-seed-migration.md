@@ -1,6 +1,6 @@
 # multi-target · Task 7: seed mapping, `legacyTargetPatch`, `scripts/migrate-targets.ts`
 
-**Plan:** docs/.spectomat/plans/multi-target.md **Spec:** docs/.spectomat/specs/multi-target.md — #3.7, #8.1, #8.2, #12, #13 **Covers:** MT-20, MT-21 **Depends on:** Task 2
+**Plan:** .spectomat/plans/multi-target.md **Spec:** .spectomat/specs/multi-target.md — #3.7, #8.1, #8.2, #12, #13 **Covers:** MT-20, MT-21 **Depends on:** Task 2
 
 ## Goal
 

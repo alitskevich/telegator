@@ -1,6 +1,6 @@
 # multi-target · Task 1: `lib/domain/target.ts` — the target-list parser
 
-**Plan:** docs/.spectomat/plans/multi-target.md **Spec:** docs/.spectomat/specs/multi-target.md — #2.1, #5.3 **Covers:** MT-1, MT-2 **Depends on:** none
+**Plan:** .spectomat/plans/multi-target.md **Spec:** .spectomat/specs/multi-target.md — #2.1, #5.3 **Covers:** MT-1, MT-2 **Depends on:** none
 
 ## Goal
 

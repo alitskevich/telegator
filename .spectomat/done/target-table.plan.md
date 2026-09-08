@@ -1,6 +1,6 @@
 # target-table — Implementation Plan
 
-**Goal:** a third DynamoDB table gives every publish destination a row — its kind, the last post it received, and the optional `messageTemplate` its posts are composed with — read by publish before each send, written after it, and edited on a new `/targets` dashboard page. **Architecture:** `lib/domain/target.ts` gains `TargetSchema`/`TargetConfigInput`; a pure `lib/pipeline/publish/template.ts` renders `{placeholder}` templates; `assembleMessage` takes a fourth `template?` argument and parameterises its overflow ladder; the publish loop reads the row (never failing on a bad read), hands the template to assembly, and mirrors `lastPostedDate`/`lastPostedMessageId` after `recordPosts`; a `TargetRepo` port with a DynamoDB adapter and an in-memory fake sits behind it; the stacks create `telegator-{env}-targets` with no GSI and grant the two roles their actions. **Tech stack:** TypeScript, Zod, Vitest, Biome, `@aws-sdk/lib-dynamodb`, aws-cdk-lib assertions, React Testing Library (jsdom), Next.js App Router. **Spec:** docs/.spectomat/specs/target-table.md
+**Goal:** a third DynamoDB table gives every publish destination a row — its kind, the last post it received, and the optional `messageTemplate` its posts are composed with — read by publish before each send, written after it, and edited on a new `/targets` dashboard page. **Architecture:** `lib/domain/target.ts` gains `TargetSchema`/`TargetConfigInput`; a pure `lib/pipeline/publish/template.ts` renders `{placeholder}` templates; `assembleMessage` takes a fourth `template?` argument and parameterises its overflow ladder; the publish loop reads the row (never failing on a bad read), hands the template to assembly, and mirrors `lastPostedDate`/`lastPostedMessageId` after `recordPosts`; a `TargetRepo` port with a DynamoDB adapter and an in-memory fake sits behind it; the stacks create `telegator-{env}-targets` with no GSI and grant the two roles their actions. **Tech stack:** TypeScript, Zod, Vitest, Biome, `@aws-sdk/lib-dynamodb`, aws-cdk-lib assertions, React Testing Library (jsdom), Next.js App Router. **Spec:** .spectomat/specs/target-table.md
 
 ## Global Constraints
 
@@ -53,11 +53,11 @@
 | `app/layout.tsx`, `test/layout.test.ts`, `test/pageAuth.test.ts` | the nav link and its guards (TT-22) | Task 7 (modify) |
 | `test/e2e/targets.test.ts` | TT-E2E-1, TT-E2E-2 | Task 8 |
 | `docs/telegator.md` | §25 rows R58 and R59 | Task 8 (modify) |
-| `docs/.spectomat/specs/target-table.md` | §11 reconciliations table, filled from the plan rulings | Task 8 (modify) |
+| `.spectomat/specs/target-table.md` | §11 reconciliations table, filled from the plan rulings | Task 8 (modify) |
 
 ## Tasks
 
-One file per task under `docs/.spectomat/plans/target-table/`, from `templates/task.md`, executed in this order. Tasks with no dependency between them and disjoint Files run in parallel as one wave.
+One file per task under `.spectomat/plans/target-table/`, from `templates/task.md`, executed in this order. Tasks with no dependency between them and disjoint Files run in parallel as one wave.
 
 | # | File | Component | Covers | Depends on | Done |
 | --- | --- | --- | --- | --- | --- |

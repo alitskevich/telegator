@@ -1,6 +1,6 @@
 # multi-target · Task 3: the `posts` map on `MessageSchema`
 
-**Plan:** docs/.spectomat/plans/multi-target.md **Spec:** docs/.spectomat/specs/multi-target.md — #2.4, #3.3, #6 **Covers:** MT-6, MT-15 **Depends on:** Task 2
+**Plan:** .spectomat/plans/multi-target.md **Spec:** .spectomat/specs/multi-target.md — #2.4, #3.3, #6 **Covers:** MT-6, MT-15 **Depends on:** Task 2
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # multi-target · Task 5: publish once per target — ports, fakes, adapter, assembly, the loop
 
-**Plan:** docs/.spectomat/plans/multi-target.md **Spec:** docs/.spectomat/specs/multi-target.md — #3.4, #5.1, #5.2, #6, #14, #9.2 (E2E-2) **Covers:** MT-7, MT-8, MT-9, MT-10, MT-11, MT-12, MT-13, MT-14, MT-23, MT-E2E-2 **Depends on:** Task 1, Task 3
+**Plan:** .spectomat/plans/multi-target.md **Spec:** .spectomat/specs/multi-target.md — #3.4, #5.1, #5.2, #6, #14, #9.2 (E2E-2) **Covers:** MT-7, MT-8, MT-9, MT-10, MT-11, MT-12, MT-13, MT-14, MT-23, MT-E2E-2 **Depends on:** Task 1, Task 3
 
 ## Goal
 

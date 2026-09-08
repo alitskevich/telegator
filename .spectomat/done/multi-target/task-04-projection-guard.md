@@ -1,6 +1,6 @@
 # multi-target · Task 4: the `status-index` projection guard
 
-**Plan:** docs/.spectomat/plans/multi-target.md **Spec:** docs/.spectomat/specs/multi-target.md — #2.4, #15.3, D2 **Covers:** MT-16 **Depends on:** none
+**Plan:** .spectomat/plans/multi-target.md **Spec:** .spectomat/specs/multi-target.md — #2.4, #15.3, D2 **Covers:** MT-16 **Depends on:** none
 
 ## Goal
 

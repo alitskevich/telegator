@@ -1,6 +1,6 @@
 # target-table · Task 4: the `targets` table, its environment variable and its two grants
 
-**Plan:** docs/.spectomat/plans/target-table.md **Spec:** docs/.spectomat/specs/target-table.md — #6, #8.1, #13 **Covers:** TT-17, TT-18 **Depends on:** none
+**Plan:** .spectomat/plans/target-table.md **Spec:** .spectomat/specs/target-table.md — #6, #8.1, #13 **Covers:** TT-17, TT-18 **Depends on:** none
 
 ## Goal
 

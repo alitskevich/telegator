@@ -1,6 +1,6 @@
 # target-table · Task 3: `TargetRepo` — the port, the fake and the DynamoDB adapter
 
-**Plan:** docs/.spectomat/plans/target-table.md **Spec:** docs/.spectomat/specs/target-table.md — #2.2, #5.3, #6, #14 **Covers:** TT-16 **Depends on:** Task 1
+**Plan:** .spectomat/plans/target-table.md **Spec:** .spectomat/specs/target-table.md — #2.2, #5.3, #6, #14 **Covers:** TT-16 **Depends on:** Task 1
 
 ## Goal
 

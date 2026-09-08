@@ -1,6 +1,6 @@
 # multi-target · Task 2: `tgChannel` → `target` on the source and the item, end to end
 
-**Plan:** docs/.spectomat/plans/multi-target.md **Spec:** docs/.spectomat/specs/multi-target.md — #2.2, #2.3, #3.1, #3.2, #3.3 (the `item.target` half), #3.6, #7 **Covers:** MT-3, MT-4, MT-5, MT-17, MT-18, MT-19 **Depends on:** none
+**Plan:** .spectomat/plans/multi-target.md **Spec:** .spectomat/specs/multi-target.md — #2.2, #2.3, #3.1, #3.2, #3.3 (the `item.target` half), #3.6, #7 **Covers:** MT-3, MT-4, MT-5, MT-17, MT-18, MT-19 **Depends on:** none
 
 ## Goal
 

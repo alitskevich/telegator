@@ -1,6 +1,6 @@
 # multi-target · Task 6: `republishMessage` bumps `ts`
 
-**Plan:** docs/.spectomat/plans/multi-target.md **Spec:** docs/.spectomat/specs/multi-target.md — #3.5, #14 **Covers:** MT-22 **Depends on:** Task 3
+**Plan:** .spectomat/plans/multi-target.md **Spec:** .spectomat/specs/multi-target.md — #3.5, #14 **Covers:** MT-22 **Depends on:** Task 3
 
 ## Goal
 

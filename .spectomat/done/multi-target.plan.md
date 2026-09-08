@@ -1,6 +1,6 @@
 # multi-target — Implementation Plan
 
-**Goal:** a source names a comma-separated list of targets in a renamed `target` column, and publish sends every message to each of them, remembering each post so a later edit reaches all of them. **Architecture:** the list is a string carried verbatim source → item → `messages.tgChannel` (name kept, D2) and parsed only in publish; publish loops over `resolveTargets(tgChannel)`, skips targets whose post is current, sends the rest, and records the whole `posts` map after every send. `MessageRepo` gains `recordPosts` and narrows `markPublished` to `{id, ts}`; republish bumps `ts`. A pure `legacyTargetPatch` plus a scan script copies `tgChannel` → `target` on live source rows before deploy. **Tech stack:** TypeScript, Zod, Vitest, Biome, `@aws-sdk/lib-dynamodb`, aws-cdk-lib assertions, React Testing Library (jsdom), `tsx` for scripts. **Spec:** docs/.spectomat/specs/multi-target.md
+**Goal:** a source names a comma-separated list of targets in a renamed `target` column, and publish sends every message to each of them, remembering each post so a later edit reaches all of them. **Architecture:** the list is a string carried verbatim source → item → `messages.tgChannel` (name kept, D2) and parsed only in publish; publish loops over `resolveTargets(tgChannel)`, skips targets whose post is current, sends the rest, and records the whole `posts` map after every send. `MessageRepo` gains `recordPosts` and narrows `markPublished` to `{id, ts}`; republish bumps `ts`. A pure `legacyTargetPatch` plus a scan script copies `tgChannel` → `target` on live source rows before deploy. **Tech stack:** TypeScript, Zod, Vitest, Biome, `@aws-sdk/lib-dynamodb`, aws-cdk-lib assertions, React Testing Library (jsdom), `tsx` for scripts. **Spec:** .spectomat/specs/multi-target.md
 
 ## Global Constraints
 
@@ -56,7 +56,7 @@
 
 ## Tasks
 
-One file per task under `docs/.spectomat/plans/multi-target/`, from `templates/task.md`, executed in this order. Tasks with no dependency between them and disjoint Files run in parallel as one wave.
+One file per task under `.spectomat/plans/multi-target/`, from `templates/task.md`, executed in this order. Tasks with no dependency between them and disjoint Files run in parallel as one wave.
 
 | # | File | Component | Covers | Depends on | Done |
 | --- | --- | --- | --- | --- | --- |

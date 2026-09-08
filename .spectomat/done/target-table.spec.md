@@ -10,7 +10,7 @@ validated against a table. Rejected: a `targets` table. Out of scope; the
 answer: the table is a **registry, not an allowlist** (§10 D5).
 
 This spec extends `docs/telegator.md` (the *base spec* below) and sits beside
-`docs/.spectomat/done/multi-target.spec.md` (the *multi-target spec*). Where it
+`.spectomat/done/multi-target.spec.md` (the *multi-target spec*). Where it
 diverges from the base spec's Part I, the divergence is a reconciliation in the
 base spec's §25, under the numbers §10 D12 assigns. Code cites this file as
 `target-table#3.1` — the `#` form, never `§`, so `test/specCitations.test.ts`

@@ -1,6 +1,6 @@
 # target-table · Task 2: `lib/pipeline/publish/template.ts` — the message template renderer
 
-**Plan:** docs/.spectomat/plans/target-table.md **Spec:** docs/.spectomat/specs/target-table.md — #2.3, #5.2 **Covers:** TT-3, TT-4, TT-5, TT-6 **Depends on:** none
+**Plan:** .spectomat/plans/target-table.md **Spec:** .spectomat/specs/target-table.md — #2.3, #5.2 **Covers:** TT-3, TT-4, TT-5, TT-6 **Depends on:** none
 
 ## Goal
 

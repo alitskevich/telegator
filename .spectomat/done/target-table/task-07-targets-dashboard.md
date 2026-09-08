@@ -1,6 +1,6 @@
 # target-table · Task 7: the `/targets` page — columns, actions, table, route and nav
 
-**Plan:** docs/.spectomat/plans/target-table.md **Spec:** docs/.spectomat/specs/target-table.md — #3.2, #7 **Covers:** TT-19, TT-20, TT-21, TT-22 **Depends on:** Task 1, Task 3, Task 4
+**Plan:** .spectomat/plans/target-table.md **Spec:** .spectomat/specs/target-table.md — #3.2, #7 **Covers:** TT-19, TT-20, TT-21, TT-22 **Depends on:** Task 1, Task 3, Task 4
 
 ## Goal
 

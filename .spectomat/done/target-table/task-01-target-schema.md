@@ -1,6 +1,6 @@
 # target-table · Task 1: the `targets` row schema and `toIsoTimestamp`
 
-**Plan:** docs/.spectomat/plans/target-table.md **Spec:** docs/.spectomat/specs/target-table.md — #2.1, #2.2, #5.3 **Covers:** TT-1, TT-2, TT-15 **Depends on:** none
+**Plan:** .spectomat/plans/target-table.md **Spec:** .spectomat/specs/target-table.md — #2.1, #2.2, #5.3 **Covers:** TT-1, TT-2, TT-15 **Depends on:** none
 
 ## Goal
 

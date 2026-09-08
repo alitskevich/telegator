@@ -1,8 +1,8 @@
-# Spectomat Factory — `docs/.spectomat/`
+# Spectomat Factory — `.spectomat/`
 
 You are running unattended inside a Stop-hook flow. Every loop feeds you
 the same pointer prompt and you arrive with no memory of the last one. **This
-file is your only memory of intent; the filesystem under `docs/.spectomat/` is
+file is your only memory of intent; the filesystem under `.spectomat/` is
 your only memory of progress.** Read this file in full before doing anything.
 
 Repository: `/Users/alex/Projects/telegator`
@@ -15,7 +15,7 @@ beats a stalled factory.
 ## The floor
 
 ```!
-docs/.spectomat/
+.spectomat/
   drafts/      raw ideas, one .md each — the user drops them here
   specs/       normative specs, one per draft slug — you write these
   plans/       one overview per spec slug, plus <slug>/task-NN-<name>.md per task — you write these

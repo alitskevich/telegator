@@ -1,6 +1,6 @@
 # multi-target · Task 8: E2E-1 over two targets, the base spec's ledger rows, the comment audit
 
-**Plan:** docs/.spectomat/plans/multi-target.md **Spec:** docs/.spectomat/specs/multi-target.md — #9.2 (E2E-1), #10 D12, #11, #16 step 7 **Covers:** MT-E2E-1 **Depends on:** Task 5, Task 7
+**Plan:** .spectomat/plans/multi-target.md **Spec:** .spectomat/specs/multi-target.md — #9.2 (E2E-1), #10 D12, #11, #16 step 7 **Covers:** MT-E2E-1 **Depends on:** Task 5, Task 7
 
 ## Goal
 
@@ -10,7 +10,7 @@ The whole pipeline over fakes sends one seeded post to both of a source's target
 
 - `docs/telegator.md` Part I (§1–§11) is never edited. §25 (Part III) and §33 (Part IV) are. R54 = the rename (base §2.1, §3.1, §8.3, §8.4, §9.4); R55 = the post map and per-target loop (base §2.3, §3.3, §3.4, §8.4's republish). Base §31 gains no numeric constant (D12).
 - `test/specCitations.test.ts` pins `§x.y L###` citations to section ranges of `docs/telegator.md`. No shipped file cites Part III/IV by line, so rows appended to §25 and §33 shift nothing that is checked — run the suite to prove it.
-- The spec's §11 table (`docs/.spectomat/specs/multi-target.md`) gets rows for plan rulings P1 and P3 — divergences from its Part I.
+- The spec's §11 table (`.spectomat/specs/multi-target.md`) gets rows for plan rulings P1 and P3 — divergences from its Part I.
 - Code cites this spec as `multi-target#<section>`, never with `§`. Criteria are `MT-n`. Relative imports carry no extension. No `any`, no suppression.
 - Gates before commit: `npx tsc --noEmit`, `npx vitest run`, `npx biome check .`, `npx cdk synth`.
 
@@ -18,7 +18,7 @@ The whole pipeline over fakes sends one seeded post to both of a source's target
 
 - Test: `test/e2e/e2e1.test.ts` (new `describe` at the end)
 - Modify: `docs/telegator.md` — §25 table (append after the `R53` row, ~line 1573), §33 table (append after the `smoke:openrouter` row, ~line 1868)
-- Modify: `docs/.spectomat/specs/multi-target.md` — §11 table
+- Modify: `.spectomat/specs/multi-target.md` — §11 table
 - Audit only (edit a comment where the audit finds one): every `.ts`/`.tsx` under `lib/`, `components/`, `handlers/`, `actions/`, `scripts/`, `infra/`
 
 ## Interfaces
@@ -109,7 +109,7 @@ describe("MT-E2E-1 (multi-target#9.2)", () => {
 `docs/telegator.md` §25 — append after the `R53` row:
 
 ```md
-| **R54** | §2.1, §3.1, §8.3, §8.4, §9.4 | `sources.tgChannel` is `sources.target`, a **comma-separated list** of target ids carried verbatim into the item payload as `target` and into `messages.tgChannel`, whose name is kept because it sits in the `status-index` projection (§7.2 L638). A stored `tgChannel` on a source is an orphan the schema strips; `scripts/migrate-targets.ts` copies it across before deploy. The full account is `docs/.spectomat/done/multi-target.spec.md` (or `specs/` while it is being built). |
+| **R54** | §2.1, §3.1, §8.3, §8.4, §9.4 | `sources.tgChannel` is `sources.target`, a **comma-separated list** of target ids carried verbatim into the item payload as `target` and into `messages.tgChannel`, whose name is kept because it sits in the `status-index` projection (§7.2 L638). A stored `tgChannel` on a source is an orphan the schema strips; `scripts/migrate-targets.ts` copies it across before deploy. The full account is `.spectomat/done/multi-target.spec.md` (or `specs/` while it is being built). |
 | **R55** | §2.3, §3.3, §3.4, §8.4 | Publish sends **once per target**: `messages.posts` maps each canonical target id to its `{tgId, tgAt}`, written whole after every send; `tgId`/`tgAt` are frozen legacy fields read only by the first-target fallback. A post is current when `tgAt >= ts` and is skipped; a rejected send fails the record so the redelivery sends to the rest; a sent-but-unrecorded post is acknowledged. `republishMessage` bumps `ts` so every post is re-sent. Base table only; no projection changes. |
 ```
 
@@ -119,7 +119,7 @@ describe("MT-E2E-1 (multi-target#9.2)", () => {
 | `migrate:targets` | R54's copy of `tgChannel` into `target` on every live source row that lacks it, **before** the deploy that reads `target`. Dry run by default, `--write` to apply; never removes `tgChannel`; idempotent. |
 ```
 
-`docs/.spectomat/specs/multi-target.md` §11 — add rows:
+`.spectomat/specs/multi-target.md` §11 — add rows:
 
 ```md
 | P1 | #6, #2.1 | `Post` schema listed under `lib/domain/target.ts`, which must import `DEFAULT_TG_CHANNEL` from `message.ts` — a cycle that throws when `target.ts` is the entry. | `PostSchema` lives in `lib/domain/message.ts`; `target.ts` imports `message.ts`, never the reverse. |
@@ -140,11 +140,11 @@ Every hit must be about the **message** field, the migration, or the seed's lega
 
 ## Rulings
 
-- Review · **Important** (`package.json:12`, `docs/.spectomat/contract.md:135`) is ruled on, not fixed in package.json: the owner's own commit `8526d6a` added a `gates` script (`typecheck && test && lint`) and rewrote the contract's gate block to a bare `npm run gates`, dropping `next build` and `npx cdk synth`. `CLAUDE.md` §32.1 requires all four, and the contract forbids weakening a gate, so the contract block is restored to `npm run gates && npm run build` + `npx cdk synth` with a sentence saying why; `package.json` is the shipped project's file and the factory leaves the owner's script as written — cost if wrong: the owner re-edits one line of contract.md.
+- Review · **Important** (`package.json:12`, `.spectomat/contract.md:135`) is ruled on, not fixed in package.json: the owner's own commit `8526d6a` added a `gates` script (`typecheck && test && lint`) and rewrote the contract's gate block to a bare `npm run gates`, dropping `next build` and `npx cdk synth`. `CLAUDE.md` §32.1 requires all four, and the contract forbids weakening a gate, so the contract block is restored to `npm run gates && npm run build` + `npx cdk synth` with a sentence saying why; `package.json` is the shipped project's file and the factory leaves the owner's script as written — cost if wrong: the owner re-edits one line of contract.md.
 - This wave's four gates were run whole and separately before the tick — `npm run gates` 0, `npm run build` 0, `npx cdk synth` 0 — so no gate was actually skipped despite the weakened block.
 - The task's three files were committed by the owner's hand-made `8526d6a "up"` while the implementer was still working, mixed with `contract.md`, `package.json` and `next-env.d.ts`. History is not rewritten and no duplicate `docs(multi-target)` commit is made: the content is on record, verified intact against the task's verbatim blocks — cost if wrong: the trail reads `up` instead of the task's Step 5 message.
 - `next-env.d.ts` flipped back to the `next build` variant after the gates and was discarded (`git checkout --`), leaving the owner's committed `next dev` variant — it belongs to no task and flips per command.
-- Review · **Minor** parked: R54's pointer `docs/.spectomat/done/multi-target.spec.md` is correct by design — phase D moves `specs/multi-target.md` there, and the row already says "(or `specs/` while it is being built)".
+- Review · **Minor** parked: R54's pointer `.spectomat/done/multi-target.spec.md` is correct by design — phase D moves `specs/multi-target.md` there, and the row already says "(or `specs/` while it is being built)".
 - Review · **Minor** parked: plan rulings P5 and P6 have no §11 row. Out of this task's scope (Tasks 5 and 7 issued them) and §11's rows are the divergences from the spec's *letter*; P5 and P6 add behaviour the spec did not forbid — cost if wrong: a reader of `lib/seed/targets.ts:15` resolves "P5" from the plan overview instead of the spec.
 - Review · **Minor** parked: the three MT-E2E-1 cases each rebuild the world and re-run `runPipeline` (~17 ms total) — the block is the task's verbatim text and independent assertions are worth the repeat.
 

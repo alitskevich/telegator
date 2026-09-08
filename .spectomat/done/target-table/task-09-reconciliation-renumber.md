@@ -1,6 +1,6 @@
 # target-table · Task 9: renumber the reconciliation references shipped by Tasks 1, 2, 3 and 5
 
-**Plan:** docs/.spectomat/plans/target-table.md **Spec:** docs/.spectomat/specs/target-table.md — D12 **Covers:** no criterion — a correction the plan lacked **Depends on:** 1, 2, 3, 5
+**Plan:** .spectomat/plans/target-table.md **Spec:** .spectomat/specs/target-table.md — D12 **Covers:** no criterion — a correction the plan lacked **Depends on:** 1, 2, 3, 5
 
 ## Goal
 

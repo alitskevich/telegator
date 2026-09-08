@@ -1,6 +1,6 @@
 # target-table · Task 5: `assembleMessage`'s fourth argument and the parameterised overflow ladder
 
-**Plan:** docs/.spectomat/plans/target-table.md **Spec:** docs/.spectomat/specs/target-table.md — #5.1 **Covers:** TT-7, TT-8, TT-9 **Depends on:** Task 2
+**Plan:** .spectomat/plans/target-table.md **Spec:** .spectomat/specs/target-table.md — #5.1 **Covers:** TT-7, TT-8, TT-9 **Depends on:** Task 2
 
 ## Goal
 
