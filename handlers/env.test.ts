@@ -41,6 +41,7 @@ describe("ENV_VARS", () => {
     expect(ENV_VARS).toEqual({
       sourcesTable: "TELEGATOR_SOURCES_TABLE",
       messagesTable: "TELEGATOR_MESSAGES_TABLE",
+      targetsTable: "TELEGATOR_TARGETS_TABLE",
       analyzeQueueUrl: "TELEGATOR_ANALYZE_QUEUE_URL",
       aggregateQueueUrl: "TELEGATOR_AGGREGATE_QUEUE_URL",
       publishQueueUrl: "TELEGATOR_PUBLISH_QUEUE_URL",

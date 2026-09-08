@@ -292,6 +292,29 @@ describe("IAM (§7.6 L707-712, R24)", () => {
     expect(dynamo).toEqual(new Set(["dynamodb:GetItem", "dynamodb:UpdateItem"]));
   });
 
+  /**
+   * TT-18 — publish now reads two tables and updates two tables, with the same
+   * two actions on each. The count is what says the targets grant exists at
+   * all; the action set is what says it added no third verb.
+   */
+  test("TT-18: publish reaches both tables with GetItem and UpdateItem only", () => {
+    const dynamo = (statementsByFunction(templateFor()).get("telegator-dev-publish") ?? []).filter(
+      (statement) =>
+        [statement.Action]
+          .flat()
+          .map(String)
+          .some((action) => action.startsWith("dynamodb:")),
+    );
+
+    const actions = new Set(dynamo.flatMap((statement) => [statement.Action].flat().map(String)));
+    expect(actions).toEqual(new Set(["dynamodb:GetItem", "dynamodb:UpdateItem"]));
+
+    // One resource per table, and no index ARN: the targets table has no GSI.
+    const resources = dynamo.flatMap((statement) => [statement.Resource].flat());
+    expect(resources).toHaveLength(2);
+    expect(JSON.stringify(resources)).not.toContain("/index/");
+  });
+
   /** Named individually, because a set equality can be satisfied by a later edit. */
   test("publish may not delete or overwrite a message record", () => {
     const statements = statementsByFunction(templateFor()).get("telegator-dev-publish") ?? [];

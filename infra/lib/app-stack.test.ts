@@ -411,6 +411,33 @@ describe("TelegatorAppStack", () => {
       expect(reads).toHaveLength(1);
       expect(reads[0]?.Resource).toBe(SESSION_SECRET_ARN);
     });
+
+    /**
+     * TT-18 — the dashboard reads and writes three tables now. The action set is
+     * unchanged, so the grant can only be seen in what the statements reach.
+     *
+     * Not a statement *count*: `@aws-cdk/aws-iam:minimizePolicies` is on in
+     * `cdk.json`, and the targets grant is deliberately the same four actions
+     * as the sources grant, so the two merge into one statement with two
+     * resources. Counting the distinct table ARNs survives that merge and is
+     * the thing worth asserting anyway.
+     */
+    test("TT-18: its DynamoDB statements reach all three tables", () => {
+      const dynamo = policyStatements(templateFor()).filter((s) =>
+        actionsOf(s).some((action) => action.startsWith("dynamodb:")),
+      );
+
+      const tables = new Set(
+        dynamo
+          .flatMap((statement) => [statement.Resource].flat())
+          .map((resource) => JSON.stringify(resource))
+          // A Query is granted on the index ARN as well; only tables count here.
+          .filter((resource) => !resource.includes("/index/")),
+      );
+
+      expect(tables.size).toBe(3);
+      expect([...tables].join(" ")).toContain("TargetsTable");
+    });
   });
 
   /**

@@ -272,6 +272,18 @@ describe("TelegatorPipelineStack functions", () => {
     }
   });
 
+  /** target-table#13 — every function carries it, so a stack that forgets is a grep away. */
+  test("TT-18: every function carries the targets table name", () => {
+    const template = stackFor().template;
+
+    for (const fn of functions(template)) {
+      const variables =
+        (fn.Environment as { Variables?: Record<string, unknown> } | undefined)?.Variables ?? {};
+
+      expect(variables.TELEGATOR_TARGETS_TABLE).toBeDefined();
+    }
+  });
+
   test("names functions with the §9.2 L896 environment prefix", () => {
     expect(named(stackFor({ env: "prod" }).template, "telegator-prod-scrape")).toBeDefined();
   });

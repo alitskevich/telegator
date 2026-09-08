@@ -12,6 +12,8 @@
 export const ENV_VARS = {
   sourcesTable: "TELEGATOR_SOURCES_TABLE",
   messagesTable: "TELEGATOR_MESSAGES_TABLE",
+  /** target-table#13 (R56) — the third table: the publish registry. */
+  targetsTable: "TELEGATOR_TARGETS_TABLE",
   analyzeQueueUrl: "TELEGATOR_ANALYZE_QUEUE_URL",
   aggregateQueueUrl: "TELEGATOR_AGGREGATE_QUEUE_URL",
   publishQueueUrl: "TELEGATOR_PUBLISH_QUEUE_URL",

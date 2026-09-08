@@ -138,6 +138,7 @@ export class TelegatorPipelineStack extends Stack {
     const environment: Record<string, string> = {
       [ENV_VARS.sourcesTable]: data.sources.tableName,
       [ENV_VARS.messagesTable]: data.messages.tableName,
+      [ENV_VARS.targetsTable]: data.targets.tableName,
       [ENV_VARS.analyzeQueueUrl]: queues.analyze.queueUrl,
       [ENV_VARS.aggregateQueueUrl]: queues.aggregate.queueUrl,
       [ENV_VARS.publishQueueUrl]: queues.publish.queueUrl,
@@ -305,6 +306,13 @@ export class TelegatorPipelineStack extends Stack {
      * (§8.4 L816). A stage that never deletes should not be able to.
      */
     grantTableActions(data.messages, publish, "dynamodb:GetItem", "dynamodb:UpdateItem");
+    /**
+     * target-table#5.3 — publish reads the row before it assembles and mirrors
+     * the two `lastPosted*` fields after it records. `GetItem` and `UpdateItem`,
+     * the same two it holds on `messages`: the mirror write creates the row
+     * when there is none, so no `PutItem` is needed (D5).
+     */
+    grantTableActions(data.targets, publish, "dynamodb:GetItem", "dynamodb:UpdateItem");
     publish.addToRolePolicy(readSecret(secretArn(this, "telegramSecretArn")));
 
     // §7.6 L711 — receive on all DLQs, send on all source queues.

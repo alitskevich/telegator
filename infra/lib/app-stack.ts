@@ -90,6 +90,7 @@ export class TelegatorAppStack extends Stack {
       // the names come from `handlers/env.ts` rather than a second vocabulary.
       [ENV_VARS.sourcesTable, data.sources.tableName],
       [ENV_VARS.messagesTable, data.messages.tableName],
+      [ENV_VARS.targetsTable, data.targets.tableName],
       [ENV_VARS.analyzeQueueUrl, queues.analyze.queueUrl],
       [ENV_VARS.aggregateQueueUrl, queues.aggregate.queueUrl],
       [ENV_VARS.publishQueueUrl, queues.publish.queueUrl],
@@ -192,6 +193,17 @@ export class TelegatorAppStack extends Stack {
     // an update too.
     grantTableActions(
       data.sources,
+      this.appRole,
+      "dynamodb:GetItem",
+      "dynamodb:Scan",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    );
+
+    // target-table#3.2 — `/targets` lists (a Scan), creates (PutItem), edits
+    // and soft-deletes (both UpdateItem). The same four the Sources page needs.
+    grantTableActions(
+      data.targets,
       this.appRole,
       "dynamodb:GetItem",
       "dynamodb:Scan",

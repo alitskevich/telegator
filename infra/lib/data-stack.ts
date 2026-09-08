@@ -79,6 +79,8 @@ export class TelegatorDataStack extends Stack {
   public readonly sources: Table;
   /** §2.3 — the only durable record of a Telegram post. */
   public readonly messages: Table;
+  /** target-table#2.2 (R56) — one row per publish destination. */
+  public readonly targets: Table;
 
   constructor(scope: Construct, id: string, props: TelegatorDataStackProps) {
     super(scope, id, props);
@@ -134,6 +136,25 @@ export class TelegatorDataStack extends Stack {
       sortKey: { name: "ts", type: AttributeType.NUMBER },
       projectionType: ProjectionType.INCLUDE,
       nonKeyAttributes: [...DEDUP_CANDIDATE_ATTRIBUTES],
+    });
+
+    /**
+     * target-table#2.2 — the registry (R56).
+     *
+     * §7.2 L629's "two tables" becomes three: a target is not a source, and
+     * §7.2's own reasoning holds — nothing is co-queried across them, so
+     * single-table modelling would add ceremony with no payoff.
+     *
+     * No index (D8): tens of rows, one `GetItem` by id and one `Scan`. No PITR
+     * either — an operator's template is re-typeable, and `messages` is the
+     * record that is not. `RETAIN` all the same, so a stack replacement does
+     * not take the templates with it.
+     */
+    this.targets = new Table(this, "TargetsTable", {
+      tableName: config.name("targets"),
+      partitionKey: { name: "id", type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      removalPolicy: RemovalPolicy.RETAIN,
     });
   }
 }

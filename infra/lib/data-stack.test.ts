@@ -39,8 +39,8 @@ const table = (t: Template, name: string) =>
   )?.Properties;
 
 describe("TelegatorDataStack", () => {
-  test("declares exactly the two tables §7.2 L629 names", () => {
-    templateFor().resourceCountIs("AWS::DynamoDB::Table", 2);
+  test("declares the three tables: §7.2 L629's two, plus targets (R56)", () => {
+    templateFor().resourceCountIs("AWS::DynamoDB::Table", 3);
   });
 
   test("names them with the §9.2 L896 environment prefix", () => {
@@ -48,18 +48,25 @@ describe("TelegatorDataStack", () => {
 
     expect(table(t, "telegator-prod-sources")).toBeDefined();
     expect(table(t, "telegator-prod-messages")).toBeDefined();
+    expect(table(t, "telegator-prod-targets")).toBeDefined();
   });
 
   /** §7.2 L629 — "both `PAY_PER_REQUEST`". */
-  test.each(["telegator-dev-sources", "telegator-dev-messages"])("%s bills per request", (name) => {
-    expect(table(templateFor(), name)?.BillingMode).toBe("PAY_PER_REQUEST");
-  });
+  test.each(["telegator-dev-sources", "telegator-dev-messages", "telegator-dev-targets"])(
+    "%s bills per request",
+    (name) => {
+      expect(table(templateFor(), name)?.BillingMode).toBe("PAY_PER_REQUEST");
+    },
+  );
 
-  test.each(["telegator-dev-sources", "telegator-dev-messages"])("%s is keyed by id", (name) => {
-    expect(table(templateFor(), name)?.KeySchema).toEqual([
-      { AttributeName: "id", KeyType: "HASH" },
-    ]);
-  });
+  test.each(["telegator-dev-sources", "telegator-dev-messages", "telegator-dev-targets"])(
+    "%s is keyed by id",
+    (name) => {
+      expect(table(templateFor(), name)?.KeySchema).toEqual([
+        { AttributeName: "id", KeyType: "HASH" },
+      ]);
+    },
+  );
 
   describe("sources", () => {
     /** §7.2 L633 — `status-index`: PK `status`, and no sort key. */
@@ -208,9 +215,9 @@ describe("TelegatorDataStack", () => {
     }
   });
 
-  test("declares no resource beyond the two tables", () => {
-    templateFor().resourceCountIs("AWS::DynamoDB::Table", 2);
-    expect(Object.keys(templateFor().toJSON().Resources ?? {})).toHaveLength(2);
+  test("declares no resource beyond the three tables", () => {
+    templateFor().resourceCountIs("AWS::DynamoDB::Table", 3);
+    expect(Object.keys(templateFor().toJSON().Resources ?? {})).toHaveLength(3);
   });
 
   test("exposes both tables to the stacks that consume them", () => {
@@ -233,5 +240,39 @@ describe("TelegatorDataStack", () => {
      */
     expect(stack.sources.node.id).toBe("SourcesTable");
     expect(stack.messages.node.id).toBe("MessagesTable");
+  });
+
+  describe("targets (target-table#2.2, R56)", () => {
+    test("TT-17: is keyed by id, bills per request and is retained", () => {
+      const properties = table(templateFor(), "telegator-dev-targets");
+
+      expect(properties?.KeySchema).toEqual([{ AttributeName: "id", KeyType: "HASH" }]);
+      expect(properties?.BillingMode).toBe("PAY_PER_REQUEST");
+    });
+
+    /** D1 — an operator's templates outlive the stack that created the table. */
+    test("TT-17: is retained when the stack goes", () => {
+      const retained = Object.values(templateFor().findResources("AWS::DynamoDB::Table")).find(
+        (resource) => resource.Properties?.TableName === "telegator-dev-targets",
+      );
+
+      expect(retained?.DeletionPolicy).toBe("Retain");
+    });
+
+    /**
+     * D8 — tens of rows, one access pattern by id and one full listing. A
+     * projection is the one thing that cannot be changed in place later, so the
+     * absence of an index is worth pinning rather than assuming.
+     */
+    test("TT-17: has no global secondary index", () => {
+      expect(table(templateFor(), "telegator-dev-targets")?.GlobalSecondaryIndexes).toBeUndefined();
+    });
+
+    /** The templates are re-typeable; `messages` is the record that is not. */
+    test("TT-17: needs no point-in-time recovery", () => {
+      expect(
+        table(templateFor(), "telegator-dev-targets")?.PointInTimeRecoverySpecification,
+      ).toBeUndefined();
+    });
   });
 });
