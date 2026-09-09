@@ -9,9 +9,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "gates": "npm run typecheck && npm run test && npm run lint",
+    "gates": "npx --yes npm-run-all --parallel --continue-on-error --aggregate-output typecheck test lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:changed": "vitest run --changed HEAD",
     "lint": "biome check .",
     "format": "biome check --write .",
     "synth": "cdk synth",
