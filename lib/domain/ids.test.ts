@@ -31,9 +31,9 @@ describe("parseItemId", () => {
   });
 
   /**
-   * §6 L593 takes the channel as `item.id.split("/")[0]`. That is only correct
+   * §6 L597 takes the channel as `item.id.split("/")[0]`. That is only correct
    * while the source segment contains no slash — otherwise the channel is
-   * silently truncated and §3.4 L322 renders a broken @mention link.
+   * silently truncated and §3.4 L326 renders a broken @mention link.
    */
   test("rejects a source segment containing a slash", () => {
     expect(() => parseItemId("a/b/1")).toThrow();
@@ -49,13 +49,13 @@ describe("parseItemId", () => {
 });
 
 describe("sourceIdOf", () => {
-  test("returns the channel segment §6 L593 needs for the @mention", () => {
+  test("returns the channel segment §6 L597 needs for the @mention", () => {
     expect(sourceIdOf("yigal_levin/12345")).toBe("yigal_levin");
   });
 
   test("throws rather than returning undefined for a malformed id", () => {
     // A silent undefined would reach MemberBlock.channel and render as
-    // "@undefined" in a published Telegram message (§3.4 L322).
+    // "@undefined" in a published Telegram message (§3.4 L326).
     expect(() => sourceIdOf("nonsense")).toThrow();
   });
 });

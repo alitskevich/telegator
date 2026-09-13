@@ -2,7 +2,7 @@ import { readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 /**
- * A static import graph, used to enforce §8.2 L788 transitively.
+ * A static import graph, used to enforce §8.2 L792 transitively.
  *
  * The first version of `test/boundaries.test.ts` read each file's own text, so a
  * dashboard file importing a module that itself imports `lib/pipeline/` passed —
@@ -21,7 +21,7 @@ import { dirname, resolve } from "node:path";
  *
  * `import type` is excluded: it is erased at build time, so it carries nothing
  * into a bundle, and counting it would forbid the dashboard from naming a
- * pipeline *type* — a restriction §8.2 L788 does not ask for.
+ * pipeline *type* — a restriction §8.2 L792 does not ask for.
  */
 const SPECIFIER_PATTERNS = [
   /\bimport\s+type\s[^"']*?from\s*["']([^"']+)["']/g,

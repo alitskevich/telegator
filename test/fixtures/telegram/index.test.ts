@@ -3,7 +3,7 @@ import { CHUNK_MARKER, telegramFixture, telegramFixtureNames } from "./index";
 
 /**
  * These fixtures were built from markup observed on a live `t.me/s/` page, not
- * imagined. §4.1 L376 calls the scraper "the system's most fragile dependency"
+ * imagined. §4.1 L380 calls the scraper "the system's most fragile dependency"
  * because it depends on four literal CSS class names, so a fixture that merely
  * looks plausible would let the parser pass here and fail in production.
  *

@@ -3,22 +3,32 @@
 import { useState } from "react";
 import type { QueueRow } from "../lib/dashboard/queues";
 import type { DlqMessage } from "../lib/queues/inspect";
+import { MAX_CONSUME } from "../lib/queues/ports";
+import { useAction } from "./useAction";
 
 /**
- * §8.2 L776 — "Queue depths + DLQ inspection/replay".
+ * §8.2 L780 — "Queue depths + DLQ inspection/replay".
  *
  * §8.3 has no row describing this page, so the content is derived from L776 and
- * §7.7 L748's operational view: per stage, what is waiting, what has failed, and
+ * §7.7 L752's operational view: per stage, what is waiting, what has failed, and
  * what those failures contain.
  */
 
 const DEFAULT_REPLAY_MAX = 10;
+
+/** R57's three states, kept out of the JSX where the ternaries would nest. */
+const purgeLabel = (armed: boolean, depth: number, running: boolean): string => {
+  if (running) return "Discarding…";
+  return armed ? `Confirm — delete ${depth}` : "Cleanup all";
+};
 
 export interface QueuesPanelProps {
   readonly rows: readonly QueueRow[];
   readonly canAdmin: boolean;
   readonly onInspect: (queueName: string) => Promise<DlqMessage[]>;
   readonly onReplay: (queueName: string, max: number) => Promise<{ replayed: number }>;
+  /** R61 — runs this queue's stage over one batch, now. */
+  readonly onConsume: (queueName: string) => Promise<{ consumed: number; failed: number }>;
   /** R57 — discards the DLQ outright. Irreversible, so it is armed before it fires. */
   readonly onPurge: (queueName: string) => Promise<{ discarded: number }>;
 }
@@ -41,11 +51,41 @@ function QueueCard({
   canAdmin,
   onInspect,
   onReplay,
+  onConsume,
   onPurge,
 }: { row: QueueRow } & Omit<QueuesPanelProps, "rows">) {
   const [messages, setMessages] = useState<DlqMessage[] | undefined>(undefined);
   const [max, setMax] = useState(String(DEFAULT_REPLAY_MAX));
-  const [notice, setNotice] = useState("");
+
+  /** The listing lands on the card itself, so there is nothing to announce. */
+  const inspect = useAction(onInspect, {
+    onDone: setMessages,
+    failure: "Inspect failed",
+  });
+
+  const replay = useAction(onReplay, {
+    describe: ({ replayed }) => `Replayed ${replayed} from ${row.name}`,
+    failure: "Replay failed",
+  });
+
+  /**
+   * R61 — offered whenever there is something in the queue to run.
+   *
+   * The event source mapping is normally the only consumer, so this is for the
+   * cases where waiting for it is the problem: §7.3 L652's five-minute delay on
+   * publish, a mapping an operator has just re-enabled, or a backlog they want
+   * moved while they watch.
+   */
+  const consume = useAction(onConsume, {
+    describe: ({ consumed, failed }) =>
+      `Consumed ${consumed} from ${row.name}${failed === 0 ? "" : `, ${failed} left failed`}`,
+    failure: "Consume failed",
+  });
+
+  const purge = useAction(onPurge, {
+    describe: ({ discarded }) => `Discarded ${discarded} from ${row.name}`,
+    failure: "Cleanup failed",
+  });
   /**
    * R57 — the cleanup is armed by one press and fired by a second.
    *
@@ -79,12 +119,30 @@ function QueueCard({
       </dl>
 
       <div className="queue-controls">
-        <button type="button" onClick={() => void onInspect(row.name).then(setMessages)}>
-          Inspect
+        <button
+          type="button"
+          disabled={inspect.running}
+          aria-busy={inspect.running}
+          onClick={() => inspect.run(row.name)}
+        >
+          {inspect.running ? "Inspecting…" : "Inspect"}
         </button>
 
+        {/* R61 — an empty queue has nothing to run a stage over, and a live
+            button there would read as broken. §8.4's triggers are admin. */}
+        {canAdmin && row.depth > 0 ? (
+          <button
+            type="button"
+            disabled={consume.running}
+            aria-busy={consume.running}
+            onClick={() => consume.run(row.name)}
+          >
+            {consume.running ? "Consuming…" : `Consume now (${MAX_CONSUME})`}
+          </button>
+        ) : null}
+
         {/* Replaying an empty DLQ invokes a Lambda and reads a queue to move
-            nothing, so the control is not offered for one. §8.4 L817 is admin. */}
+            nothing, so the control is not offered for one. §8.4 L821 is admin. */}
         {canAdmin && row.dlqDepth > 0 ? (
           <>
             <label>
@@ -93,38 +151,38 @@ function QueueCard({
             </label>
             <button
               type="button"
+              disabled={replay.running}
+              aria-busy={replay.running}
               onClick={() => {
                 // The handler bounds its drain by `max`; a zero or negative one
                 // would be rejected after an invoke that could not do anything.
                 if (!Number.isInteger(replayMax) || replayMax <= 0) return;
-                void onReplay(row.name, replayMax).then(({ replayed }) => {
-                  setNotice(`Replayed ${replayed}`);
-                });
+                replay.run(row.name, replayMax);
               }}
             >
-              Replay
+              {replay.running ? "Replaying…" : "Replay"}
             </button>
 
             <button
               type="button"
               className="queue-danger"
+              disabled={purge.running}
+              aria-busy={purge.running}
               onClick={() => {
                 if (!armed) {
                   setArmedAt(row.dlqDepth);
                   return;
                 }
+                // Disarmed on the firing press: a purge that failed must be
+                // armed again rather than sitting one press from firing.
                 setArmedAt(undefined);
-                void onPurge(row.name).then(({ discarded }) => {
-                  setNotice(`Discarded ${discarded}`);
-                });
+                purge.run(row.name);
               }}
             >
-              {armed ? `Confirm — delete ${row.dlqDepth}` : "Cleanup all"}
+              {purgeLabel(armed, row.dlqDepth, purge.running)}
             </button>
           </>
         ) : null}
-
-        {notice === "" ? null : <output className="notice">{notice}</output>}
       </div>
 
       {messages === undefined ? null : messages.length === 0 ? (

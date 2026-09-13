@@ -13,7 +13,7 @@ import { isCurrent, postFor } from "./posts";
 /**
  * §3.4 — the publish consumer, once per target (multi-target#3.4, #5.1; R55).
  *
- * Batch size is 1 (§3.4 L313), deliberately: each send is rate-limited against
+ * Batch size is 1 (§3.4 L317), deliberately: each send is rate-limited against
  * Telegram and the FIFO message group already serialises work per message. This
  * still loops, so the stage stays correct if the batch size is ever raised.
  */
@@ -36,7 +36,7 @@ export interface PublishDeps {
 }
 
 /**
- * §3.4 L350 sends first and records second, and nothing can make those atomic:
+ * §3.4 L354 sends first and records second, and nothing can make those atomic:
  * Telegram has no idempotency key, and a post cannot be un-sent. So the gap is
  * narrowed rather than closed. Three attempts covers the failure that actually
  * happens here — a throttled `UpdateItem` — while leaving the loop bounded.
@@ -50,7 +50,7 @@ export interface PublishResultSummary {
   readonly batchItemFailures: ReadonlyArray<{ readonly itemIdentifier: string }>;
 }
 
-/** §3.4 L317 — the only status that is still worth sending. */
+/** §3.4 L321 — the only status that is still worth sending. */
 const PUBLISHABLE_STATUS = "topublish";
 
 async function send(
@@ -60,7 +60,7 @@ async function send(
 ): Promise<TelegramResponse> {
   switch (assembled.method) {
     case "editMessageText":
-      // `assembleMessage` chose this branch because a tgId exists (§3.4 L345),
+      // `assembleMessage` chose this branch because a tgId exists (§3.4 L349),
       // so the narrowing below is exhaustive rather than defensive.
       if (tgId === undefined) {
         throw new Error("editMessageText was chosen for a message with no tgId");
@@ -115,7 +115,7 @@ export async function runPublish(
       continue;
     }
 
-    // §8.4 L810's soft delete, honoured before the status check (R16): a
+    // §8.4 L814's soft delete, honoured before the status check (R16): a
     // deleted message is acknowledged, since a retry finds it deleted too.
     if (stored.deleted === true) {
       deps.logger.info("publish skipped: message is deleted", { messageId });
@@ -123,7 +123,7 @@ export async function runPublish(
     }
 
     /**
-     * §3.4 L317 — "If `status !== 'topublish'`, acknowledge and exit — the work
+     * §3.4 L321 — "If `status !== 'topublish'`, acknowledge and exit — the work
      * was superseded." Also the guard that protects Telegram from a duplicate
      * delivery: SQS's 5-minute FIFO window is a floor, not a lock (AC-4.6).
      */
@@ -138,7 +138,7 @@ export async function runPublish(
       /**
        * D6 — a post is live and its record did not land. ACKNOWLEDGED: a
        * redelivery would find no post for that target and send it again, the
-       * duplicate §9.5 L978 exists to prevent. The error log named the target
+       * duplicate §9.5 L982 exists to prevent. The error log named the target
        * and the tgId, which is the only handle an operator has on the post.
        */
       continue;
@@ -190,7 +190,7 @@ async function publishTargets(
     const response = await send(deps.bot, assembled, existing?.tgId);
 
     if (!response.ok) {
-      // §4.2 L386 — `ok` is the error signal, not the HTTP status. Nothing is
+      // §4.2 L390 — `ok` is the error signal, not the HTTP status. Nothing is
       // written for this target: a tgId that does not exist on Telegram would
       // turn every future publish into an edit of nothing.
       deps.metrics.count("TelegramApiErrors", 1, { Method: assembled.method });

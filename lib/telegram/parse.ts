@@ -1,5 +1,5 @@
 /**
- * The §3.1 L209–220 `t.me/s/{channel}` HTML parser.
+ * The §3.1 L209–221 `t.me/s/{channel}` HTML parser.
  *
  * Telegram's preview page is scraped, not fetched through an API, so this module
  * is deliberately string-level: no DOM, no HTML library. Three details below come
@@ -19,6 +19,8 @@ export interface ParsedPost {
   links: Array<{ id: number; href: string }>;
   image?: string;
   forwardedFrom?: string;
+  /** The post's publish time, as the page writes it — an ISO-8601 string. */
+  postedAt?: string;
 }
 
 /** §3.1 L209 — the literal the page is split on. */
@@ -66,7 +68,7 @@ const HTML_ENTITIES: ReadonlyArray<readonly [string, string]> = [
   ["&gt;", ">"],
   ["&quot;", '"'],
   ["&#39;", "'"],
-  // A plain space rather than U+00A0: §3.1 L224 strips a source's `teaser` from
+  // A plain space rather than U+00A0: §3.1 L225 strips a source's `teaser` from
   // this body by literal comparison, which an invisible non-breaking space breaks.
   ["&nbsp;", " "],
   ["&amp;", "&"],
@@ -88,6 +90,17 @@ const BACKGROUND_IMAGE_PATTERN = /background-image:\s*url\('([^']*)'\)/g;
  */
 const EMOJI_SPRITE_URL_PATTERN = /telegram\.org\/img\/emoji\//;
 const EMOJI_CLASS_PATTERN = /class="[^"]*\bemoji\b[^"]*"/;
+
+/**
+ * §3.1 L219 — the publish time, read off the date anchor's
+ * `<time datetime="2026-08-29T09:15:00+00:00">`.
+ *
+ * The first `<time>` carrying a `datetime` is the post's own: the date anchor is
+ * the only element of a chunk that has one. The value is passed through as the
+ * page wrote it, so the parser stays clock-free and string-level — §3.1 L227
+ * does the arithmetic.
+ */
+const POSTED_AT_PATTERN = /<time\b[^>]*\sdatetime="(?<postedAt>[^"]*)"/;
 
 /** §3.1 L218 — the forwarded-from anchor. */
 const FORWARDED_FROM_CLASS = "tgme_widget_message_forwarded_from_name";
@@ -213,7 +226,7 @@ function extractForwardedFrom(chunk: string): string | undefined {
 function parseChunk(chunk: string): ParsedPost | undefined {
   const id = MESSAGE_ID_PATTERN.exec(chunk)?.groups?.messageId;
   if (id === undefined) {
-    // §3.1 L220 — an id-less chunk is a zero-yield signal for the orchestrator;
+    // §3.1 L221 — an id-less chunk is a zero-yield signal for the orchestrator;
     // here it only means: never emit a post without an id.
     return undefined;
   }
@@ -229,11 +242,15 @@ function parseChunk(chunk: string): ParsedPost | undefined {
   if (forwardedFrom !== undefined) {
     post.forwardedFrom = forwardedFrom;
   }
+  const postedAt = POSTED_AT_PATTERN.exec(chunk)?.groups?.postedAt;
+  if (postedAt !== undefined) {
+    post.postedAt = postedAt;
+  }
 
   return post;
 }
 
-/** §3.1 L209–220 — one page of `t.me/s/{channel}` markup into posts. */
+/** §3.1 L209–221 — one page of `t.me/s/{channel}` markup into posts. */
 export function parseTelegramPage(html: string): ParsedPost[] {
   const posts: ParsedPost[] = [];
 

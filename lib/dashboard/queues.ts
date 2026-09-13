@@ -6,7 +6,7 @@ import { REPLAYABLE_QUEUES, type ReplayableQueue } from "../queues/ports";
 import type { DlqPurger } from "../queues/purge";
 
 /**
- * §8.2 L776 — "Queue depths + DLQ inspection/replay".
+ * §8.2 L780 — "Queue depths + DLQ inspection/replay".
  *
  * §8.3 has no row for this page, so its content comes from L776 and from §7.7
  * L748's operational view: for each stage, what is waiting, what has failed, and
@@ -58,8 +58,8 @@ const QueueNameSchema = z.object({ queueName: z.enum(REPLAYABLE_QUEUES) });
 /**
  * Read what is sitting in one DLQ.
  *
- * `viewer`, because §8.6 L843 gives that role every page and this is part of
- * one — replaying is the privileged act (§8.4 L817), not looking. The queue is
+ * `viewer`, because §8.6 L847 gives that role every page and this is part of
+ * one — replaying is the privileged act (§8.4 L821), not looking. The queue is
  * named rather than defaulted, as it is in `handlers/dlqReplay.ts`: showing an
  * operator the wrong queue's contents would misinform a decision to replay.
  */
@@ -74,7 +74,7 @@ export async function inspectDlq(input: unknown, deps: QueuePageDeps): Promise<D
 /**
  * R57 — discard everything in one DLQ.
  *
- * `admin`, alongside §8.4 L817's replay and for a stronger reason: replay moves
+ * `admin`, alongside §8.4 L821's replay and for a stronger reason: replay moves
  * messages, this ends them. §1.3 L69 makes the DLQ a dead-lettered post's last
  * copy, so nothing recovers what this deletes.
  *

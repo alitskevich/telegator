@@ -51,7 +51,7 @@ const deps = () => ({
   revalidate: (path: string) => revalidated.push(path),
 });
 
-describe("loadQueues — §8.2 L776", () => {
+describe("loadQueues — §8.2 L780", () => {
   test("carries every stage with both depths", async () => {
     queues.set(QUEUES.analyze, { available: 4, inFlight: 1 });
     queues.set(DLQS.analyze, { available: 2, inFlight: 0 });
@@ -74,10 +74,10 @@ describe("loadQueues — §8.2 L776", () => {
   });
 });
 
-describe("inspectDlq — §8.2 L776", () => {
+describe("inspectDlq — §8.2 L780", () => {
   const body = { messageId: "m1", body: '{"id":"example/1"}', receiveCount: 3 };
 
-  /** §8.6 L843 — `viewer` reads all pages, and this is part of one. */
+  /** §8.6 L847 — `viewer` reads all pages, and this is part of one. */
   test("a viewer may inspect", async () => {
     signedInAs("viewer");
     inspector.set(DLQS.publish, [body]);
@@ -128,7 +128,7 @@ describe("purgeDlq — R57", () => {
     expect(await purgeDlq({ queueName: "analyze" }, deps())).toEqual({ discarded: 9 });
   });
 
-  /** §8.4 L817's replay is `admin`; ending messages outright cannot be less. */
+  /** §8.4 L821's replay is `admin`; ending messages outright cannot be less. */
   test("a viewer may not purge", async () => {
     signedInAs("viewer");
 

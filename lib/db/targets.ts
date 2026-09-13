@@ -41,7 +41,7 @@ export function createTargetRepo(options: TargetRepoOptions): TargetRepo {
     },
 
     /**
-     * §8.3 L797 — every target.
+     * §8.3 L801 — every target.
      *
      * A Scan, for the reason `sources.listAll` is one: tens of rows, no index
      * to query (D8), and an index existing only to avoid a Scan of that size
@@ -74,7 +74,7 @@ export function createTargetRepo(options: TargetRepoOptions): TargetRepo {
       await client.send(new PutCommand({ TableName: tableName, Item: target }));
     },
 
-    /** §8.4 L808 — an operator edit. The action validates the delta first. */
+    /** §8.4 L812 — an operator edit. The action validates the delta first. */
     patch: async (id: string, delta: Readonly<Record<string, unknown>>): Promise<void> => {
       const command = updateAttributes(tableName, id, delta);
       if (command === undefined) return;
@@ -107,7 +107,7 @@ export function createTargetRepo(options: TargetRepoOptions): TargetRepo {
       );
     },
 
-    /** §8.4 L810 — soft delete, one UpdateItem per id. */
+    /** §8.4 L814 — soft delete, one UpdateItem per id. */
     softDelete: async (ids: readonly string[]): Promise<void> => {
       for (const id of ids) {
         await client.send(softDeleteCommand(tableName, id));

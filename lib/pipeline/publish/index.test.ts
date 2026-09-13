@@ -84,7 +84,7 @@ describe("runPublish", () => {
 
   /**
    * AC-4.5: "A message whose status is no longer `topublish` is
-   * acknowledged without a Telegram call." §3.4 L317 — the work was superseded.
+   * acknowledged without a Telegram call." §3.4 L321 — the work was superseded.
    * This is also the application-level guard that actually protects Telegram
    * when SQS's 5-minute dedup window lets a second delivery through, which is
    * why AC-4.6 is BLOCKED as an SQS property rather than a code one.
@@ -105,9 +105,9 @@ describe("runPublish", () => {
   });
 
   /**
-   * §8.4 L810's soft delete, honoured here.
+   * §8.4 L814's soft delete, honoured here.
    *
-   * *Reconciliation.* §3.4 L317 gates this stage on `status` alone, and
+   * *Reconciliation.* §3.4 L321 gates this stage on `status` alone, and
    * `softDelete` writes `deleted` without touching it — so a message an
    * operator deleted from the dashboard was still posted to Telegram if its
    * publish job was already on the queue. R16 hides a deleted message from
@@ -130,7 +130,7 @@ describe("runPublish", () => {
   });
 
   /**
-   * AC-4.7, implementable half. §4.2 L386: a failure arrives as HTTP 200
+   * AC-4.7, implementable half. §4.2 L390: a failure arrives as HTTP 200
    * with ok:false. It must be reported so SQS retries — and must NOT write
    * `published` or a tgId that does not exist.
    */
@@ -172,7 +172,7 @@ describe("runPublish", () => {
     expect((await messages.get("chan_a/1"))?.posts.telegator_news?.tgId).toBe("4711");
   });
 
-  test("counts a first send and an edit as different metrics (§7.7 L731)", async () => {
+  test("counts a first send and an edit as different metrics (§7.7 L735)", async () => {
     const { deps: d } = deps([message({ id: "chan_a/1" })]);
     await runPublish([record("chan_a/1")], d);
     expect(metrics.get("MessagesPublished")).toBe(1);
@@ -183,7 +183,7 @@ describe("runPublish", () => {
     expect(metrics.get("MessagesEdited")).toBe(1);
   });
 
-  test("counts a Telegram failure by method (§7.7 L734)", async () => {
+  test("counts a Telegram failure by method (§7.7 L738)", async () => {
     const { deps: d } = deps(
       [message({ id: "chan_a/1" })],
       fakeBot({ failWith: { description: "chat not found" } }),
@@ -214,7 +214,7 @@ describe("runPublish", () => {
     expect(result.batchItemFailures).toEqual([{ itemIdentifier: "sqs-bad" }]);
   });
 
-  /** §3.4 L313 sets batch size 1, but the handler must still be correct for more. */
+  /** §3.4 L317 sets batch size 1, but the handler must still be correct for more. */
   test("processes several records independently", async () => {
     const { bot, deps: d } = deps([message({ id: "chan_a/1" }), message({ id: "chan_b/2" })]);
 
@@ -237,9 +237,9 @@ describe("runPublish", () => {
 
 describe("runPublish when the status write fails after a successful send", () => {
   /**
-   * The window item 7.3 found. §3.4 L350 sends first and records second, so a
+   * The window item 7.3 found. §3.4 L354 sends first and records second, so a
    * transient DynamoDB failure between the two leaves a live Telegram post with
-   * `status: topublish` and no recorded post — and on redelivery §3.4 L317's
+   * `status: topublish` and no recorded post — and on redelivery §3.4 L321's
    * guard sees `topublish`, `postFor` sees nothing recorded, and Telegram gets a
    * SECOND post that no future edit can ever reach.
    */
@@ -384,7 +384,7 @@ describe("runPublish when the status write fails after a successful send", () =>
 
 describe("AC-4.6 — the guard that survives a duplicate delivery", () => {
   /**
-   * AC-4.6 (§3.4 L359) — "Two publish requests for the same message id within 5
+   * AC-4.6 (§3.4 L363) — "Two publish requests for the same message id within 5
    * minutes result in **one** Telegram call."
    *
    * BLOCKED as stated: the five-minute window is SQS FIFO's fixed, non
@@ -394,7 +394,7 @@ describe("AC-4.6 — the guard that survives a duplicate delivery", () => {
    * These tests are the half that is ours, and the one that matters more. SQS's
    * window is a floor rather than a lock — a redelivery after the visibility
    * timeout, or a replay of the publish DLQ an hour later, is outside it — so
-   * §3.4 L317's status check is what actually stops a second post. Delivering
+   * §3.4 L321's status check is what actually stops a second post. Delivering
    * the same record twice is the direct test of that, and it did not exist:
    * every other publish test delivers each record once.
    */
@@ -443,8 +443,8 @@ describe("AC-4.6 — the guard that survives a duplicate delivery", () => {
   });
 
   /**
-   * The guard must suppress a duplicate without suppressing real work. §6 L581
-   * returns a message to `topublish` when a merge adds a member, and §3.4 L345
+   * The guard must suppress a duplicate without suppressing real work. §6 L585
+   * returns a message to `topublish` when a merge adds a member, and §3.4 L349
    * then edits the live post — so a delivery after that is not a duplicate and
    * must go through.
    */
@@ -453,7 +453,7 @@ describe("AC-4.6 — the guard that survives a duplicate delivery", () => {
     const { deps: d, messages, bot } = deps(stored);
 
     await runPublish([record("chan_a/1")], d);
-    // §6 L593 — a merge stamps `ts: now`, which is what makes the recorded
+    // §6 L597 — a merge stamps `ts: now`, which is what makes the recorded
     // post stale under multi-target D4; the status alone would be skipped.
     await messages.patch("chan_a/1", { status: "topublish", ts: NOW + 1 });
     await runPublish([record("chan_a/1")], d);

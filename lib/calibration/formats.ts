@@ -46,7 +46,7 @@ export function parsePairsJsonl(text: string): LabelledPair[] {
 }
 
 /**
- * `items.json` — the fields a match key is built from (§5.2 L447-457), and
+ * `items.json` — the fields a match key is built from (§5.2 L451-461), and
  * nothing else.
  *
  * Deliberately narrower than `AnalyzedItem`, for the same reason

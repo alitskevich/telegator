@@ -53,7 +53,7 @@ describe("fakeSourceRepo", () => {
   });
 
   /**
-   * R16. §8.4 L810's soft delete sets `deleted: true`, and nothing in §3.1
+   * R16. §8.4 L814's soft delete sets `deleted: true`, and nothing in §3.1
    * filters on it — so a deleted source would keep being polled and keep
    * publishing. The filter belongs in the repository, where every caller gets it.
    */
@@ -64,7 +64,7 @@ describe("fakeSourceRepo", () => {
   });
 
   /**
-   * §3.1 L228 writes the cursor only after the enqueue succeeds. A patch must
+   * §3.1 L231 writes the cursor only after the enqueue succeeds. A patch must
    * touch exactly the fields it names — writing the whole record would undo an
    * operator's concurrent edit to category or teaser.
    */
@@ -90,7 +90,7 @@ describe("fakeMessageRepo", () => {
   });
 
   /**
-   * §7.2 L636 (amended by R44): `date-index` projects the match key and
+   * §7.2 L640 (amended by R44): `date-index` projects the match key and
    * `memberIds`, not `members`. Giving the candidate its own shape means §6's
    * Pass 2 cannot read a member map that the real query would never have
    * returned — the defect R9 exists to prevent, where a whole-record write
@@ -106,14 +106,14 @@ describe("fakeMessageRepo", () => {
     expect(candidate).not.toHaveProperty("title");
   });
 
-  test("queryByDate is partitioned by date, the correctness rule of §6 L541", async () => {
+  test("queryByDate is partitioned by date, the correctness rule of §6 L545", async () => {
     const repo = fakeMessageRepo([message, { ...message, id: "a/1", date: "2026-08-30" }]);
 
     expect(await repo.queryByDate("2026-08-30")).toHaveLength(1);
     expect((await repo.queryByDate("2026-08-30"))[0]?.id).toBe("a/1");
   });
 
-  /** §7.2 L636 excludes both large attributes from `status-index`. */
+  /** §7.2 L640 excludes both large attributes from `status-index`. */
   test("queryByStatus returns list items without members or embedding", async () => {
     const repo = fakeMessageRepo([message]);
 
@@ -124,7 +124,7 @@ describe("fakeMessageRepo", () => {
     expect(listed).not.toHaveProperty("embedding");
   });
 
-  test("queryByStatus sorts by ts descending, as §8.5 L832 requires", async () => {
+  test("queryByStatus sorts by ts descending, as §8.5 L836 requires", async () => {
     const repo = fakeMessageRepo([
       { ...message, id: "a/1", ts: 1 },
       { ...message, id: "a/2", ts: 3 },
@@ -169,7 +169,7 @@ describe("fakeMessageRepo", () => {
   });
 
   /**
-   * §3.3 L284 preserves tgId so the next publish is an edit (§2.3 L161), and R7
+   * §3.3 L288 preserves tgId so the next publish is an edit (§2.3 L161), and R7
    * notes the §6 spread would silently drop tgAt. A merge must touch neither.
    */
   test("mergeMember preserves tgId and tgAt, which publish owns", async () => {

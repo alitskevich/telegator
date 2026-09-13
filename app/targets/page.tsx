@@ -13,14 +13,14 @@ import { authorized } from "../authorize";
  * target-table#3.2 — the Targets page.
  *
  * Thin: authorise, load, render. Every action passed down re-checks the
- * caller's role server-side (§8.4 L819), so `canEdit` only decides what is on
+ * caller's role server-side (§8.4 L823), so `canEdit` only decides what is on
  * screen — it is not the gate.
  */
 
 export const dynamic = "force-dynamic";
 
 export default async function TargetsPage() {
-  // §8.6 L842 — `viewer` reads every page.
+  // §8.6 L846 — `viewer` reads every page.
   const session = await authorized(requireRole("viewer", await authContext()));
   const principal = { roles: session.roles, enabled: true };
 

@@ -44,7 +44,7 @@ async function main(): Promise<void> {
   for (const conflict of plan.backwards) {
     console.error(
       `  ${conflict.id}: REFUSED, ${conflict.lastItemId} is behind ${conflict.from} — ` +
-        "re-scraping would re-publish (§9.5 L978)",
+        "re-scraping would re-publish (§9.5 L982)",
     );
   }
 
@@ -57,13 +57,13 @@ async function main(): Promise<void> {
   if (!write) {
     console.log(
       "dry run — pass --write to apply. Confirm the Firebase Telegram schedulers are " +
-        "stopped first: these cursors must be the values they stopped at (§9.5 L978).",
+        "stopped first: these cursors must be the values they stopped at (§9.5 L982).",
     );
     return;
   }
 
   for (const update of plan.updates) {
-    // A patch, not a put: §3.1 L228's `updateCursor` writes only the cursor, so
+    // A patch, not a put: §3.1 L231's `updateCursor` writes only the cursor, so
     // an operator's concurrent edit to `category` or `teaser` survives.
     await repo.updateCursor(update.id, { lastItemId: update.lastItemId });
   }

@@ -17,7 +17,7 @@ function systemPromptFromSpec(): string {
 
 describe("SYSTEM_PROMPT", () => {
   /**
-   * §5.2 L434 calls the prompt "ported verbatim; load-bearing". It is compared
+   * §5.2 L438 calls the prompt "ported verbatim; load-bearing". It is compared
    * against the text lifted from the spec at test time rather than against a
    * copy pasted into the test, so a drift in either direction fails — including
    * the one that matters most, someone "tidying" the prompt in code.
@@ -28,16 +28,16 @@ describe("SYSTEM_PROMPT", () => {
 
   /**
    * The rule L434 singles out as load-bearing: §3.1 L215 tokenises links into
-   * `[text](#N)`, §3.4 L321 resolves them back into anchors at render time, and
+   * `[text](#N)`, §3.4 L325 resolves them back into anchors at render time, and
    * a model that rewrites or strips them breaks every link in a published
    * message.
    */
-  test("instructs the model to preserve the [text](#N) tokens §3.4 L321 resolves", () => {
+  test("instructs the model to preserve the [text](#N) tokens §3.4 L325 resolves", () => {
     expect(SYSTEM_PROMPT).toContain("preserve '[text](#[1-9]+)' tokens intact;");
   });
 
   /**
-   * "responseSchema" is Gemini vocabulary; the Messages request at §5.2 L427
+   * "responseSchema" is Gemini vocabulary; the Messages request at §5.2 L431
    * calls the field `schema`. Kept because L434 says verbatim — changing prompt
    * wording changes model behaviour, and this build cannot measure the effect.
    */

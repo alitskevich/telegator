@@ -3,7 +3,7 @@ import { PIE_CENTRE, PIE_PALETTE, PIE_RADIUS, sliceColor, toPieSlices } from "./
 
 const slice = (label: string, value: number) => ({ label, value });
 
-describe("toPieSlices — §8.5 L836's arc geometry", () => {
+describe("toPieSlices — §8.5 L840's arc geometry", () => {
   /**
    * The source's geometry, kept verbatim: centre 100,100, radius 80, and the
    * path form `M cx cy L … A r r 0 large 1 … Z`. Slices start at twelve o'clock
@@ -96,7 +96,7 @@ describe("toPieSlices — §8.5 L836's arc geometry", () => {
 });
 
 describe("the palette", () => {
-  /** §8.5 L836 — "its 10-colour palette", cycled across §5.4's 29 categories. */
+  /** §8.5 L840 — "its 10-colour palette", cycled across §5.4's 29 categories. */
   test("has ten colours", () => {
     expect(PIE_PALETTE).toHaveLength(10);
   });

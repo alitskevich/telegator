@@ -13,7 +13,7 @@ import { telegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
- * E2E-2 (§10.2 L995) — "Two near-identical posts from different sources on the
+ * E2E-2 (§10.2 L999) — "Two near-identical posts from different sources on the
  * same date produce **one** message with two members."
  *
  * What this can and cannot prove. "Near-identical" is a *semantic* claim, and
@@ -128,7 +128,7 @@ describe("E2E-2 fixtures", () => {
   });
 });
 
-describe("E2E-2 (§10.2 L995) — the same event", () => {
+describe("E2E-2 (§10.2 L999) — the same event", () => {
   const ABOVE = true;
 
   test("two different sources each contribute one item", async () => {
@@ -161,7 +161,7 @@ describe("E2E-2 (§10.2 L995) — the same event", () => {
   });
 
   /**
-   * §3.3 L290 groups the publish queue by message id, so a merge that produced
+   * §3.3 L294 groups the publish queue by message id, so a merge that produced
    * two enqueues would still send twice — the member count and the send count
    * are separate claims.
    */

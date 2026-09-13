@@ -7,14 +7,20 @@ import { ItemIdSchema } from "./ids";
  *
  * It exists in two shapes: Stage A leaves `scrape` for the analyze queue
  * (§2.2 L130–140), and Stage B leaves `analyze` for the aggregate queue
- * (§2.2 L142), adding the AI fields of §5.2 L445–457.
+ * (§2.2 L142), adding the AI fields of §5.2 L449–461.
  */
 
-/** §11.2 L1041 and §5.2 L450 — the source prompt's 60-symbol cap, raised to 220. */
+/** §11.2 L1045 and §5.2 L454 — the source prompt's 60-symbol cap, raised to 220. */
 export const SUMMARY_MAX_LENGTH = 220;
 
-/** §2.2 L140 — replaces the source system's initial `status` value. */
-export const ITEM_KINDS = ["post", "forward", "empty"] as const;
+/**
+ * §2.2 L140 — replaces the source system's initial `status` value.
+ *
+ * `obsolete` (§3.1 L227) joins the two §3.1 L225 kinds the enqueue drops. It is
+ * a kind rather than a filter in the orchestrator so the drop reaches §7.7's
+ * `ItemsDropped` counter through the one path every dropped post already takes.
+ */
+export const ITEM_KINDS = ["post", "forward", "empty", "obsolete"] as const;
 
 export const ItemKindSchema = z.enum(ITEM_KINDS);
 export type ItemKind = z.infer<typeof ItemKindSchema>;
@@ -47,18 +53,18 @@ export const ScrapedItemSchema = z.object({
 export type ScrapedItem = z.infer<typeof ScrapedItemSchema>;
 
 /**
- * The AI fields, declared once. §5.2 L445 fixes which are required.
+ * The AI fields, declared once. §5.2 L449 fixes which are required.
  *
  * `category` is an open string here rather than §5.4's enum: item 2.13 narrows
  * it to `CategorySchema` for the model-response schema, where the constraint
  * belongs. Constraining it here as well would duplicate the enum.
  */
 const aiField = {
-  /** Essential subject in three words, English (§5.2 L449). */
+  /** Essential subject in three words, English (§5.2 L453). */
   title: z.string(),
-  /** Brief factual matter, in Belarusian, with `[text](#N)` tokens intact (§5.2 L450). */
+  /** Brief factual matter, in Belarusian, with `[text](#N)` tokens intact (§5.2 L454). */
   summary: z.string().max(SUMMARY_MAX_LENGTH),
-  /** ISO-3166 alpha-2 (§5.2 L451). Case is normalised by §3.2 L256, not here. */
+  /** ISO-3166 alpha-2 (§5.2 L455). Case is normalised by §3.2 L260, not here. */
   country: z.string(),
   location: z.string(),
   category: z.string(),
@@ -68,7 +74,7 @@ const aiField = {
   tags: z.string().optional(),
 } as const;
 
-/** The model's response shape (§5.2 L445–457). */
+/** The model's response shape (§5.2 L449–461). */
 export const AiFieldsSchema = z.object(aiField);
 
 export type AiFields = z.infer<typeof AiFieldsSchema>;
@@ -78,7 +84,7 @@ export type AiFields = z.infer<typeof AiFieldsSchema>;
  *
  * Built with `.extend()` rather than merging `AiFieldsSchema` wholesale, so the
  * model's optional `tags` cannot weaken Stage A's own `tags`, and so `category`
- * keeps Stage A's meaning. §3.2 L256 merges tags rather than replacing them.
+ * keeps Stage A's meaning. §3.2 L260 merges tags rather than replacing them.
  */
 export const AnalyzedItemSchema = ScrapedItemSchema.extend({
   title: aiField.title,
@@ -86,7 +92,7 @@ export const AnalyzedItemSchema = ScrapedItemSchema.extend({
   /**
    * AC-2.4: "`country` is always uppercase or empty." Asserted rather
    * than transformed — a Zod `.toUpperCase()` here would make the criterion
-   * unfalsifiable at the stage that is supposed to satisfy it (§3.2 L256).
+   * unfalsifiable at the stage that is supposed to satisfy it (§3.2 L260).
    */
   country: aiField.country.refine((v) => v === v.toUpperCase(), "expected an uppercase country"),
   location: aiField.location,

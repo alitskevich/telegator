@@ -40,14 +40,14 @@ function scraped(fields: Record<string, unknown>): ScrapedItem {
 }
 
 describe("route — acceptance criteria", () => {
-  test("AC-2.1 (§3.2 L262) an item classified importance: low never reaches aggregate", () => {
+  test("AC-2.1 (§3.2 L266) an item classified importance: low never reaches aggregate", () => {
     const decision = route(classified({ importance: "low" }));
 
     expect(decision).toEqual({ kind: "drop", reason: "low" });
     expect(decision.kind).not.toBe("enqueue");
   });
 
-  test("AC-2.3 (§3.2 L264) source tags survive alongside AI tags, with no duplicates", () => {
+  test("AC-2.3 (§3.2 L268) source tags survive alongside AI tags, with no duplicates", () => {
     expect(normalizeTags("war,economy", "belarus,war")).toBe("war,economy,belarus");
   });
 
@@ -56,7 +56,7 @@ describe("route — acceptance criteria", () => {
     expect(normalizeTags("war", undefined)).toBe("war");
   });
 
-  test("AC-2.4 (§3.2 L265) country is always uppercase or empty", () => {
+  test("AC-2.4 (§3.2 L269) country is always uppercase or empty", () => {
     expect(normalizeCountry("by")).toBe("BY");
     expect(normalizeCountry("By")).toBe("BY");
     expect(normalizeCountry("BY")).toBe("BY");
@@ -75,7 +75,7 @@ describe("route — acceptance criteria", () => {
   });
 });
 
-describe("prefilter — §3.2 L243", () => {
+describe("prefilter — §3.2 L247", () => {
   test("an empty body is dropped with reason nobody", () => {
     expect(prefilter("")).toEqual({ kind: "drop", reason: "nobody" });
   });
@@ -119,7 +119,7 @@ describe("prefilter — §3.2 L243", () => {
   });
 });
 
-describe("route — the table of §3.2 L249–254, in order", () => {
+describe("route — the table of §3.2 L253–258, in order", () => {
   test("no category returned yields a retry decision the orchestrator throws on", () => {
     expect(route({ importance: "high" })).toEqual({ kind: "retry", cause: "no-category" });
     expect(route({ category: "", importance: "high" })).toEqual({
@@ -165,8 +165,8 @@ describe("route — the table of §3.2 L249–254, in order", () => {
 
 describe("route — R5: the crime&law branch is currently dead", () => {
   test("DROPPED_CATEGORY is not one of §5.4's categories, so the model cannot emit it", () => {
-    // §5.2 L427 constrains model output to CategorySchema. The drop rule of
-    // §3.2 L253 is therefore unreachable in production and its metric is always
+    // §5.2 L431 constrains model output to CategorySchema. The drop rule of
+    // §3.2 L257 is therefore unreachable in production and its metric is always
     // zero — implemented as written, pinned here rather than silently corrected.
     expect(CategorySchema.safeParse(DROPPED_CATEGORY).success).toBe(false);
     expect(CATEGORIES).not.toContain(DROPPED_CATEGORY);
@@ -178,7 +178,7 @@ describe("route — R5: the crime&law branch is currently dead", () => {
 });
 
 describe("skippedDimensions — R31: the dimension name is `Reason`, capital R", () => {
-  test("uses §7.7 L729's spelling, not §3.2 L253's lowercase `reason`", () => {
+  test("uses §7.7 L733's spelling, not §3.2 L257's lowercase `reason`", () => {
     // CloudWatch dimension names are case-sensitive; two spellings would split
     // one metric into two.
     expect(skippedDimensions("low")).toEqual({ Reason: "low" });
@@ -187,7 +187,7 @@ describe("skippedDimensions — R31: the dimension name is `Reason`, capital R",
   });
 });
 
-describe("normalizeAnalyzed — §3.2 L256", () => {
+describe("normalizeAnalyzed — §3.2 L260", () => {
   test("MT-5: AI fields overwrite the scrape defaults, scrape identity fields (target included) survive", () => {
     const analyzed = normalizeAnalyzed(
       scraped({ id: "chan/7", category: "operator-default", target: "a,b" }),

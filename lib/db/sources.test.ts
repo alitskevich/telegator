@@ -79,7 +79,7 @@ describe("createSourceRepo", () => {
   });
 
   /**
-   * §3.1 L228 writes the cursor after a successful enqueue. It has to be a
+   * §3.1 L231 writes the cursor after a successful enqueue. It has to be a
    * patch: writing the whole record would undo an operator's concurrent edit to
    * `category` or `teaser`, which §2.1 L110-114 marks operator-owned.
    */
@@ -104,7 +104,7 @@ describe("createSourceRepo", () => {
     expect(s.inputs).toHaveLength(0);
   });
 
-  /** R15 — the field §4.1 L378's staleness rule needs after L220 zeroes lastCount. */
+  /** R15 — the field §4.1 L382's staleness rule needs after L220 zeroes lastCount. */
   test("updateCursor can write lastNonZeroCount", async () => {
     const s = stub();
 

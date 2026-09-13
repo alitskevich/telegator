@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { MemberRow } from "../lib/dashboard/records";
 import type { MessageListItem } from "../lib/domain/message";
 import { MessagesTable, type PublishNowResult } from "./MessagesTable";
+import { ToastHost } from "./ToastHost";
 
 const row = (n: number, extra: Partial<MessageListItem> = {}): MessageListItem => ({
   id: `example/${n}`,
@@ -26,6 +27,7 @@ let onSave: ReturnType<typeof vi.fn<SaveFn>>;
 let onRepublish: ReturnType<typeof vi.fn<RepublishFn>>;
 let onLoadMembers: ReturnType<typeof vi.fn<MembersFn>>;
 let onDelete: ReturnType<typeof vi.fn<DeleteFn>>;
+let onExport: ReturnType<typeof vi.fn<() => Promise<string>>>;
 
 const MEMBERS: MemberRow[] = [
   { itemId: "chan_a/1", summary: "First summary", links: [], channel: "chan_a", ts: 1 },
@@ -37,6 +39,7 @@ beforeEach(() => {
   onRepublish = vi.fn<RepublishFn>(async () => undefined);
   onLoadMembers = vi.fn<MembersFn>(async () => MEMBERS);
   onDelete = vi.fn<DeleteFn>(async () => undefined);
+  onExport = vi.fn<() => Promise<string>>(async () => "id\nfirst");
 });
 
 afterEach(cleanup);
@@ -45,20 +48,23 @@ const rows = [row(1), row(2, { category: "sports", memberCount: 2 })];
 
 const draw = (props: Partial<Parameters<typeof MessagesTable>[0]> = {}) =>
   render(
-    <MessagesTable
-      rows={rows}
-      status="topublish"
-      canEdit
-      canAdmin
-      onSave={onSave}
-      onRepublish={onRepublish}
-      onLoadMembers={onLoadMembers}
-      onDelete={onDelete}
-      {...props}
-    />,
+    <ToastHost>
+      <MessagesTable
+        rows={rows}
+        status="topublish"
+        canEdit
+        canAdmin
+        onSave={onSave}
+        onRepublish={onRepublish}
+        onLoadMembers={onLoadMembers}
+        onDelete={onDelete}
+        onExport={onExport}
+        {...props}
+      />
+    </ToastHost>,
   );
 
-describe("MessagesTable — §8.3 L798", () => {
+describe("MessagesTable — §8.3 L802", () => {
   test("shows every column the section lists", () => {
     draw();
 
@@ -76,7 +82,7 @@ describe("MessagesTable — §8.3 L798", () => {
   });
 
   describe("status tabs", () => {
-    /** §8.2 L775 — `?status=topublish`, so each tab is a link, not local state. */
+    /** §8.2 L779 — `?status=topublish`, so each tab is a link, not local state. */
     test("links to each status, marking the current one", () => {
       draw();
 
@@ -96,7 +102,7 @@ describe("MessagesTable — §8.3 L798", () => {
     });
   });
 
-  describe("search (§8.3 L801)", () => {
+  describe("search (§8.3 L805)", () => {
     test("filters across visible columns", () => {
       draw();
       fireEvent.change(screen.getByLabelText("Search"), { target: { value: "sports" } });
@@ -185,7 +191,7 @@ describe("MessagesTable — §8.3 L798", () => {
     });
   });
 
-  describe("Re-publish (§8.4 L815)", () => {
+  describe("Re-publish (§8.4 L819)", () => {
     test("republishes the row", () => {
       draw();
       fireEvent.click(
@@ -207,10 +213,10 @@ describe("MessagesTable — §8.3 L798", () => {
   });
 
   /**
-   * §8.4 L810 — `deleteRecords(table, ids[])`, `editor`, soft.
+   * §8.4 L814 — `deleteRecords(table, ids[])`, `editor`, soft.
    *
-   * *Reconciliation.* §8.3 L798's Messages row lists inline edit, Re-publish and
-   * export, and not delete; §8.4 L810 defines the action over both tables and
+   * *Reconciliation.* §8.3 L802's Messages row lists inline edit, Re-publish and
+   * export, and not delete; §8.4 L814 defines the action over both tables and
    * `MessageRepo.softDelete` implements it. The action is followed: a message
    * built from a mis-scraped item is otherwise unremovable from the tab an
    * operator works through.
@@ -290,7 +296,7 @@ describe("MessagesTable — §8.3 L798", () => {
 
 /**
  * R53 — "Publish now" runs the deployed publish stage against the pending
- * backlog. §8.4 L815's Re-publish is the queue route and waits out §7.3 L648's
+ * backlog. §8.4 L819's Re-publish is the queue route and waits out §7.3 L652's
  * 300 s delay; this is the one that sends on the operator's timescale.
  */
 describe("Publish now — R53", () => {
@@ -310,7 +316,7 @@ describe("Publish now — R53", () => {
     if (trigger !== null) fireEvent.click(trigger);
 
     expect(onPublishNow).toHaveBeenCalledWith(10);
-    expect(await screen.findByText("published 2, 0 failed")).toBeDefined();
+    expect(await screen.findByText("Published 2, 0 failed")).toBeDefined();
   });
 
   /** The backlog it drains is the `topublish` one; on any other tab the button would lie. */
@@ -343,11 +349,11 @@ describe("Publish now — R53", () => {
     const trigger = button();
     if (trigger !== null) fireEvent.click(trigger);
 
-    expect(await screen.findByText("published 1, 2 failed")).toBeDefined();
+    expect(await screen.findByText("Published 1, 2 failed")).toBeDefined();
   });
 });
 
-/** The same header controls as the Sources table, over §8.3 L798's columns. */
+/** The same header controls as the Sources table, over §8.3 L802's columns. */
 describe("filter and sort — the header row", () => {
   const idsOnScreen = () =>
     screen
@@ -382,7 +388,7 @@ describe("filter and sort — the header row", () => {
     fireEvent.click(header());
     expect(idsOnScreen()).toEqual(["row-example/2", "row-example/1"]);
 
-    // §8.5 L832 reads `status-index` with `ts` descending, so the cleared state
+    // §8.5 L836 reads `status-index` with `ts` descending, so the cleared state
     // is "newest first" — an order the cycle has to be able to return to.
     fireEvent.click(header());
     expect(idsOnScreen()).toEqual(["row-example/2", "row-example/1"]);
@@ -415,7 +421,7 @@ describe("filter and sort — the header row", () => {
 });
 
 /**
- * R56 — §8.3 L798 lists this table's toolbar and names no select-all;
+ * R56 — §8.3 L802 lists this table's toolbar and names no select-all;
  * `lib/ui/selection` carries the account.
  */
 describe("select all (R56)", () => {

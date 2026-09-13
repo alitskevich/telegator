@@ -5,12 +5,12 @@ import { parseTelegramPage } from "./parse";
 
 /**
  * Every case runs over the recorded `t.me/s/` markup captured in item 3.1, never
- * over hand-written HTML: §3.1 L209–220 parses a real page, and the two rules
+ * over hand-written HTML: §3.1 L209–221 parses a real page, and the two rules
  * that bit hardest (`<br/>` self-closing, `tgme_widget_message_text
  * js-message_text`) are only visible in the recording.
  *
  * Two cases need markup no recording happens to contain — a chunk with no id
- * (§3.1 L220) and the `&amp;lt;` double-decode hazard (§3.1 L216). Those are
+ * (§3.1 L221) and the `&amp;lt;` double-decode hazard (§3.1 L216). Those are
  * derived by a single substitution into a recorded fixture rather than authored,
  * so the surrounding structure stays live-accurate.
  */
@@ -50,7 +50,7 @@ describe("chunking (§3.1 L209)", () => {
   });
 
   /**
-   * §3.1 L220 treats a chunk with no id as a zero-yield signal handled by the
+   * §3.1 L221 treats a chunk with no id as a zero-yield signal handled by the
    * orchestrator; the parser's own duty is only never to emit an id-less post.
    */
   test("skips a chunk whose anchors carry no t.me message href", () => {
@@ -63,7 +63,7 @@ describe("chunking (§3.1 L209)", () => {
 });
 
 describe("links and tokenised body (§3.1 L215)", () => {
-  // AC-1.3 (§3.1 L234): two links produce `[…](#1)`, `[…](#2)` and two entries.
+  // AC-1.3 (§3.1 L237): two links produce `[…](#1)`, `[…](#2)` and two entries.
   test("AC-1.3 a post with two links yields (#1), (#2) and links.length === 2", () => {
     const post = onlyPost("twoLinks");
     expect(post.body).toContain("[first source](#1)");
@@ -168,7 +168,7 @@ describe("image (§3.1 L217, R32)", () => {
 
   /**
    * R32 regression: read literally, §3.1 L217's "first `background-image:url('X')`"
-   * stores the emoji sprite that precedes the photo, which §3.4 L344 would then
+   * stores the emoji sprite that precedes the photo, which §3.4 L348 would then
    * `sendPhoto` as the story's picture.
    */
   test("R32 never returns the emoji sprite that precedes the photo", () => {
@@ -196,6 +196,21 @@ describe("forwardedFrom (§3.1 L218)", () => {
   test("leaves forwardedFrom unset on a post that is not a forward", () => {
     for (const post of parseFixture("multiPost")) {
       expect(post.forwardedFrom).toBeUndefined();
+    }
+  });
+});
+
+describe("postedAt (§3.1 L219)", () => {
+  test("reads the date anchor's `<time datetime>`, verbatim", () => {
+    for (const post of parseFixture("multiPost")) {
+      expect(post.postedAt).toBe("2026-08-29T09:15:00+00:00");
+    }
+  });
+
+  test("leaves postedAt unset on a chunk carrying no time element", () => {
+    const undated = telegramFixture("multiPost").replace(/<time datetime="[^"]*">/g, "<time>");
+    for (const post of parseTelegramPage(undated)) {
+      expect(post.postedAt).toBeUndefined();
     }
   });
 });

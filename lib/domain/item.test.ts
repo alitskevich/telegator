@@ -80,7 +80,7 @@ describe("ScrapedItemSchema (Stage A, §2.2 L130-140)", () => {
   });
 });
 
-describe("AiFieldsSchema (§5.2 L445-457)", () => {
+describe("AiFieldsSchema (§5.2 L449-461)", () => {
   test("requires the six fields L445 lists as required", () => {
     expect(AiFieldsSchema.parse(aiFields)).toMatchObject(aiFields);
   });
@@ -104,18 +104,18 @@ describe("AiFieldsSchema (§5.2 L445-457)", () => {
     expect(AiFieldsSchema.safeParse({ ...aiFields, importance }).success).toBe(true);
   });
 
-  test("rejects an importance outside §5.2 L454's enum", () => {
+  test("rejects an importance outside §5.2 L458's enum", () => {
     expect(AiFieldsSchema.safeParse({ ...aiFields, importance: "medium" }).success).toBe(false);
   });
 
-  /** §11.2 L1041 and §5.2 L450: the source prompt's 60-symbol cap is raised to 220. */
+  /** §11.2 L1045 and §5.2 L454: the source prompt's 60-symbol cap is raised to 220. */
   test("caps summary at 220 characters", () => {
     expect(SUMMARY_MAX_LENGTH).toBe(220);
     expect(AiFieldsSchema.safeParse({ ...aiFields, summary: "x".repeat(220) }).success).toBe(true);
     expect(AiFieldsSchema.safeParse({ ...aiFields, summary: "x".repeat(221) }).success).toBe(false);
   });
 
-  /** The model returns whatever case it likes; §3.2 L256 is what uppercases it. */
+  /** The model returns whatever case it likes; §3.2 L260 is what uppercases it. */
   test("does not require the model's country to be uppercase", () => {
     expect(AiFieldsSchema.safeParse({ ...aiFields, country: "ua" }).success).toBe(true);
   });
@@ -129,12 +129,12 @@ describe("AnalyzedItemSchema (Stage B, §2.2 L142)", () => {
   });
 
   /**
-   * §6 L514 builds the embedding text as
+   * §6 L518 builds the embedding text as
    * [title, summary, category, tags, body].filter(Boolean).join(" ").
    * Dropping `body` between stages would silently degrade every similarity
    * score, and no test of the dedup algorithm itself would notice.
    */
-  test("keeps body, which §6 L514 embeds", () => {
+  test("keeps body, which §6 L518 embeds", () => {
     expect(AnalyzedItemSchema.parse(analyzed).body).toBe(scraped.body);
   });
 

@@ -6,7 +6,7 @@ const repoRoot = resolve(import.meta.dirname, "..");
 const docPath = join(repoRoot, "docs/telegator.md");
 
 /**
- * `§3.4 L316` — a section, and a line inside it. The line half is optional, and
+ * `§3.4 L320` — a section, and a line inside it. The line half is optional, and
  * a range (`L495-497`) names two.
  */
 const CITATION = /§(\d+(?:\.\d+)?)(?:\s+L(\d+)(?:[-–](\d+))?)?/g;

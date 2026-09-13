@@ -9,7 +9,7 @@ const rows = [
 
 const visible = ["title", "category"] as const;
 
-describe("filterByKeyword — §8.3 L801", () => {
+describe("filterByKeyword — §8.3 L805", () => {
   /** "Search on every table filters across visible columns." */
   test("matches on any visible column", () => {
     expect(filterByKeyword(rows, "cup", visible).map((r) => r.id)).toEqual(["example/2"]);

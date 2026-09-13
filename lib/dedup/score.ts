@@ -19,7 +19,7 @@ export type Verdict = "merge" | "adjudicate" | "distinct";
  *
  * Two items that both lack entities have produced no evidence, not agreement.
  * Returning 1 there would auto-merge every sparse pair on the
- * heaviest-weighted component — a false merge, which §10.3 L1007 ranks as the
+ * heaviest-weighted component — a false merge, which §10.3 L1011 ranks as the
  * costlier error.
  */
 function jaccard(a: readonly string[], b: readonly string[]): number {
@@ -36,11 +36,11 @@ function jaccard(a: readonly string[], b: readonly string[]): number {
 }
 
 /**
- * R46 — the replacement for §6 L533's cosine similarity.
+ * R46 — the replacement for §6 L537's cosine similarity.
  *
  * Weighted because the three components are not equally discriminating: two
  * reports of one event nearly always share a proper name or a person, often
- * share a title token once §5.2 L447 has reduced the title to three English
+ * share a title token once §5.2 L451 has reduced the title to three English
  * words, and share tags only loosely because L455 asks for "3-5 related tags"
  * rather than a controlled vocabulary.
  */

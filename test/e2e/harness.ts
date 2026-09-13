@@ -55,7 +55,7 @@ export interface PipelineRun {
   readonly analyzeMessages: QueueMessage[];
   /** Stage B payloads analyze enqueued (§2.2 L142). */
   readonly aggregateMessages: QueueMessage[];
-  /** `{messageId}` envelopes aggregate enqueued (§7.3 L648). */
+  /** `{messageId}` envelopes aggregate enqueued (§7.3 L652). */
   readonly publishMessages: QueueMessage[];
   readonly scrape: Awaited<ReturnType<typeof runScrape>>;
   /**

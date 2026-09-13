@@ -18,11 +18,11 @@ describe("the §6 CONST block (L546-279)", () => {
 });
 
 describe("constants §6 references but does not declare", () => {
-  test("MAX_BATCH_SIZE is 10, the batch §6 L556 and §7.3 L647 both cap", () => {
+  test("MAX_BATCH_SIZE is 10, the batch §6 L560 and §7.3 L651 both cap", () => {
     expect(MAX_BATCH_SIZE).toBe(10);
   });
 
-  /** §3.3 L292 and §7.3 L648; §11.4 L1043 records 300 s as "a starting value". */
+  /** §3.3 L296 and §7.3 L652; §11.4 L1047 records 300 s as "a starting value". */
   test("SETTLE_DELAY_SECONDS is 300", () => {
     expect(SETTLE_DELAY_SECONDS).toBe(300);
   });
@@ -40,7 +40,7 @@ describe("constants §6 references but does not declare", () => {
 
 describe("no constant is declared twice", () => {
   /**
-   * §3.4 L319 renders 12 of the 20 stored members. The value belongs to the
+   * §3.4 L323 renders 12 of the 20 stored members. The value belongs to the
    * message domain (item 2.6) and is re-exported here rather than restated —
    * two independent literals would drift silently.
    */

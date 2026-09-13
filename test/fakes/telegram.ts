@@ -43,7 +43,7 @@ export interface BotCall {
 }
 
 export interface FakeBotOptions {
-  /** Every call answers `{ok: false, description}` — a §4.2 L386 failure. */
+  /** Every call answers `{ok: false, description}` — a §4.2 L390 failure. */
   readonly failWith?: { readonly description: string };
   /** The first call answers a 429 carrying `retry_after`; later calls succeed. */
   readonly rateLimitFirstCall?: { readonly retryAfter: number };
@@ -57,7 +57,7 @@ export interface FakeBot extends TelegramBot {
 
 /**
  * A Bot API sink that records calls and can fail the way Telegram actually
- * fails: HTTP 200 with `ok: false` (§4.2 L386), never a thrown error and never
+ * fails: HTTP 200 with `ok: false` (§4.2 L390), never a thrown error and never
  * a non-2xx status. A fake that threw would let publish be written with a
  * try/catch and pass, while the real API returned failures it read as success.
  */

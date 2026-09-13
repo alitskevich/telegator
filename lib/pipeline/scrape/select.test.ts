@@ -30,13 +30,13 @@ function ids(sources: readonly Source[]): string[] {
 }
 
 describe("selectSources — acceptance criteria", () => {
-  test("AC-1.1 (§3.1 L232) a source polled 5 minutes ago with lastCount = 3 is not selected", () => {
+  test("AC-1.1 (§3.1 L235) a source polled 5 minutes ago with lastCount = 3 is not selected", () => {
     const warm = source({ id: "warm", lastCount: 3, lastUpdated: polledMinutesAgo(5) });
 
     expect(selectSources([warm], NOW)).toEqual([]);
   });
 
-  test("AC-1.2 (§3.1 L233) a source with lastCount = 25 is selected regardless of lastUpdated", () => {
+  test("AC-1.2 (§3.1 L236) a source with lastCount = 25 is selected regardless of lastUpdated", () => {
     const justPolled = source({ id: "hot", lastCount: 25, lastUpdated: NOW });
     const polledAMinuteAgo = source({
       id: "hot2",
@@ -110,7 +110,7 @@ describe("selectSources — filters", () => {
   });
 
   /**
-   * R16: §8.4 L810's soft delete sets `deleted: true`, and §3.1 has no filter for
+   * R16: §8.4 L814's soft delete sets `deleted: true`, and §3.1 has no filter for
    * it — a deleted source would keep being polled and keep publishing.
    */
   test("a soft-deleted source is excluded even while status stays `ok` (R16)", () => {

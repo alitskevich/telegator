@@ -50,7 +50,7 @@ function isDue(source: Source, now: number): boolean {
  * repeated here so the function is correct on any input, including the unfiltered
  * scans the tests and the operator tooling hand it.
  *
- * **R16.** §8.4 L810's `deleteRecords` is a soft delete that sets `deleted: true`,
+ * **R16.** §8.4 L814's `deleteRecords` is a soft delete that sets `deleted: true`,
  * and §3.1 never filters on it — a deleted source would keep being polled and keep
  * publishing, since nothing else in the pipeline consults the flag.
  */

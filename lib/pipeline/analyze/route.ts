@@ -6,14 +6,14 @@ import type { MetricDimensions } from "../../metrics/ports";
 import { SKIP_REASONS, type SkipReason } from "../../metrics/ports";
 
 /**
- * Stage 2's pre-filter, routing table and field normalisers (§3.2 L243–256) as
+ * Stage 2's pre-filter, routing table and field normalisers (§3.2 L247–260) as
  * pure functions.
  *
  * Nothing here performs an effect. Each function returns a decision or a value;
  * the orchestrator (item 3.7) emits the `ItemsSkipped` metrics, does the
  * enqueueing, and throws on `retry`. That split is what makes the routing table
  * testable without an SQS or CloudWatch double, and it keeps the "why errors
- * throw rather than drop" reasoning of §3.2 L258 in one place instead of
+ * throw rather than drop" reasoning of §3.2 L262 in one place instead of
  * scattered across branches.
  */
 
@@ -25,9 +25,9 @@ export { SKIP_REASONS };
  * What the orchestrator should do with one item.
  *
  * `retry` covers the table's first row — "No category returned, or provider
- * error" (§3.2 L249). It is a decision rather than a thrown error here because
+ * error" (§3.2 L253). It is a decision rather than a thrown error here because
  * throwing is an effect: the orchestrator throws so SQS retries and the item
- * ultimately reaches the DLQ (§3.2 L258), while `route` stays a total function
+ * ultimately reaches the DLQ (§3.2 L262), while `route` stays a total function
  * that a test can call and inspect.
  */
 export type RouteDecision =
@@ -38,8 +38,8 @@ export type RouteDecision =
 /**
  * The dimension set for an `ItemsSkipped` count.
  *
- * R31 — the name is `Reason`, capital R. §7.7 L729 spells it that way while
- * §3.2 L253 writes `reason`; CloudWatch dimension names are case-sensitive, so
+ * R31 — the name is `Reason`, capital R. §7.7 L733 spells it that way while
+ * §3.2 L257 writes `reason`; CloudWatch dimension names are case-sensitive, so
  * emitting both spellings would split one metric into two half-populated ones.
  * Building the dimensions here rather than at each call site means the casing is
  * decided once.
@@ -49,7 +49,7 @@ export function skippedDimensions(reason: SkipReason): MetricDimensions {
 }
 
 /**
- * A body consisting of exactly one link token, per §3.2 L243.
+ * A body consisting of exactly one link token, per §3.2 L247.
  *
  * R31 — the intent, not the literal example: §3.1 L215 emits `[Y](#N)` with the
  * anchor's own text, so a rule matching the literal string would never fire.
@@ -59,12 +59,12 @@ export function skippedDimensions(reason: SkipReason): MetricDimensions {
 const LONE_LINK_TOKEN = /^\[[^\]]*\]\(#\d+\)$/;
 
 /**
- * §3.2 L243 — an empty body, or one that is a bare link with no prose, is
+ * §3.2 L247 — an empty body, or one that is a bare link with no prose, is
  * dropped before the AI call: no request, no downstream message.
  *
  * Returns `undefined` when the body passes and should be classified.
  *
- * The reason is `nobody`. §3.2 L243 names none, but §7.7 L729 declares
+ * The reason is `nobody`. §3.2 L247 names none, but §7.7 L733 declares
  * `Reason = low | category | nobody` and the other two are spoken for by the
  * routing table, leaving this the only rule `nobody` can belong to.
  */
@@ -79,10 +79,10 @@ export function prefilter(body: string): RouteDecision | undefined {
 }
 
 /**
- * The fields the routing table of §3.2 L249–254 reads.
+ * The fields the routing table of §3.2 L253–258 reads.
  *
  * Deliberately wider than `NewsItem`, which still satisfies it: `NewsItem`
- * constrains `category` to §5.4's enum (§5.2 L427), so neither the "no category
+ * constrains `category` to §5.4's enum (§5.2 L431), so neither the "no category
  * returned" row nor the `crime&law` row would be expressible in that type.
  * Widening also lets a raw, not-yet-validated response be routed.
  */
@@ -92,7 +92,7 @@ export interface RoutableClassification {
 }
 
 /**
- * §3.2 L249–254, evaluated in the table's own order.
+ * §3.2 L253–258, evaluated in the table's own order.
  *
  * Order is load-bearing: an item with no category and `importance: "low"` is a
  * retry, not a drop, because the first row wins. Silently dropping it would
@@ -109,7 +109,7 @@ export function route(classified: RoutableClassification): RouteDecision {
 
   /**
    * R5 — this branch is currently dead. `DROPPED_CATEGORY` is `"crime&law"`,
-   * which is not one of §5.4's categories, and §5.2 L427 constrains the model to
+   * which is not one of §5.4's categories, and §5.2 L431 constrains the model to
    * that enum, so the comparison can never be true for a validated response.
    * §3.2 is the normative stage spec, so the rule ships exactly as written and
    * the mismatch is pinned by test rather than quietly repointed at `crime`.
@@ -122,7 +122,7 @@ export function route(classified: RoutableClassification): RouteDecision {
 }
 
 /**
- * §3.2 L256 — "`country` uppercased".
+ * §3.2 L260 — "`country` uppercased".
  *
  * AC-2.4 reads "always uppercase or empty", and this is the only place
  * that is made true: `AnalyzedItemSchema` asserts the property rather than
@@ -134,7 +134,7 @@ export function normalizeCountry(country: string): string {
 }
 
 /**
- * §3.2 L256 — "AI `tags` merged with source tags (comma-split, deduplicated,
+ * §3.2 L260 — "AI `tags` merged with source tags (comma-split, deduplicated,
  * comma-joined)".
  *
  * AI tags lead, matching the sentence's order; `mergeTags` keeps first-seen
@@ -147,7 +147,7 @@ export function normalizeTags(aiTags: string | undefined, sourceTags: string | u
 }
 
 /**
- * Composes §3.2 L256's normalisers into the Stage B payload of §2.2 L142.
+ * Composes §3.2 L260's normalisers into the Stage B payload of §2.2 L142.
  *
  * The AI fields overwrite the scrape defaults — §2.2 L138 lets a source carry an
  * operator's arbitrary category until AI supplies a real one — while `tags` is

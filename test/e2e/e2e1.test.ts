@@ -14,7 +14,7 @@ import { telegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
- * E2E-1 (§10.2 L994) — "A seeded source with three fresh posts produces three
+ * E2E-1 (§10.2 L998) — "A seeded source with three fresh posts produces three
  * analyze messages, at least one message record, and one Telegram send."
  */
 
@@ -115,7 +115,7 @@ describe("E2E-1 fixtures", () => {
   });
 });
 
-describe("E2E-1 (§10.2 L994)", () => {
+describe("E2E-1 (§10.2 L998)", () => {
   test("three fresh posts produce three analyze messages", async () => {
     const run = await runPipeline(world);
 
@@ -147,7 +147,7 @@ describe("E2E-1 (§10.2 L994)", () => {
   });
 
   /**
-   * §3.1 L228 — the cursor advances only after the enqueue succeeds, and it is
+   * §3.1 L231 — the cursor advances only after the enqueue succeeds, and it is
    * "the sole duplicate-suppression mechanism" (§2.1 L115). A run that published
    * correctly but left the cursor behind would re-scrape all three posts on the
    * next pass, which E2E-3 then fails.

@@ -25,7 +25,7 @@ import { legacyTargetPatch } from "../lib/seed/targets";
  * this script exists to find.
  */
 
-/** §7.2 L633's table, environment-prefixed per §9.2 L896. */
+/** §7.2 L637's table, environment-prefixed per §9.2 L900. */
 const SOURCES_RESOURCE = "sources";
 
 const WRITE = "--write";

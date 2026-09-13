@@ -13,7 +13,7 @@ import {
 } from "./bot";
 
 /**
- * An obvious placeholder. §7.6 L701 keeps the real token in Secrets Manager and
+ * An obvious placeholder. §7.6 L705 keeps the real token in Secrets Manager and
  * the engineering bar forbids a secret in the repo, so nothing here may look
  * like a Telegram token (`\d+:[A-Za-z0-9_-]{35}`).
  */
@@ -39,7 +39,7 @@ const ok = (messageId: number): HttpPostResponse => ({
   body: { ok: true, result: { message_id: messageId } },
 });
 
-/** §4.2 L386 — a failure is HTTP 200 with `ok: false`, never a status code. */
+/** §4.2 L390 — a failure is HTTP 200 with `ok: false`, never a status code. */
 const failure = (description: string): HttpPostResponse => ({
   status: 200,
   body: { ok: false, description },
@@ -102,7 +102,7 @@ function harness(responses: readonly HttpPostResponse[], options: HarnessOptions
   return { http, posts, sleeps, logLines, metrics, bot, tokenCalls: () => tokenCalls };
 }
 
-describe("request shape (§4.2 L382)", () => {
+describe("request shape (§4.2 L386)", () => {
   test("sendMessage posts to /bot{token}/sendMessage with the Telegram body", async () => {
     const h = harness([ok(4242)]);
 
@@ -166,7 +166,7 @@ describe("request shape (§4.2 L382)", () => {
     });
   });
 
-  /** §4.2 L384 via `chatIdFor` — the chat id is the channel with a leading `@`. */
+  /** §4.2 L388 via `chatIdFor` — the chat id is the channel with a leading `@`. */
   test("a chat id that already carries an @ is not doubled", async () => {
     const h = harness([ok(1)]);
 
@@ -175,7 +175,7 @@ describe("request shape (§4.2 L382)", () => {
     expect(h.posts[0]?.body.chat_id).toBe("@telegator_news");
   });
 
-  /** §3.4 L346 — "parse_mode: html". */
+  /** §3.4 L350 — "parse_mode: html". */
   test("parse_mode defaults to HTML and an override is passed through", async () => {
     const h = harness([ok(1)], { parseMode: "MarkdownV2" });
 
@@ -186,7 +186,7 @@ describe("request shape (§4.2 L382)", () => {
   });
 });
 
-describe("the `ok` field is the error signal, not the HTTP status (§4.2 L386)", () => {
+describe("the `ok` field is the error signal, not the HTTP status (§4.2 L390)", () => {
   test("a successful send returns ok with the Telegram message_id", async () => {
     const h = harness([ok(4242)]);
 
@@ -238,7 +238,7 @@ describe("the `ok` field is the error signal, not the HTTP status (§4.2 L386)",
   });
 });
 
-describe("pacing and retry (§3.4 L348)", () => {
+describe("pacing and retry (§3.4 L352)", () => {
   test("a ≥3 s pause is requested after a successful send", async () => {
     const h = harness([ok(1)]);
 
@@ -256,7 +256,7 @@ describe("pacing and retry (§3.4 L348)", () => {
     expect(h.posts).toHaveLength(2);
     expect(response.ok).toBe(true);
     expect(response.result?.message_id).toBe(4242);
-    // The retry wait replaces that send's pause: §3.4 L348 says "≥3 s", so a
+    // The retry wait replaces that send's pause: §3.4 L352 says "≥3 s", so a
     // longer retry_after wait satisfies the pause too.
     expect(h.sleeps).toEqual([7_000, SEND_PAUSE_MS]);
   });
@@ -287,7 +287,7 @@ describe("pacing and retry (§3.4 L348)", () => {
     expect(response.description).toContain("Too Many Requests");
   });
 
-  /** Telegram may wrap a rate limit in a 200 (§4.2 L386), so the envelope counts. */
+  /** Telegram may wrap a rate limit in a 200 (§4.2 L390), so the envelope counts. */
   test("retry_after in a 200 envelope also triggers the single retry", async () => {
     const h = harness([
       { status: 200, body: { ok: false, description: "flood", parameters: { retry_after: 5 } } },
@@ -319,7 +319,7 @@ describe("pacing and retry (§3.4 L348)", () => {
   });
 });
 
-describe("the token never escapes the request path (§7.6 L701)", () => {
+describe("the token never escapes the request path (§7.6 L705)", () => {
   test("no log line contains the token", async () => {
     const h = harness([failure("Bad Request: chat not found")]);
 
@@ -371,7 +371,7 @@ describe("the token never escapes the request path (§7.6 L701)", () => {
   });
 });
 
-describe("TelegramApiErrors (§7.7 L734)", () => {
+describe("TelegramApiErrors (§7.7 L738)", () => {
   test("a failure emits TelegramApiErrors dimensioned by Method", async () => {
     const h = harness([failure("Bad Request: chat not found")]);
 

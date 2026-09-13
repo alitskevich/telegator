@@ -5,10 +5,10 @@ import { z } from "zod";
  *
  * Two fields are additions the spec does not list, each recorded as a
  * reconciliation rather than invented here:
- *  - `lastNonZeroCount` (R15). §4.1 L378 fires `SourceStale` on a source with "a
- *    non-zero historical `lastCount`", but §3.1 L220 writes `lastCount: 0` on the
+ *  - `lastNonZeroCount` (R15). §4.1 L382 fires `SourceStale` on a source with "a
+ *    non-zero historical `lastCount`", but §3.1 L221 writes `lastCount: 0` on the
  *    first zero-yield run — destroying the evidence two runs before it is needed.
- *  - `deleted` (R16). §8.4 L810 mandates a soft delete setting `deleted: true`;
+ *  - `deleted` (R16). §8.4 L814 mandates a soft delete setting `deleted: true`;
  *    §2.1's table never declares the field.
  */
 
@@ -48,7 +48,7 @@ const field = {
   teaser: z.string().optional(),
 
   // Written by scrape (§2.1 L115–119).
-  /** The `?after=` cursor, and the sole duplicate-suppression mechanism (§3.1 L222). */
+  /** The `?after=` cursor, and the sole duplicate-suppression mechanism (§3.1 L223). */
   lastItemId: z.string().optional(),
   lastCount: count,
   lastUpdated: epochMs,
@@ -104,7 +104,7 @@ export type SourceConfig = z.infer<typeof SourceConfigInput>;
  * Deliberately built from `field` rather than `SourceSchema.pick()`: a pick
  * carries the read-side `.default(0)` through `.partial()`, so parsing a patch
  * that omits `zeroYieldRuns` would *inject* 0 — resetting the staleness counter
- * on every successful poll and making §4.1 L378's alarm unreachable. A patch
+ * on every successful poll and making §4.1 L382's alarm unreachable. A patch
  * must leave an absent field absent.
  *
  * Strict for the mirror reason to `SourceConfigInput`: scrape must not overwrite

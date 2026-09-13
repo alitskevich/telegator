@@ -6,7 +6,10 @@ import { DEFAULT_TARGET_TYPE, type Target } from "../lib/domain/target";
 import { TARGET_COLUMNS } from "../lib/ui/columns";
 import { filterByColumn, filterByKeyword } from "../lib/ui/filter";
 import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
+import { downloadText, exportFilename } from "./download";
 import { TableHead } from "./TableHead";
+import { useAction } from "./useAction";
+import { useDeleteSelected } from "./useDeleteSelected";
 
 /**
  * target-table#7 — the Targets table: id, type, the two `lastPosted*` mirrors
@@ -30,7 +33,7 @@ export interface TargetsTableProps {
   readonly canEdit: boolean;
   readonly onSave: (id: string, delta: Record<string, string>) => Promise<void>;
   readonly onDelete: (ids: string[]) => Promise<void>;
-  readonly onExport?: () => Promise<string>;
+  readonly onExport: () => Promise<string>;
 }
 
 const cellText = (value: unknown) => (value === undefined || value === null ? "" : String(value));
@@ -41,6 +44,28 @@ export function TargetsTable(props: TargetsTableProps) {
   const [sort, setSort] = useState<SortState | undefined>(undefined);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [newId, setNewId] = useState("");
+
+  /** §8.4 L812 — `onSave` upserts, so "add" and "edit" are one action. */
+  const add = useAction(props.onSave, {
+    describe: (_result, id) => `Added ${id}`,
+    failure: "Add failed",
+  });
+
+  /**
+   * §8.4 L814 — the same hook the other two tables use. It used to clear the
+   * selection on the click rather than on the answer, so a delete that failed
+   * emptied the boxes and left the rows.
+   */
+  const remove = useDeleteSelected(props.onDelete, "target", () => setSelected(new Set()));
+
+  /** §8.4 L816 — the CSV is a file; one name per render, so the toast and the
+      saved file cannot name two different days. */
+  const csvName = exportFilename("targets", new Date());
+  const exportRows = useAction(props.onExport, {
+    onDone: (csv: string) => downloadText(csvName, csv),
+    describe: () => `Exported ${csvName}`,
+    failure: "Export failed",
+  });
 
   const visible = useMemo(() => {
     const matched = filterByKeyword([...props.rows], keyword, TARGET_COLUMNS);
@@ -82,32 +107,37 @@ export function TargetsTable(props: TargetsTableProps) {
             </label>
             <button
               type="button"
+              disabled={add.running}
+              aria-busy={add.running}
               onClick={() => {
                 // An empty id would create a row nothing can address, and the
                 // action would reject it after a round trip.
                 if (newId.trim() === "") return;
-                void props.onSave(newId.trim(), { type: DEFAULT_TARGET_TYPE });
+                add.run(newId.trim(), { type: DEFAULT_TARGET_TYPE });
                 setNewId("");
               }}
             >
-              Add
+              {add.running ? "Adding…" : "Add"}
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (selected.size === 0) return;
-                void props.onDelete([...selected]);
-                setSelected(new Set());
-              }}
+              disabled={remove.deleting}
+              aria-busy={remove.deleting}
+              onClick={() => remove.run([...selected])}
             >
-              Delete selected
+              {remove.deleting ? "Deleting…" : "Delete selected"}
             </button>
           </>
         ) : null}
 
-        {/* §8.4 L812 — export is `viewer`, so everyone who can see the table has it. */}
-        <button type="button" onClick={() => void props.onExport?.()}>
-          Export
+        {/* §8.4 L816 — export is `viewer`, so everyone who can see the table has it. */}
+        <button
+          type="button"
+          disabled={exportRows.running}
+          aria-busy={exportRows.running}
+          onClick={() => exportRows.run()}
+        >
+          {exportRows.running ? "Exporting…" : "Export"}
         </button>
       </div>
 
@@ -163,6 +193,11 @@ function TargetRow({
 }) {
   const [draft, setDraft] = useState<Record<string, string>>({});
 
+  const save = useAction(onSave, {
+    describe: (_result, id) => `Saved ${id}`,
+    failure: "Save failed",
+  });
+
   // Only what the operator actually changed. Sending unchanged fields would
   // overwrite a concurrent edit with a value this page read before it landed.
   const changed = Object.entries(draft).filter(
@@ -198,13 +233,14 @@ function TargetRow({
         <td>
           <button
             type="button"
-            disabled={changed.length === 0}
+            disabled={changed.length === 0 || save.running}
+            aria-busy={save.running}
             onClick={() => {
-              void onSave(row.id, Object.fromEntries(changed));
+              save.run(row.id, Object.fromEntries(changed));
               setDraft({});
             }}
           >
-            Save
+            {save.running ? "Saving…" : "Save"}
           </button>
         </td>
       ) : null}

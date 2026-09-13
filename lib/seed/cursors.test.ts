@@ -71,7 +71,7 @@ describe("planCursorReseed — §9.5 step 5", () => {
   /**
    * An id in the file with no matching source is a typo or a source deleted
    * since the export. Silently ignoring it would leave a channel un-reseeded,
-   * and §9.5 L975's whole purpose is that AWS resumes where Firebase stopped.
+   * and §9.5 L979's whole purpose is that AWS resumes where Firebase stopped.
    */
   test("reports an id that matches no source", () => {
     const plan = planCursorReseed([source("a", "10")], { a: "15", ghost: "99" });
@@ -80,7 +80,7 @@ describe("planCursorReseed — §9.5 step 5", () => {
   });
 
   /**
-   * The invariant of §9.5 L978: "The two systems must never publish the same
+   * The invariant of §9.5 L982: "The two systems must never publish the same
    * Telegram content concurrently — they would double-post." Moving a cursor
    * backwards makes AWS re-scrape posts it has already handled, which is that
    * failure exactly, so it is refused rather than applied.

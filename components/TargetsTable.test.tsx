@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Target } from "../lib/domain/target";
 import { TargetsTable } from "./TargetsTable";
+import { ToastHost } from "./ToastHost";
 
 const target = (id: string, extra: Partial<Target> = {}): Target => ({
   id,
@@ -17,10 +18,12 @@ type DeleteFn = (ids: string[]) => Promise<void>;
 
 let onSave: ReturnType<typeof vi.fn<SaveFn>>;
 let onDelete: ReturnType<typeof vi.fn<DeleteFn>>;
+let onExport: ReturnType<typeof vi.fn<() => Promise<string>>>;
 
 beforeEach(() => {
   onSave = vi.fn<SaveFn>(async () => undefined);
   onDelete = vi.fn<DeleteFn>(async () => undefined);
+  onExport = vi.fn<() => Promise<string>>(async () => "id\nfirst");
 });
 
 afterEach(cleanup);
@@ -28,7 +31,18 @@ afterEach(cleanup);
 const rows = [target("a", { messageTemplate: "{header}\n\n{body}" }), target("b")];
 
 const draw = (props: Partial<Parameters<typeof TargetsTable>[0]> = {}) =>
-  render(<TargetsTable rows={rows} canEdit onSave={onSave} onDelete={onDelete} {...props} />);
+  render(
+    <ToastHost>
+      <TargetsTable
+        rows={rows}
+        canEdit
+        onSave={onSave}
+        onDelete={onDelete}
+        onExport={onExport}
+        {...props}
+      />
+    </ToastHost>,
+  );
 
 const rowFor = (id: string) => screen.getByTestId(`row-${id}`);
 

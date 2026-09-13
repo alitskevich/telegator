@@ -14,7 +14,7 @@ import { telegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
- * E2E-4 (§10.2 L997) — "A new item merged into a published message triggers
+ * E2E-4 (§10.2 L1001) — "A new item merged into a published message triggers
  * `editMessageText` with the stored `tgId`."
  *
  * The two runs are the point. A merge inside one batch never needs an edit —
@@ -121,7 +121,7 @@ async function publishThenMerge() {
   const first = await runPipeline(world());
 
   await sources.put(source(SECOND));
-  // Same UTC date: §6 L560 looks for candidates in `date-index` for the item's
+  // Same UTC date: §6 L564 looks for candidates in `date-index` for the item's
   // own date, so a merge into yesterday's message is not what this tests.
   clock.advance(NEXT_POLL_MS);
 
@@ -139,7 +139,7 @@ describe("E2E-4 fixtures", () => {
   });
 });
 
-describe("E2E-4 (§10.2 L997)", () => {
+describe("E2E-4 (§10.2 L1001)", () => {
   test("the first run publishes and records a post on the default channel", async () => {
     const { first } = await publishThenMerge();
 
@@ -160,7 +160,7 @@ describe("E2E-4 (§10.2 L997)", () => {
     expect(record?.memberCount).toBe(2);
   });
 
-  /** §3.4 L345 — "`tgId` present → `editMessageText`". */
+  /** §3.4 L349 — "`tgId` present → `editMessageText`". */
   test("and triggers editMessageText, not a second post", async () => {
     await publishThenMerge();
 

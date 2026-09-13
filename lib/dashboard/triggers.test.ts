@@ -8,7 +8,15 @@ import type { LambdaInvoker } from "../aws/lambda";
 import type { Message } from "../domain/message";
 import type { Source } from "../domain/source";
 import { SOURCE_COLUMNS, TARGET_COLUMNS } from "../ui/columns";
-import { exportTable, publishPending, replayDlq, republishMessage, runScraper } from "./triggers";
+import {
+  consumeQueue,
+  exportTable,
+  publishPending,
+  replayDlq,
+  republishMessage,
+  resetSourceCursors,
+  runScraper,
+} from "./triggers";
 
 const NOW = 1_770_000_000_000;
 const SUB = "e4f1a2b3-0000-4000-8000-000000000001";
@@ -93,6 +101,7 @@ const deps = () => ({
     scrape: "telegator-scrape",
     dlqReplay: "telegator-dlq-replay",
     publish: "telegator-publish",
+    consume: "telegator-consume",
   },
   messages,
   sources,
@@ -101,9 +110,9 @@ const deps = () => ({
   revalidate: (path: string) => revalidated.push(path),
 });
 
-describe("runScraper — §8.4 L814", () => {
+describe("runScraper — §8.4 L818", () => {
   /**
-   * §8.2 L788 — "manual triggers call `lambda:InvokeFunction` on the deployed
+   * §8.2 L792 — "manual triggers call `lambda:InvokeFunction` on the deployed
    * function, so 'run this now' executes the exact deployed artefact". Importing
    * the stage instead would run the dashboard's own copy of it.
    */
@@ -136,7 +145,7 @@ describe("runScraper — §8.4 L814", () => {
   });
 });
 
-describe("replayDlq — §8.4 L817", () => {
+describe("replayDlq — §8.4 L821", () => {
   test("invokes the replay handler with the operator's choice", async () => {
     signedInAs("admin");
     lambdaResult = { replayed: 4, failed: 0 };
@@ -173,9 +182,9 @@ describe("replayDlq — §8.4 L817", () => {
   });
 });
 
-describe("republishMessage — §8.4 L815", () => {
+describe("republishMessage — §8.4 L819", () => {
   /**
-   * The ordering the ledger names. §3.4 L317 has the publish stage load the
+   * The ordering the ledger names. §3.4 L321 has the publish stage load the
    * message and drop anything not in `topublish`; a request that arrived before
    * the status write landed would be silently discarded, and the operator would
    * see a button that did nothing.
@@ -261,7 +270,108 @@ describe("republishMessage — §8.4 L815", () => {
   });
 });
 
-describe("exportTable — §8.4 L812", () => {
+describe("consumeQueue — R61", () => {
+  /**
+   * §8.2 L792 — the dashboard runs a stage by invoking a deployed function, and
+   * never by importing one. R61's pump is what holds the queue grants, so the
+   * event names which queue rather than the dashboard reading it.
+   */
+  test("invokes the pump with the queue and the cap, and returns its summary", async () => {
+    signedInAs("admin");
+    lambdaResult = { consumed: 7, failed: 1 };
+
+    expect(await consumeQueue({ queueName: "analyze", max: 10 }, deps())).toEqual({
+      consumed: 7,
+      failed: 1,
+    });
+    expect(invocations).toEqual([
+      { functionName: "telegator-consume", payload: { queueName: "analyze", max: 10 } },
+    ]);
+    expect(revalidated).toEqual(["/queues"]);
+  });
+
+  /** Bounded here as well as inside the function: every message is real work. */
+  test("refuses a batch over the cap without invoking anything", async () => {
+    signedInAs("admin");
+
+    await expect(consumeQueue({ queueName: "analyze", max: 11 }, deps())).rejects.toThrow();
+    expect(invocations).toEqual([]);
+  });
+
+  test("refuses a queue it does not know", async () => {
+    signedInAs("admin");
+
+    await expect(consumeQueue({ queueName: "everything", max: 1 }, deps())).rejects.toThrow();
+    expect(invocations).toEqual([]);
+  });
+
+  test("an editor is rejected and nothing is invoked", async () => {
+    signedInAs("editor");
+
+    await expect(consumeQueue({ queueName: "publish", max: 10 }, deps())).rejects.toBeInstanceOf(
+      AuthorizationError,
+    );
+    expect(invocations).toEqual([]);
+  });
+
+  /** A reply that is not a summary means the function failed without saying so. */
+  test("a malformed reply is rejected rather than shown as an empty drain", async () => {
+    signedInAs("admin");
+    lambdaResult = { ok: true };
+
+    await expect(consumeQueue({ queueName: "publish", max: 10 }, deps())).rejects.toThrow();
+  });
+});
+
+describe("resetSourceCursors — R60", () => {
+  test("clears every source's cursor and makes it due at once", async () => {
+    signedInAs("admin");
+
+    expect(await resetSourceCursors(deps())).toEqual({ reset: 2 });
+
+    for (const id of ["channel-a", "channel-b"]) {
+      const after = await sources.get(id);
+      // §3.1 L207 — an empty cursor is the no-cursor case: the base
+      // `t.me/s/{id}`, which serves the channel's newest posts.
+      expect(after?.lastItemId).toBe("");
+      // §3.1 L202 — otherwise a "Scrape now" straight after would poll nothing.
+      expect(after?.lastUpdated).toBe(0);
+      expect(after?.zeroYieldRuns).toBe(0);
+    }
+
+    expect(revalidated).toEqual(["/sources"]);
+  });
+
+  /** A disabled source is not polled, but it must start from the latest message
+      whenever an operator re-enables it. */
+  test("resets disabled sources too", async () => {
+    signedInAs("admin");
+    await resetSourceCursors(deps());
+
+    const paused = await sources.get("channel-b");
+    expect(paused?.status).toBe("paused");
+    expect(paused?.lastItemId).toBe("");
+  });
+
+  /** §2.1 L110-114 — the operator's own columns are not the cursor's to touch. */
+  test("leaves operator-owned fields alone", async () => {
+    signedInAs("admin");
+    await resetSourceCursors(deps());
+
+    const after = await sources.get("channel-a");
+    expect(after?.category).toBe("politics");
+    expect(after?.target).toBe("@target");
+  });
+
+  test("an editor is rejected and nothing is written", async () => {
+    signedInAs("editor");
+
+    await expect(resetSourceCursors(deps())).rejects.toBeInstanceOf(AuthorizationError);
+    expect(sources.writeCount).toBe(0);
+  });
+});
+
+describe("exportTable — §8.4 L816", () => {
   test("a viewer may export", async () => {
     signedInAs("viewer");
     expect(await exportTable({ table: "sources" }, deps())).toContain("channel-a");
@@ -293,7 +403,7 @@ describe("exportTable — §8.4 L812", () => {
     ]);
   });
 
-  test("the header row is §8.3 L798's message columns", async () => {
+  test("the header row is §8.3 L802's message columns", async () => {
     signedInAs("viewer");
     const [header] = (await exportTable({ table: "messages" }, deps())).split("\n");
 
@@ -362,7 +472,7 @@ describe("exportTable — §8.4 L812", () => {
   });
 });
 
-describe("exportTable on targets — §8.4 L812", () => {
+describe("exportTable on targets — §8.4 L816", () => {
   test("TT-20: emits the TARGET_COLUMNS header", async () => {
     signedInAs("viewer");
 
@@ -399,7 +509,7 @@ describe("publishPending — R53", () => {
   });
 
   /**
-   * The whole point of the trigger: §7.3 L648 gives the publish queue a
+   * The whole point of the trigger: §7.3 L652 gives the publish queue a
    * queue-level `DelaySeconds 300` and FIFO has no per-message delay, so
    * anything enqueued waits five minutes. Only an invoke is "now".
    */

@@ -14,7 +14,7 @@ const exported = (extra: Record<string, unknown> = {}) => ({
   lastCount: "12",
   lastUpdated: "1770000000000",
   lastResult: "2026-02-01T00:00:00.000Z",
-  // Stat columns §9.4 L965 says to drop.
+  // Stat columns §9.4 L969 says to drop.
   members: "18432",
   views: "99120",
   adv_price: "300",
@@ -24,7 +24,7 @@ const exported = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
-describe("toSeedSource — §9.4 L965 as a migration", () => {
+describe("toSeedSource — §9.4 L969 as a migration", () => {
   test("keeps exactly §2.1's fields", () => {
     const seeded = toSeedSource(exported());
 
@@ -46,7 +46,7 @@ describe("toSeedSource — §9.4 L965 as a migration", () => {
   });
 
   /**
-   * §9.4 L965 — "minus unused stat columns". They are dropped rather than
+   * §9.4 L969 — "minus unused stat columns". They are dropped rather than
    * carried because §2.3's schema is closed (R7), and a record with extra
    * attributes would fail `SourceSchema` on the first read after seeding.
    */

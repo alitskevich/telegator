@@ -55,7 +55,7 @@ export interface CursorPlan {
 /**
  * Work out what to write, without writing it.
  *
- * A backwards move is refused rather than applied. §9.5 L978 is the invariant of
+ * A backwards move is refused rather than applied. §9.5 L982 is the invariant of
  * the whole cutover — "The two systems must never publish the same Telegram
  * content concurrently — they would double-post" — and moving a cursor back
  * makes AWS re-scrape posts it has already published, which is that failure

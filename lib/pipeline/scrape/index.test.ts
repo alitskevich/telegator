@@ -5,7 +5,11 @@ import { recordingSink } from "../../../test/fakes/logging";
 import { type RecordingMetrics, recordingMetrics } from "../../../test/fakes/metrics";
 import { type FakeQueueProducer, fakeQueueProducer } from "../../../test/fakes/queues";
 import { type FakeFetcher, fakeFetcher } from "../../../test/fakes/telegram";
-import { CHUNK_MARKER, telegramFixture } from "../../../test/fixtures/telegram/index";
+import {
+  CHUNK_MARKER,
+  datedTelegramMarkup,
+  telegramFixture,
+} from "../../../test/fixtures/telegram/index";
 import type { Source } from "../../domain/source";
 import { SOURCE_STATUS_OK, SourceSchema } from "../../domain/source";
 import { createLogger } from "../../logging/logger";
@@ -29,7 +33,7 @@ const urlFor = (channel: string, after?: string): string =>
 
 /**
  * Pages are assembled from **recorded** chunks, never hand-written markup: the
- * loop's rule is that real Telegram HTML is captured (§4.1 L376 makes the four
+ * loop's rule is that real Telegram HTML is captured (§4.1 L380 makes the four
  * literal class names the system's most fragile dependency), so a volume or
  * ordering test re-ids a real chunk rather than inventing a simplified one.
  */
@@ -58,6 +62,11 @@ const page = (chunks: readonly string[]): string =>
     .join("")}</section></body></html>`;
 
 const postsPage = (ids: readonly number[]): string => page(ids.map(postChunk));
+
+const datedChunk = datedTelegramMarkup;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const FOUR_DAYS_MS = 4 * DAY_MS;
 
 function source(fields: Record<string, unknown>): Source {
   return SourceSchema.parse({
@@ -116,7 +125,7 @@ async function readBack(repo: FakeSourceRepo, id: string): Promise<Source> {
 }
 
 describe("runScrape — acceptance criteria", () => {
-  test("AC-1.4 (§3.1 L235) an unreachable source increments zeroYieldRuns and leaves other sources unaffected", async () => {
+  test("AC-1.4 (§3.1 L238) an unreachable source increments zeroYieldRuns and leaves other sources unaffected", async () => {
     const h = harness({
       sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
       // Only the second channel answers; the first is modelled the way §3.1 L207
@@ -141,7 +150,7 @@ describe("runScrape — acceptance criteria", () => {
     expect(result).toEqual({ processed: 2, enqueued: 2 });
   });
 
-  test("AC-1.4 (§3.1 L235) a fetcher that throws still leaves other sources unaffected", async () => {
+  test("AC-1.4 (§3.1 L238) a fetcher that throws still leaves other sources unaffected", async () => {
     const h = harness({
       sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
       pages: { [urlFor(OTHER_CHANNEL)]: postsPage([600]) },
@@ -164,7 +173,7 @@ describe("runScrape — acceptance criteria", () => {
     expect((await readBack(h.repo, OTHER_CHANNEL)).lastItemId).toBe("600");
   });
 
-  test("AC-1.5 (§3.1 L236) a failed SendMessageBatch leaves lastItemId unchanged", async () => {
+  test("AC-1.5 (§3.1 L239) a failed SendMessageBatch leaves lastItemId unchanged", async () => {
     const h = harness({
       sources: [source({ lastItemId: "100000", lastCount: 3, zeroYieldRuns: 2 })],
       pages: { [urlFor(CHANNEL, "100000")]: postsPage([100001, 100002]) },
@@ -177,7 +186,7 @@ describe("runScrape — acceptance criteria", () => {
 
     const after = await readBack(h.repo, CHANNEL);
     expect(after.lastItemId).toBe("100000");
-    // §3.1 L228 — "Cursor fields are written **only after** the enqueue
+    // §3.1 L231 — "Cursor fields are written **only after** the enqueue
     // succeeds", read strictly: a non-empty `failed` writes nothing at all, so
     // the source stays overdue and the next run retries the whole page.
     expect(h.repo.writeCount).toBe(0);
@@ -185,7 +194,7 @@ describe("runScrape — acceptance criteria", () => {
     expect(result).toEqual({ processed: 2, enqueued: 1 });
   });
 
-  test("AC-1.6 (§3.1 L237) a forwarded post is counted and dropped, never enqueued", async () => {
+  test("AC-1.6 (§3.1 L240) a forwarded post is counted and dropped, never enqueued", async () => {
     const h = harness({
       sources: [source({})],
       pages: { [urlFor(CHANNEL)]: telegramFixture("forwarded") },
@@ -201,6 +210,54 @@ describe("runScrape — acceptance criteria", () => {
     // Dropping is not failing: the cursor still advances past the forward, or
     // every run would re-fetch and re-drop it forever.
     expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe(FORWARD_CHUNK_ID);
+  });
+
+  test("AC-1.7 (§3.1 L241) a post older than three days is counted and dropped, never enqueued", async () => {
+    const h = harness({
+      sources: [source({})],
+      pages: { [urlFor(CHANNEL)]: page([datedChunk(postChunk(700), NOW - FOUR_DAYS_MS)]) },
+    });
+
+    const result = await runScrape(h.deps);
+
+    expect(h.queue.sent).toEqual([]);
+    expect(h.queue.sendCalls).toBe(0);
+    expect(h.metrics.get("ItemsDropped", { Reason: "obsolete" })).toBe(1);
+    expect(h.metrics.get("ItemsScraped", { Source: CHANNEL })).toBe(1);
+    expect(result).toEqual({ processed: 1, enqueued: 0 });
+    // As with a forward: the cursor advances past it, or the run re-fetches and
+    // re-drops the same stale post every 30 minutes forever.
+    expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe("700");
+  });
+
+  test("a stale post is skipped while its fresh neighbours on the same page are enqueued", async () => {
+    const h = harness({
+      sources: [source({})],
+      pages: {
+        [urlFor(CHANNEL)]: page([
+          datedChunk(postChunk(801), NOW - FOUR_DAYS_MS),
+          datedChunk(postChunk(802), NOW - DAY_MS),
+        ]),
+      },
+    });
+
+    const result = await runScrape(h.deps);
+
+    const ids = h.queue.sent.map((message) => JSON.parse(message.body).id);
+    expect(ids).toEqual([`${CHANNEL}/802`]);
+    expect(h.metrics.get("ItemsDropped", { Reason: "obsolete" })).toBe(1);
+    expect(result).toEqual({ processed: 2, enqueued: 1 });
+    expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe("802");
+  });
+
+  test("a page whose posts carry no time drops them all, rather than publishing history", async () => {
+    const undated = page([postChunk(900)]).replace(/<time datetime="[^"]*">/g, "<time>");
+    const h = harness({ sources: [source({})], pages: { [urlFor(CHANNEL)]: undated } });
+
+    await runScrape(h.deps);
+
+    expect(h.queue.sent).toEqual([]);
+    expect(h.metrics.get("ItemsDropped", { Reason: "obsolete" })).toBe(1);
   });
 
   test("an empty post is dropped with Reason 'empty'", async () => {
@@ -280,7 +337,7 @@ describe("runScrape — cursor", () => {
     expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe("42");
   });
 
-  test("§3.1 L220 a successful parse resets zeroYieldRuns and records lastNonZeroCount (R15)", async () => {
+  test("§3.1 L221 a successful parse resets zeroYieldRuns and records lastNonZeroCount (R15)", async () => {
     const h = harness({
       sources: [source({ zeroYieldRuns: 2, lastNonZeroCount: 0 })],
       pages: { [urlFor(CHANNEL)]: telegramFixture("multiPost") },
@@ -306,14 +363,14 @@ describe("runScrape — cursor", () => {
 
     const after = await readBack(h.repo, CHANNEL);
     expect(after.lastCount).toBe(0);
-    // Without this, §4.1 L378's "non-zero historical lastCount" is gone two runs
+    // Without this, §4.1 L382's "non-zero historical lastCount" is gone two runs
     // before the alarm needs it.
     expect(after.lastNonZeroCount).toBe(4);
   });
 });
 
 describe("runScrape — metrics", () => {
-  test("§7.7 L725 ItemsScraped is counted per source", async () => {
+  test("§7.7 L729 ItemsScraped is counted per source", async () => {
     const h = harness({
       sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
       pages: {
@@ -328,7 +385,7 @@ describe("runScrape — metrics", () => {
     expect(h.metrics.get("ItemsScraped", { Source: OTHER_CHANNEL })).toBe(1);
   });
 
-  test("§4.1 L378 three consecutive zero-yield runs emit SourceStale, dimensioned and undimensioned (R25)", async () => {
+  test("§4.1 L382 three consecutive zero-yield runs emit SourceStale, dimensioned and undimensioned (R25)", async () => {
     const repo = fakeSourceRepo([source({ lastCount: 0, lastNonZeroCount: 5 })]);
     const metrics = recordingMetrics();
 
@@ -344,12 +401,12 @@ describe("runScrape — metrics", () => {
 
     expect((await readBack(repo, CHANNEL)).zeroYieldRuns).toBe(STALE_ZERO_YIELD_RUNS);
     expect(metrics.get("SourceStale", { Source: CHANNEL })).toBe(1);
-    // R25 — §7.7 L750 alarms on "SourceStale for any source", and a CloudWatch
+    // R25 — §7.7 L754 alarms on "SourceStale for any source", and a CloudWatch
     // alarm cannot enumerate a runtime-discovered dimension at synth time.
     expect(metrics.get("SourceStale", {})).toBe(1);
   });
 
-  test("§4.1 L378 a source that never yielded anything does not alarm", async () => {
+  test("§4.1 L382 a source that never yielded anything does not alarm", async () => {
     const repo = fakeSourceRepo([source({ lastCount: 0, lastNonZeroCount: 0 })]);
     const metrics = recordingMetrics();
 
@@ -364,7 +421,7 @@ describe("runScrape — metrics", () => {
 });
 
 describe("runScrape — enqueue", () => {
-  test("§3.1 L226 posts are sent in batches of SQS_MAX_BATCH_ENTRIES", async () => {
+  test("§3.1 L229 posts are sent in batches of SQS_MAX_BATCH_ENTRIES", async () => {
     const total = SQS_MAX_BATCH_ENTRIES + 2;
     const ids = Array.from({ length: total }, (_, index) => 900 + index);
     const inner = fakeQueueProducer();
@@ -388,7 +445,7 @@ describe("runScrape — enqueue", () => {
     expect(result).toEqual({ processed: total, enqueued: total });
   });
 
-  test("§3.1 L226 only kind === 'post' items reach the analyze queue", async () => {
+  test("§3.1 L229 only kind === 'post' items reach the analyze queue", async () => {
     const h = harness({
       sources: [source({})],
       pages: { [urlFor(CHANNEL)]: page([postChunk(11), forwardChunk(12)]) },

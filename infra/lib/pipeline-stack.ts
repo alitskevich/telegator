@@ -22,10 +22,10 @@ import { grantTableActions } from "./grants";
 import type { TelegatorQueueStack } from "./queue-stack";
 
 /**
- * §9.1 L886 — the pipeline's five Lambdas. Their triggers, IAM and alarms are
- * item 4.6; this item is the function inventory of §7.5 L685–693.
+ * §9.1 L890 — the pipeline's five Lambdas. Their triggers, IAM and alarms are
+ * item 4.6; this item is the function inventory of §7.5 L689–697.
  *
- * §9.1 L890 puts this stack after Data and Queue, which is why both arrive as
+ * §9.1 L894 puts this stack after Data and Queue, which is why both arrive as
  * props: passing the constructs directly lets CDK emit the exports and imports
  * itself, rather than importing by a hardcoded name that would not exist until
  * the other stack had deployed.
@@ -37,6 +37,8 @@ export const PIPELINE_FUNCTIONS = [
   "aggregate",
   "publish",
   "dlqReplay",
+  /** R61 — "Consume now": one operator-initiated batch through one stage. */
+  "consume",
 ] as const;
 
 export type PipelineFunction = (typeof PIPELINE_FUNCTIONS)[number];
@@ -50,7 +52,7 @@ export interface TelegatorPipelineStackProps extends StackProps {
 /** Every row of §7.5's table gives 300 s. */
 const TIMEOUT = Duration.seconds(300);
 
-/** §7.5 L685 — "All Node.js 22, ARM64, bundled with esbuild." */
+/** §7.5 L689 — "All Node.js 22, ARM64, bundled with esbuild." */
 const RUNTIME = Runtime.NODEJS_22_X;
 
 /**
@@ -81,13 +83,13 @@ interface FunctionSpec {
   readonly entry: string;
   readonly memorySize: number;
   /**
-   * §7.5 L691–692 write "by message group" rather than a number for aggregate
-   * and publish, and §3.3 L272 is explicit that the FIFO group "replaces a
+   * §7.5 L695–696 write "by message group" rather than a number for aggregate
+   * and publish, and §3.3 L276 is explicit that the FIFO group "replaces a
    * blunt reserved-concurrency-of-1". Reserving there would serialise across
    * dates too, undoing the parallelism the groups exist to allow.
    */
   readonly reservedConcurrency?: number;
-  /** §11.5 L1044 gives a retention only for analyze. */
+  /** §11.5 L1048 gives a retention only for analyze. */
   readonly logRetention?: RetentionDays;
 }
 
@@ -99,12 +101,12 @@ const SPECS: readonly FunctionSpec[] = [
     entry: "analyze.ts",
     memorySize: 512,
     reservedConcurrency: 5,
-    // §11.5 L1044 — 90 days. Not decoration: §7.7 L737 sources §8.5 L831's
+    // §11.5 L1048 — 90 days. Not decoration: §7.7 L741 sources §8.5 L835's
     // category chart from a Logs Insights query over these logs, so retention
     // is a functional setting rather than a cost one.
     logRetention: RetentionDays.THREE_MONTHS,
   },
-  // §7.5 L691 — 1024 MB "because it holds a day of 4 KB vectors plus a 10-item
+  // §7.5 L695 — 1024 MB "because it holds a day of 4 KB vectors plus a 10-item
   // embedding batch". R43 removed the embeddings; the size is left as the spec
   // sets it rather than re-tuned against a workload nothing here can measure.
   { key: "aggregate", name: "aggregate", entry: "aggregate.ts", memorySize: 1024 },
@@ -114,6 +116,22 @@ const SPECS: readonly FunctionSpec[] = [
     name: "dlq-replay",
     entry: "dlqReplay.ts",
     memorySize: 512,
+    reservedConcurrency: 1,
+  },
+  /**
+   * R61 — it runs whichever stage the operator names, so it is sized for the
+   * largest of them (§7.5 L695's 1024 MB for aggregate).
+   *
+   * Reserved at 1 like the other operator-initiated function: a second press
+   * while the first batch is in flight would run two batches of the same queue
+   * concurrently, and §3.3 L276 keeps aggregate correct through FIFO groups
+   * that a parallel invoke outside the event source mapping would not respect.
+   */
+  {
+    key: "consume",
+    name: "consume",
+    entry: "consume.ts",
+    memorySize: 1024,
     reservedConcurrency: 1,
   },
 ];
@@ -145,7 +163,7 @@ export class TelegatorPipelineStack extends Stack {
       [ENV_VARS.analyzeDlqUrl]: dlqUrl(queues, "analyze"),
       [ENV_VARS.aggregateDlqUrl]: dlqUrl(queues, "aggregate"),
       [ENV_VARS.publishDlqUrl]: dlqUrl(queues, "publish"),
-      // §7.6 L701 — the bot token. Its ARN is a context parameter rather than
+      // §7.6 L705 — the bot token. Its ARN is a context parameter rather than
       // a lookup: a `Secret.fromLookup` would make synth an authenticated call.
       [ENV_VARS.telegramSecretArn]: secretArn(this, "telegramSecretArn"),
       // §7.6, as revised by R50 — the second secret. Under Bedrock this row read
@@ -158,7 +176,7 @@ export class TelegatorPipelineStack extends Stack {
       /**
        * R41 — built here and handed to the function, because CDK's managed
        * log group already claims `/aws/lambda/<name>`: a second one is rejected
-       * on deploy, and until it collided it was inert, leaving §11.5 L1044's
+       * on deploy, and until it collided it was inert, leaving §11.5 L1048's
        * 90 days unapplied.
        */
       const logGroup =
@@ -177,7 +195,7 @@ export class TelegatorPipelineStack extends Stack {
         runtime: RUNTIME,
         architecture: Architecture.ARM_64,
         /**
-         * §8.5 L831's category chart is a Logs Insights query grouping by a
+         * §8.5 L835's category chart is a Logs Insights query grouping by a
          * top-level `category` field, and `lib/logging/logger.ts` writes one
          * JSON object per line for it. `LoggingFormat.JSON` would wrap each
          * record in an envelope and carry ours as a `message` string, so the
@@ -209,9 +227,9 @@ export class TelegatorPipelineStack extends Stack {
   }
 
   /**
-   * §7.3 L646–648's event source mappings, and §7.5 L689's schedule.
+   * §7.3 L650–652's event source mappings, and §7.5 L693's schedule.
    *
-   * Every mapping reports batch item failures (§7.3 L664): without it one
+   * Every mapping reports batch item failures (§7.3 L668): without it one
    * poison message forces the whole batch to retry, which for analyze means
    * re-billing nine successful OpenRouter calls.
    */
@@ -226,7 +244,7 @@ export class TelegatorPipelineStack extends Stack {
 
     /**
      * R33 — AWS does not support a batching window on a FIFO queue, so
-     * `batchSize: 10` is all that survives. §7.4 L677 has already reasoned about
+     * `batchSize: 10` is all that survives. §7.4 L681 has already reasoned about
      * it: correctness comes from the date-index query, so the loss costs smaller
      * batches and more queries, not missed merges.
      */
@@ -239,7 +257,7 @@ export class TelegatorPipelineStack extends Stack {
 
     this.functions.publish.addEventSource(
       new SqsEventSource(queues.publish, {
-        // §3.4 L315 — one deliberately: each send is rate-limited against
+        // §3.4 L319 — one deliberately: each send is rate-limited against
         // Telegram and the message group already serialises work per message.
         batchSize: 1,
         reportBatchItemFailures: true,
@@ -262,23 +280,23 @@ export class TelegatorPipelineStack extends Stack {
     });
   }
 
-  /** §7.6 L707–712's per-function grants, plus R24's additions. */
+  /** §7.6 L711–716's per-function grants, plus R24's additions. */
   private grantLeastPrivilege(data: TelegatorDataStack, queues: TelegatorQueueStack): void {
-    const { scrape, analyze, aggregate, publish, dlqReplay } = this.functions;
+    const { scrape, analyze, aggregate, publish, dlqReplay, consume } = this.functions;
 
-    // §7.6 L707 — scrape reads and writes `sources` and sends to analyze.
-    // §3.1 L199 selects sources with a Query on `status-index`; §3.1 L228
+    // §7.6 L711 — scrape reads and writes `sources` and sends to analyze.
+    // §3.1 L199 selects sources with a Query on `status-index`; §3.1 L231
     // advances the cursor with an UpdateItem. It reads no source by id, creates
     // none and deletes none.
     grantTableActions(data.sources, scrape, "dynamodb:Query", "dynamodb:UpdateItem");
     queues.analyze.grantSendMessages(scrape);
 
-    // §7.6 L708.
+    // §7.6 L712.
     queues.analyze.grantConsumeMessages(analyze);
     queues.aggregate.grantSendMessages(analyze);
     analyze.addToRolePolicy(readSecret(secretArn(this, "openRouterSecretArn")));
 
-    // §7.6 L709.
+    // §7.6 L713.
     queues.aggregate.grantConsumeMessages(aggregate);
     // §6's two passes: `queryByDate` on `date-index`, `get` for R9's base-table
     // read, then either L584's create (PutItem) or L581's merge (UpdateItem).
@@ -293,17 +311,17 @@ export class TelegatorPipelineStack extends Stack {
     queues.publish.grantSendMessages(aggregate);
     aggregate.addToRolePolicy(readSecret(secretArn(this, "openRouterSecretArn")));
 
-    // §7.6 L710. Both secrets' ARNs are configuration rather than a lookup, so
+    // §7.6 L714. Both secrets' ARNs are configuration rather than a lookup, so
     // the grants are scoped to those ARN strings rather than to constructs.
     queues.publish.grantConsumeMessages(publish);
     /**
-     * §7.6 L711 says "read/write `messages`", which `grantReadWriteData` would
+     * §7.6 L715 says "read/write `messages`", which `grantReadWriteData` would
      * read as including `DeleteItem`. This stage calls two APIs: `GetItem` for
-     * §3.4 L318's load and `UpdateItem` for L350's result.
+     * §3.4 L322's load and `UpdateItem` for L350's result.
      *
      * The narrow reading is taken because `messages` is the only durable record
      * of a post (§1.3 L69), which is why even an operator's delete is soft
-     * (§8.4 L816). A stage that never deletes should not be able to.
+     * (§8.4 L820). A stage that never deletes should not be able to.
      */
     grantTableActions(data.messages, publish, "dynamodb:GetItem", "dynamodb:UpdateItem");
     /**
@@ -315,21 +333,53 @@ export class TelegatorPipelineStack extends Stack {
     grantTableActions(data.targets, publish, "dynamodb:GetItem", "dynamodb:UpdateItem");
     publish.addToRolePolicy(readSecret(secretArn(this, "telegramSecretArn")));
 
-    // §7.6 L711 — receive on all DLQs, send on all source queues.
+    // §7.6 L715 — receive on all DLQs, send on all source queues.
     for (const dlq of queues.deadLetterQueues) dlq.grantConsumeMessages(dlqReplay);
     for (const queue of [queues.analyze, queues.aggregate, queues.publish]) {
       queue.grantSendMessages(dlqReplay);
     }
 
     /**
+     * R61 — `consume` runs any one of the three stages over a batch it takes
+     * off that stage's live queue, so it holds the union of their grants.
+     *
+     * That union is the whole point of the function existing. §7.6 L716 gives
+     * the dashboard role no queue write and no invoke on the analysis stages,
+     * and §8.2 L792 forbids it from importing them — so the alternative was to
+     * put receive, delete and two more invokes on the *web* role, where every
+     * request that reaches the console can use them. Here they sit on a Lambda
+     * that does one thing and is reserved at a concurrency of 1.
+     */
+    grantTableActions(
+      data.messages,
+      consume,
+      "dynamodb:GetItem",
+      "dynamodb:Query",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    );
+    grantTableActions(data.targets, consume, "dynamodb:GetItem", "dynamodb:UpdateItem");
+    for (const queue of [queues.analyze, queues.aggregate, queues.publish]) {
+      // Receive **and delete**: §7.3 L668's partial batch response is only
+      // honoured by deleting what did not fail, which is what the event source
+      // mapping does for these same queues.
+      queue.grantConsumeMessages(consume);
+      // Analyze sends to aggregate and aggregate sends to publish; which one
+      // runs is the operator's choice, so it can send to either.
+      queue.grantSendMessages(consume);
+    }
+    consume.addToRolePolicy(readSecret(secretArn(this, "openRouterSecretArn")));
+    consume.addToRolePolicy(readSecret(secretArn(this, "telegramSecretArn")));
+
+    /**
      * R24 — §7.6 omits `cloudwatch:PutMetricData`, yet §7.7's twelve counters
-     * cannot be emitted without it and §7.7 L720 makes them the pipeline's
+     * cannot be emitted without it and §7.7 L724 makes them the pipeline's
      * system of record for volume.
      *
      * `PutMetricData` takes no resource-level ARN, so `*` is unavoidable; the
      * namespace condition is what keeps it least-privilege.
      */
-    for (const fn of [scrape, analyze, aggregate, publish, dlqReplay]) {
+    for (const fn of [scrape, analyze, aggregate, publish, dlqReplay, consume]) {
       fn.addToRolePolicy(
         new PolicyStatement({
           effect: Effect.ALLOW,
@@ -341,12 +391,12 @@ export class TelegatorPipelineStack extends Stack {
     }
   }
 
-  /** §7.7 L750's five alarms, with the thresholds that section pins. */
+  /** §7.7 L754's five alarms, with the thresholds that section pins. */
   private declareAlarms(config: TelegatorConfig, queues: TelegatorQueueStack): void {
     /**
      * "Any DLQ depth > 0". A dead-lettered post has no other record anywhere
      * (§1.3 L69), so this is the only signal that one is waiting for an
-     * operator — and §10.4 L1027 allows it at most an hour to fire.
+     * operator — and §10.4 L1031 allows it at most an hour to fire.
      */
     queues.deadLetterQueues.forEach((dlq, index) => {
       new Alarm(this, `DeadLetterDepthAlarm${index}`, {
@@ -362,7 +412,7 @@ export class TelegatorPipelineStack extends Stack {
     });
 
     /**
-     * R25 — §7.7 L750 alarms on "SourceStale for any source", but the metric is
+     * R25 — §7.7 L754 alarms on "SourceStale for any source", but the metric is
      * dimensioned by a runtime-discovered `Source` that no alarm can enumerate
      * at synth time, and a lookup would break the credential-free synth gate.
      * Item 3.5 therefore emits it undimensioned as well, and this watches that.
@@ -382,7 +432,7 @@ export class TelegatorPipelineStack extends Stack {
     });
 
     /**
-     * §7.2 L640 — "Alarm at > 500 — the point at which the in-memory comparison
+     * §7.2 L644 — "Alarm at > 500 — the point at which the in-memory comparison
      * assumption (§6) needs revisiting." The migration path is a `date#shard`
      * key or a vector store; this is the tripwire that says when to take it.
      */
@@ -400,7 +450,7 @@ export class TelegatorPipelineStack extends Stack {
       treatMissingData: TreatMissingData.NOT_BREACHING,
     });
 
-    /** §10.4 L1027 — "Oldest message < 1 hour under normal load". */
+    /** §10.4 L1031 — "Oldest message < 1 hour under normal load". */
     new Alarm(this, "AnalyzeQueueAgeAlarm", {
       alarmName: config.name("analyze-queue-age"),
       metric: queues.analyze.metricApproximateAgeOfOldestMessage({
@@ -413,7 +463,7 @@ export class TelegatorPipelineStack extends Stack {
     });
 
     /**
-     * §7.7 L750 — "Lambda error rate > 10% over 15 minutes".
+     * §7.7 L754 — "Lambda error rate > 10% over 15 minutes".
      *
      * A rate rather than a count, expressed as metric math across all five
      * functions: a count would alarm on one failure in a busy hour, and a
@@ -460,7 +510,7 @@ export class TelegatorPipelineStack extends Stack {
  *
  * One `GetSecretValue` on the OpenRouter key replaces the Bedrock statements of
  * R42 and R49, which this account's Organization disabled above IAM anyway. The
- * trade §7.6 L716 records: IAM authorizes the read of the bearer token, not the
+ * trade §7.6 L720 records: IAM authorizes the read of the bearer token, not the
  * inference, so `CLASSIFIER_MODEL_ID` is the only thing fixing which model the
  * token is spent on.
  */
@@ -485,7 +535,7 @@ function secretArn(scope: Construct, contextKey: string): string {
   if (typeof configured === "string" && configured !== "") return configured;
   // `telegator-*`, not `telegator/*`. The spec writes the secrets as
   // `telegator/telegram-bot-token`, but nothing is named that way: every
-  // deployed secret follows §9.2 L896's `telegator-{env}-{resource}` scheme
+  // deployed secret follows §9.2 L900's `telegator-{env}-{resource}` scheme
   // (`telegator-dev-telegram-token`). A `telegator/*` fallback therefore
   // matched no secret in the account at all — it read as least privilege and
   // was in fact zero privilege, which a deploy cannot notice because the grant
@@ -493,7 +543,7 @@ function secretArn(scope: Construct, contextKey: string): string {
   return `arn:${Aws.PARTITION}:secretsmanager:${Aws.REGION}:${Aws.ACCOUNT_ID}:secret:telegator-*`;
 }
 
-/** §7.3 L650 — "Each has a matching DLQ", in the order the queue stack exposes them. */
+/** §7.3 L654 — "Each has a matching DLQ", in the order the queue stack exposes them. */
 function dlqUrl(queues: TelegatorQueueStack, name: "analyze" | "aggregate" | "publish"): string {
   const index = { analyze: 0, aggregate: 1, publish: 2 }[name];
   const dlq = queues.deadLetterQueues[index];

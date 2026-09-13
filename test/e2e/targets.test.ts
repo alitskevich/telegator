@@ -6,7 +6,7 @@ import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
 import { fakeMessageRepo, fakeSourceRepo, fakeTargetRepo } from "../fakes/db";
 import { fakeBot, fakeFetcher } from "../fakes/telegram";
-import { telegramFixture } from "../fixtures/telegram/index";
+import { datedTelegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
@@ -55,7 +55,9 @@ beforeEach(() => {
   bot = fakeBot();
 
   world = {
-    fetcher: fakeFetcher({ [URL]: telegramFixture("multiPost") }),
+    // Re-dated to this run's clock: §3.1 L234 drops a post older than 3 days,
+    // and the recording's own timestamp is fixed in the past.
+    fetcher: fakeFetcher({ [URL]: datedTelegramFixture("multiPost", NOW) }),
     sources: fakeSourceRepo([
       {
         id: SOURCE,

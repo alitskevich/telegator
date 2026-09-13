@@ -216,14 +216,17 @@ Take the first **10**. Three tiers: a **hot** source (>20 posts last run) is alw
 | `body` | Strip remaining tags; `<br>` → `\n`; decode `&amp; &lt; &gt; &quot; &#39; &nbsp;`; collapse 3+ whitespace to `\n\n`; trim. |
 | `image` | First `background-image:url('X')` → X. |
 | `forwardedFrom` | `tgme_widget_message_forwarded_from_name` anchor's channel segment. |
+| `postedAt` | The date anchor's `<time datetime="…">`, passed through as written. |
 
 **Guards.** An empty fetch, no chunks, or a first chunk with no id increments `zeroYieldRuns` and sets `lastCount: 0`, `lastUpdated: now`. A successful parse resets `zeroYieldRuns` to 0.
 
 **Duplicate suppression — cursor only.** There is no existence check; there is no table to check against. `lastItemId` is the sole mechanism, and the `members` map absorbs anything that slips past (§2.3) — but only within the same `date`, because candidates are drawn from `date-index` for that date alone.
 
-**Transform.** Per post: `id = "{sourceId}/{messageId}"`; strip the source's `teaser` from the body; stamp `tgChannel`, `category`, `tags`, `date` = today; set `kind` to `forward` (if forwarded), `empty` (blank body) or `post`.
+**Transform.** Per post: `id = "{sourceId}/{messageId}"`; strip the source's `teaser` from the body; stamp `tgChannel`, `category`, `tags`, `date` = today; set `kind` to `obsolete` (published more than `MAX_POST_AGE_DAYS` before the run), `forward` (if forwarded), `empty` (blank body) or `post`.
 
-**Enqueue.** Posts with `kind === "post"` go to the **analyze** queue via `SendMessageBatch` (10 per call). `forward` and `empty` posts are **dropped** with a counter metric.
+**Freshness.** A post whose `postedAt` is older than **3 days** at the moment the run starts is `obsolete`: it is news nobody is waiting for, and classifying it costs an AI call. Age is measured against the run's single clock reading, so every source of a run shares one cutoff; a post exactly at the cutoff is kept. A post carrying **no** parseable `postedAt` is obsolete as well — the page dates every post, so a missing time means the markup changed, and the opposite default would republish a channel's whole visible history the first time it did.
+
+**Enqueue.** Posts with `kind === "post"` go to the **analyze** queue via `SendMessageBatch` (10 per call). `forward`, `empty` and `obsolete` posts are **dropped** with a counter metric. Dropping is not failing: the cursor still advances past a dropped post, or every run re-fetches and re-drops it.
 
 **Cursor update.** Cursor fields are written **only after** the enqueue succeeds. A failed enqueue leaves `lastItemId` unadvanced so the next run retries those posts.
 
@@ -235,6 +238,7 @@ Take the first **10**. Three tiers: a **hot** source (>20 posts last run) is alw
 - AC-1.4 An unreachable source increments `zeroYieldRuns` and leaves other sources unaffected.
 - AC-1.5 A failed `SendMessageBatch` leaves `lastItemId` unchanged.
 - AC-1.6 A forwarded post is counted and dropped, never enqueued.
+- AC-1.7 A post published four days before the run is counted and dropped, never enqueued, and the cursor still advances past it.
 
 ### 3.2 Stage 2 — `analyze` · *SQS Standard consumer*
 
@@ -724,7 +728,7 @@ Because there is no items table, **CloudWatch is the pipeline's system of record
 | Metric | Dimensions | Emitted by |
 | --- | --- | --- |
 | `ItemsScraped` | `Source` | scrape |
-| `ItemsDropped` | `Reason` = `forward`\|`empty` | scrape |
+| `ItemsDropped` | `Reason` = `forward`\|`empty`\|`obsolete` | scrape |
 | `ItemsAnalyzed` | — | analyze |
 | `ItemsSkipped` | `Reason` = `low`\|`category`\|`nobody` | analyze |
 | `MessagesCreated`, `MessagesMerged` | — | aggregate |
@@ -1577,6 +1581,8 @@ Numbers are permanent. `R6` was never issued.
 | **R57** | §8.4, §7.6 | **"Cleanup all"** — `purgeDlq(queueName) => {discarded}`, `admin`. §8.4 lists no such action and §7.6 L712 grants the dashboard role no queue write, yet §3.5's replay is the only exit a DLQ has: a backlog that will never drain cleanly — a poison payload, a batch a later scrape superseded — keeps §7.7's depth alarm lit for good, and an operator learns to ignore the one signal that means act. It is one `PurgeQueue` call with no pipeline behind it, so it runs from the dashboard's own SQS client like §8.2 L776's inspection rather than through the replay Lambda, and `sqs:PurgeQueue` is granted **per dead-letter queue only**. Irreversible in a way replay is not (§1.3 L69 makes the DLQ the last copy), so the panel arms on one press and fires on a second, and the confirmation names the count. |
 | **R58** | §2, §7.2, §8.2, §8.3, §8.4, §9.1, §29 | A **third table**, `telegator-{env}-targets`, gives every publish destination a row: `id`, `type` (`telegram_channel` today), `lastPostedDate`, `lastPostedMessageId`, `messageTemplate` and the usual soft-delete flag. PK `id`, `PAY_PER_REQUEST`, `RETAIN`, and **no GSI** — tens of rows, one `GetItem` and one `Scan`. It is a **registry, not an allowlist**: a target with no row publishes normally, and publish's own write creates the row, so a forgotten row can never become silent non-publication. Publish mirrors the two `lastPosted*` fields after `recordPosts` and only logs if that write fails; `messages.posts` remains the authority for the edit decision. §8.2's route tree gains `/targets` and §29's map gains `TELEGATOR_TARGETS_TABLE`. The full account is `.spectomat/done/target-table.spec.md` (or `specs/` while it is being built). |
 | **R59** | §3.4 | A target may carry a `messageTemplate`, and §3.4's composition step then runs through it: literal operator-authored HTML with `{header}`, `{body}`, `{hashtags}`, `{title}`, `{category}`, `{country}`, `{location}` and `{date}` substituted, unknown names rendering empty, and runs of blank lines collapsed. The overflow ladder is unchanged in order — hashtags before member blocks, never below one — but parameterised by the composer, so both paths shorten the same way. A target with no template takes §3.4's built-in layout byte for byte, so there is no default template and nothing changes for a target nobody configured. |
+| **R60** | §8.3, §8.4, §2.1, §3.1 | **"Reset all"** — `resetSourceCursors() => {reset}`, `admin`. §8.4 lists no such action and §2.1 L115 makes `lastItemId` scrape-owned, which is why it cannot be an inline edit: `SOURCE_WRITABLE_FIELDS` deliberately excludes it. It exists because a cursor can end up pointing deep in a channel's history — a re-seed from a stale export (§9.5 L975), or a channel that removed the post the cursor names — and §3.1 L207 then re-fetches the same dead window every run, yielding nothing while the table shows a source polling normally. One `updateCursor` per source clears three fields: `lastItemId` to empty, which §3.1 L207 already reads as no cursor and therefore as the bare `t.me/s/{id}` — the channel's newest page; `lastUpdated` to 0, so §3.1 L202 makes every source due at once and a "Scrape now" pressed straight after actually polls; and `zeroYieldRuns` to 0, since §4.1 L378's counter describes the window just discarded. Disabled sources are reset too — they are not polled, but they must start from the latest message when re-enabled. **It is a stored-state write and nothing else**: DynamoDB only, instant, no Telegram fetch to fail halfway. The price is that with no cursor nothing suppresses duplicates (§3.1 L222), so each channel's newest window is enqueued as new and whatever §6 does not match to an existing message is published again — which is why the button arms on one press and fires on a second, exactly as R57's "Cleanup all" does. `scripts/set-cursors-now.ts` remains the other operation, writing each channel's *newest* id to skip that window; it stays a script because it needs the network. |
+| **R61** | §7.5, §7.6, §8.2 | **"Consume now"** — `consumeQueue({queueName, max}) => {consumed, failed}`, `admin`, one button per queue card capped at `MAX_CONSUME`. §7.5 drives every stage from an event source mapping and §8.4 offers no way to ask for a batch: a trigger invokes a *function*, and a stage function does nothing unless handed records. R53's "Publish now" only works around that for publish, whose payload happens to be a message id. The mechanism is a **sixth Lambda**, `telegator-{env}-consume` (1024 MB, reserved concurrency 1): it receives up to ten messages off the named live queue, runs that stage — through the stage's own handler, so it cannot drift from what the mapping calls — and deletes what §7.3 L664's partial batch response did not report, exactly as the mapping would. A stage that throws deletes nothing, because redelivery is harmless (§2.3 L180, R51) and a silent drop is not (§1.3 L69). It is a function rather than dashboard logic to *keep* §7.6 L712 and §8.2 L788 intact: consuming a queue means running a stage, so doing it in the dashboard would have put `sqs:ReceiveMessage`, `sqs:DeleteMessage` and invokes on both analysis stages onto the **web role**, reachable by every request the console serves. Instead the pump holds the union of the three stages' grants plus receive/delete on the three live queues, and the app role gains one more invoke — `analyze` and `aggregate` stay ungranted there, still asserted by the stack test. |
 
 ## 26. Traps this project actually hit
 
@@ -1723,6 +1729,7 @@ then a grep away rather than a runtime discovery.
 | `TELEGATOR_SCRAPE_FUNCTION_NAME` | the "Scrape now" target |
 | `TELEGATOR_DLQ_REPLAY_FUNCTION_NAME` | the replay target |
 | `TELEGATOR_PUBLISH_FUNCTION_NAME` | the "Publish now" target (§25, R53) |
+| `TELEGATOR_CONSUME_FUNCTION_NAME` | the "Consume now" pump (§25, R61) |
 | `TELEGATOR_USER_POOL_ID` | §8.6's pool |
 | `TELEGATOR_USER_POOL_CLIENT_ID` | |
 | `TELEGATOR_COGNITO_DOMAIN` | the hosted-UI domain |
@@ -1797,12 +1804,14 @@ The one place any of these is written. Each is a named constant in code, and
 | `SETTLE_DELAY_SECONDS` | 300 | §11.4 |
 | `SQS_MAX_DELAY_SECONDS` | 900 | SQS's own ceiling on the above |
 | `PURGE_COOLDOWN_SECONDS` | 60 | SQS's own limit on `PurgeQueue`, §25 R57 — one per queue per minute |
+| `MAX_CONSUME` | 10 | "Consume now"'s batch, §25 R61 — the operator's cap and `ReceiveMessage`'s in one number |
 | photo suppression threshold | 1012 characters | §25, R13 — **not** the 1024 caption limit |
 | `TELEGRAM_MESSAGE_LIMIT` | 4096 | §4.2 |
 | `TELEGRAM_CAPTION_LIMIT` | 1024 | §4.2 |
 | summary cap | 220 characters | §11.2 |
 | `MIN_TITLE_WORD_LENGTH` | 4 (so 5 and up are kept) | §3.4's hashtag rule |
 | hot / warm / cold thresholds | >20 posts / 30 min / 240 min | §3.1 |
+| `MAX_POST_AGE_DAYS` | 3 | §3.1 — older posts are `obsolete` and never analysed |
 | `zeroYieldRuns` alarm | 3 consecutive | §4.1 |
 | `DedupCandidateCount` alarm | 500 | §7.2 |
 | dashboard cache TTL | 60 s | §8.5 |

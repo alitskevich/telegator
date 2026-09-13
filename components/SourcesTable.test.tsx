@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Source } from "../lib/domain/source";
 import { SourcesTable } from "./SourcesTable";
+import { ToastHost } from "./ToastHost";
 
 const source = (id: string, extra: Partial<Source> = {}): Source => ({
   id,
@@ -26,23 +27,33 @@ const source = (id: string, extra: Partial<Source> = {}): Source => ({
 type SaveFn = (id: string, delta: Record<string, string>) => Promise<void>;
 type DeleteFn = (ids: string[]) => Promise<void>;
 type ScrapeFn = () => Promise<{ processed: number }>;
+type ResetFn = () => Promise<{ reset: number }>;
+type ExportFn = () => Promise<string>;
 
 let onSave: ReturnType<typeof vi.fn<SaveFn>>;
 let onDelete: ReturnType<typeof vi.fn<DeleteFn>>;
 let onScrapeNow: ReturnType<typeof vi.fn<ScrapeFn>>;
+let onResetAll: ReturnType<typeof vi.fn<ResetFn>>;
+let onExport: ReturnType<typeof vi.fn<ExportFn>>;
 
 beforeEach(() => {
   onSave = vi.fn<SaveFn>(async () => undefined);
   onDelete = vi.fn<DeleteFn>(async () => undefined);
   onScrapeNow = vi.fn<ScrapeFn>(async () => ({ processed: 7 }));
+  onResetAll = vi.fn<ResetFn>(async () => ({ reset: 2 }));
+  onExport = vi.fn<ExportFn>(async () => "id,status\nyigal_levin,ok");
 });
 
 afterEach(cleanup);
 
 const rows = [source("yigal_levin"), source("sports_daily", { category: "sports", teaser: "" })];
 
-const draw = (props: Partial<Parameters<typeof SourcesTable>[0]> = {}) =>
-  render(
+/**
+ * Rendered inside the host every route has (`app/layout.tsx`), because that is
+ * where the answer to a press now lands — `useToasts` throws without it.
+ */
+const table = (props: Partial<Parameters<typeof SourcesTable>[0]> = {}) => (
+  <ToastHost>
     <SourcesTable
       rows={rows}
       canEdit
@@ -50,13 +61,27 @@ const draw = (props: Partial<Parameters<typeof SourcesTable>[0]> = {}) =>
       onSave={onSave}
       onDelete={onDelete}
       onScrapeNow={onScrapeNow}
+      onResetAll={onResetAll}
+      onExport={onExport}
       {...props}
-    />,
-  );
+    />
+  </ToastHost>
+);
+
+const draw = (props: Partial<Parameters<typeof SourcesTable>[0]> = {}) => render(table(props));
 
 const rowFor = (id: string) => screen.getByTestId(`row-${id}`);
 
-describe("SourcesTable — §8.3 L797", () => {
+/** A promise this test settles by hand, so "in flight" is a state to assert on. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+describe("SourcesTable — §8.3 L801", () => {
   test("shows every column the section lists", () => {
     draw();
 
@@ -89,7 +114,7 @@ describe("SourcesTable — §8.3 L797", () => {
     expect(onSave).toHaveBeenCalledWith("yigal_levin", { target: "a, @b" });
   });
 
-  describe("search (§8.3 L801)", () => {
+  describe("search (§8.3 L805)", () => {
     test("filters to matching rows", () => {
       draw();
       fireEvent.change(screen.getByLabelText("Search"), { target: { value: "sports" } });
@@ -114,7 +139,7 @@ describe("SourcesTable — §8.3 L797", () => {
     });
 
     /**
-     * §8.3 L801 — "across visible columns". `lastUpdated` is not one, so it must
+     * §8.3 L805 — "across visible columns". `lastUpdated` is not one, so it must
      * not match; the operator would see a row with nothing in it that explains
      * why.
      */
@@ -199,7 +224,9 @@ describe("SourcesTable — §8.3 L797", () => {
     });
   });
 
-  describe("Scrape now (§8.4 L814)", () => {
+  describe("Scrape now (§8.4 L818)", () => {
+    const scrapeButton = () => screen.getByRole("button", { name: /Scrape now|Scraping/ });
+
     test("invokes the trigger and reports what it processed", async () => {
       draw();
       fireEvent.click(screen.getByRole("button", { name: "Scrape now" }));
@@ -207,11 +234,139 @@ describe("SourcesTable — §8.3 L797", () => {
       expect(onScrapeNow).toHaveBeenCalled();
       expect(await screen.findByText(/7/)).toBeDefined();
     });
+
+    /**
+     * §8.4 L818 invokes the deployed scrape function and waits for its summary,
+     * and §3.1 L205 lets that poll ten channels — seconds, not milliseconds. A
+     * button that looked idle throughout is what makes an operator press it
+     * again, and each press is another Lambda invoke.
+     */
+    test("says it is working and refuses a second press until it answers", async () => {
+      const pending = deferred<{ processed: number }>();
+      onScrapeNow.mockReturnValueOnce(pending.promise);
+      draw();
+
+      fireEvent.click(scrapeButton());
+      await waitFor(() => expect(scrapeButton().textContent).toBe("Scraping…"));
+      expect(scrapeButton().hasAttribute("disabled")).toBe(true);
+      expect(scrapeButton().getAttribute("aria-busy")).toBe("true");
+
+      fireEvent.click(scrapeButton());
+      expect(onScrapeNow).toHaveBeenCalledTimes(1);
+
+      pending.resolve({ processed: 7 });
+      await waitFor(() => expect(scrapeButton().textContent).toBe("Scrape now"));
+      expect(await screen.findByText(/Scraped 7 items/)).toBeDefined();
+    });
+
+    /** A trigger that failed used to look exactly like one that did nothing. */
+    test("reports a failure and stays pressable", async () => {
+      onScrapeNow.mockRejectedValueOnce(new Error("Lambda unreachable"));
+      draw();
+
+      fireEvent.click(scrapeButton());
+
+      expect((await screen.findByRole("alert")).textContent).toContain("Lambda unreachable");
+      await waitFor(() => expect(scrapeButton().hasAttribute("disabled")).toBe(false));
+    });
   });
 
-  describe("role gates (§8.6 L842-846)", () => {
+  describe("Reset all (R60)", () => {
+    const resetButton = () => screen.getByRole("button", { name: /Reset all|Confirm — reset/ });
+
+    test("arms on the first press and fires on the second", async () => {
+      draw();
+
+      fireEvent.click(resetButton());
+      expect(onResetAll).not.toHaveBeenCalled();
+      expect(resetButton().textContent).toContain("Confirm — reset 2");
+
+      fireEvent.click(resetButton());
+      expect(onResetAll).toHaveBeenCalled();
+      expect(await screen.findByText(/Reset 2 sources/)).toBeDefined();
+      // Fired, so the next press has to arm again.
+      expect(resetButton().textContent).toBe("Reset all");
+    });
+
     /**
-     * The server re-checks every action (§8.4 L819), so hiding a control is
+     * The armed count is held rather than a flag: a table that revalidated to a
+     * different set of sources under an armed button would fire over rows the
+     * operator never saw.
+     */
+    test("disarms when the rows change underneath it", () => {
+      const view = draw();
+
+      fireEvent.click(resetButton());
+      view.rerender(table({ rows: [...rows, source("late_arrival")] }));
+
+      expect(resetButton().textContent).toBe("Reset all");
+    });
+
+    test("an empty table has nothing to reset", () => {
+      draw({ rows: [] });
+      expect(resetButton().hasAttribute("disabled")).toBe(true);
+    });
+  });
+
+  describe("what a press reports", () => {
+    /** Every actionable control ends in a server action, and the answer to it
+        lands in one place rather than beside the button that fired it. */
+    test("a save says which row it saved", async () => {
+      draw();
+      const target = rowFor("yigal_levin");
+      fireEvent.change(within(target).getByLabelText("category"), {
+        target: { value: "sport" },
+      });
+      fireEvent.click(within(target).getByRole("button", { name: "Save" }));
+
+      expect(await screen.findByText("Saved yigal_levin")).toBeDefined();
+    });
+
+    test("a failed save is announced, not swallowed", async () => {
+      onSave.mockRejectedValueOnce(new Error("not authorised"));
+      draw();
+      const target = rowFor("yigal_levin");
+      fireEvent.change(within(target).getByLabelText("category"), {
+        target: { value: "sport" },
+      });
+      fireEvent.click(within(target).getByRole("button", { name: "Save" }));
+
+      expect((await screen.findByRole("alert")).textContent).toContain("not authorised");
+    });
+
+    /**
+     * §8.4 L816's CSV is a file. The page is what turns it into one — every
+     * table used to discard the string, so the button did nothing at all.
+     */
+    test("an export downloads the CSV and names the file it saved", async () => {
+      const saved: string[] = [];
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+        this: HTMLAnchorElement,
+      ) {
+        saved.push(this.download);
+      });
+
+      draw();
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+
+      expect(onExport).toHaveBeenCalled();
+      await waitFor(() => expect(saved).toHaveLength(1));
+      expect(saved[0]).toMatch(/^sources-\d{4}-\d{2}-\d{2}\.csv$/);
+      expect(await screen.findByText(`Exported ${saved[0]}`)).toBeDefined();
+    });
+
+    test("a scrape that fails leaves the failure on screen", async () => {
+      onScrapeNow.mockRejectedValueOnce(new Error("Lambda unreachable"));
+      draw();
+      fireEvent.click(screen.getByRole("button", { name: "Scrape now" }));
+
+      expect((await screen.findByRole("alert")).textContent).toContain("Lambda unreachable");
+    });
+  });
+
+  describe("role gates (§8.6 L846-850)", () => {
+    /**
+     * The server re-checks every action (§8.4 L823), so hiding a control is
      * courtesy rather than security — but showing a viewer a Save button that
      * always fails is worse than not showing it.
      */
@@ -228,9 +383,10 @@ describe("SourcesTable — §8.3 L797", () => {
 
       expect(screen.getAllByRole("button", { name: "Save" }).length).toBeGreaterThan(0);
       expect(screen.queryByRole("button", { name: "Scrape now" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Reset all" })).toBeNull();
     });
 
-    /** §8.4 L812 — export is `viewer`, so it is always available. */
+    /** §8.4 L816 — export is `viewer`, so it is always available. */
     test("a viewer may still export", () => {
       draw({ canEdit: false, canAdmin: false });
       expect(screen.getByRole("button", { name: "Export" })).toBeDefined();
@@ -246,8 +402,8 @@ describe("SourcesTable — §8.3 L797", () => {
 /**
  * Column filter and sort.
  *
- * *Reconciliation.* §8.3 L801 specifies the cross-column search and nothing
- * more; §8.1 L766 records that filtering and sorting were expected to be server
+ * *Reconciliation.* §8.3 L805 specifies the cross-column search and nothing
+ * more; §8.1 L770 records that filtering and sorting were expected to be server
  * round-trips once the offline layer went. Both run here on the rows the page
  * already holds — the same set the search has always run over.
  */
@@ -332,7 +488,7 @@ describe("filter and sort — the header row", () => {
 });
 
 /**
- * R56 — §8.3 L797 lists this table's toolbar and names no select-all;
+ * R56 — §8.3 L801 lists this table's toolbar and names no select-all;
  * `lib/ui/selection` carries the account.
  */
 describe("select all (R56)", () => {

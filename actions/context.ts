@@ -100,7 +100,7 @@ export const publishQueue = createSqsQueueProducer({
 });
 
 /**
- * §8.4 L814/L817 — the two functions the manual triggers invoke, by name. The
+ * §8.4 L818/L817 — the two functions the manual triggers invoke, by name. The
  * names are set by `infra/lib/app-stack.ts`, which grants InvokeFunction on
  * exactly these two.
  */
@@ -108,6 +108,8 @@ export const functions = {
   scrape: requireEnv(DASHBOARD_ENV_VARS.scrapeFunctionName),
   dlqReplay: requireEnv(DASHBOARD_ENV_VARS.dlqReplayFunctionName),
   publish: requireEnv(DASHBOARD_ENV_VARS.publishFunctionName),
+  /** R61 — the pump behind "Consume now"; the queue grants live on it, not here. */
+  consume: requireEnv(DASHBOARD_ENV_VARS.consumeFunctionName),
 } as const;
 
 /**
@@ -141,7 +143,7 @@ export const dlqUrls = {
   publish: requireEnv(ENV_VARS.publishDlqUrl),
 } as const;
 
-/** §8.2 L776 — reads DLQ bodies without consuming them. */
+/** §8.2 L780 — reads DLQ bodies without consuming them. */
 export const dlqInspector = createSqsDlqInspector(sqs);
 
 /** R57 — discards a DLQ an operator has judged unrecoverable. */

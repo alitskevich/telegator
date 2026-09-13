@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { ToastHost } from "../components/ToastHost";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * §8.2 L771-776. Four routes, all of them operator surfaces; there is no public
+ * §8.2 L775-780. Four routes, all of them operator surfaces; there is no public
  * page and no marketing shell. The Cognito session provider named at L772 is
  * added by item 5.3 once `lib/auth/session.ts` exists — putting an empty
  * provider here now would be a component that authorises nothing while looking
@@ -26,19 +27,23 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <div className="app-shell">
-          <header className="app-header">
-            <span className="app-brand">Telegator</span>
-            <nav className="app-nav">
-              {NAV.map(({ href, label }) => (
-                <a key={href} href={href}>
-                  {label}
-                </a>
-              ))}
-            </nav>
-          </header>
-          <main className="app-main">{children}</main>
-        </div>
+        {/* Every actionable control on every route reports here, so the host
+            sits above the router rather than once per page. */}
+        <ToastHost>
+          <div className="app-shell">
+            <header className="app-header">
+              <span className="app-brand">Telegator</span>
+              <nav className="app-nav">
+                {NAV.map(({ href, label }) => (
+                  <a key={href} href={href}>
+                    {label}
+                  </a>
+                ))}
+              </nav>
+            </header>
+            <main className="app-main">{children}</main>
+          </div>
+        </ToastHost>
       </body>
     </html>
   );

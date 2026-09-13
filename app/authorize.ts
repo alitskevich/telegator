@@ -4,9 +4,9 @@ import { AuthorizationError, type AuthorizationReason, type Session } from "../l
 /**
  * The bridge from §8.6's three gates to the two answers HTTP has for them.
  *
- * `requireRole` throws — deliberately, since §8.6 L873 allows no code path that
+ * `requireRole` throws — deliberately, since §8.6 L877 allows no code path that
  * skips authorisation — and an uncaught throw out of a server component is a
- * 500. That is what every page of §8.2 L771-776 served to a signed-out browser,
+ * 500. That is what every page of §8.2 L775-780 served to a signed-out browser,
  * which is every browser's first visit: an opaque error page, on a console whose
  * sign-in route at L775 worked the whole time and which nothing ever linked to.
  *

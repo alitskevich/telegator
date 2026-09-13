@@ -62,11 +62,13 @@ const NAMES = [
   "telegator-dev-aggregate",
   "telegator-dev-publish",
   "telegator-dev-dlq-replay",
+  /** R61 — the sixth, and the only one no queue or schedule ever calls. */
+  "telegator-dev-consume",
 ];
 
 describe("TelegatorPipelineStack functions", () => {
   /**
-   * §8.5 L831's category chart is a Logs Insights query grouping by a top-level
+   * §8.5 L835's category chart is a Logs Insights query grouping by a top-level
    * `category` field, which only works if Lambda emits the line the analyze
    * stage produced and nothing else. `LoggingFormat.JSON` wraps every record in
    * an envelope and carries ours as a `message` string, so the query would match
@@ -74,25 +76,29 @@ describe("TelegatorPipelineStack functions", () => {
    * TEXT is today's default; declaring it means a future default cannot change
    * that silently.
    */
-  test("logs in TEXT format, which §8.5 L831's query depends on", () => {
+  test("logs in TEXT format, which §8.5 L835's query depends on", () => {
     const formats = functions(stackFor().template).map(
       (fn) => (fn.LoggingConfig as { LogFormat?: string } | undefined)?.LogFormat,
     );
 
-    expect(formats).toHaveLength(5);
+    expect(formats).toHaveLength(NAMES.length);
     expect(formats.every((format) => format === "Text")).toBe(true);
   });
 
-  /** §7.5 L685 — "Five functions, down from the source system's seven". */
-  test("declares exactly the five functions §7.5 L689-693 inventories", () => {
-    expect(functions(stackFor().template)).toHaveLength(5);
+  /**
+   * §7.5 L689 — "Five functions, down from the source system's seven", plus
+   * R61's `consume`. Counted against the inventory rather than a literal, so
+   * adding a seventh is still a deliberate act rather than a silent one.
+   */
+  test("declares exactly the functions §7.5 L693-697 inventories, plus R61's", () => {
+    expect(functions(stackFor().template)).toHaveLength(NAMES.length);
   });
 
   test.each(NAMES)("declares %s", (name) => {
     expect(named(stackFor().template, name)).toBeDefined();
   });
 
-  /** §7.5 L685 — "All Node.js 22, ARM64, bundled with esbuild." */
+  /** §7.5 L689 — "All Node.js 22, ARM64, bundled with esbuild." */
   test.each(NAMES)("%s runs Node.js 22 on ARM64", (name) => {
     const fn = named(stackFor().template, name);
 
@@ -108,7 +114,7 @@ describe("TelegatorPipelineStack functions", () => {
   test.each([
     ["telegator-dev-scrape", 512],
     ["telegator-dev-analyze", 512],
-    // §7.5 L691 — "aggregate is given 1024 MB because it holds a day of 4 KB
+    // §7.5 L695 — "aggregate is given 1024 MB because it holds a day of 4 KB
     // vectors plus a 10-item embedding batch".
     ["telegator-dev-aggregate", 1024],
     ["telegator-dev-publish", 512],
@@ -117,7 +123,7 @@ describe("TelegatorPipelineStack functions", () => {
     expect(named(stackFor().template, name)?.MemorySize).toBe(memory);
   });
 
-  describe("reserved concurrency (§7.5 L689-693)", () => {
+  describe("reserved concurrency (§7.5 L693-697)", () => {
     test.each([
       ["telegator-dev-scrape", 1],
       ["telegator-dev-analyze", 5],
@@ -127,7 +133,7 @@ describe("TelegatorPipelineStack functions", () => {
     });
 
     /**
-     * §7.5 L691-692 say "by message group" rather than a number, and §3.3 L272
+     * §7.5 L695-696 say "by message group" rather than a number, and §3.3 L276
      * is explicit that this "replaces a blunt reserved-concurrency-of-1".
      * Reserving here would serialise across dates too, undoing the parallelism
      * FIFO groups exist to allow.
@@ -139,20 +145,25 @@ describe("TelegatorPipelineStack functions", () => {
       },
     );
 
-    test("exactly three functions reserve concurrency", () => {
+    /**
+     * §3.1 L197's scrape, §3.5's replay, and R61's consume — the three that an
+     * operator or a schedule starts. The two driven by FIFO groups reserve
+     * nothing, which is the assertion above.
+     */
+    test("exactly four functions reserve concurrency", () => {
       const reserved = functions(stackFor().template).filter(
         (f) => f.ReservedConcurrentExecutions !== undefined,
       );
 
-      expect(reserved).toHaveLength(3);
+      expect(reserved).toHaveLength(4);
     });
 
     /**
      * R40 — `reserveConcurrency=false` drops every reservation.
      *
      * A cold account's whole quota is 5, so AWS rejects *any* reservation and
-     * §3.1 L197 and §3.2 L241 become undeployable through no fault of the
-     * template (§7.5 L695).
+     * §3.1 L197 and §3.2 L245 become undeployable through no fault of the
+     * template (§7.5 L699).
      *
      * Its own parameter rather than a dev-only branch, for R23's reason: the
      * driver is the account's quota, not the environment name. The default stays
@@ -178,7 +189,7 @@ describe("TelegatorPipelineStack functions", () => {
     });
   });
 
-  /** §11.5 L1044 — analyze's logs are the source of §8.5 L831's category chart. */
+  /** §11.5 L1048 — analyze's logs are the source of §8.5 L835's category chart. */
   test("retains analyze logs for 90 days", () => {
     const groups = Object.values(stackFor().template.findResources("AWS::Logs::LogGroup")).map(
       (r) => r.Properties ?? {},
@@ -284,7 +295,7 @@ describe("TelegatorPipelineStack functions", () => {
     }
   });
 
-  test("names functions with the §9.2 L896 environment prefix", () => {
+  test("names functions with the §9.2 L900 environment prefix", () => {
     expect(named(stackFor({ env: "prod" }).template, "telegator-prod-scrape")).toBeDefined();
   });
 

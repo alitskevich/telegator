@@ -3,24 +3,24 @@ import {
   deleteRecords as deleteRecordsAction,
   upsertRecord as upsertRecordAction,
 } from "../../actions/records";
-import { exportTable, runScraper } from "../../actions/triggers";
+import { exportTable, resetSourceCursors, runScraper } from "../../actions/triggers";
 import { SourcesTable } from "../../components/SourcesTable";
 import { hasRole } from "../../lib/auth/roles";
 import { requireRole } from "../../lib/auth/session";
 import { authorized } from "../authorize";
 
 /**
- * §8.3 L797 — the Sources page.
+ * §8.3 L801 — the Sources page.
  *
  * Thin: authorise, load, render. Every action passed down re-checks the caller's
- * role server-side (§8.4 L819), so the `canEdit` and `canAdmin` flags below only
+ * role server-side (§8.4 L823), so the `canEdit` and `canAdmin` flags below only
  * decide what is on screen — they are not the gate.
  */
 
 export const dynamic = "force-dynamic";
 
 export default async function SourcesPage() {
-  // §8.6 L842 — `viewer` reads every page. An unauthorised caller gets the
+  // §8.6 L846 — `viewer` reads every page. An unauthorised caller gets the
   // AuthorizationError rather than a table with the controls hidden.
   const session = await authorized(requireRole("viewer", await authContext()));
   const principal = { roles: session.roles, enabled: true };
@@ -42,6 +42,12 @@ export default async function SourcesPage() {
     return runScraper();
   }
 
+  /** R60 — clears every source's cursor; the action re-checks `admin` (§8.4 L823). */
+  async function resetAll() {
+    "use server";
+    return resetSourceCursors();
+  }
+
   async function exportSources() {
     "use server";
     return exportTable({ table: "sources" });
@@ -55,6 +61,7 @@ export default async function SourcesPage() {
       onSave={save}
       onDelete={remove}
       onScrapeNow={scrapeNow}
+      onResetAll={resetAll}
       onExport={exportSources}
     />
   );

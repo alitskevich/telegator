@@ -16,13 +16,13 @@ import { selectSources } from "./select";
 import { transformPost } from "./transform";
 
 /**
- * Stage 1 — the §3.1 L195–228 scrape orchestrator.
+ * Stage 1 — the §3.1 L195–231 scrape orchestrator.
  *
- * §8.2 L788 makes `lib/pipeline/` the single implementation of every stage and
+ * §8.2 L792 makes `lib/pipeline/` the single implementation of every stage and
  * the Lambda handlers thin wrappers around it, so everything §3.1 describes as
  * an effect lives here: the fetch, the guards, the enqueue and the cursor write.
  * The pure parts it composes are already built — `selectSources` (§3.1 L199–205),
- * `parseTelegramPage` (§3.1 L209–220) and `transformPost` (§3.1 L224).
+ * `parseTelegramPage` (§3.1 L209–221) and `transformPost` (§3.1 L225).
  *
  * Every boundary arrives as a `ScrapeDeps` field. Nothing here reads the clock,
  * the network, the environment or `console`.
@@ -46,7 +46,7 @@ export const SCRAPE_ACCEPT_LANGUAGE = "en-US,en;q=0.9,ru;q=0.8,be;q=0.7";
  * §3.1 L207's browser-like headers.
  *
  * They are not decoration: `t.me/s/` serves a reduced page to clients it reads
- * as bots, and a reduced page parses to zero chunks — which §3.1 L220 records as
+ * as bots, and a reduced page parses to zero chunks — which §3.1 L221 records as
  * a zero-yield run rather than as an error, so the failure would be silent.
  */
 export const SCRAPE_HEADERS: Readonly<Record<string, string>> = {
@@ -54,16 +54,16 @@ export const SCRAPE_HEADERS: Readonly<Record<string, string>> = {
   "Accept-Language": SCRAPE_ACCEPT_LANGUAGE,
 };
 
-/** §4.1 L378 — "reaches **3** consecutive zero-yield runs". */
+/** §4.1 L382 — "reaches **3** consecutive zero-yield runs". */
 export const STALE_ZERO_YIELD_RUNS = 3;
 
-/** One occurrence of a counter metric (§7.7 L725–735 are all counts). */
+/** One occurrence of a counter metric (§7.7 L729–739 are all counts). */
 const ONE_EVENT = 1;
 
-/** §3.1 L220 — one more consecutive zero-yield run. */
+/** §3.1 L221 — one more consecutive zero-yield run. */
 const ONE_RUN = 1;
 
-/** §3.1 L220 — "sets `lastCount: 0`". */
+/** §3.1 L221 — "sets `lastCount: 0`". */
 const NO_POSTS = 0;
 
 export interface ScrapeDeps {
@@ -102,7 +102,7 @@ function scrapeUrl(source: Source): string {
  *    lexicographically `"9" > "10"` — which would drive the cursor backwards on
  *    any channel crossing a digit boundary.
  *  - **Over every post parsed**, not only those enqueued. L115 says "seen" and
- *    §3.1 L226 drops `forward`/`empty` deliberately, so a cursor that skipped
+ *    §3.1 L229 drops `forward`/`empty` deliberately, so a cursor that skipped
  *    them would leave a forward-heavy channel's newest posts outside the window
  *    forever, re-fetching and re-dropping them every run.
  */
@@ -116,7 +116,7 @@ function newestItemId(posts: readonly ParsedPost[]): string | undefined {
   return newest;
 }
 
-/** §3.1 L226 — `SendMessageBatch`, 10 entries per call. */
+/** §3.1 L229 — `SendMessageBatch`, 10 entries per call. */
 async function sendInBatches(
   queue: QueueProducer,
   messages: readonly QueueMessage[],
@@ -142,10 +142,10 @@ async function sendInBatches(
 }
 
 /**
- * §3.1 L220's guard branch — "An empty fetch, no chunks, or a first chunk with
+ * §3.1 L221's guard branch — "An empty fetch, no chunks, or a first chunk with
  * no id increments `zeroYieldRuns` and sets `lastCount: 0`, `lastUpdated: now`."
  *
- * `lastNonZeroCount` is deliberately absent from the patch (R15): §4.1 L378
+ * `lastNonZeroCount` is deliberately absent from the patch (R15): §4.1 L382
  * fires `SourceStale` on a source with "a non-zero historical `lastCount`", and
  * L220 has already destroyed `lastCount` by the first zero-yield run — two runs
  * before the alarm needs it. `SourceCursorUpdate` is a partial patch, so an
@@ -162,18 +162,18 @@ async function recordZeroYield(deps: ScrapeDeps, source: Source, now: number): P
 
   deps.logger.warn("scrape yielded nothing", { source: source.id, zeroYieldRuns });
 
-  // §4.1 L378. `status: "ok"` is already guaranteed — `selectSources` filtered
+  // §4.1 L382. `status: "ok"` is already guaranteed — `selectSources` filtered
   // on it — so only the historical count and the run count are re-checked.
   if (zeroYieldRuns >= STALE_ZERO_YIELD_RUNS && source.lastNonZeroCount > NO_POSTS) {
     deps.metrics.count("SourceStale", ONE_EVENT, { Source: source.id });
-    // R25 — emitted a second time with no dimensions. §7.7 L750 alarms on
+    // R25 — emitted a second time with no dimensions. §7.7 L754 alarms on
     // "`SourceStale` for any source", and a CloudWatch alarm must name its
     // dimensions at synth time, when the set of source ids is not yet known.
     deps.metrics.count("SourceStale", ONE_EVENT);
   }
 }
 
-/** §3.1 L207–228 for one source. */
+/** §3.1 L207–231 for one source. */
 async function scrapeSource(
   deps: ScrapeDeps,
   source: Source,
@@ -183,9 +183,9 @@ async function scrapeSource(
   const html = await deps.fetcher.get(scrapeUrl(source), SCRAPE_HEADERS);
 
   /**
-   * §3.1 L220 lists three zero-yield triggers — an empty fetch, no chunks, and a
+   * §3.1 L221 lists three zero-yield triggers — an empty fetch, no chunks, and a
    * first chunk with no id — which all reduce to "the parse produced no posts":
-   * `parseTelegramPage` already discards an id-less chunk (§3.1 L213, L220).
+   * `parseTelegramPage` already discards an id-less chunk (§3.1 L213, L221).
    *
    * Recorded decision: a page whose *first* chunk lacks an id but whose later
    * chunks parse is treated as a success, not a zero-yield run. Reading L220
@@ -198,11 +198,14 @@ async function scrapeSource(
     return { processed: NO_POSTS, enqueued: NO_POSTS };
   }
 
-  const items: ScrapedItem[] = posts.map((post) => transformPost(post, source, date));
+  // `now` is the run's clock reading, so §3.1 L227's freshness cut is the same
+  // for every source of the run and cannot drift between them.
+  const items: ScrapedItem[] = posts.map((post) => transformPost(post, source, date, now));
   deps.metrics.count("ItemsScraped", items.length, { Source: source.id });
 
-  // §3.1 L226 — only `kind === "post"` is enqueued; `forward` and `empty` are
-  // dropped with a counter (§7.7 L727 spells the dimension `Reason`).
+  // §3.1 L229 — only `kind === "post"` is enqueued; `forward`, `empty` and
+  // `obsolete` (§3.1 L227) are dropped with a counter (§7.7 L731 spells the
+  // dimension `Reason`).
   const messages: QueueMessage[] = [];
   for (const item of items) {
     if (item.kind === "post") {
@@ -215,7 +218,7 @@ async function scrapeSource(
   const { enqueued, failed } = await sendInBatches(deps.queue, messages);
 
   /**
-   * §3.1 L228 — "Cursor fields are written **only after** the enqueue succeeds."
+   * §3.1 L231 — "Cursor fields are written **only after** the enqueue succeeds."
    *
    * L228 does not define success for a half-failed batch. The recorded reading
    * is strict: any non-empty `failed` means no cursor write at all, so the next
@@ -226,7 +229,7 @@ async function scrapeSource(
    *
    * Nothing is written, not even `lastUpdated`: leaving it stale keeps the
    * source overdue under §3.1 L202, and leaving `zeroYieldRuns` untouched keeps
-   * §4.1 L378's alarm honest — the page parsed, so this is not staleness.
+   * §4.1 L382's alarm honest — the page parsed, so this is not staleness.
    */
   if (failed > NO_POSTS) {
     deps.logger.error("enqueue failed; cursor not advanced", {
@@ -243,9 +246,9 @@ async function scrapeSource(
     lastUpdated: now,
     /** §2.1 L118 — "ISO timestamp of last successful poll". */
     lastResult: new Date(now).toISOString(),
-    /** §3.1 L220 — "A successful parse resets `zeroYieldRuns` to 0." */
+    /** §3.1 L221 — "A successful parse resets `zeroYieldRuns` to 0." */
     zeroYieldRuns: NO_POSTS,
-    // R15 — the evidence §4.1 L378 needs, kept where the zero-yield branch
+    // R15 — the evidence §4.1 L382 needs, kept where the zero-yield branch
     // cannot erase it. Written only when the count is non-zero.
     ...(items.length > NO_POSTS ? { lastNonZeroCount: items.length } : {}),
   };
@@ -259,7 +262,7 @@ async function scrapeSource(
  * One scheduled scrape run (§3.1 L197 — EventBridge, every 30 minutes).
  *
  * Sources are polled sequentially and each is wrapped, so one failure cannot
- * abort the others (AC-1.4, L235). §7.5 gives this function a reserved
+ * abort the others (AC-1.4, L238). §7.5 gives this function a reserved
  * concurrency of 1 and §3.1 L205 caps it at 10 sources, so there is nothing to
  * win by fanning out — and a fan-out would make the per-source isolation harder
  * to reason about, not easier.
@@ -271,7 +274,7 @@ export async function runScrape(deps: ScrapeDeps): Promise<ScrapeSummary> {
    * Read **once per run**, so every post of this run shares one date. §2.2 L137
    * makes the key both the dedup partition and the FIFO `MessageGroupId`, so a
    * run that straddled midnight would otherwise split one batch across two
-   * groups and break §6 L541's correctness rule.
+   * groups and break §6 L545's correctness rule.
    */
   const date = todayKey(deps.clock);
 
@@ -294,7 +297,7 @@ export async function runScrape(deps: ScrapeDeps): Promise<ScrapeSummary> {
       processed += outcome.processed;
       enqueued += outcome.enqueued;
     } catch (error) {
-      // AC-1.4 (§3.1 L235). §3.1 L207 says a non-2xx is already an empty string
+      // AC-1.4 (§3.1 L238). §3.1 L207 says a non-2xx is already an empty string
       // rather than an exception, so reaching here means an adapter broke its
       // contract or the repo write failed. Either way the run continues: the
       // other nine sources of §3.1 L205 have nothing to do with this one.

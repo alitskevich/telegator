@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { QueueRow } from "../lib/dashboard/queues";
 import type { DlqMessage } from "../lib/queues/inspect";
 import { QueuesPanel } from "./QueuesPanel";
+import { ToastHost } from "./ToastHost";
 
 type InspectFn = (queueName: string) => Promise<DlqMessage[]>;
 type ReplayFn = (queueName: string, max: number) => Promise<{ replayed: number }>;
@@ -11,6 +12,9 @@ type PurgeFn = (queueName: string) => Promise<{ discarded: number }>;
 
 let onInspect: ReturnType<typeof vi.fn<InspectFn>>;
 let onReplay: ReturnType<typeof vi.fn<ReplayFn>>;
+let onConsume: ReturnType<
+  typeof vi.fn<(q: string) => Promise<{ consumed: number; failed: number }>>
+>;
 let onPurge: ReturnType<typeof vi.fn<PurgeFn>>;
 
 const MESSAGES: DlqMessage[] = [
@@ -28,25 +32,29 @@ beforeEach(() => {
   onInspect = vi.fn<InspectFn>(async () => MESSAGES);
   onReplay = vi.fn<ReplayFn>(async () => ({ replayed: 2 }));
   onPurge = vi.fn<PurgeFn>(async () => ({ discarded: 2 }));
+  onConsume = vi.fn(async () => ({ consumed: 4, failed: 0 }));
 });
 
 afterEach(cleanup);
 
 const draw = (props: Partial<Parameters<typeof QueuesPanel>[0]> = {}) =>
   render(
-    <QueuesPanel
-      rows={rows}
-      canAdmin
-      onInspect={onInspect}
-      onReplay={onReplay}
-      onPurge={onPurge}
-      {...props}
-    />,
+    <ToastHost>
+      <QueuesPanel
+        rows={rows}
+        canAdmin
+        onInspect={onInspect}
+        onReplay={onReplay}
+        onConsume={onConsume}
+        onPurge={onPurge}
+        {...props}
+      />
+    </ToastHost>,
   );
 
 const queue = (name: string) => screen.getByTestId(`queue-${name}`);
 
-describe("QueuesPanel — §8.2 L776", () => {
+describe("QueuesPanel — §8.2 L780", () => {
   test("shows every stage with both depths", () => {
     draw();
 
@@ -107,7 +115,7 @@ describe("QueuesPanel — §8.2 L776", () => {
     });
   });
 
-  describe("replay (§8.4 L817)", () => {
+  describe("replay (§8.4 L821)", () => {
     test("replays the named queue up to the given max", async () => {
       draw();
       const card = queue("analyze");
@@ -137,7 +145,7 @@ describe("QueuesPanel — §8.2 L776", () => {
       expect(within(queue("aggregate")).queryByRole("button", { name: "Replay" })).toBeNull();
     });
 
-    /** §8.4 L817 — `admin`. Inspection stays available to everyone (§8.6 L843). */
+    /** §8.4 L821 — `admin`. Inspection stays available to everyone (§8.6 L847). */
     test("a viewer sees no replay control but may still inspect", () => {
       draw({ canAdmin: false });
 
@@ -199,11 +207,62 @@ describe("QueuesPanel — §8.2 L776", () => {
       expect(within(queue("aggregate")).queryByRole("button", { name: /cleanup/i })).toBeNull();
     });
 
-    /** §8.4 L817's replay is `admin`; destroying the messages cannot be less. */
+    /** §8.4 L821's replay is `admin`; destroying the messages cannot be less. */
     test("a viewer sees no cleanup control", () => {
       draw({ canAdmin: false });
 
       expect(screen.queryByRole("button", { name: /cleanup/i })).toBeNull();
     });
+  });
+});
+
+describe("Consume now — R61", () => {
+  const consumeIn = (name: string) =>
+    within(queue(name)).queryByRole("button", { name: /Consume now/ });
+
+  /**
+   * §8.2 L792 — the card asks the pump to run a stage; it never runs one. What
+   * it fixes is the wait: the event source mapping is otherwise the only
+   * consumer, and §7.3 L652 delays publish by five minutes.
+   */
+  test("runs one capped batch through the named queue's stage", async () => {
+    draw();
+    const trigger = consumeIn("analyze");
+    expect(trigger).not.toBeNull();
+    if (trigger !== null) fireEvent.click(trigger);
+
+    expect(onConsume).toHaveBeenCalledWith("analyze");
+    expect(await screen.findByText("Consumed 4 from analyze")).toBeDefined();
+  });
+
+  /** §7.3 L668 — what the stage could not do stays on the queue, and is said so. */
+  test("names what was left behind", async () => {
+    onConsume = vi.fn(async () => ({ consumed: 3, failed: 2 }));
+    draw({ onConsume });
+    const trigger = consumeIn("analyze");
+    if (trigger !== null) fireEvent.click(trigger);
+
+    expect(await screen.findByText("Consumed 3 from analyze, 2 left failed")).toBeDefined();
+  });
+
+  test("an empty queue has nothing to consume", () => {
+    draw();
+    expect(consumeIn("aggregate")).toBeNull();
+  });
+
+  test("a viewer does not see it", () => {
+    draw({ canAdmin: false });
+    expect(consumeIn("analyze")).toBeNull();
+  });
+
+  test("a failure is reported rather than swallowed", async () => {
+    onConsume = vi.fn(async () => {
+      throw new Error("pump unreachable");
+    });
+    draw({ onConsume });
+    const trigger = consumeIn("analyze");
+    if (trigger !== null) fireEvent.click(trigger);
+
+    expect((await screen.findByRole("alert")).textContent).toContain("pump unreachable");
   });
 });
