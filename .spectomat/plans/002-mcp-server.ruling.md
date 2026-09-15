@@ -48,3 +48,39 @@ One entry per ruling, tagged by the task or the review round that issued it.
   output is stable as §5.3 requires; message ids are
   `"{sourceId}/{telegramMessageId}"`, for which locale collation and code-point
   order agree on every realistic id.
+
+## Review round 2 — final round, MAX_REVIEW_ROUNDS reached
+
+Round 1's one Important finding (bare `§` citations of this slug's spec, which
+`test/specCitations.test.ts` resolves against `docs/telegator.md` and so passes
+green while pointing at unrelated prose) is **closed**. Task 9
+(`05f7d08..9302978`) rewrote all four offenders — `scripts/mcp.ts:53`,
+`lib/mcp/tools.test.ts:251`, `lib/mcp/tools.test.ts:275`,
+`test/e2e/mcp.test.ts:15` — to the `mcp-server#n` form, and `grep -rn "§"` over
+`lib/mcp/`, `scripts/mcp.ts` and `test/e2e/mcp.test.ts` now returns nothing. The
+new guard at `test/boundaries.test.ts:213-235` scans `mcpSources()` (which
+includes `scripts/mcp.ts`, `test/boundaries.test.ts:171`) plus the four mcp test
+files and fails on any line containing the section character, so all four fixed
+sites are covered and a regression on any of them is red. Task 9 touched only
+the four files its `Files` section named, and changed no behaviour in
+`scripts/mcp.ts` (comment only). No Critical or Important finding this round.
+
+- **The citation guard's set of test files is a hard-coded list**
+  (`test/boundaries.test.ts:216-219`: `lib/mcp/ids.test.ts`,
+  `lib/mcp/tools.test.ts`, `lib/mcp/server.test.ts`, `test/e2e/mcp.test.ts`),
+  where its shipped-source half is a directory walk. A test file added under
+  `lib/mcp/` later is not scanned, and a bare `§` in it would be green again.
+  Ruled acceptable and not fixed: `mcpSources()` deliberately excludes
+  `*.test.ts` because the stdout scan above it names `console.log` and
+  `process.stdout` and would match a test asserting on them, so the two halves
+  cannot share one walk without splitting the helper — work out of proportion to
+  a four-file subsystem that is now complete. If a fifth mcp test file appears,
+  add it to the list, or split `mcpSources()` into a walk plus a
+  `mcpTestSources()` walk that the stdout scan does not use.
+
+- **`String.fromCharCode(167)` is used for the section character on
+  `test/boundaries.test.ts:222` while the same line's trailing comment carries
+  the literal `§`.** The self-match the indirection guards against cannot occur:
+  `test/boundaries.test.ts` is not in its own scanned set (and its legitimate
+  base-spec `§8.1`/`§8.2` citations would otherwise fail it). Ruled acceptable:
+  harmless, and the comment documents the intent.
