@@ -146,3 +146,61 @@ describe("the §8.2 L792 boundary", () => {
     expect(dashboardSources().length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * mcp-server#5.5, #6.2 — the two boundaries this subsystem adds. Shipped
+ * source only, same reasoning as `dashboardSources()` above: `lib/mcp/` names
+ * `console.log` and `process.stdout` in this very file's banned list, so a
+ * scan over the test tree would match itself.
+ */
+function mcpSources(): string[] {
+  const walk = (dir: string): string[] => {
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return [];
+    }
+    return entries.flatMap((entry) => {
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) return walk(path);
+      return /\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path) ? [path] : [];
+    });
+  };
+
+  return [...walk(join(repoRoot, "lib/mcp")), join(repoRoot, "scripts/mcp.ts")];
+}
+
+describe("the mcp-server#5.5 and #6.2 boundaries", () => {
+  /**
+   * mcp-server#5.5 — stdout carries JSON-RPC frames on a stdio transport; any
+   * other byte corrupts the stream, and the symptom is a client reporting a
+   * malformed message rather than a stack trace.
+   */
+  test("no file under lib/mcp/ or scripts/mcp.ts writes to stdout", () => {
+    const banned = ["console.log", "process.stdout"];
+    const offenders = mcpSources().flatMap((path) => {
+      const source = readFileSync(path, "utf8");
+      return banned.filter((token) => source.includes(token)).map((token) => `${path}: ${token}`);
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * mcp-server#6.2 — the same rule §8.2 L792 gives the dashboard, over the
+   * transitive closure: a tool must never run a local copy of a deployed
+   * stage.
+   */
+  test("nothing reachable from lib/mcp/ or scripts/mcp.ts is a pipeline stage", () => {
+    const reached = [...reachableFrom(mcpSources()).files].filter((path) =>
+      under(path, "lib/pipeline"),
+    );
+
+    expect(reached).toEqual([]);
+  });
+
+  test("the mcp tree exists to be constrained", () => {
+    expect(mcpSources().length).toBeGreaterThan(0);
+  });
+});
