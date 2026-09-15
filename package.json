@@ -20,6 +20,7 @@
     "scrape": "tsx scripts/scrape.ts",
     "cursors:now": "tsx scripts/set-cursors-now.ts --write",
     "migrate:targets": "tsx scripts/migrate-targets.ts --write",
+    "mcp": "tsx scripts/mcp.ts",
     "smoke:openrouter": "export OPENROUTER_API_KEY=$(cat $HOME/.keys/openrouter-api.key) &&tsx scripts/smoke-openrouter.ts",
     "dev": "next dev",
     "build": "next build",
@@ -45,6 +46,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.6",
