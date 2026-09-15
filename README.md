@@ -34,6 +34,29 @@ the data reads fail with `AccessDeniedException`.
 No gate above runs a bundler, so a change can break the dashboard at runtime and
 still pass all four (§32.2).
 
+## MCP server
+
+`docs/telegator.md`'s companion, `.spectomat/specs/002-mcp-server.md`, specs a
+local stdio MCP server exposing three tools — `add_source`, `add_target`,
+`find_messages_by_tags` — over this repository's own DynamoDB tables. It
+deploys nothing and needs the same AWS credentials `npm run dev` does.
+
+```bash
+npm run mcp                 # dev tables
+npm run mcp -- --env=prod   # prod tables
+```
+
+Configure an MCP client with that command and this repository as its working
+directory, for example:
+
+```json
+{
+  "mcpServers": {
+    "telegator": { "command": "npm", "args": ["run", "--silent", "mcp"], "cwd": "<repo>" }
+  }
+}
+```
+
 ## Deploying
 
 **This repository carries no AWS credentials, and nothing here has been
