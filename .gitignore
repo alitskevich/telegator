@@ -31,3 +31,6 @@ data/
 .spectomat/state.md
 .spectomat/work/
 .spectomat/log.md
+.spectomat/state.json
+.spectomat/state.json.tmp.*
+.spectomat/pointer.md
