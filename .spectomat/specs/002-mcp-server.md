@@ -82,6 +82,11 @@ already exist, through their existing schemas: `Source` (`lib/domain/source.ts`)
 entities below are the ones that exist only in memory, as the shape of a tool's
 input and output.
 
+The three tool input schemas the pseudocode of §5 names — `AddSourceInput`,
+`AddTargetInput` and `FindMessagesInput` — are `.strict()` `z.ZodObject`s in
+`lib/mcp/tools.ts`, one per tool, whose fields are exactly the tables of §3.2,
+§3.3 and §3.4 and nothing else (D16).
+
 ### 2.1 `ToolDefinition`
 
 One entry of the registry. Transport-agnostic: it names no MCP SDK type.
@@ -145,7 +150,9 @@ model as "known to be empty".
 Trigger: `npm run mcp [-- --env=<env>]`, or the same command run by an MCP
 client as its configured server command.
 
-Input: `process.argv`. `parseTarget` (`lib/ops/target.ts`) reads `--env`,
+Input: `process.argv.slice(2)` — the arguments after the interpreter and the
+script path, which is what every other script passes (D15). `parseTarget`
+(`lib/ops/target.ts`) reads `--env`,
 defaults to `dev` and rejects any other argument — the behaviour every other
 operational script already has.
 
@@ -599,13 +606,14 @@ Driven by a real SDK `Client` connected to the real `McpServer` over
 
 ## 10. Decisions
 
-Dated 2026-09-15. All are `assumed` unless the Source column says `draft`.
+Dated 2026-09-15. All are `assumed` unless the Source column says `draft`;
+`revised` marks a row the `REVIEW-SPEC` pass added.
 
 | Id | Decision | Source | Rejected | Why |
 | --- | --- | --- | --- | --- |
 | D1 | "Telegator API" means the repository ports of `lib/db/ports.ts`; the tools call them directly. | assumed | (a) reuse `lib/dashboard/records.ts`'s `upsertRecord`; (b) call the dashboard's server actions over HTTP. | (a) needs a `RequireRoleDeps` and a `revalidatePath` that do not exist outside a request; (b) there is no HTTP API, and inventing one is a second system. |
 | D2 | No authentication and no role check. The AWS credential the process runs under is the authorisation. | assumed | A Cognito/bearer-token surface mirroring `requireRole`. | A stdio child process has no session to check; a token surface would be an authentication design the draft did not ask for. |
-| D3 | Transport is **stdio**, using `@modelcontextprotocol/sdk` as a devDependency. | assumed | (a) an HTTP MCP route in `app/api/mcp/`; (b) a Lambda with a Function URL; (c) hand-rolled JSON-RPC, no dependency. | (a) and (b) each need auth, deploy and infra the draft did not ask for and no gate could verify; (c) trades one audited dependency for a protocol implementation this repository would then own. devDependency because only `scripts/` reaches it, like `tsx`. |
+| D3 | Transport is **stdio**, using `@modelcontextprotocol/sdk` as a devDependency. | assumed | (a) an HTTP MCP route in `app/api/mcp/`; (b) a Lambda with a Function URL; (c) hand-rolled JSON-RPC, no dependency. | (a) and (b) each need auth, deploy and infra the draft did not ask for and no gate could verify; (c) trades one audited dependency for a protocol implementation this repository would then own. devDependency because the only modules that import it are `lib/mcp/server.ts` and `scripts/mcp.ts`, and neither is reachable from the dashboard bundle or a Lambda artefact (D17). |
 | D4 | Table names come from `resourceName(env, …)` with `--env`, as in `scripts/migrate-targets.ts`. | assumed | `ENV_VARS` + `.env.local`. | Factory memory records that a new environment variable needs four edits and only two are gated; this command needs none of them. |
 | D5 | A source created with no `status` gets `SOURCE_STATUS_OK`. | assumed | Leave `status` unset. | An unset status disables polling (base spec §2.1 L110), so the tool would create a source that silently never runs — the reason to add one is to poll it. |
 | D6 | An existing row, including a soft-deleted one, makes an add fail. | assumed | Resurrect a soft-deleted row by overwriting it. | The overwrite resets `lastItemId`, and base spec §2.1 L115 makes that the sole duplicate-suppression mechanism: the failure mode is duplicate posts, with nothing in the logs. |
@@ -617,6 +625,9 @@ Dated 2026-09-15. All are `assumed` unless the Source column says `draft`.
 | D12 | The handshake's server version is `package.json`'s `version`, read at startup. | assumed | A constant in `lib/mcp/server.ts`. | The factory bumps the patch version on every completed plan, so a constant would be stale by design, and a test pinning it would fail the archive phase. |
 | D13 | Ids are canonicalised with `parseTargets`, and a value that does not yield exactly one id is rejected. | assumed | Accept the raw string; or take the first of several. | `parseTargets` is the repository's one canonicalisation (multi-target D1), so `@a` and `a` must address one row here as they do at publish; taking the first of `"a,b"` would report a creation that half happened. |
 | D14 | `SEARCHED_STATUSES` is `["published", "topublish"]`; `error` is never searched. | assumed | Search every status; or `published` alone. | Base spec §2.3 L153 gives `error` no writer and its content is not quotable; excluding `topublish` would hide the newest stories, which is what a model asking about tags most wants. |
+| D15 | §3.1 and §13 read the arguments as `process.argv.slice(2)`, matching §6.4. | revised | The earlier `parseTarget(process.argv)` in §3.1 and §13. | `parseTarget` throws `unknown argument` on anything that is not `--env`, so the whole `process.argv` — which begins with the node binary and the script path — would fail at startup every time; `scripts/scrape.ts` and `scripts/migrate-targets.ts` both slice. |
+| D16 | The three input schemas are `AddSourceInput`, `AddTargetInput` and `FindMessagesInput` in `lib/mcp/tools.ts`, their fields exactly §3.2–3.4's tables (§2). | revised | Leaving the names to appear only in §5's pseudocode. | §5.1–5.3 call them by name and §6.1 assigns them a module, but no section said what they contain; a planner would have had to infer the link to §3.2–3.4's tables. |
+| D17 | D3's devDependency rationale names `lib/mcp/server.ts` alongside `scripts/mcp.ts`. | revised | "only `scripts/` reaches it". | §6.1 gives `lib/mcp/server.ts` the SDK import, so the old rationale contradicted the component map; the placement is unchanged because neither module is reachable from the dashboard bundle or a Lambda artefact. |
 
 ## 11. Reconciliations
 
@@ -657,7 +668,7 @@ world from `test/fakes/db.ts` directly.
 
 | Input | Source | Default | Failure |
 | --- | --- | --- | --- |
-| `--env` | `parseTarget(process.argv)` | `dev` | Unknown argument or empty value throws before any AWS call. |
+| `--env` | `parseTarget(process.argv.slice(2))` | `dev` | Unknown argument or empty value throws before any AWS call. |
 | Region | `REGION` in `lib/ops/target.ts` | `eu-central-1` | Not configurable, by base spec §9.2 L900. |
 | Table names | `resourceName(env, "sources" \| "messages" \| "targets")` | — | A wrong `--env` addresses another environment's tables; §6.5's stderr line is what makes that visible. |
 | AWS credentials | Ambient chain | — | The SDK's own error, on stderr, on the first tool call. |
@@ -733,4 +744,4 @@ Bottom-up. Each step ends with all gates green.
 
 ## 17. Review
 
-Empty until the `REVIEW-SPEC` phase writes it.
+- Round 1 — 3 issues (completeness 1, consistency 2, clarity 0, scope 0, shape 0) — fixed in §2, §3.1, §10 (D3), §13; 3 decisions added

@@ -31,4 +31,5 @@ What the factory has learned about this codebase. Every loop reads it before wor
 ## Traps
 
 - `test/acceptance.test.ts` audits `AC-x.y` in both directions against `docs/telegator.md` §3.1–3.4 only, so a slug spec must give its criteria a prefix of their own (`MT-`, `TT-`, `MCP-`) or every test naming one fails the reverse check.
+- `test/specCitations.test.ts` resolves every `§n` in any `.ts`/`.tsx` file against `docs/telegator.md` alone, so a comment citing a slug spec must use the `<slug>#n` form — a `§` would be resolved against the base spec and fail or, worse, point at an unrelated section.
 - A new environment variable needs four edits and only two are gated: `handlers/env.ts`, the stack that supplies it, `.env.local.example`, and your own `.env.local`. The dashboard reads the last one through `requireEnv`, so a missing entry there passes all four gates and throws only under `next dev`.
