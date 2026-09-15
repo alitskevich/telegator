@@ -88,6 +88,7 @@ lower-numbered tasks, and every file in the map has exactly one owning task.
 | 6 | `task-06-boundaries.md` | `test/boundaries.test.ts` | MCP-19, MCP-20 | 5 |
 | 7 | `task-07-e2e.md` | `test/e2e/mcp.test.ts` | MCP-E2E-1, MCP-E2E-2, MCP-E2E-3, MCP-E2E-4, MCP-NF-2 | 6 |
 | 8 | `task-08-readme.md` | `README.md` | MCP-NF-3 (residue) | 7 |
+| 9 | `task-09-citation-form.md` | `scripts/mcp.ts`, `lib/mcp/tools.test.ts`, `test/e2e/mcp.test.ts`, `test/boundaries.test.ts` | citation form (review round 1) | 3, 5, 6, 7 |
 
 ## Coverage
 
@@ -135,3 +136,5 @@ release to `ARCHIVE` (or back to `IMPLEMENT` for another round) is a `state.json
 phase change, not a line in this file.
 
 `- Round R — N findings (C critical, I important, M minor) — tasks NN–MM added`
+
+- Round 1 — 6 findings (0 critical, 1 important, 5 minor) — task 9 added
