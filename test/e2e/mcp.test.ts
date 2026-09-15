@@ -12,7 +12,7 @@ import { fakeMessageRepo, fakeSourceRepo, fakeTargetRepo } from "../fakes/db";
  * `test/fakes/db.ts` (MCP-NF-2: no socket, no pipe, no child process).
  *
  * `test/e2e/harness.ts` is not used: it wires the four pipeline stages, and
- * this subsystem touches none of them (§12).
+ * this subsystem touches none of them (mcp-server#12).
  */
 
 function member(ts: number, summary = "s") {

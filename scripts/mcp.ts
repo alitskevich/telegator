@@ -50,7 +50,7 @@ async function main(): Promise<void> {
 
   const version = readVersion();
 
-  // mcp-server#6.5 — stderr, never stdout (§5.5): stdout carries JSON-RPC
+  // mcp-server#6.5 — stderr, never stdout (mcp-server#5.5): stdout carries JSON-RPC
   // frames once `connect` runs, and any other byte on it corrupts the stream.
   console.error(
     `telegator mcp: env=${env} region=${REGION} tables=${sourcesTable},${messagesTable},${targetsTable}`,

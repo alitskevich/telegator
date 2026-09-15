@@ -248,7 +248,7 @@ describe("findMessagesByTags", () => {
     expect(result.returned).toBe(MESSAGE_RESULT_LIMIT);
   });
 
-  test("carries the §2.3 fields and flattens+orders members by ts ascending; absent fields are absent", async () => {
+  test("carries the mcp-server#2.3 fields and flattens+orders members by ts ascending; absent fields are absent", async () => {
     const messages = fakeMessageRepo([
       seedMessage({
         id: "s/1",
@@ -272,7 +272,7 @@ describe("findMessagesByTags", () => {
       seedMessage({ id: "s/1", tags: "x", ts: 2 }),
       seedMessage({ id: "s/2", tags: "x", ts: 1 }),
     ]);
-    // Simulates the race §5.3 names: the row is still on the status-index at
+    // Simulates the race mcp-server#5.3 names: the row is still on the status-index at
     // query time (both candidates are matched) but is gone, or soft-deleted,
     // by the time the base-table `get` runs for `s/2`.
     const raced: typeof messages = {

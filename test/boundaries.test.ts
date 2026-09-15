@@ -203,4 +203,35 @@ describe("the mcp-server#5.5 and #6.2 boundaries", () => {
   test("the mcp tree exists to be constrained", () => {
     expect(mcpSources().length).toBeGreaterThan(0);
   });
+
+  /**
+   * This spec's sections are cited `mcp-server#n`, and a bare `§` is resolved
+   * against `docs/telegator.md` by `test/specCitations.test.ts`, which makes a
+   * wrong citation green. Every file that mentions this spec must use the
+   * `mcp-server#` form, including test files.
+   */
+  test("all mcp-related files use mcp-server#n citations, not bare §", () => {
+    const citingFiles = [
+      ...mcpSources(),
+      join(repoRoot, "lib/mcp/ids.test.ts"),
+      join(repoRoot, "lib/mcp/tools.test.ts"),
+      join(repoRoot, "lib/mcp/server.test.ts"),
+      join(repoRoot, "test/e2e/mcp.test.ts"),
+    ];
+
+    const sectionChar = String.fromCharCode(167); // "§"
+    const offenders: string[] = [];
+
+    for (const path of citingFiles) {
+      const source = readFileSync(path, "utf8");
+      const lines = source.split("\n");
+      lines.forEach((line, i) => {
+        if (line.includes(sectionChar)) {
+          offenders.push(`${path}:${i + 1}`);
+        }
+      });
+    }
+
+    expect(offenders).toEqual([]);
+  });
 });
