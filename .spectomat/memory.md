@@ -25,8 +25,10 @@ What the factory has learned about this codebase. Every loop reads it before wor
 
 ## Patterns
 
+- An operational script gets its tables from `parseTarget(argv)` + `resourceName(env, "sources")` + `REGION` (`lib/ops/target.ts`, `infra/lib/naming.ts`), never from `ENV_VARS` — that route is for Lambdas and the dashboard and needs a `.env.local` entry no gate covers.
 - A test needing a scratch directory takes it from `isolatedOutdir()` in `test/support/cdkOutdir.ts` and registers `afterAll(removeIsolatedOutdirs)` — never `/tmp` by hand, never the shared `cdk.out/`.
 
 ## Traps
 
+- `test/acceptance.test.ts` audits `AC-x.y` in both directions against `docs/telegator.md` §3.1–3.4 only, so a slug spec must give its criteria a prefix of their own (`MT-`, `TT-`, `MCP-`) or every test naming one fails the reverse check.
 - A new environment variable needs four edits and only two are gated: `handlers/env.ts`, the stack that supplies it, `.env.local.example`, and your own `.env.local`. The dashboard reads the last one through `requireEnv`, so a missing entry there passes all four gates and throws only under `next dev`.
