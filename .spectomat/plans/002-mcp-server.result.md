@@ -34,3 +34,8 @@
 - Commits: d917289..139c680
 - Tests: 1858/1858 (122 files)
 - Gates: 4/4 green
+
+## Task 8
+- Commits: 3973e71..bd41aab
+- Tests: 1858/1858 (122 files)
+- Gates: 4/4 green
