@@ -3,30 +3,25 @@ import { z } from "zod";
 import { DISTINCT_THRESHOLD, MERGE_THRESHOLD, SCORE_WEIGHTS } from "../dedup/constants";
 
 /**
- * §11.3 step 6's record, rewritten (R48 — §11.3, replacing the design's
- * original steps 2-5; see `lib/calibration/sweep.ts` for what the sweep
- * itself became) — and §11.3's closing rule, unchanged: "Until this is done
- * the pipeline must not publish to production channels."
+ * §10.3 step 5's record (R48), and §10.3's closing rule: until it exists, the
+ * pipeline must not publish to production channels.
  *
- * That rule was a sentence. This makes it a file: the recalibration is
- * complete exactly when a record exists that names the band and the weights
- * it was measured against, and both are the ones §6 actually uses.
+ * The rule becomes a file: recalibration is complete exactly when a record
+ * exists naming the band and the weights it was measured against, and both are
+ * the ones §6 actually uses.
  *
- * What changed from the embedding era: `model`, `dims` and `inputType` are
- * gone — there is no embedding model left to name (R43). The single
- * `threshold` is gone too, replaced by `mergeThreshold` and
- * `distinctThreshold` (R46) — a record naming one number could not describe
- * the band `classify` actually applies. `weights` is new: R46's score is
- * weighted, so a threshold pair recorded against one weighting carries no
- * guarantee against another, for the same reason the embedding-era record
- * distrusted a threshold ported to a different embedding model.
- * `autoMergePrecision`, `autoSplitRecall` and `bandFraction` replace the old
- * `precision`/`recall` pair with design §9's three-way objective.
- * `adjudicatorAccuracy` is new: it is measured separately, on band pairs
- * only, and is the one part of the harness that spends a model call.
- * `labelledSetHash` is new: a threshold is a property of the exact set it was
- * tuned on, the same argument that applied when the score was a similarity
- * threshold over embedded text.
+ * Why each field is required (R46, R48):
+ *
+ *  - `mergeThreshold`/`distinctThreshold` — one number cannot describe the band
+ *    `classify` applies.
+ *  - `weights` — the score is weighted, so a threshold pair recorded against one
+ *    weighting carries no guarantee against another.
+ *  - `autoMergePrecision`, `autoSplitRecall`, `bandFraction` — §10.3's three-way
+ *    objective.
+ *  - `adjudicatorAccuracy` — measured separately on band pairs, and the one part
+ *    of the harness that spends a model call.
+ *  - `labelledSetHash` — a threshold is a property of the exact set it was tuned
+ *    on.
  */
 
 /** Where the record lives, relative to the repository root. */
@@ -41,17 +36,14 @@ const ScoreWeightsSchema = z.strictObject({
 
 /**
  * **Strict.** A calibration record is written once, by hand, and read by the
- * production gate; an unrecognised key in one is a record that was edited from
- * the embedding-era shape rather than rewritten, or one produced by a harness
- * this schema does not know about. Either way the honest answer is to refuse it
- * — a non-strict schema would accept a file carrying BOTH shapes, and
- * `productionBlocker` would then clear a gate on fields sitting beside a stale
- * `threshold`/`precision`/`recall` that nobody had reconciled. Nothing reads an
- * extra key, so nothing loses by this.
+ * production gate; an unrecognised key means a record edited from an older shape
+ * rather than rewritten, or one from a harness this schema does not know. Either
+ * way the honest answer is to refuse it — a non-strict schema would accept a file
+ * carrying both shapes and clear the gate on fields sitting beside stale ones.
  */
 export const CalibrationRecordSchema = z
   .strictObject({
-    /** The values §11.3 step 4 (rewritten) chose. */
+    /** The values §10.3 step 4 (rewritten) chose. */
     mergeThreshold: z.number().min(0).max(1),
     distinctThreshold: z.number().min(0).max(1),
     weights: ScoreWeightsSchema,
@@ -60,7 +52,7 @@ export const CalibrationRecordSchema = z
     bandFraction: z.number().min(0).max(1),
     adjudicatorAccuracy: z.number().min(0).max(1),
     labelledSetHash: z.string().min(1),
-    /** §11.3 step 1 — "at least 100 hand-judged item pairs". */
+    /** §10.3 step 1 — "at least 100 hand-judged item pairs". */
     pairs: z.number().int().nonnegative(),
     recordedAt: z.string().min(1),
   })
@@ -74,7 +66,7 @@ export const CalibrationRecordSchema = z
 
 export type CalibrationRecord = z.infer<typeof CalibrationRecordSchema>;
 
-/** §11.3 step 1's floor, below which the curve is not evidence of anything. */
+/** §10.3 step 1's floor, below which the curve is not evidence of anything. */
 export const MIN_LABELLED_PAIRS = 100;
 
 export type ReadFile = (path: string) => string;
@@ -113,11 +105,11 @@ export function readCalibrationRecord(
  */
 export function productionBlocker(record: CalibrationRecord | null): string | null {
   if (record === null) {
-    return `no ${CALIBRATION_RECORD_PATH}: §11.3's recalibration has not been done`;
+    return `no ${CALIBRATION_RECORD_PATH}: §10.3's recalibration has not been done`;
   }
 
   if (record.pairs < MIN_LABELLED_PAIRS) {
-    return `calibrated on ${record.pairs} pairs, fewer than §11.3's ${MIN_LABELLED_PAIRS}`;
+    return `calibrated on ${record.pairs} pairs, fewer than §10.3's ${MIN_LABELLED_PAIRS}`;
   }
 
   if (

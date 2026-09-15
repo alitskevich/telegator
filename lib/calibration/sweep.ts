@@ -2,29 +2,22 @@ import { buildMatchKey, type MatchKeyFields } from "../dedup/matchKey";
 import { classify, matchScore, type ScoreWeights } from "../dedup/score";
 
 /**
- * §11.3's threshold sweep, rewritten (R48 — §11.3, replacing the design's
- * original steps 2-4).
+ * §10.3's threshold sweep (R48).
  *
- * The embedding step is gone. `dedupBatch` used to compare Cohere cosine
- * similarity against one threshold; it now scores `matchScore` over the
- * analyzed fields directly (R46) and classifies into a two-threshold band
- * (`classify`, R46). So the sweep no longer embeds anything: it scores each
- * labelled pair exactly once with `matchScore`, then buckets that same score
- * at every `(distinct, merge)` grid point — nothing here is `async`, nothing
- * is awaited, and nothing reaches a model. That is what makes this harness
- * cheap enough to run in the ordinary offline test suite.
+ * Each labelled pair is scored exactly once with `matchScore`, then bucketed at
+ * every `(distinct, merge)` grid point. Nothing here is `async` and nothing
+ * reaches a model, which is what makes the harness cheap enough for the ordinary
+ * offline suite.
  *
- * The objective is three-way (design §9 step 4), not the embedding era's
- * "maximise precision subject to recall >= 0.80":
+ * The objective is three-way (§10.3 step 3):
  *
- *   - maximise auto-merge precision — a false merge is the costlier error,
- *     per §11.3's own reasoning: it fuses two unrelated stories into one
- *     published Telegram message that then keeps editing itself;
+ *   - maximise auto-merge precision — the costlier error, because a false merge
+ *     fuses two unrelated stories into one post that keeps editing itself;
  *   - maximise auto-split recall;
  *   - minimise band volume — literally the adjudicator's model-call cost.
  *
  * `sweepBands` reports all three at every grid point. Picking the grid point
- * that best trades them off against §11.3's error floors is the remaining
+ * that best trades them off against §10.3's error floors is the remaining
  * human judgement call, exercised when `calibration/record.json` is written —
  * the same way step 1's >=100 hand-judged pairs are human work this module
  * does not perform.
@@ -38,7 +31,7 @@ import { classify, matchScore, type ScoreWeights } from "../dedup/score";
  * candidate, never inside it.
  */
 
-/** Basis points keep the grid's endpoints exact, the way §11.3's original 1-D sweep did. */
+/** Basis points keep the grid's endpoints exact, the way §10.3's original 1-D sweep did. */
 const BASIS_POINTS = 100;
 const SWEEP_MIN_BP = 0;
 const SWEEP_MAX_BP = 100;
@@ -46,7 +39,7 @@ const SWEEP_MAX_BP = 100;
 /**
  * One hand-judged pair, expressed as the two items' match-key fields.
  *
- * Structural, like `MatchKeyFields` itself (§11.3's calibration harness is the
+ * Structural, like `MatchKeyFields` itself (§10.3's calibration harness is the
  * reason that type is structural in the first place) — a labelled-set record
  * read from `pairs.jsonl`/`items.json` satisfies this without any pipeline
  * plumbing.
@@ -85,7 +78,7 @@ const BP_EPSILON = 1e-9;
 /**
  * The `(distinct, merge)` candidates to sweep, generated from integers.
  *
- * Not `min + i * step`: that accumulates float error the way §11.3's original
+ * Not `min + i * step`: that accumulates float error the way §10.3's original
  * `0.70 + 15 * 0.01` did, landing off the exact value an operator is looking
  * for. A basis-point integer walk keeps every candidate exact.
  *
@@ -97,7 +90,7 @@ const BP_EPSILON = 1e-9;
  *    0.01 and sweep a grid ten times coarser than requested, reporting rows
  *    labelled with thresholds the caller never asked about;
  *  - a step that does not divide the [0, 1] range (0.03, say) walks
- *    0.00 … 0.99 and never evaluates 1.00, so the endpoint §11.3's original
+ *    0.00 … 0.99 and never evaluates 1.00, so the endpoint §10.3's original
  *    1-D sweep always included is quietly missing.
  */
 function candidateThresholds(step: number): number[] {

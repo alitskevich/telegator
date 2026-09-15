@@ -14,7 +14,7 @@ import { telegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
- * E2E-1 (§11.2 L848) — "A seeded source with three fresh posts produces three
+ * E2E-1 (§10.2 L998) — "A seeded source with three fresh posts produces three
  * analyze messages, at least one message record, and one Telegram send."
  */
 
@@ -76,7 +76,7 @@ beforeEach(() => {
     {
       id: SOURCE,
       status: "ok",
-      tgChannel: "telegator_news",
+      target: "telegator_news",
       category: "politics",
       lastCount: 0,
       lastUpdated: 0,
@@ -115,7 +115,7 @@ describe("E2E-1 fixtures", () => {
   });
 });
 
-describe("E2E-1 (§11.2 L848)", () => {
+describe("E2E-1 (§10.2 L998)", () => {
   test("three fresh posts produce three analyze messages", async () => {
     const run = await runPipeline(world);
 
@@ -147,8 +147,8 @@ describe("E2E-1 (§11.2 L848)", () => {
   });
 
   /**
-   * §3.1 L216 — the cursor advances only after the enqueue succeeds, and it is
-   * "the sole duplicate-suppression mechanism" (§2.1 L107). A run that published
+   * §3.1 L231 — the cursor advances only after the enqueue succeeds, and it is
+   * "the sole duplicate-suppression mechanism" (§2.1 L115). A run that published
    * correctly but left the cursor behind would re-scrape all three posts on the
    * next pass, which E2E-3 then fails.
    */
@@ -165,7 +165,7 @@ describe("E2E-1 (§11.2 L848)", () => {
     expect(run.scrape.enqueued).toBe(3);
   });
 
-  /** §3.1 L195's request, including the headers §3.1 requires. */
+  /** §3.1 L207's request, including the headers §3.1 requires. */
   test("fetches the preview page for the seeded source", async () => {
     await runPipeline(world);
 
@@ -189,5 +189,74 @@ describe("E2E-1 (§11.2 L848)", () => {
     ]) {
       expect(() => JSON.parse(message.body)).not.toThrow();
     }
+  });
+});
+
+/**
+ * MT-E2E-1 (multi-target#9.2) — "A seeded source with `target: "a,b"` and one
+ * fresh post yields one message and **two** Telegram sends, to `@a` and `@b`."
+ */
+describe("MT-E2E-1 (multi-target#9.2)", () => {
+  const TWO_TARGETS = "a,b";
+
+  const twoTargetWorld = () => {
+    const local = {
+      messages: fakeMessageRepo(),
+      sources: fakeSourceRepo([
+        {
+          id: SOURCE,
+          status: "ok",
+          target: TWO_TARGETS,
+          category: "politics",
+          lastCount: 0,
+          lastUpdated: 0,
+          zeroYieldRuns: 0,
+          lastNonZeroCount: 0,
+        },
+      ]),
+      bot: fakeBot(),
+    };
+    return {
+      ...local,
+      world: {
+        fetcher: fakeFetcher({ [URL]: telegramFixture("twoLinks") }),
+        sources: local.sources,
+        classifier: recordingClassifier(),
+        adjudicator: fakeAdjudicator(() => false),
+        messages: local.messages,
+        bot: local.bot,
+        clock: manualClock(NOW),
+      },
+    };
+  };
+
+  test("one fresh post yields one message record", async () => {
+    const { world: w, messages } = twoTargetWorld();
+
+    await runPipeline(w);
+
+    expect(await messages.countByStatus("published")).toBe(1);
+    expect(await messages.countByStatus("topublish")).toBe(0);
+  });
+
+  test("and two Telegram sends, to @a and @b in list order", async () => {
+    const { world: w } = twoTargetWorld();
+
+    const run = await runPipeline(w);
+
+    expect(run.telegramCalls).toHaveLength(2);
+    expect(run.telegramCalls.map((call) => call.method)).toEqual(["sendMessage", "sendMessage"]);
+    expect(run.telegramCalls.map((call) => call.args.chatId)).toEqual(["@a", "@b"]);
+  });
+
+  test("the message remembers both posts under canonical ids", async () => {
+    const { world: w, messages } = twoTargetWorld();
+
+    await runPipeline(w);
+
+    const [only] = await messages.queryByStatus("published");
+    const stored = only === undefined ? undefined : await messages.get(only.id);
+    expect(stored?.tgChannel).toBe(TWO_TARGETS);
+    expect(Object.keys(stored?.posts ?? {})).toEqual(["a", "b"]);
   });
 });

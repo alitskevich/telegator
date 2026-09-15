@@ -8,16 +8,16 @@ import {
   type RecordActionDeps,
   upsertRecord as upsertRecordCore,
 } from "../lib/dashboard/records";
-import { authContext, messages, sources } from "./context";
+import { authContext, messages, sources, targets } from "./context";
 
 /**
- * §8.4 L749-751. Thin wrappers: every rule — the `editor` check, the writable
+ * §8.4 L812-814. Thin wrappers: every rule — the `editor` check, the writable
  * -field allowlist, the soft delete — lives in `lib/dashboard/records.ts`, which
  * is where the tests are.
  */
 
 async function deps(): Promise<RecordActionDeps> {
-  return { sources, messages, auth: await authContext(), revalidate: revalidatePath };
+  return { sources, messages, targets, auth: await authContext(), revalidate: revalidatePath };
 }
 
 export async function upsertRecord(input: unknown): Promise<void> {
@@ -28,7 +28,7 @@ export async function deleteRecords(input: unknown): Promise<void> {
   await deleteRecordsCore(input, await deps());
 }
 
-/** R26 — the lazy base-table read behind §8.3 L742's expandable member list. */
+/** R26 — the lazy base-table read behind §8.3 L802's expandable member list. */
 export async function loadMembers(input: unknown): Promise<MemberRow[]> {
   return loadMembersCore(input, await deps());
 }

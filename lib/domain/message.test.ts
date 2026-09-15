@@ -8,6 +8,7 @@ import {
   MemberBlockSchema,
   MessageListItemSchema,
   MessageSchema,
+  PostSchema,
 } from "./message";
 
 const block = {
@@ -26,7 +27,7 @@ const message = {
   ts: 1_772_458_034_502,
 };
 
-describe("MemberBlockSchema (§2.3 L156-163)", () => {
+describe("MemberBlockSchema (§2.3 L168-175)", () => {
   test("carries everything publish needs to render one item", () => {
     expect(MemberBlockSchema.parse(block)).toEqual(block);
   });
@@ -43,14 +44,14 @@ describe("MemberBlockSchema (§2.3 L156-163)", () => {
     expect(MemberBlockSchema.parse(rest).links).toEqual([]);
   });
 
-  test("requires ts, which §3.4 L318 sorts members by", () => {
+  test("requires ts, which §3.4 L323 sorts members by", () => {
     const { ts: _omitted, ...rest } = block;
 
     expect(MemberBlockSchema.safeParse(rest).success).toBe(false);
   });
 });
 
-describe("MessageSchema (§2.3 L140-152)", () => {
+describe("MessageSchema (§2.3 L150-163)", () => {
   test("parses a freshly created message", () => {
     expect(MessageSchema.parse(message)).toMatchObject(message);
   });
@@ -59,19 +60,19 @@ describe("MessageSchema (§2.3 L140-152)", () => {
     expect(MessageSchema.safeParse({ ...message, status }).success).toBe(true);
   });
 
-  test("rejects a status outside §2.3 L143's enum", () => {
+  test("rejects a status outside §2.3 L153's enum", () => {
     expect(MessageSchema.safeParse({ ...message, status: "fetched" }).success).toBe(false);
   });
 
-  /** §2.3 L149 — "Target channel; defaults to `telegator_news`". */
+  /** §2.3 L160 — "Target channel; defaults to `telegator_news`". */
   test("defaults tgChannel to telegator_news", () => {
     expect(MessageSchema.parse(message).tgChannel).toBe(DEFAULT_TG_CHANNEL);
     expect(DEFAULT_TG_CHANNEL).toBe("telegator_news");
   });
 
   /**
-   * §2.3 L145 caches memberCount "so the dashboard need not read the map", and
-   * §6 L543 recomputes it on every write. Drift means a stage bug, and nothing
+   * §2.3 L155 caches memberCount "so the dashboard need not read the map", and
+   * §3.3 L283 recomputes it on every write. Drift means a stage bug, and nothing
    * downstream repairs it — the dashboard would simply show a wrong number.
    */
   test("rejects a memberCount that disagrees with the map", () => {
@@ -92,7 +93,7 @@ describe("MessageSchema (§2.3 L140-152)", () => {
   });
 
   /**
-   * §2.4 L175: ids are used verbatim as DynamoDB map keys. The slash must
+   * §2.4 L187: ids are used verbatim as DynamoDB map keys. The slash must
    * survive the round trip or every member lookup breaks.
    */
   test("round-trips a member key containing a slash", () => {
@@ -109,8 +110,8 @@ describe("MessageSchema (§2.3 L140-152)", () => {
   });
 
   /**
-   * R8: §6 sets `ts` on neither branch, yet §2.3 L152 makes it the sort key on
-   * both GSIs (§7.2 L588). A record without it is absent from status-index and
+   * R8: §6 sets `ts` on neither branch, yet §2.3 L163 makes it the sort key on
+   * both GSIs (§7.2 L638). A record without it is absent from status-index and
    * date-index — invisible to the dedup query that created it. Required here so
    * the omission cannot ship.
    */
@@ -134,15 +135,15 @@ describe("MessageSchema (§2.3 L140-152)", () => {
     expect(parsed.tgAt).toBeUndefined();
   });
 
-  test("accepts the soft-delete flag §8.4 L751 requires", () => {
+  test("accepts the soft-delete flag §8.4 L814 requires", () => {
     expect(MessageSchema.parse({ ...message, deleted: true }).deleted).toBe(true);
   });
 
   /**
-   * R7: §6 L528/L539 spread `{...item}` into the record, which would write body,
+   * R7: §6 L585/L584 spread `{...item}` into the record, which would write body,
    * links, kind, importance, properNames and forwardedFrom — none of them in
    * §2.3's field table. §2.3 is the schema; the spread is shorthand for "the
-   * item's descriptive fields overwrite" (§3.3 L285).
+   * item's descriptive fields overwrite" (§3.3 L287).
    */
   test("strips item-only fields the §6 spread would otherwise carry in", () => {
     const parsed = MessageSchema.parse({
@@ -159,7 +160,7 @@ describe("MessageSchema (§2.3 L140-152)", () => {
     }
   });
 
-  test("exports the render limit §3.4 L318 applies", () => {
+  test("exports the render limit §3.4 L323 applies", () => {
     expect(MEMBER_RENDER_LIMIT).toBe(12);
   });
 });
@@ -213,7 +214,7 @@ describe("the match key attributes (R44, R51)", () => {
 });
 
 describe("MessageListItemSchema (the status-index projection, R27)", () => {
-  test("omits the two attributes §7.2 L598 excludes", () => {
+  test("omits the two attributes §7.2 L640 excludes", () => {
     const { members: _m, ...projected } = message;
     const parsed = MessageListItemSchema.parse({ ...projected, memberCount: 1 });
 
@@ -221,7 +222,7 @@ describe("MessageListItemSchema (the status-index projection, R27)", () => {
     expect(parsed).not.toHaveProperty("embedding");
   });
 
-  /** §2.3 L145: memberCount exists precisely so the dashboard need not read the map. */
+  /** §2.3 L155: memberCount exists precisely so the dashboard need not read the map. */
   test("keeps memberCount, which the Messages page lists", () => {
     const { members: _m, ...projected } = message;
 
@@ -256,5 +257,39 @@ describe("MessageListItemSchema (the status-index projection, R27)", () => {
     expect(parsed).not.toHaveProperty("keyTitle");
     expect(parsed).not.toHaveProperty("keyTags");
     expect(parsed).not.toHaveProperty("memberIds");
+  });
+});
+
+describe("posts — multi-target#2.4 (R55)", () => {
+  const post = { tgId: "4711", tgAt: 1_772_458_034_502 };
+
+  test("MT-15: a record without posts parses as posts: {}", () => {
+    expect(MessageSchema.parse(message).posts).toEqual({});
+  });
+
+  test("MT-15: a stored post map is kept, keyed by canonical target id", () => {
+    expect(MessageSchema.parse({ ...message, posts: { a: post } }).posts).toEqual({ a: post });
+  });
+
+  test("MT-15: neither projection type carries posts", () => {
+    const stored = { ...message, posts: { a: post } };
+
+    expect(MessageListItemSchema.parse(stored)).not.toHaveProperty("posts");
+    expect(DedupCandidateSchema.parse(stored)).not.toHaveProperty("posts");
+  });
+
+  test("a post needs a string tgId and an integer tgAt", () => {
+    expect(PostSchema.safeParse({ tgId: 4711, tgAt: 1 }).success).toBe(false);
+    expect(PostSchema.safeParse({ tgId: "4711", tgAt: 1.5 }).success).toBe(false);
+    expect(MessageSchema.safeParse({ ...message, posts: { a: { tgId: "1" } } }).success).toBe(
+      false,
+    );
+  });
+
+  test("the legacy tgId/tgAt pair still parses beside the map", () => {
+    const parsed = MessageSchema.parse({ ...message, tgId: "1", tgAt: 5, posts: {} });
+
+    expect(parsed.tgId).toBe("1");
+    expect(parsed.tgAt).toBe(5);
   });
 });

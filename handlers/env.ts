@@ -12,10 +12,12 @@
 export const ENV_VARS = {
   sourcesTable: "TELEGATOR_SOURCES_TABLE",
   messagesTable: "TELEGATOR_MESSAGES_TABLE",
+  /** target-table#13 (R58) — the third table: the publish registry. */
+  targetsTable: "TELEGATOR_TARGETS_TABLE",
   analyzeQueueUrl: "TELEGATOR_ANALYZE_QUEUE_URL",
   aggregateQueueUrl: "TELEGATOR_AGGREGATE_QUEUE_URL",
   publishQueueUrl: "TELEGATOR_PUBLISH_QUEUE_URL",
-  // §7.3 L610 — "Each has a matching DLQ"; §3.5's replay handler drains them.
+  // §7.3 L654 — "Each has a matching DLQ"; §3.5's replay handler drains them.
   analyzeDlqUrl: "TELEGATOR_ANALYZE_DLQ_URL",
   aggregateDlqUrl: "TELEGATOR_AGGREGATE_DLQ_URL",
   publishDlqUrl: "TELEGATOR_PUBLISH_DLQ_URL",
@@ -43,7 +45,7 @@ export function requireEnv(name: string): string {
 }
 
 /**
- * The variables only the dashboard reads (§8.4 L752/L754, §8.6 L780).
+ * The variables only the dashboard reads (§8.4 L818/L817, §8.6 L844).
  *
  * Here rather than in `infra/lib/app-stack.ts`, for the reason `ROLE_GROUPS`
  * moved out of the auth stack: a server action importing the stack would pull
@@ -53,14 +55,16 @@ export function requireEnv(name: string): string {
 export const DASHBOARD_ENV_VARS = {
   scrapeFunctionName: "TELEGATOR_SCRAPE_FUNCTION_NAME",
   dlqReplayFunctionName: "TELEGATOR_DLQ_REPLAY_FUNCTION_NAME",
-  /** R53 — "Publish now" invokes the publish stage; §7.6 L673 lists only the two above. */
+  /** R53 — "Publish now" invokes the publish stage; §7.6 L716 lists only the two above. */
   publishFunctionName: "TELEGATOR_PUBLISH_FUNCTION_NAME",
+  /** R61 — "Consume now" invokes the pump, which is what holds the queue grants. */
+  consumeFunctionName: "TELEGATOR_CONSUME_FUNCTION_NAME",
   userPoolId: "TELEGATOR_USER_POOL_ID",
   userPoolClientId: "TELEGATOR_USER_POOL_CLIENT_ID",
   hostedUiDomain: "TELEGATOR_COGNITO_DOMAIN",
   appUrl: "TELEGATOR_APP_URL",
   /** The ARN. The key itself is fetched at runtime — see `grantAppPermissions`. */
   sessionSecretArn: "TELEGATOR_SESSION_SECRET_ARN",
-  /** §8.5 L771 — the log group the category chart runs Logs Insights over. */
+  /** §8.5 L835 — the log group the category chart runs Logs Insights over. */
   analyzeLogGroup: "TELEGATOR_ANALYZE_LOG_GROUP",
 } as const;

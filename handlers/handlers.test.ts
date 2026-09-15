@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 /**
- * §8.2 L734 makes `lib/pipeline/` the single implementation of every stage and
+ * §8.2 L792 makes `lib/pipeline/` the single implementation of every stage and
  * the handlers thin wrappers. These tests assert the wrapper contract only —
  * the stage behaviour is covered where the stage lives.
  */
@@ -34,7 +34,7 @@ describe("Lambda entry points", () => {
   });
 
   /**
-   * The boundary §8.2 L734 draws: a handler wires adapters to a stage and holds
+   * The boundary §8.2 L792 draws: a handler wires adapters to a stage and holds
    * no stage logic of its own.
    */
   test.each(["scrape", "analyze", "aggregate", "publish", "dlqReplay"])(

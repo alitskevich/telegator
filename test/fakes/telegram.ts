@@ -19,7 +19,7 @@ export interface FakeFetcher extends HttpFetcher {
 /**
  * Serves recorded pages by exact URL.
  *
- * An unregistered URL returns "" rather than throwing, which is §3.1 L195's
+ * An unregistered URL returns "" rather than throwing, which is §3.1 L207's
  * rule for a non-2xx response — and it is how a test models an unreachable
  * source for AC-1.4. Keying on the full URL means a cursored request
  * (`?after=90177`) and an uncursored one are distinct fixtures, which is what
@@ -43,10 +43,12 @@ export interface BotCall {
 }
 
 export interface FakeBotOptions {
-  /** Every call answers `{ok: false, description}` — a §4.2 L381 failure. */
+  /** Every call answers `{ok: false, description}` — a §4.2 L390 failure. */
   readonly failWith?: { readonly description: string };
   /** The first call answers a 429 carrying `retry_after`; later calls succeed. */
   readonly rateLimitFirstCall?: { readonly retryAfter: number };
+  /** Every call to one of these chat ids answers `{ok: false}`; the rest succeed (plan ruling P6). */
+  readonly failChatIds?: readonly string[];
 }
 
 export interface FakeBot extends TelegramBot {
@@ -55,7 +57,7 @@ export interface FakeBot extends TelegramBot {
 
 /**
  * A Bot API sink that records calls and can fail the way Telegram actually
- * fails: HTTP 200 with `ok: false` (§4.2 L381), never a thrown error and never
+ * fails: HTTP 200 with `ok: false` (§4.2 L390), never a thrown error and never
  * a non-2xx status. A fake that threw would let publish be written with a
  * try/catch and pass, while the real API returned failures it read as success.
  */
@@ -64,9 +66,9 @@ export function fakeBot(options: FakeBotOptions = {}): FakeBot {
   let nextMessageId = 1000;
   let rateLimited = options.rateLimitFirstCall !== undefined;
 
-  const respond = (): TelegramResponse => {
-    if (options.failWith !== undefined) {
-      return { ok: false, description: options.failWith.description };
+  const respond = (chatId: string): TelegramResponse => {
+    if (options.failWith !== undefined || options.failChatIds?.includes(chatId) === true) {
+      return { ok: false, description: options.failWith?.description ?? "chat not found" };
     }
 
     if (rateLimited && options.rateLimitFirstCall !== undefined) {
@@ -86,15 +88,15 @@ export function fakeBot(options: FakeBotOptions = {}): FakeBot {
     calls,
     sendMessage: async (args) => {
       calls.push({ method: "sendMessage", args });
-      return respond();
+      return respond(args.chatId);
     },
     sendPhoto: async (args) => {
       calls.push({ method: "sendPhoto", args });
-      return respond();
+      return respond(args.chatId);
     },
     editMessageText: async (args) => {
       calls.push({ method: "editMessageText", args });
-      return respond();
+      return respond(args.chatId);
     },
   };
 }

@@ -62,7 +62,7 @@ describe("unionMatchKeys (R45)", () => {
 });
 
 /**
- * Design §13 names "union cap determinism" as required, and nothing pinned it:
+ * Design §6.1 names "union cap determinism" as required, and nothing pinned it:
  * the cap could be deleted, or moved ahead of the sort, with all tests green.
  *
  * The cap must apply **after** sorting, or the retained subset is whichever

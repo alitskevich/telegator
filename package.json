@@ -9,15 +9,18 @@
     "node": ">=22"
   },
   "scripts": {
+    "gates": "npx --yes npm-run-all --parallel --continue-on-error --aggregate-output typecheck test lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:changed": "vitest run --changed HEAD",
     "lint": "biome check .",
     "format": "biome check --write .",
     "synth": "cdk synth",
     "deploy": "tsx scripts/deploy.ts --execute",
     "scrape": "tsx scripts/scrape.ts",
-    "cursors:now": "tsx scripts/set-cursors-now.ts",
-    "smoke:openrouter": "export OPENROUTER_API_KEY=$(cat .orkey) &&tsx scripts/smoke-openrouter.ts",
+    "cursors:now": "tsx scripts/set-cursors-now.ts --write",
+    "migrate:targets": "tsx scripts/migrate-targets.ts --write",
+    "smoke:openrouter": "export OPENROUTER_API_KEY=$(cat $HOME/.keys/openrouter-api.key) &&tsx scripts/smoke-openrouter.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"

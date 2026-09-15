@@ -11,12 +11,12 @@ import type { TelegatorPipelineStack } from "./pipeline-stack";
 import type { TelegatorQueueStack } from "./queue-stack";
 
 /**
- * §9.1 L804 — the Amplify Hosting app, its environment config and the app's
+ * §9.1 L891 — the Amplify Hosting app, its environment config and the app's
  * IAM role.
  *
- * §9.3 L814 chooses Amplify because it "supports the App Router (SSR, server
+ * §9.3 L910 chooses Amplify because it "supports the App Router (SSR, server
  * actions, streaming) natively with no OpenNext adapter or Fargate service".
- * Last in §9.1 L806's order, since it consumes every other stack.
+ * Last in §9.1 L894's order, since it consumes every other stack.
  */
 
 /** Env vars the dashboard needs beyond the pipeline's own (`handlers/env.ts`). */
@@ -90,17 +90,19 @@ export class TelegatorAppStack extends Stack {
       // the names come from `handlers/env.ts` rather than a second vocabulary.
       [ENV_VARS.sourcesTable, data.sources.tableName],
       [ENV_VARS.messagesTable, data.messages.tableName],
+      [ENV_VARS.targetsTable, data.targets.tableName],
       [ENV_VARS.analyzeQueueUrl, queues.analyze.queueUrl],
       [ENV_VARS.aggregateQueueUrl, queues.aggregate.queueUrl],
       [ENV_VARS.publishQueueUrl, queues.publish.queueUrl],
       [ENV_VARS.analyzeDlqUrl, analyzeDlq.queueUrl],
       [ENV_VARS.aggregateDlqUrl, aggregateDlq.queueUrl],
       [ENV_VARS.publishDlqUrl, publishDlq.queueUrl],
-      // §8.4 L752/L754 — the two functions the manual triggers invoke by name.
+      // §8.4 L818/L817 — the two functions the manual triggers invoke by name.
       [DASHBOARD_ENV_VARS.scrapeFunctionName, pipeline.functions.scrape.functionName],
       [DASHBOARD_ENV_VARS.dlqReplayFunctionName, pipeline.functions.dlqReplay.functionName],
       [DASHBOARD_ENV_VARS.publishFunctionName, pipeline.functions.publish.functionName],
-      // §8.6 L780 — the hosted-UI session layer.
+      [DASHBOARD_ENV_VARS.consumeFunctionName, pipeline.functions.consume.functionName],
+      // §8.6 L844 — the hosted-UI session layer.
       [DASHBOARD_ENV_VARS.userPoolId, auth.userPool.userPoolId],
       [DASHBOARD_ENV_VARS.userPoolClientId, auth.userPoolClient.userPoolClientId],
       // `baseUrl()` is the hosted UI's origin, derived from the domain this
@@ -114,7 +116,7 @@ export class TelegatorAppStack extends Stack {
        * sessions. `handlers/publish.ts` treats the bot token the same way.
        */
       [DASHBOARD_ENV_VARS.sessionSecretArn, sessionSecretArn],
-      // §8.5 L771. Taken from the function's own log group rather than rebuilt
+      // §8.5 L835. Taken from the function's own log group rather than rebuilt
       // as `/aws/lambda/${name}`, so a change to either stays in step.
       [DASHBOARD_ENV_VARS.analyzeLogGroup, pipeline.functions.analyze.logGroup.logGroupName],
     ].map(([name, value]) => ({ name: String(name), value: String(value) }));
@@ -123,7 +125,7 @@ export class TelegatorAppStack extends Stack {
 
     const dashboard = new CfnApp(this, "DashboardApp", {
       name: config.name("dashboard"),
-      // §9.3 L814 — only WEB_COMPUTE runs server-side. WEB would deploy a static
+      // §9.3 L910 — only WEB_COMPUTE runs server-side. WEB would deploy a static
       // export, and every server action of §8.4 would 404.
       platform: "WEB_COMPUTE",
       // `iamServiceRole`, not `iamServiceRoleArn`. The L1 construct accepts an
@@ -145,17 +147,12 @@ export class TelegatorAppStack extends Stack {
   }
 
   /**
-   * R52. §9.1 L804 lists this stack's contents as "Amplify Hosting app, env
-   * config, app IAM role" — no branch. But §9.3 L814 chooses Amplify to *serve*
-   * the App Router, and an app on its own serves nothing: it holds
-   * configuration, and a branch is the thing Amplify builds and deploys. A
-   * stack that stopped at the app would satisfy §9.1 word for word and leave
-   * §9.3 unimplemented, so the branch is added here.
+   * R52 — §9.1 L891's inventory names no branch, but a branch is what the host
+   * actually builds and serves, so a stack stopping at the app would satisfy
+   * §9.1 word for word and leave §9.3 L910 unimplemented.
    *
-   * It appears only when a repository does, for the reason
-   * `repositoryConnection` exists at all: Amplify has nothing to build a branch
-   * from without one, and a credential-free `cdk synth` must keep producing the
-   * template it produces today.
+   * It appears only when a repository does: there is nothing to build a branch
+   * from without one, and `cdk synth` must stay credential-free.
    */
   private addBranch(
     dashboard: CfnApp,
@@ -178,13 +175,10 @@ export class TelegatorAppStack extends Stack {
   }
 
   /**
-   * §7.6 L673's app role, plus R24's additions.
-   *
-   * R24 records that §7.6's list is incomplete for what §8 actually does; each
-   * addition below names the section that needs it. Cognito administration is
-   * deliberately **not** granted: §8.2, §8.3 and §8.4 define no
-   * user-management route, page or action, so the grant §8.6 L786 implies would
-   * exceed the task.
+   * §7.6 L716's app role, plus R24's additions — each one below names the
+   * section that needs it. Cognito administration is deliberately not granted:
+   * §8.2–§8.4 define no user-management surface, so the grant §8.6 L850 implies
+   * would exceed the task. R34 later admits exactly one Cognito read.
    */
   private grantAppPermissions(
     data: TelegatorDataStack,
@@ -193,10 +187,10 @@ export class TelegatorAppStack extends Stack {
     auth: TelegatorAuthStack,
     sessionSecretArn: string,
   ): void {
-    // §7.6 L673 — "read both tables, write `sources`/`messages`". Soft deletes
-    // (§8.4 L751) are writes, so no DeleteItem is needed.
-    // §8.3 L741's table is a Scan (`listAll`); §8.4 L749 creates a source with a
-    // PutItem and edits one with an UpdateItem; L751's delete is soft, so it is
+    // §7.6 L716 — "read both tables, write `sources`/`messages`". Soft deletes
+    // (§8.4 L814) are writes, so no DeleteItem is needed.
+    // §8.3 L801's table is a Scan (`listAll`); §8.4 L812 creates a source with a
+    // PutItem and edits one with an UpdateItem; L810's delete is soft, so it is
     // an update too.
     grantTableActions(
       data.sources,
@@ -207,7 +201,18 @@ export class TelegatorAppStack extends Stack {
       "dynamodb:UpdateItem",
     );
 
-    // §8.3 L742's tabs and §8.5 L768's count are Queries on `status-index`.
+    // target-table#3.2 — `/targets` lists (a Scan), creates (PutItem), edits
+    // and soft-deletes (both UpdateItem). The same four the Sources page needs.
+    grantTableActions(
+      data.targets,
+      this.appRole,
+      "dynamodb:GetItem",
+      "dynamodb:Scan",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    );
+
+    // §8.3 L802's tabs and §8.5 L832's count are Queries on `status-index`.
     // No PutItem: R37 — a message id is minted by the scrape stage, so the
     // dashboard cannot create one.
     grantTableActions(
@@ -219,11 +224,11 @@ export class TelegatorAppStack extends Stack {
     );
 
     /**
-     * R34. §8.6 L788 — "a disabled user is rejected at every action" — needs a
+     * R34. §8.6 L875 — "a disabled user is rejected at every action" — needs a
      * live read, and this is it. R24 withheld Cognito from this role because
      * §8.2–§8.4 define no user-management surface; that still holds, and this
      * grant does not reopen it: one read action, on this pool only. The
-     * user-management APIs of §8.6 L786 remain ungranted, and a test names them.
+     * user-management APIs of §8.6 L850 remain ungranted, and a test names them.
      */
     this.appRole.addToPolicy(
       new PolicyStatement({
@@ -235,7 +240,7 @@ export class TelegatorAppStack extends Stack {
 
     // The cookie sealing key, read at runtime rather than carried in the app's
     // environment. Scoped to the one secret; `secretsmanager:GetSecretValue` on
-    // `*` would also read the Telegram bot token of §7.6 L663.
+    // `*` would also read the Telegram bot token of §7.6 L705.
     this.appRole.addToPolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,
@@ -247,14 +252,14 @@ export class TelegatorAppStack extends Stack {
     this.appRole.addToPolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,
-        // §8.5 L765–767's cards. GetMetricData takes no resource-level ARN.
+        // §8.5 L829–831's cards. GetMetricData takes no resource-level ARN.
         actions: ["cloudwatch:GetMetricData"],
         resources: ["*"],
       }),
     );
 
     /**
-     * §8.5 L771's category chart runs one Logs Insights query over one log
+     * §8.5 L835's category chart runs one Logs Insights query over one log
      * group — the analyze function's, which is the only group
      * `lib/aws/observability.ts` is ever constructed with. `StartQuery` takes a
      * resource, so it is scoped to that group; on `*` this role could query
@@ -269,12 +274,10 @@ export class TelegatorAppStack extends Stack {
     );
 
     /**
-     * R24 — §7.6 L673 grants only `StartQuery`, which on its own returns
-     * nothing: the chart needs the results too.
-     *
-     * These two key off an ephemeral query id rather than a log group and
-     * cannot be resource-scoped, so `*` is the only form AWS accepts. Kept as a
-     * separate statement so the narrowing above is not undone by grouping them.
+     * R24 — §7.6 L716 grants only `StartQuery`, which returns nothing on its
+     * own. These two key off an ephemeral query id rather than a log group, so
+     * `*` is the only form AWS accepts; kept separate so the narrowing above is
+     * not undone by grouping them.
      */
     this.appRole.addToPolicy(
       new PolicyStatement({
@@ -284,37 +287,49 @@ export class TelegatorAppStack extends Stack {
       }),
     );
 
-    // §8.5 L769–770's queue-depth strip and error card.
+    // §8.5 L833–834's queue-depth strip and error card.
     for (const queue of [queues.analyze, queues.aggregate, queues.publish]) {
       queue.grant(this.appRole, "sqs:GetQueueAttributes");
     }
 
-    // R24 — §8.2 L723's "DLQ inspection" reads message bodies, which
-    // GetQueueAttributes cannot do.
+    /**
+     * R24 — §8.2 L780's "DLQ inspection" reads message bodies, which
+     * GetQueueAttributes cannot do.
+     *
+     * R57 adds `PurgeQueue`, and only here: the grant is per dead-letter queue,
+     * so nothing in this stack can purge a *source* queue and discard work still
+     * in flight. §7.6 L716 grants the role no queue write at all, so both
+     * actions are recorded divergences rather than transcribed ones.
+     */
     for (const dlq of queues.deadLetterQueues) {
-      dlq.grant(this.appRole, "sqs:GetQueueAttributes", "sqs:ReceiveMessage");
+      dlq.grant(this.appRole, "sqs:GetQueueAttributes", "sqs:ReceiveMessage", "sqs:PurgeQueue");
     }
 
-    // R24 — §8.4 L753's republishMessage "sets `topublish`, enqueues", and §7.6
-    // L673 grants no send at all.
+    // R24 — §8.4 L819's republishMessage "sets `topublish`, enqueues", and §7.6
+    // L712 grants no send at all.
     queues.publish.grantSendMessages(this.appRole);
 
     /**
-     * §7.6 L673 — "lambda:InvokeFunction on the scraper and the replay
+     * §7.6 L716 — "lambda:InvokeFunction on the scraper and the replay
      * handler", and only those two.
      *
-     * §8.2 L734 is what makes the narrowness matter: the dashboard must not
-     * import `lib/pipeline/`, so invoking is its only route into the pipeline.
-     * A broader grant would let it invoke the stages directly and the boundary
-     * would exist only in the source tree.
+     * §8.2 L792 makes the narrowness matter: the dashboard must not import
+     * `lib/pipeline/`, so a broader grant would let it invoke the stages
+     * directly and the boundary would exist only in the source tree.
      *
-     * R53 — `publish` is a recorded third. L673's list predates the "Publish
-     * now" trigger, which has no other route: §7.3 L608 gives the publish queue
-     * a queue-level `DelaySeconds 300`, FIFO has no per-message delay, and the
-     * message-id deduplication collapses a repeat inside five minutes — so the
-     * queue cannot express "send this now" at all. The boundary L673 exists to
-     * protect is `analyze` and `aggregate`, which stay ungranted and are named
-     * in the test.
+     * R53 — `publish` is a recorded third, because "Publish now" has no other
+     * route: §7.3 L652's queue-level `DelaySeconds 300`, FIFO's lack of a
+     * per-message delay and the five-minute deduplication mean the queue cannot
+     * express "send this now" at all. The boundary L712 protects is `analyze`
+     * and `aggregate`, which stay ungranted and are named in the test.
+     *
+     * R61 — `consume` is a fourth, and it is what keeps that boundary intact
+     * rather than what breaks it. "Consume now" has to receive from a live
+     * queue, run a stage over the batch and delete what succeeded; doing it
+     * from here would have put `sqs:ReceiveMessage`, `sqs:DeleteMessage` and an
+     * invoke on both analysis stages onto the *web* role, reachable by every
+     * request the console serves. Instead one Lambda holds those grants, and
+     * this role may only ask it to run.
      */
     this.appRole.addToPolicy(
       new PolicyStatement({
@@ -324,6 +339,7 @@ export class TelegatorAppStack extends Stack {
           pipeline.functions.scrape.functionArn,
           pipeline.functions.dlqReplay.functionArn,
           pipeline.functions.publish.functionArn,
+          pipeline.functions.consume.functionArn,
         ],
       }),
     );

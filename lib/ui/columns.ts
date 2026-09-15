@@ -1,16 +1,16 @@
 /**
- * §8.3 L741 and L742's table columns.
+ * §8.3 L805 and L802's table columns.
  *
- * One definition per table, shared by the page and by §8.4 L755's export — L744
+ * One definition per table, shared by the page and by §8.4 L816's export — L801
  * ties them together ("filters across visible columns"), and an export whose
  * columns differed from the table it was taken from would be quietly wrong.
  */
 
-/** §8.3 L741 — the Sources table. */
+/** §8.3 L801 — the Sources table; `target` replaces `tgChannel` (multi-target#3.6, R54). */
 export const SOURCE_COLUMNS = [
   "id",
   "status",
-  "tgChannel",
+  "target",
   "category",
   "teaser",
   "lastCount",
@@ -18,7 +18,7 @@ export const SOURCE_COLUMNS = [
   "zeroYieldRuns",
 ] as const;
 
-/** §8.3 L742 — the Messages table, minus the expandable member list. */
+/** §8.3 L802 — the Messages table, minus the expandable member list. */
 export const MESSAGE_COLUMNS = [
   "id",
   "title",
@@ -27,4 +27,19 @@ export const MESSAGE_COLUMNS = [
   "date",
   "tgChannel",
   "memberCount",
+] as const;
+
+/**
+ * target-table#7 — the Targets table.
+ *
+ * `messageTemplate` is last because it is by far the widest, and the two
+ * `lastPosted*` columns sit beside `type` where an operator scanning the table
+ * reads them together.
+ */
+export const TARGET_COLUMNS = [
+  "id",
+  "type",
+  "lastPostedDate",
+  "lastPostedMessageId",
+  "messageTemplate",
 ] as const;

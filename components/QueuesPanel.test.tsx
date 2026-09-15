@@ -4,12 +4,18 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { QueueRow } from "../lib/dashboard/queues";
 import type { DlqMessage } from "../lib/queues/inspect";
 import { QueuesPanel } from "./QueuesPanel";
+import { ToastHost } from "./ToastHost";
 
 type InspectFn = (queueName: string) => Promise<DlqMessage[]>;
 type ReplayFn = (queueName: string, max: number) => Promise<{ replayed: number }>;
+type PurgeFn = (queueName: string) => Promise<{ discarded: number }>;
 
 let onInspect: ReturnType<typeof vi.fn<InspectFn>>;
 let onReplay: ReturnType<typeof vi.fn<ReplayFn>>;
+let onConsume: ReturnType<
+  typeof vi.fn<(q: string) => Promise<{ consumed: number; failed: number }>>
+>;
+let onPurge: ReturnType<typeof vi.fn<PurgeFn>>;
 
 const MESSAGES: DlqMessage[] = [
   { messageId: "m1", body: '{"id":"example/1"}', receiveCount: 3 },
@@ -25,16 +31,30 @@ const rows: QueueRow[] = [
 beforeEach(() => {
   onInspect = vi.fn<InspectFn>(async () => MESSAGES);
   onReplay = vi.fn<ReplayFn>(async () => ({ replayed: 2 }));
+  onPurge = vi.fn<PurgeFn>(async () => ({ discarded: 2 }));
+  onConsume = vi.fn(async () => ({ consumed: 4, failed: 0 }));
 });
 
 afterEach(cleanup);
 
 const draw = (props: Partial<Parameters<typeof QueuesPanel>[0]> = {}) =>
-  render(<QueuesPanel rows={rows} canAdmin onInspect={onInspect} onReplay={onReplay} {...props} />);
+  render(
+    <ToastHost>
+      <QueuesPanel
+        rows={rows}
+        canAdmin
+        onInspect={onInspect}
+        onReplay={onReplay}
+        onConsume={onConsume}
+        onPurge={onPurge}
+        {...props}
+      />
+    </ToastHost>,
+  );
 
 const queue = (name: string) => screen.getByTestId(`queue-${name}`);
 
-describe("QueuesPanel — §8.2 L723", () => {
+describe("QueuesPanel — §8.2 L780", () => {
   test("shows every stage with both depths", () => {
     draw();
 
@@ -95,7 +115,7 @@ describe("QueuesPanel — §8.2 L723", () => {
     });
   });
 
-  describe("replay (§8.4 L754)", () => {
+  describe("replay (§8.4 L821)", () => {
     test("replays the named queue up to the given max", async () => {
       draw();
       const card = queue("analyze");
@@ -125,12 +145,124 @@ describe("QueuesPanel — §8.2 L723", () => {
       expect(within(queue("aggregate")).queryByRole("button", { name: "Replay" })).toBeNull();
     });
 
-    /** §8.4 L754 — `admin`. Inspection stays available to everyone (§8.6 L783). */
+    /** §8.4 L821 — `admin`. Inspection stays available to everyone (§8.6 L847). */
     test("a viewer sees no replay control but may still inspect", () => {
       draw({ canAdmin: false });
 
       expect(screen.queryByRole("button", { name: "Replay" })).toBeNull();
       expect(within(queue("analyze")).getByRole("button", { name: "Inspect" })).toBeDefined();
     });
+  });
+
+  describe("cleanup all (R57)", () => {
+    const cleanupButton = (name: string) =>
+      within(queue(name)).getByRole("button", { name: "Cleanup all" });
+
+    /** Two non-empty DLQs, so "armed" can be shown to be per-card. */
+    const twoFull: QueueRow[] = [
+      { name: "analyze", depth: 4, dlqDepth: 2, dlqUrl: "dlq/analyze" },
+      { name: "publish", depth: 1, dlqDepth: 5, dlqUrl: "dlq/publish" },
+    ];
+
+    /**
+     * A purge cannot be undone — §1.3 L69 makes the DLQ a dead-lettered post's
+     * last copy — and the control sits next to Replay, so one press must not be
+     * enough.
+     */
+    test("one press does not purge", () => {
+      draw();
+      fireEvent.click(cleanupButton("analyze"));
+
+      expect(onPurge).not.toHaveBeenCalled();
+    });
+
+    /** The confirmation names the count, so an operator confirms a number. */
+    test("the armed label names how many are about to go", () => {
+      draw();
+      fireEvent.click(cleanupButton("analyze"));
+
+      expect(within(queue("analyze")).getByRole("button", { name: /delete 2/ })).toBeDefined();
+    });
+
+    test("a second press purges that queue and reports the count", async () => {
+      draw();
+      fireEvent.click(cleanupButton("analyze"));
+      fireEvent.click(within(queue("analyze")).getByRole("button", { name: /delete 2/ }));
+
+      expect(onPurge).toHaveBeenCalledWith("analyze");
+      expect(await screen.findByText(/discarded 2/i)).toBeDefined();
+    });
+
+    /** Arming one card must not arm another; each queue is a separate decision. */
+    test("arming one queue leaves the others disarmed", () => {
+      draw({ rows: twoFull });
+      fireEvent.click(cleanupButton("analyze"));
+
+      expect(within(queue("publish")).getByRole("button", { name: "Cleanup all" })).toBeDefined();
+    });
+
+    /** Nothing to clean up, so nothing to offer. */
+    test("offers no cleanup for an empty DLQ", () => {
+      draw();
+      expect(within(queue("aggregate")).queryByRole("button", { name: /cleanup/i })).toBeNull();
+    });
+
+    /** §8.4 L821's replay is `admin`; destroying the messages cannot be less. */
+    test("a viewer sees no cleanup control", () => {
+      draw({ canAdmin: false });
+
+      expect(screen.queryByRole("button", { name: /cleanup/i })).toBeNull();
+    });
+  });
+});
+
+describe("Consume now — R61", () => {
+  const consumeIn = (name: string) =>
+    within(queue(name)).queryByRole("button", { name: /Consume now/ });
+
+  /**
+   * §8.2 L792 — the card asks the pump to run a stage; it never runs one. What
+   * it fixes is the wait: the event source mapping is otherwise the only
+   * consumer, and §7.3 L652 delays publish by five minutes.
+   */
+  test("runs one capped batch through the named queue's stage", async () => {
+    draw();
+    const trigger = consumeIn("analyze");
+    expect(trigger).not.toBeNull();
+    if (trigger !== null) fireEvent.click(trigger);
+
+    expect(onConsume).toHaveBeenCalledWith("analyze");
+    expect(await screen.findByText("Consumed 4 from analyze")).toBeDefined();
+  });
+
+  /** §7.3 L668 — what the stage could not do stays on the queue, and is said so. */
+  test("names what was left behind", async () => {
+    onConsume = vi.fn(async () => ({ consumed: 3, failed: 2 }));
+    draw({ onConsume });
+    const trigger = consumeIn("analyze");
+    if (trigger !== null) fireEvent.click(trigger);
+
+    expect(await screen.findByText("Consumed 3 from analyze, 2 left failed")).toBeDefined();
+  });
+
+  test("an empty queue has nothing to consume", () => {
+    draw();
+    expect(consumeIn("aggregate")).toBeNull();
+  });
+
+  test("a viewer does not see it", () => {
+    draw({ canAdmin: false });
+    expect(consumeIn("analyze")).toBeNull();
+  });
+
+  test("a failure is reported rather than swallowed", async () => {
+    onConsume = vi.fn(async () => {
+      throw new Error("pump unreachable");
+    });
+    draw({ onConsume });
+    const trigger = consumeIn("analyze");
+    if (trigger !== null) fireEvent.click(trigger);
+
+    expect((await screen.findByRole("alert")).textContent).toContain("pump unreachable");
   });
 });

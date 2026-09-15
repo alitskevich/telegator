@@ -1,49 +1,56 @@
 import { z } from "zod";
 import { type RequireRoleDeps, requireRole } from "../auth/session";
-import type { MessageRepo, SourceRepo } from "../db/ports";
+import type { MessageRepo, SourceRepo, TargetRepo } from "../db/ports";
 import { ItemIdSchema } from "../domain/ids";
 import type { MemberBlock } from "../domain/message";
 import { SourceSchema } from "../domain/source";
+import { TargetConfigInput, TargetSchema } from "../domain/target";
 
 /**
- * §8.4 L749-751 — `upsertRecord` and `deleteRecords`, both `editor`.
+ * §8.4 L812-814 — `upsertRecord` and `deleteRecords`, both `editor`.
  *
  * The logic lives here rather than in `actions/records.ts` so it can be tested
  * without a request context; the action file is a `"use server"` wrapper, the
  * same shape as the Lambda entry points over `lib/pipeline/`.
  */
 
-export const TABLES = ["sources", "messages"] as const;
+export const TABLES = ["sources", "messages", "targets"] as const;
 export type TableName = (typeof TABLES)[number];
 
 /**
- * §2.1 L102-106's "Written by: operator" column, exactly.
+ * §2.1 L110-114's "Written by: operator" column, exactly.
  *
  * Everything omitted is written by the scrape stage, and `lastItemId` is the
- * reason the omission is enforced rather than trusted: §2.1 L107 calls it "the
+ * reason the omission is enforced rather than trusted: §2.1 L115 calls it "the
  * sole duplicate-suppression mechanism", so an operator editing it silently
  * re-scrapes or skips a range of history with no error anywhere.
+ * `target` replaces `tgChannel` (multi-target#2.2, R54).
  */
-export const SOURCE_WRITABLE_FIELDS = [
-  "status",
-  "tgChannel",
-  "category",
-  "tags",
-  "teaser",
-] as const;
+export const SOURCE_WRITABLE_FIELDS = ["status", "target", "category", "tags", "teaser"] as const;
 
 /**
- * §8.3 L742's descriptive columns — R37.
+ * §8.3 L802's descriptive columns — R37.
  *
  * The Messages table also shows `id`, `status`, `date` and `memberCount`, and
  * none of them is editable. `id` is the key. `memberCount` is `size(members)` by
- * §2.3 L145's invariant, so editing it produces a record `MessageSchema` itself
+ * §2.3 L155's invariant, so editing it produces a record `MessageSchema` itself
  * rejects. `date` partitions `date-index`, which §6's dedup reads. And `status`
- * is a pipeline state machine whose only correct transition is §8.4 L753's
+ * is a pipeline state machine whose only correct transition is §8.4 L819's
  * `republishMessage`, because that also enqueues — setting `topublish` here
  * would leave a message waiting for a publish that nothing asked for.
  */
 export const MESSAGE_WRITABLE_FIELDS = ["title", "category", "tgChannel"] as const;
+
+/**
+ * target-table#2.2's operator-writable columns — the two `lastPosted*` fields
+ * are publish's mirror (D7) and editing one would make the table lie about a
+ * post that did happen. `id` is the key.
+ *
+ * The list the table's editable cells read; the schema that validates a write
+ * is `TargetConfigInput`, so there is one allowlist rather than two (plan
+ * ruling P1).
+ */
+export const TARGET_WRITABLE_FIELDS = ["type", "messageTemplate"] as const;
 
 /** Every operator-writable field is a string, so one shape covers both tables. */
 const writableDelta = <T extends readonly [string, ...string[]]>(fields: T) =>
@@ -70,6 +77,11 @@ const UpsertInputSchema = z.discriminatedUnion("table", [
     id: z.string().min(1),
     delta: writableDelta(MESSAGE_WRITABLE_FIELDS),
   }),
+  z.object({
+    table: z.literal("targets"),
+    id: z.string().min(1),
+    delta: TargetConfigInput,
+  }),
 ]);
 
 const DeleteInputSchema = z.object({
@@ -81,13 +93,18 @@ const DeleteInputSchema = z.object({
 export interface RecordActionDeps {
   readonly sources: SourceRepo;
   readonly messages: MessageRepo;
+  readonly targets: TargetRepo;
   readonly auth: RequireRoleDeps;
   /** `revalidatePath` in production; injected so this module never imports Next. */
   readonly revalidate: (path: string) => void;
 }
 
-const repoFor = (table: TableName, deps: RecordActionDeps) =>
-  table === "sources" ? deps.sources : deps.messages;
+/** The repository each table's soft delete goes to. */
+const repoFor = (table: TableName, deps: RecordActionDeps) => {
+  if (table === "sources") return deps.sources;
+  if (table === "targets") return deps.targets;
+  return deps.messages;
+};
 
 /** §8.2's route tree — the page whose data this write invalidates. */
 const pathFor = (table: TableName) => `/${table}`;
@@ -115,11 +132,29 @@ export async function upsertRecord(input: unknown, deps: RecordActionDeps): Prom
     return;
   }
 
+  if (table === "targets") {
+    const existing = await deps.targets.get(id);
+
+    if (existing === undefined) {
+      /**
+       * target-table#3.2's "add". A bare `UpdateItem` would create a row with
+       * no `type`, which fails `TargetSchema` on the very next read; the schema
+       * supplies the default here instead.
+       */
+      await deps.targets.put(TargetSchema.parse({ id, ...delta }));
+    } else {
+      await deps.targets.patch(id, delta);
+    }
+
+    deps.revalidate(pathFor(table));
+    return;
+  }
+
   const existing = await deps.sources.get(id);
 
   if (existing === undefined) {
     /**
-     * §8.3 L741's "add". A bare `UpdateItem` would create a *partial* source —
+     * §8.3 L801's "add". A bare `UpdateItem` would create a *partial* source —
      * no `lastCount`, no `zeroYieldRuns` — and §3.1's refresh heuristic and
      * §4.1's staleness alarm both read those, so the source would poll on the
      * wrong schedule and never alarm. `SourceSchema` supplies the defaults.
@@ -149,9 +184,9 @@ export interface MemberRow extends MemberBlock {
 const MembersInputSchema = z.object({ messageId: ItemIdSchema });
 
 /**
- * R26 — the expandable member list of §8.3 L742, one message at a time.
+ * R26 — the expandable member list of §8.3 L802, one message at a time.
  *
- * §7.2 L598 projects `members` on no index, so the list query returns
+ * §7.2 L640 projects `members` on no index, so the list query returns
  * `memberCount` and expanding a row comes here for a base-table `GetItem`.
  * Rendering the list from the index result instead is the defect this prevents,
  * and it would fail silently: the map is simply absent, so every row would
@@ -174,7 +209,7 @@ export async function loadMembers(input: unknown, deps: RecordActionDeps): Promi
   return (
     Object.entries(message.members)
       .map(([itemId, block]) => ({ itemId, ...block }))
-      // §3.4 L318 sorts members by `ts` when it renders the published message; the
+      // §3.4 L323 sorts members by `ts` when it renders the published message; the
       // panel shows the same order, so an operator can match one to the other.
       .sort((a, b) => a.ts - b.ts)
   );

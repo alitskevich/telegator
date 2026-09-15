@@ -26,7 +26,7 @@ import {
 const NOW = 1_770_000_000_000;
 const clock = manualClock(NOW);
 
-/** Ids are `{sourceId}/{telegramMessageId}` (§2.4 L173), so the fixtures use real ones. */
+/** Ids are `{sourceId}/{telegramMessageId}` (§2.4 L185), so the fixtures use real ones. */
 const message = (n: number, status: Message["status"], ts: number): Message => ({
   id: `example/${n}`,
   title: `title ${n}`,
@@ -41,6 +41,7 @@ const message = (n: number, status: Message["status"], ts: number): Message => (
   keyTitle: [],
   keyTags: [],
   memberIds: [],
+  posts: {},
 });
 
 describe("windows", () => {
@@ -54,7 +55,7 @@ describe("windows", () => {
   });
 });
 
-describe("the three CloudWatch cards (§8.5 L765-767)", () => {
+describe("the three CloudWatch cards (§8.5 L829-831)", () => {
   test("items scraped is the metric's sum", async () => {
     const metrics = new FakeMetricReader();
     metrics.set("ItemsScraped", 412);
@@ -68,7 +69,7 @@ describe("the three CloudWatch cards (§8.5 L765-767)", () => {
   });
 
   /**
-   * §8.5 L767 — "`ItemsSkipped` Sum by `Reason`". The card shows a total and the
+   * §8.5 L831 — "`ItemsSkipped` Sum by `Reason`". The card shows a total and the
    * split, and the split's keys are `SKIP_REASONS` from the analyze stage, so
    * the two cannot drift.
    */
@@ -91,7 +92,7 @@ describe("the three CloudWatch cards (§8.5 L765-767)", () => {
   });
 });
 
-describe("messages published (§8.5 L768)", () => {
+describe("messages published (§8.5 L832)", () => {
   test("counts published messages over all time", async () => {
     const repo = fakeMessageRepo([
       message(1, "published", NOW),
@@ -103,7 +104,7 @@ describe("messages published (§8.5 L768)", () => {
   });
 });
 
-describe("errors (§8.5 L769)", () => {
+describe("errors (§8.5 L833)", () => {
   /** "Sum of all DLQ depths", current. */
   test("sums available and in-flight across every DLQ", async () => {
     const queues = new FakeQueueDepthReader();
@@ -119,7 +120,7 @@ describe("errors (§8.5 L769)", () => {
   });
 });
 
-describe("status chart (§8.5 L770)", () => {
+describe("status chart (§8.5 L834)", () => {
   /** "Queue depths + message status counts", current. */
   test("carries a slice per queue and per message status", async () => {
     const queues = new FakeQueueDepthReader();
@@ -150,7 +151,7 @@ describe("status chart (§8.5 L770)", () => {
   });
 });
 
-describe("category chart (§8.5 L771)", () => {
+describe("category chart (§8.5 L835)", () => {
   test("passes the 7 day window through", async () => {
     const logs = new FakeCategoryLogReader();
     logs.set([{ category: "politics", count: 9 }]);
@@ -171,7 +172,7 @@ describe("category chart (§8.5 L771)", () => {
   });
 });
 
-describe("recent messages (§8.5 L772)", () => {
+describe("recent messages (§8.5 L836)", () => {
   /**
    * "`status-index`, `ts` descending, first 10". The index is partitioned by
    * status, so "most recent" across the dashboard means querying each status and
@@ -215,7 +216,7 @@ describe("recent messages (§8.5 L772)", () => {
  * The console blanked entirely on `QueueDoesNotExist` from one SQS call — the
  * 24 h counters and the recent-message list went with it, though neither reads
  * SQS. `categoryChart` already argues the case for tolerating a single dead
- * source; queue depth cannot copy it verbatim, because §8.5 L769 makes DLQ
+ * source; queue depth cannot copy it verbatim, because §8.5 L833 makes DLQ
  * depth the "Errors" card and a zero there reads as a healthy pipeline.
  */
 describe("an unreadable queue", () => {

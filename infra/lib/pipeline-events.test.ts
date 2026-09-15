@@ -44,13 +44,13 @@ const policyStatements = (t: Template) =>
 const alarms = (t: Template) =>
   Object.values(t.findResources("AWS::CloudWatch::Alarm")).map((r) => r.Properties ?? {});
 
-describe("event source mappings (§7.3 L606-608, §7.3 L620)", () => {
+describe("event source mappings (§7.3 L650-652, §7.3 L668)", () => {
   test("declares one mapping per consumer", () => {
     expect(mappings(templateFor())).toHaveLength(3);
   });
 
   /**
-   * §7.3 L620 — "Every consumer sets functionResponseTypes:
+   * §7.3 L668 — "Every consumer sets functionResponseTypes:
    * ['ReportBatchItemFailures']". Without it one poison message forces the whole
    * batch to retry, which for analyze means re-billing nine OpenRouter calls.
    */
@@ -69,7 +69,7 @@ describe("event source mappings (§7.3 L606-608, §7.3 L620)", () => {
   });
 
   /**
-   * §3.2 L229 gives analyze a 60 s window. R33: §3.3 L258 also gives aggregate
+   * §3.2 L245 gives analyze a 60 s window. R33: §3.3 L274 also gives aggregate
    * 300 s, but AWS supports no batching window on a FIFO queue and CDK rejects
    * it at synth — so analyze's is the only one, and this asserts that rather
    * than the spec's stated pair.
@@ -83,7 +83,7 @@ describe("event source mappings (§7.3 L606-608, §7.3 L620)", () => {
   });
 });
 
-describe("the EventBridge schedule (§7.5 L649, R22, R23)", () => {
+describe("the EventBridge schedule (§7.5 L693, R22, R23)", () => {
   test("fires every 30 minutes", () => {
     templateFor().hasResourceProperties("AWS::Events::Rule", {
       ScheduleExpression: "rate(30 minutes)",
@@ -91,7 +91,7 @@ describe("the EventBridge schedule (§7.5 L649, R22, R23)", () => {
   });
 
   /**
-   * R23 and §9.2 L810. The flag is not derived from the environment name:
+   * R23 and §9.2 L900. The flag is not derived from the environment name:
    * §9.5 step 4 deploys PROD with the schedule disabled too, enabling it only at
    * step 7 after a 48-hour soak. A dev deploy that can post to production
    * Telegram channels is a defect, and so is a prod deploy that starts posting
@@ -114,7 +114,7 @@ describe("the EventBridge schedule (§7.5 L649, R22, R23)", () => {
   });
 });
 
-describe("IAM (§7.6 L668-673, R24)", () => {
+describe("IAM (§7.6 L711-716, R24)", () => {
   /**
    * §7.6's whole point is per-function least privilege. A wildcard resource
    * would grant every function every table and queue in the account.
@@ -131,7 +131,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
 
   /**
    * R24 — §7.6 omits PutMetricData, yet §7.7's twelve counters are unemittable
-   * without it, and §7.7 L679 makes them the system of record for volume.
+   * without it, and §7.7 L724 makes them the system of record for volume.
    */
   test("grants PutMetricData, conditioned on the Telegator namespace", () => {
     const putMetric = policyStatements(templateFor()).filter((s) =>
@@ -147,7 +147,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
    * the role both reference. Without this the secret assertions below can only
    * say "three functions got a secret" — and R50 put two different secrets in
    * the stack, so which function got which is the whole content of §7.6
-   * L669-671.
+   * L708-710.
    */
   function statementsByFunction(template: Template): Map<string, Record<string, unknown>[]> {
     const roleToFunction = new Map<string, string>();
@@ -217,13 +217,21 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     expect(bedrock).toEqual([]);
   });
 
-  /** §7.6, as revised by R50 — the model key reaches exactly the two stages that call a model. */
-  test("grants GetSecretValue to exactly three functions, none of them wildcarded", () => {
+  /**
+   * §7.6, as revised by R50 — the model key reaches exactly the two stages that
+   * call a model, and the bot token only publish.
+   *
+   * R61's `consume` runs any of those stages on demand, so it holds both keys —
+   * a fourth statement, naming two resources rather than one. That union is the
+   * reason it exists as a function of its own rather than as permissions on the
+   * web role.
+   */
+  test("grants GetSecretValue to exactly four statements, none of them wildcarded", () => {
     const statements = policyStatements(templateFor(SECRET_ARNS)).filter((statement) =>
       [statement.Action].flat().map(String).includes("secretsmanager:GetSecretValue"),
     );
 
-    expect(statements).toHaveLength(3);
+    expect(statements).toHaveLength(4);
     for (const statement of statements) {
       expect(statement.Resource).not.toBe("*");
     }
@@ -235,6 +243,14 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     );
   });
 
+  /** R61 — it runs analyze, aggregate or publish, so it needs what all three need. */
+  test("consume may read both keys, because it may run any stage", () => {
+    const secrets = secretsFor(templateFor(SECRET_ARNS), "telegator-dev-consume");
+
+    expect(secrets).toContain(SECRET_ARNS.openRouterSecretArn);
+    expect(secrets).toContain(SECRET_ARNS.telegramSecretArn);
+  });
+
   test("aggregate may read the OpenRouter key", () => {
     expect(secretsFor(templateFor(SECRET_ARNS), "telegator-dev-aggregate")).toContain(
       SECRET_ARNS.openRouterSecretArn,
@@ -243,7 +259,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
 
   /**
    * The bot token is §3.4's send credential and nothing else. A model stage
-   * holding it could post to the channel outside §3.4 L316's status guard.
+   * holding it could post to the channel outside §3.4 L321's status guard.
    */
   test("neither model stage may read the Telegram token", () => {
     const template = templateFor(SECRET_ARNS);
@@ -270,18 +286,18 @@ describe("IAM (§7.6 L668-673, R24)", () => {
   });
 
   /**
-   * §7.6 L672 reads "read/write `messages`", which `grantReadWriteData` matches
+   * §7.6 L715 reads "read/write `messages`", which `grantReadWriteData` matches
    * literally — and that helper also grants DeleteItem and BatchWriteItem.
-   * `publish` calls exactly two APIs: `GetItem` (§3.4 L316's load) and
-   * `UpdateItem` (§3.4 L345's result write).
+   * `publish` calls exactly two APIs: `GetItem` (§3.4 L321's load) and
+   * `UpdateItem` (§3.4 L354's result write).
    *
    * The narrow reading wins here because of what the wide one enables. §7.2
-   * makes `messages` the only durable record of a Telegram post — §1.3 L49 says
-   * a post that never merges "leaves no row anywhere" — and §8.4 L751 makes even
+   * makes `messages` the only durable record of a Telegram post — §1.3 L69 says
+   * a post that never merges "leaves no row anywhere" — and §8.4 L814 makes even
    * an operator's delete soft for that reason. A stage that never deletes should
    * not be able to, least of all irrecoverably.
    */
-  test("publish may read and update messages, and nothing more (§7.6 L672)", () => {
+  test("publish may read and update messages, and nothing more (§7.6 L715)", () => {
     const statements = statementsByFunction(templateFor()).get("telegator-dev-publish") ?? [];
     const dynamo = new Set(
       statements
@@ -290,6 +306,52 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     );
 
     expect(dynamo).toEqual(new Set(["dynamodb:GetItem", "dynamodb:UpdateItem"]));
+  });
+
+  /**
+   * TT-18 — publish now reads two tables and updates two tables, with the same
+   * two actions on each. The count is what says the targets grant exists at
+   * all; the action set is what says it added no third verb.
+   */
+  test("TT-18: publish reaches both tables with GetItem and UpdateItem only", () => {
+    const dynamo = (statementsByFunction(templateFor()).get("telegator-dev-publish") ?? []).filter(
+      (statement) =>
+        [statement.Action]
+          .flat()
+          .map(String)
+          .some((action) => action.startsWith("dynamodb:")),
+    );
+
+    const actions = new Set(dynamo.flatMap((statement) => [statement.Action].flat().map(String)));
+    expect(actions).toEqual(new Set(["dynamodb:GetItem", "dynamodb:UpdateItem"]));
+
+    // One resource per table, and no index ARN: the targets table has no GSI.
+    const resources = dynamo.flatMap((statement) => [statement.Resource].flat());
+    const serialised = JSON.stringify(resources);
+    expect(resources).toHaveLength(2);
+    // Named, because "two resources" alone is satisfied by a grant on any
+    // second table.
+    expect(serialised).toContain("MessagesTable");
+    expect(serialised).toContain("TargetsTable");
+    expect(serialised).not.toContain("/index/");
+
+    /**
+     * And both actions on `targets` specifically. Everything above is a union
+     * or a count: a grant of `GetItem` alone on `targets` shares too little
+     * with the `messages` statement to be merged, so it would leave two
+     * statements, two resources, both table names, and the same union — and
+     * would silently break the `lastPosted*` mirror write.
+     */
+    for (const name of ["MessagesTable", "TargetsTable"]) {
+      const perTable = dynamo.filter((statement) =>
+        JSON.stringify(statement.Resource).includes(name),
+      );
+
+      expect(perTable).toHaveLength(1);
+      expect(new Set([perTable[0]?.Action].flat().map(String))).toEqual(
+        new Set(["dynamodb:GetItem", "dynamodb:UpdateItem"]),
+      );
+    }
   });
 
   /** Named individually, because a set equality can be satisfied by a later edit. */
@@ -315,7 +377,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     );
 
   /**
-   * §7.6 L668 — "read/write `sources`". `scrape` calls `listByStatus` (a Query
+   * §7.6 L711 — "read/write `sources`". `scrape` calls `listByStatus` (a Query
    * on `status-index`) and `updateCursor` (an UpdateItem). It never reads a
    * source by id, never creates one, and never deletes one.
    */
@@ -326,7 +388,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
   });
 
   /**
-   * §7.6 L670 — "read/write `messages`". `aggregate` calls `get`, `queryByDate`
+   * §7.6 L713 — "read/write `messages`". `aggregate` calls `get`, `queryByDate`
    * (on `date-index`), `putNew` and `mergeMember`: §6's create branch genuinely
    * needs PutItem, which is why this stage is not `publish`.
    */
@@ -339,7 +401,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
   /**
    * A Query against a GSI is authorised on the index ARN, not the table's —
    * `table.grant()` grants only the table, so a narrowed Query that forgot the
-   * index would fail at runtime on §3.1 L187's source selection and §6 L515's
+   * index would fail at runtime on §3.1 L199's source selection and §6 L564's
    * dedup read, which is a worse outcome than the widening being removed.
    */
   test("a narrowed Query still reaches the indexes it queries", () => {
@@ -354,7 +416,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     }
   });
 
-  /** No stage deletes a record: §8.4 L751 makes even an operator's delete soft. */
+  /** No stage deletes a record: §8.4 L814 makes even an operator's delete soft. */
   test("no pipeline function may delete a record", () => {
     const template = templateFor();
 
@@ -371,7 +433,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
     }
   });
 
-  /** §7.6 L675 — "No VPC." A VPC would need NAT for outbound scraping, with no security gain. */
+  /** §9.3 L943 — "No VPC." A VPC would need NAT for outbound scraping, with no security gain. */
   test("places no function in a VPC", () => {
     for (const fn of Object.values(templateFor().findResources("AWS::Lambda::Function"))) {
       expect(fn.Properties?.VpcConfig).toBeUndefined();
@@ -379,7 +441,7 @@ describe("IAM (§7.6 L668-673, R24)", () => {
   });
 });
 
-describe("alarms (§7.7 L699)", () => {
+describe("alarms (§7.7 L754)", () => {
   test("declares the five §7.7 alarms", () => {
     // Three DLQ-depth alarms, plus SourceStale, DedupCandidateCount, the Lambda
     // error rate and the analyze queue age.
@@ -398,7 +460,7 @@ describe("alarms (§7.7 L699)", () => {
     }
   });
 
-  /** §7.2 L600 — "Alarm at > 500 — the point at which the in-memory comparison assumption needs revisiting." */
+  /** §7.2 L644 — "Alarm at > 500 — the point at which the in-memory comparison assumption needs revisiting." */
   test("alarms when a day's dedup candidates exceed 500", () => {
     const alarm = alarms(templateFor()).find((a) => a.MetricName === "DedupCandidateCount");
 
@@ -407,7 +469,7 @@ describe("alarms (§7.7 L699)", () => {
   });
 
   /**
-   * R25 — §7.7 L699 alarms on "SourceStale for any source", but the metric is
+   * R25 — §7.7 L754 alarms on "SourceStale for any source", but the metric is
    * dimensioned by a runtime-discovered Source. A CloudWatch alarm cannot
    * enumerate that at synth time and lookups are banned, so item 3.5 emits the
    * metric undimensioned as well and the alarm watches that.
@@ -419,7 +481,7 @@ describe("alarms (§7.7 L699)", () => {
     expect(alarm?.Dimensions ?? []).toEqual([]);
   });
 
-  /** §11.4 L874 targets "oldest message < 1 hour under normal load". */
+  /** §10.4 L1031 targets "oldest message < 1 hour under normal load". */
   test("alarms when the analyze queue's oldest message passes an hour", () => {
     const alarm = alarms(templateFor()).find(
       (a) => a.MetricName === "ApproximateAgeOfOldestMessage",

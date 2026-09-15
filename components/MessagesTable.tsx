@@ -6,16 +6,20 @@ import { MESSAGE_WRITABLE_FIELDS } from "../lib/dashboard/records";
 import { MESSAGE_STATUSES, type MessageListItem, type MessageStatus } from "../lib/domain/message";
 import { MESSAGE_COLUMNS } from "../lib/ui/columns";
 import { filterByColumn, filterByKeyword } from "../lib/ui/filter";
+import { allSelected, toggleSelectAll } from "../lib/ui/selection";
 import { cycleSort, type SortState, sortRows } from "../lib/ui/sort";
+import { downloadText, exportFilename } from "./download";
 import { TableHead } from "./TableHead";
+import { useAction } from "./useAction";
+import { useDeleteSelected } from "./useDeleteSelected";
 
 /**
- * §8.3 L742 — "Status tabs; table of id, title, category, status, date,
+ * §8.3 L802 — "Status tabs; table of id, title, category, status, date,
  * tgChannel, `memberCount`, with an expandable member list rendered from the
- * `members` map; inline edit; **Re-publish**; export", plus L744's search.
+ * `members` map; inline edit; **Re-publish**; export", plus L801's search.
  */
 
-/** R37 — the three fields §8.4 L749 will accept for a message. */
+/** R37 — the three fields §8.4 L812 will accept for a message. */
 const EDITABLE: ReadonlySet<string> = new Set(MESSAGE_WRITABLE_FIELDS);
 
 /** R53 — what `publishPending` answers: one send attempted per pending message. */
@@ -35,9 +39,9 @@ export interface MessagesTableProps {
   readonly onSave: (id: string, delta: Record<string, string>) => Promise<void>;
   readonly onRepublish: (messageId: string) => Promise<void>;
   readonly onLoadMembers: (messageId: string) => Promise<MemberRow[]>;
-  /** §8.4 L751 — `editor`, and soft: the record survives, R16 hides it. */
+  /** §8.4 L814 — `editor`, and soft: the record survives, R16 hides it. */
   readonly onDelete: (ids: string[]) => Promise<void>;
-  readonly onExport?: () => Promise<string>;
+  readonly onExport: () => Promise<string>;
   /** R53 — `admin` only, and only the `topublish` tab has a backlog to drain. */
   readonly onPublishNow?: (max: number) => Promise<PublishNowResult>;
 }
@@ -51,11 +55,22 @@ export function MessagesTable(props: MessagesTableProps) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   const visible = useMemo(() => {
-    // §8.3 L744 — across the columns on screen, and only those.
+    // §8.3 L805 — across the columns on screen, and only those.
     const matched = filterByKeyword([...props.rows], keyword, MESSAGE_COLUMNS);
     // Then the per-column boxes narrow that, and the sort orders what survives.
     return sortRows(filterByColumn(matched, columnFilters, MESSAGE_COLUMNS), sort);
   }, [props.rows, keyword, columnFilters, sort]);
+
+  const remove = useDeleteSelected(props.onDelete, "message", () => setSelected(new Set()));
+
+  /** §8.4 L816 — the CSV is a file; the name is fixed per render so the toast
+      and the saved file cannot name two different days. */
+  const csvName = exportFilename("messages", new Date());
+  const exportRows = useAction(props.onExport, {
+    onDone: (csv: string) => downloadText(csvName, csv),
+    describe: () => `Exported ${csvName}`,
+    failure: "Export failed",
+  });
 
   const toggle = (id: string) => {
     setSelected((current) => {
@@ -64,6 +79,9 @@ export function MessagesTable(props: MessagesTableProps) {
       return next;
     });
   };
+
+  /** R56 — what "all" means here: the rows the filters and sort left on screen. */
+  const visibleIds = visible.map((message) => message.id);
 
   /** The edge columns this table renders itself, for `TableHead` to span. */
   const leading = props.canEdit ? ["select", "expand"] : ["expand"];
@@ -74,7 +92,7 @@ export function MessagesTable(props: MessagesTableProps) {
     <>
       <h1 className="page-title">Messages</h1>
 
-      {/* §8.2 L722 — the tab is `?status=`, so each is a link and the current
+      {/* §8.2 L779 — the tab is `?status=`, so each is a link and the current
           one survives a reload, a bookmark and a shared URL. */}
       <nav className="tabs">
         {MESSAGE_STATUSES.map((status) => (
@@ -101,23 +119,34 @@ export function MessagesTable(props: MessagesTableProps) {
         </label>
 
         {props.canEdit ? (
-          <button
-            type="button"
-            onClick={() => {
-              if (selected.size === 0) return;
-              void props.onDelete([...selected]);
-              // The rows come back without the deleted ones (R16), so a
-              // selection kept across that render would address ids the table
-              // no longer shows.
-              setSelected(new Set());
-            }}
-          >
-            Delete selected
-          </button>
+          <>
+            {/* R56 — see `lib/ui/selection`: an empty table has nothing to
+                select, and a live button there would read as broken. */}
+            <button
+              type="button"
+              disabled={visibleIds.length === 0}
+              onClick={() => setSelected(toggleSelectAll(visibleIds, selected))}
+            >
+              {allSelected(visibleIds, selected) ? "Clear selection" : "Select all"}
+            </button>
+            <button
+              type="button"
+              disabled={remove.deleting}
+              aria-busy={remove.deleting}
+              onClick={() => remove.run([...selected])}
+            >
+              {remove.deleting ? "Deleting…" : "Delete selected"}
+            </button>
+          </>
         ) : null}
 
-        <button type="button" onClick={() => void props.onExport?.()}>
-          Export
+        <button
+          type="button"
+          disabled={exportRows.running}
+          aria-busy={exportRows.running}
+          onClick={() => exportRows.run()}
+        >
+          {exportRows.running ? "Exporting…" : "Export"}
         </button>
 
         {/* R53 — offered only where it means something: the backlog it runs is
@@ -173,7 +202,7 @@ export function MessagesTable(props: MessagesTableProps) {
  *
  * The count is reported rather than assumed: `publishPending` answers with what
  * the stage actually sent, and a failure there is a Telegram error the operator
- * has to see. §3.4 L142 reports one in the summary instead of throwing, so a
+ * has to see. §3 L193 reports one in the summary instead of throwing, so a
  * silent button would look identical to a successful one.
  */
 function PublishNow({
@@ -182,7 +211,13 @@ function PublishNow({
   onPublishNow: (max: number) => Promise<PublishNowResult>;
 }) {
   const [max, setMax] = useState(String(MAX_PUBLISH_NOW));
-  const [notice, setNotice] = useState("");
+
+  /** R53 — every invoke is a real Telegram send, so a second press mid-flight
+      would double the backlog it works through. */
+  const publish = useAction(onPublishNow, {
+    describe: ({ published, failed }) => `Published ${published}, ${failed} failed`,
+    failure: "Publish failed",
+  });
 
   const requested = Number(max);
 
@@ -194,19 +229,17 @@ function PublishNow({
       </label>
       <button
         type="button"
+        disabled={publish.running}
+        aria-busy={publish.running}
         onClick={() => {
           // Bounded here as well as server-side: an out-of-range value would be
           // rejected by the action after a round trip that could send nothing.
           if (!Number.isInteger(requested) || requested <= 0 || requested > MAX_PUBLISH_NOW) return;
-          setNotice("");
-          void onPublishNow(requested).then(({ published, failed }) => {
-            setNotice(`published ${published}, ${failed} failed`);
-          });
+          publish.run(requested);
         }}
       >
-        Publish now
+        {publish.running ? "Publishing…" : "Publish now"}
       </button>
-      {notice === "" ? null : <output className="notice">{notice}</output>}
     </>
   );
 }
@@ -229,6 +262,17 @@ function MessageRow({
   columnCount: number;
 } & Omit<MessagesTableProps, "rows" | "status" | "onExport">) {
   const [draft, setDraft] = useState<Record<string, string>>({});
+
+  const save = useAction(onSave, {
+    describe: (_result, id) => `Saved ${id}`,
+    failure: "Save failed",
+  });
+
+  /** §8.4 L819 — sets `topublish` and enqueues; the send itself is the queue's. */
+  const republish = useAction(onRepublish, {
+    describe: (_result, id) => `Queued ${id} for re-publishing`,
+    failure: "Re-publish failed",
+  });
   const [expanded, setExpanded] = useState(false);
   const [members, setMembers] = useState<MemberRow[] | undefined>(undefined);
 
@@ -289,18 +333,24 @@ function MessageRow({
             {canEdit ? (
               <button
                 type="button"
-                disabled={changed.length === 0}
+                disabled={changed.length === 0 || save.running}
+                aria-busy={save.running}
                 onClick={() => {
-                  void onSave(message.id, Object.fromEntries(changed));
+                  save.run(message.id, Object.fromEntries(changed));
                   setDraft({});
                 }}
               >
-                Save
+                {save.running ? "Saving…" : "Save"}
               </button>
             ) : null}
             {canAdmin ? (
-              <button type="button" onClick={() => void onRepublish(message.id)}>
-                Re-publish
+              <button
+                type="button"
+                disabled={republish.running}
+                aria-busy={republish.running}
+                onClick={() => republish.run(message.id)}
+              >
+                {republish.running ? "Queueing…" : "Re-publish"}
               </button>
             ) : null}
           </td>
@@ -313,7 +363,7 @@ function MessageRow({
             {members === undefined ? (
               <p className="empty">Loading members…</p>
             ) : members.length === 0 ? (
-              // §6 L539's create branch writes one member, so an empty map means
+              // §6 L588's create branch writes one member, so an empty map means
               // this record predates the member write or was hand-made.
               <p className="empty">No members recorded</p>
             ) : (

@@ -60,7 +60,7 @@ function storedMessage(over: Partial<Message> & Pick<Message, "id">): Message {
   const members: Record<string, MemberBlock> = over.members ?? {
     [over.id]: { summary: "stored", links: [], channel: over.id.split("/")[0] ?? "c", ts: 1 },
   };
-  // Parsed rather than cast, so a fixture that violates §2.3 L145's memberCount
+  // Parsed rather than cast, so a fixture that violates §2.3 L155's memberCount
   // invariant fails in the test that built it rather than somewhere downstream.
   return MessageSchema.parse({
     status: "topublish",
@@ -266,7 +266,7 @@ describe("empty batch", () => {
   });
 });
 
-describe("create branch (§6 L538-541)", () => {
+describe("create branch (§6 L588-588)", () => {
   test("a single item becomes one message keyed by its own id", async () => {
     const a = item("chan_a/1");
     const result = await dedupBatch([a], deps());
@@ -284,7 +284,7 @@ describe("create branch (§6 L538-541)", () => {
     expect(result.toPublish).toEqual(["chan_a/1"]);
   });
 
-  test("the member block carries what publish needs to render it (§1.3 L48)", async () => {
+  test("the member block carries what publish needs to render it (§1.3 L68)", async () => {
     const a = item("chan_a/1", { summary: "Выбухі", links: [{ id: 1, href: "https://x.test" }] });
     const result = await dedupBatch([a], deps());
 
@@ -300,14 +300,24 @@ describe("create branch (§6 L538-541)", () => {
 
   test("defaults tgChannel to telegator_news, and keeps an explicit one", async () => {
     const a = item("chan_a/1", SAME_EVENT);
-    const b = item("chan_b/2", { ...OTHER_EVENT, tgChannel: "other_news" });
+    const b = item("chan_b/2", { ...OTHER_EVENT, target: "other_news" });
     const result = await dedupBatch([a, b], deps());
 
     const channels = result.writes.map((w) => (w.kind === "create" ? w.message.tgChannel : ""));
     expect(channels).toEqual(["telegator_news", "other_news"]);
   });
 
-  /** R45 — the key the scorer will read back on the next batch (§7.2 L598). */
+  test("MT-6: a create carries the item's target as tgChannel and an empty post map", async () => {
+    const a = item("chan_a/1", { ...SAME_EVENT, target: "a, @b" });
+    const b = item("chan_b/2", OTHER_EVENT);
+    const result = await dedupBatch([a, b], deps());
+
+    const creates = result.writes.flatMap((w) => (w.kind === "create" ? [w.message] : []));
+    expect(creates.map((m) => m.tgChannel)).toEqual(["a, @b", "telegator_news"]);
+    expect(creates.map((m) => m.posts)).toEqual([{}, {}]);
+  });
+
+  /** R45 — the key the scorer will read back on the next batch (§7.2 L640). */
   test("stores the item's own match key, and no embedding", async () => {
     const a = item("chan_a/1", SAME_EVENT);
     const result = await dedupBatch([a], deps());
@@ -353,9 +363,9 @@ describe("create branch (§6 L538-541)", () => {
   });
 });
 
-describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
+describe("Pass 1 — intra-batch matching (§6 L572-550)", () => {
   /**
-   * AC-3.1 (L300), R47 — "cosine similarity 0.90" restated as a score at or
+   * AC-3.1, R47 — "cosine similarity 0.90" restated as a score at or
    * above `MERGE_THRESHOLD`; the id is kept, the vocabulary is not.
    */
   test("two near-identical items on the same date produce one message with two members", async () => {
@@ -370,7 +380,7 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
   });
 
   /**
-   * AC-3.3 (L302), R47 — "0.80" restated as a score at or below
+   * AC-3.3, R47 — "0.80" restated as a score at or below
    * `DISTINCT_THRESHOLD`; the id is kept, the vocabulary is not.
    */
   test("two unrelated items produce two messages", async () => {
@@ -380,7 +390,7 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
     expect([...result.toPublish].sort()).toEqual(["src_a/1", "src_b/2"]);
   });
 
-  /** AC-3.2 (L301) — §3.3 L276 calls the date filter a correctness rule, not an optimisation. */
+  /** AC-3.2 — §6 L545 calls the date filter a correctness rule, not an optimisation. */
   test("two near-identical items with different dates produce two messages", async () => {
     const a = item("chan_a/1", SAME_EVENT);
     const b = item("chan_b/2", { ...SAME_EVENT, date: "2026-08-30" });
@@ -390,7 +400,7 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
     expect(result.writes).toHaveLength(2);
   });
 
-  /** AC-3.5 (L304) — matched "without an intervening write". */
+  /** AC-3.5 — matched "without an intervening write". */
   test("the whole batch produces its writes only at the end", async () => {
     const { repo, deps: d } = repoDeps([]);
 
@@ -411,7 +421,7 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
     expect(Object.keys(merged.message.members).sort()).toEqual(["chan_a/1", "chan_c/3"]);
   });
 
-  /** §3.3 L285 — title, category, country, location, peoples overwritten by the newest item. */
+  /** §3.3 L287 — title, category, country, location, peoples overwritten by the newest item. */
   test("the newest item's descriptive fields overwrite", async () => {
     const a = item("chan_a/1", { ...SAME_EVENT, title: "first", location: "Kyiv" });
     const b = item("chan_b/2", { ...SAME_EVENT, title: "second", location: "Lviv" });
@@ -424,7 +434,7 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
     expect(write.message.location).toBe("Lviv");
   });
 
-  test("tags are merged, not replaced (§6 L532)", async () => {
+  test("tags are merged, not replaced (§3.3 L286)", async () => {
     const a = item("chan_a/1", { ...SAME_EVENT, tags: "war,politics" });
     const b = item("chan_b/2", { ...SAME_EVENT, tags: "politics,drones" });
 
@@ -435,7 +445,7 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
     expect(write.message.tags).toBe("politics,drones,war");
   });
 
-  /** R30 — §6 L530 uses `??`, which preserves an empty-string image. */
+  /** R30 — §3.3 L285 uses `??`, which preserves an empty-string image. */
   test("image keeps the existing value, including an empty string", async () => {
     const a = item("chan_a/1", { ...SAME_EVENT, image: "" });
     const b = item("chan_b/2", { ...SAME_EVENT, image: "https://img.test/b.jpg" });
@@ -448,7 +458,7 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
   });
 
   /**
-   * AC-3.6 (L305). R45 — §6 L533's elementwise mean has no analogue without a
+   * AC-3.6. R45 — §3.3 L284's elementwise mean has no analogue without a
    * vector; the union is what replaces it, and it must stay canonical (sorted,
    * deduplicated) or AC-3.7's byte-identical replay is impossible. R47 —
    * restates the criterion itself: "equals the element-wise mean of the two
@@ -474,7 +484,7 @@ describe("Pass 1 — intra-batch matching (§6 L505-511)", () => {
   });
 });
 
-describe("Pass 2 — stored messages (§6 L513-519)", () => {
+describe("Pass 2 — stored messages (§6 L576-576)", () => {
   test("merges into a stored message on the same date", async () => {
     const a = item("chan_a/1", SAME_EVENT);
     const stored = storedMessage({ id: "chan_z/9", ...keyOf(SAME_EVENT) });
@@ -506,7 +516,7 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
   });
 
   /**
-   * R9. §7.2 L598 says nothing projects `members`, so a whole-record write built
+   * R9. §7.2 L640 says nothing projects `members`, so a whole-record write built
    * from a date-index candidate would erase every member already stored. The
    * merge is attribute-level and the pre-existing member survives.
    */
@@ -528,7 +538,7 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
     expect(after?.memberIds.sort()).toEqual(["chan_a/1", "chan_z/9"]);
   });
 
-  /** AC-3.4 (L303), E2E-4 (L851). */
+  /** AC-3.4, E2E-4 (L997). */
   test("merging into a published message resets it to topublish and keeps tgId", async () => {
     const a = item("chan_a/1", SAME_EVENT);
     const stored = storedMessage({
@@ -550,6 +560,26 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
     expect(after?.status).toBe("topublish");
     expect(after?.tgId).toBe("4711");
     expect(after?.tgAt).toBe(500);
+  });
+
+  /** multi-target#2.4 — publish owns `posts`; a merge must not name it. */
+  test("a merge never writes posts, so a live post map survives", async () => {
+    const a = item("chan_a/1", SAME_EVENT);
+    const stored = storedMessage({
+      id: "chan_z/9",
+      status: "published",
+      posts: { a: { tgId: "4711", tgAt: 500 } },
+      ...keyOf(SAME_EVENT),
+    });
+    const { repo, deps: d } = repoDeps([stored]);
+
+    const result = await dedupBatch([a], d);
+    const write = result.writes[0];
+    if (write?.kind !== "merge") throw new Error("expected a merge");
+    expect(write.merge.attributes).not.toHaveProperty("posts");
+
+    await repo.mergeMember(write.merge);
+    expect((await repo.get("chan_z/9"))?.posts).toEqual({ a: { tgId: "4711", tgAt: 500 } });
   });
 
   test("a stored message on a different date is never a candidate", async () => {
@@ -584,7 +614,7 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
   });
 
   /**
-   * R46 — §6 L513 runs Pass 2 only when Pass 1 found no match, which reads as a
+   * R46 — §6 L576 runs Pass 2 only when Pass 1 found no match, which reads as a
    * yes/no answer a band does not give. Both passes run here and the single
    * highest score wins, so the stored candidates are examined even when an
    * in-batch one is already merge-worthy — `candidateCount` is what says they
@@ -623,7 +653,7 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
    * on one date. `chan_a/1` merges into `chan_y/8` (1.00, against 0.80 for
    * `chan_z/9`), which puts a stored record into `pending`. `chan_b/2` then
    * scores 0.80 against it in Pass 1 — merge-worthy on its own — and 1.00
-   * against `chan_z/9` in Pass 2. §6 L513 stops at Pass 1 and merges `chan_b/2`
+   * against `chan_z/9` in Pass 2. §6 L576 stops at Pass 1 and merges `chan_b/2`
    * into `chan_y/8`; taking the maximum puts it where it belongs.
    *
    * Without this test, an edit that returned to §6's structure would pass the
@@ -655,11 +685,11 @@ describe("Pass 2 — stored messages (§6 L513-519)", () => {
       throw new Error("expected a merge into each stored message");
     }
     expect(Object.keys(toNear.merge.members)).toEqual(["chan_a/1"]);
-    // The load-bearing one: §6 L513 would have put chan_b/2 here too.
+    // The load-bearing one: §6 L576 would have put chan_b/2 here too.
     expect(Object.keys(toFar.merge.members)).toEqual(["chan_b/2"]);
   });
 
-  /** §7.2 L600 — emitted per aggregate run, alarmed above 500. */
+  /** §7.2 L644 — emitted per aggregate run, alarmed above 500. */
   test("emits DedupCandidateCount for the candidates it examined", async () => {
     const a = item("chan_a/1");
     const stored = [storedMessage({ id: "chan_z/9" }), storedMessage({ id: "chan_y/8" })];
@@ -732,7 +762,7 @@ describe("the band (R46)", () => {
     expect(adjudicator.calls[0]?.map((pair) => pair.id)).toEqual(["src_c/3->src_a/1"]);
   });
 
-  test("a 'same' verdict merges and a 'different' verdict splits", async () => {
+  test("AC-3.10: a 'same' verdict merges and a 'different' verdict splits", async () => {
     const merged = await dedupBatch(
       twoAmbiguousItems(),
       deps({ adjudicator: fakeAdjudicator(() => true) }),
@@ -797,7 +827,7 @@ describe("the band (R46)", () => {
   });
 
   /**
-   * §7.2 L598's projection carries the key and `memberIds` and nothing else, so
+   * §7.2 L640's projection carries the key and `memberIds` and nothing else, so
    * a stored candidate's `title` costs a base-table read. Without it the model
    * would receive exactly the three token sets `matchScore` has just failed to
    * decide on — a tie broken with the data that produced it.
@@ -832,7 +862,7 @@ describe("the band (R46)", () => {
   });
 
   /**
-   * §5.3's multilingual embedder existed to serve `summary` (Belarusian) and
+   * §6's multilingual embedder existed to serve `summary` (Belarusian) and
    * `body` (Russian or Ukrainian). Neither crosses this boundary, and the
    * exhaustive key check is what keeps a later field from drifting across it.
    */
@@ -938,8 +968,8 @@ describe("the band (R46)", () => {
     expect(metrics.get("DedupAdjudicationFailed")).toBe(0);
   });
 
-  /** §11.3 L868 — "False merges are worse than false splits." */
-  test("a failing adjudication splits rather than merging", async () => {
+  /** §10.3 L1011 — "False merges are worse than false splits." */
+  test("AC-3.11: a failing adjudication splits rather than merging", async () => {
     const result = await dedupBatch(
       twoAmbiguousItems(),
       deps({ adjudicator: failingAdjudicator() }),
@@ -966,7 +996,7 @@ describe("the band (R46)", () => {
   });
 
   /**
-   * §11.3's recalibration is a configuration change, not a code edit — the
+   * §10.3's recalibration is a configuration change, not a code edit — the
    * rationale `similarityThreshold` carried, kept for the band.
    */
   test("an injected band overrides the default in both directions", async () => {
@@ -988,7 +1018,7 @@ describe("the replay short-circuit (R51, AC-3.7)", () => {
   /**
    * The stored record's key is `OTHER_EVENT` and the item's is `SAME_EVENT`, so
    * the pair scores 0. Only identity can merge them, which is the point: §3.3
-   * L285 lets later members overwrite the descriptive fields, so a replayed item
+   * L283 lets later members overwrite the descriptive fields, so a replayed item
    * can have drifted right out of the key it helped build.
    */
   test("an item already in a candidate's memberIds merges there with no scoring", async () => {
@@ -1038,7 +1068,7 @@ describe("the replay short-circuit (R51, AC-3.7)", () => {
   });
 });
 
-describe("member cap (§6 L525-526)", () => {
+describe("member cap (§3.3 L283-283)", () => {
   const fullMembers = (): Record<string, MemberBlock> =>
     Object.fromEntries(
       Array.from({ length: MAX_MEMBERS }, (_, i) => [
@@ -1047,7 +1077,7 @@ describe("member cap (§6 L525-526)", () => {
       ]),
     );
 
-  /** AC-3.8 (L307). */
+  /** AC-3.8. */
   test("a 21st member is dropped entirely and memberCount stays at 20", async () => {
     const a = item("chan_a/1", SAME_EVENT);
     const stored = storedMessage({
@@ -1064,7 +1094,7 @@ describe("member cap (§6 L525-526)", () => {
     expect(metrics.get("MemberCapReached")).toBe(1);
   });
 
-  /** §6 L525's carve-out: `and item.id not in match.members`. */
+  /** §3.3 L283's carve-out: `and item.id not in match.members`. */
   test("replaying an item already in a full map still merges", async () => {
     const a = item("chan_full/1", SAME_EVENT);
     const stored = storedMessage({
@@ -1087,14 +1117,14 @@ describe("member cap (§6 L525-526)", () => {
 /**
  * R51 — AC-3.7's wording is unchanged ("replaying the identical item message
  * produces a byte-identical message record"), but not how it holds. §3.3
- * L285 makes it an emergent property of idempotent member writes; here a
+ * L283 makes it an emergent property of idempotent member writes; here a
  * replayed item is caught by the `memberIds` short-circuit above (before any
  * scoring runs) and merges into the exact record it already belongs to, so
  * byte-identical replay is guaranteed rather than emergent.
  */
-describe("replay idempotency (AC-3.7 L306, E2E-5 L852)", () => {
+describe("replay idempotency (AC-3.7 L304, E2E-5 L998)", () => {
   /**
-   * Run under an advancing clock, deliberately. R11: §6 L522 stamps
+   * Run under an advancing clock, deliberately. R11: §6 L597 stamps
    * `ts: now()` into every member block, so a frozen clock makes a
    * non-idempotent implementation look idempotent — the second write happens to
    * produce the same timestamp. Only a moving clock proves the block's ts is
@@ -1120,7 +1150,7 @@ describe("replay idempotency (AC-3.7 L306, E2E-5 L852)", () => {
   });
 
   /**
-   * R45 — `unionMatchKeys` is idempotent, which is what replaces §6 L559's
+   * R45 — `unionMatchKeys` is idempotent, which is what replaces §6 L597's
    * "the mean of a vector with itself is that vector". Unlike the centroid it
    * does not drift at all, so this holds for a multi-member message too.
    */
@@ -1175,7 +1205,7 @@ describe("replay idempotency (AC-3.7 L306, E2E-5 L852)", () => {
 });
 
 describe("metrics", () => {
-  test("counts creates and merges separately (§7.7 L689)", async () => {
+  test("counts creates and merges separately (§7.7 L734)", async () => {
     await dedupBatch(twoNearIdenticalItems(), deps());
 
     expect(metrics.get("MessagesCreated")).toBe(1);
@@ -1185,10 +1215,10 @@ describe("metrics", () => {
 
 describe("a merge that changes nothing does not re-publish (R39)", () => {
   /**
-   * §2.3 L168 argues idempotency is free: "Re-processing a replayed item writes
-   * `members.{itemId}` with the same value — a no-op." §6 L527's merge branch
+   * §2.3 L180 argues idempotency is free: "Re-processing a replayed item writes
+   * `members.{itemId}` with the same value — a no-op." §6 L585's merge branch
    * writes `status: "topublish"` unconditionally, which is what stops it being
-   * one — a replayed message returns to the publish queue and §3.4 L340 edits
+   * one — a replayed message returns to the publish queue and §3.4 L349 edits
    * the live post with identical text.
    */
   test("a replayed member leaves the status alone", async () => {

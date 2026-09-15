@@ -24,7 +24,9 @@ import { systemClock } from "../lib/clock";
 import { cachedCategoryLogReader, cachedMetricReader } from "../lib/dashboard/cache";
 import { createMessageRepo } from "../lib/db/messages";
 import { createSourceRepo } from "../lib/db/sources";
+import { createTargetRepo } from "../lib/db/targets";
 import { createSqsDlqInspector } from "../lib/queues/inspect";
+import { createSqsDlqPurger } from "../lib/queues/purge";
 import { createSqsQueueProducer } from "../lib/queues/sqs";
 
 /**
@@ -72,6 +74,10 @@ export const messages = createMessageRepo({
   client: documents,
   tableName: requireEnv(ENV_VARS.messagesTable),
 });
+export const targets = createTargetRepo({
+  client: documents,
+  tableName: requireEnv(ENV_VARS.targetsTable),
+});
 
 /** Adapts Next's request-scoped cookie store to the `CookieJar` port. */
 export async function authContext(): Promise<RequireRoleDeps> {
@@ -94,7 +100,7 @@ export const publishQueue = createSqsQueueProducer({
 });
 
 /**
- * §8.4 L752/L754 — the two functions the manual triggers invoke, by name. The
+ * §8.4 L818/L817 — the two functions the manual triggers invoke, by name. The
  * names are set by `infra/lib/app-stack.ts`, which grants InvokeFunction on
  * exactly these two.
  */
@@ -102,10 +108,12 @@ export const functions = {
   scrape: requireEnv(DASHBOARD_ENV_VARS.scrapeFunctionName),
   dlqReplay: requireEnv(DASHBOARD_ENV_VARS.dlqReplayFunctionName),
   publish: requireEnv(DASHBOARD_ENV_VARS.publishFunctionName),
+  /** R61 — the pump behind "Consume now"; the queue grants live on it, not here. */
+  consume: requireEnv(DASHBOARD_ENV_VARS.consumeFunctionName),
 } as const;
 
 /**
- * §8.5's read side, with L774's 60 s cache applied at the port so every
+ * §8.5's read side, with L834's 60 s cache applied at the port so every
  * CloudWatch read is covered — including ones added later.
  */
 export const metrics = cachedMetricReader(
@@ -135,5 +143,8 @@ export const dlqUrls = {
   publish: requireEnv(ENV_VARS.publishDlqUrl),
 } as const;
 
-/** §8.2 L723 — reads DLQ bodies without consuming them. */
+/** §8.2 L780 — reads DLQ bodies without consuming them. */
 export const dlqInspector = createSqsDlqInspector(sqs);
+
+/** R57 — discards a DLQ an operator has judged unrecoverable. */
+export const dlqPurger = createSqsDlqPurger(sqs);

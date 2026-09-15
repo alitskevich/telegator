@@ -3,12 +3,13 @@ import { type RequireRoleDeps, requireRole } from "../auth/session";
 import type { QueueDepthReader } from "../aws/ports";
 import type { DlqInspector, DlqMessage } from "../queues/inspect";
 import { REPLAYABLE_QUEUES, type ReplayableQueue } from "../queues/ports";
+import type { DlqPurger } from "../queues/purge";
 
 /**
- * §8.2 L723 — "Queue depths + DLQ inspection/replay".
+ * §8.2 L780 — "Queue depths + DLQ inspection/replay".
  *
- * §8.3 has no row for this page, so its content comes from L723 and from §7.7
- * L697's operational view: for each stage, what is waiting, what has failed, and
+ * §8.3 has no row for this page, so its content comes from L776 and from §7.7
+ * L748's operational view: for each stage, what is waiting, what has failed, and
  * what those failures actually contain.
  */
 
@@ -26,8 +27,12 @@ export interface QueuePageDeps {
   readonly auth: RequireRoleDeps;
   readonly queues: QueueDepthReader;
   readonly inspector: DlqInspector;
+  /** R57 — "Cleanup all". */
+  readonly purger: DlqPurger;
   readonly queueUrls: QueueUrls;
   readonly dlqUrls: QueueUrls;
+  /** So a purge leaves the card showing what the queue now holds, not what it held. */
+  readonly revalidate: (path: string) => void;
 }
 
 export async function loadQueues(deps: QueuePageDeps): Promise<QueueRow[]> {
@@ -48,20 +53,49 @@ export async function loadQueues(deps: QueuePageDeps): Promise<QueueRow[]> {
   );
 }
 
-const InspectInputSchema = z.object({ queueName: z.enum(REPLAYABLE_QUEUES) });
+const QueueNameSchema = z.object({ queueName: z.enum(REPLAYABLE_QUEUES) });
 
 /**
  * Read what is sitting in one DLQ.
  *
- * `viewer`, because §8.6 L783 gives that role every page and this is part of
- * one — replaying is the privileged act (§8.4 L754), not looking. The queue is
+ * `viewer`, because §8.6 L847 gives that role every page and this is part of
+ * one — replaying is the privileged act (§8.4 L821), not looking. The queue is
  * named rather than defaulted, as it is in `handlers/dlqReplay.ts`: showing an
  * operator the wrong queue's contents would misinform a decision to replay.
  */
 export async function inspectDlq(input: unknown, deps: QueuePageDeps): Promise<DlqMessage[]> {
   await requireRole("viewer", deps.auth);
 
-  const { queueName } = InspectInputSchema.parse(input);
+  const { queueName } = QueueNameSchema.parse(input);
 
   return deps.inspector.peek(deps.dlqUrls[queueName]);
+}
+
+/**
+ * R57 — discard everything in one DLQ.
+ *
+ * `admin`, alongside §8.4 L821's replay and for a stronger reason: replay moves
+ * messages, this ends them. §1.3 L69 makes the DLQ a dead-lettered post's last
+ * copy, so nothing recovers what this deletes.
+ *
+ * The depth is read *before* the purge so the operator gets a receipt in the
+ * same shape as replay's `{ replayed }`. It is approximate twice over — SQS
+ * depths are approximate, and a message arriving between the read and the purge
+ * is discarded uncounted — which is why the field is named `discarded` for what
+ * was there rather than `deleted` for what went.
+ */
+export async function purgeDlq(
+  input: unknown,
+  deps: QueuePageDeps,
+): Promise<{ discarded: number }> {
+  await requireRole("admin", deps.auth);
+
+  const { queueName } = QueueNameSchema.parse(input);
+  const dlqUrl = deps.dlqUrls[queueName];
+
+  const before = await deps.queues.depth(dlqUrl);
+  await deps.purger.purge(dlqUrl);
+
+  deps.revalidate("/queues");
+  return { discarded: before.available + before.inFlight };
 }

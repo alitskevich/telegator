@@ -14,7 +14,7 @@ import { telegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
- * E2E-4 (§11.2 L851) — "A new item merged into a published message triggers
+ * E2E-4 (§10.2 L1001) — "A new item merged into a published message triggers
  * `editMessageText` with the stored `tgId`."
  *
  * The two runs are the point. A merge inside one batch never needs an edit —
@@ -32,7 +32,7 @@ const SECOND = "source_b";
 const source = (id: string): Source => ({
   id,
   status: "ok",
-  tgChannel: "telegator_news",
+  target: "telegator_news",
   category: "politics",
   lastCount: 0,
   lastUpdated: 0,
@@ -121,7 +121,7 @@ async function publishThenMerge() {
   const first = await runPipeline(world());
 
   await sources.put(source(SECOND));
-  // Same UTC date: §6 L515 looks for candidates in `date-index` for the item's
+  // Same UTC date: §6 L564 looks for candidates in `date-index` for the item's
   // own date, so a merge into yesterday's message is not what this tests.
   clock.advance(NEXT_POLL_MS);
 
@@ -139,13 +139,15 @@ describe("E2E-4 fixtures", () => {
   });
 });
 
-describe("E2E-4 (§11.2 L851)", () => {
-  test("the first run publishes and stores a tgId", async () => {
+describe("E2E-4 (§10.2 L1001)", () => {
+  test("the first run publishes and records a post on the default channel", async () => {
     const { first } = await publishThenMerge();
 
     expect(first.telegramCalls).toHaveLength(1);
     expect(first.telegramCalls[0]?.method).toBe("sendMessage");
-    expect((await messages.get(`${FIRST}/${POST}`))?.tgId).toBeDefined();
+    const stored = await messages.get(`${FIRST}/${POST}`);
+    expect(stored?.posts.telegator_news?.tgId).toBeDefined();
+    expect(stored?.tgId).toBeUndefined();
   });
 
   test("the second item merges rather than creating a message", async () => {
@@ -158,7 +160,7 @@ describe("E2E-4 (§11.2 L851)", () => {
     expect(record?.memberCount).toBe(2);
   });
 
-  /** §3.4 L340 — "`tgId` present → `editMessageText`". */
+  /** §3.4 L349 — "`tgId` present → `editMessageText`". */
   test("and triggers editMessageText, not a second post", async () => {
     await publishThenMerge();
 
@@ -167,18 +169,36 @@ describe("E2E-4 (§11.2 L851)", () => {
 
   /**
    * The stored id, not a fresh one. An edit against the wrong message id either
-   * fails or rewrites somebody else's post; §2.3 L150 keeps the id an edit is
+   * fails or rewrites somebody else's post; §2.3 L161 keeps the id an edit is
    * editing precisely so this cannot drift.
    */
-  test("the edit carries the tgId the first send stored", async () => {
+  /** MT-E2E-2 — from `posts` for a message published under the map. */
+  test("MT-E2E-2: the edit carries the tgId the first send recorded in posts", async () => {
     const { first } = await publishThenMerge();
 
     const sent = first.telegramCalls[0]?.args as { chatId: string };
     const edit = bot.calls[1]?.args as EditMessageTextArgs;
-    const stored = (await messages.get(`${FIRST}/${POST}`))?.tgId;
+    const stored = (await messages.get(`${FIRST}/${POST}`))?.posts.telegator_news?.tgId;
 
     expect(edit.messageId).toBe(stored);
     expect(edit.chatId).toBe(sent.chatId);
+  });
+
+  /** MT-E2E-2 — from the frozen `tgId` for a message published before the map. */
+  test("MT-E2E-2: a legacy record with tgId and no posts is edited, not re-posted", async () => {
+    await runPipeline(world());
+    const id = `${FIRST}/${POST}`;
+    const legacyId = (await messages.get(id))?.posts.telegator_news?.tgId ?? "";
+    // Rewrite the record into its pre-map shape.
+    await messages.patch(id, { posts: {}, tgId: legacyId, tgAt: NOW });
+
+    await sources.put(source(SECOND));
+    clock.advance(NEXT_POLL_MS);
+    await runPipeline(world());
+
+    const edit = bot.calls[1]?.args as EditMessageTextArgs;
+    expect(bot.calls.map((call) => call.method)).toEqual(["sendMessage", "editMessageText"]);
+    expect(edit.messageId).toBe(legacyId);
   });
 
   /** The edit replaces the whole message, so it has to carry both members. */

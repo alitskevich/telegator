@@ -1,13 +1,13 @@
 /**
- * The classification system prompt, §5.2 L433–438.
+ * The classification system prompt, §5.2 L441–446.
  *
- * §5.2 L430 calls it "ported verbatim; load-bearing" and singles out why: the
- * `[text](#N)` preservation rule keeps the link tokens §3.1 L203 produces
- * intact, so §3.4 L320 can resolve them back into anchors at render time. A
+ * §5.2 L438 calls it "ported verbatim; load-bearing" and singles out why: the
+ * `[text](#N)` preservation rule keeps the link tokens §3.1 L215 produces
+ * intact, so §3.4 L325 can resolve them back into anchors at render time. A
  * model that rewrites or strips them breaks every link in a published message.
  *
  * Two things here look like mistakes and are kept deliberately. "responseSchema"
- * is Gemini vocabulary — the Messages request at §5.2 L423 calls the field
+ * is Gemini vocabulary — the Messages request at §5.2 L431 calls the field
  * `schema` — and the rules end with semicolons rather than full stops. Prompt
  * wording changes model behaviour, and no test in this repo can measure the
  * effect of an edit, so verbatim means verbatim. A test compares this constant

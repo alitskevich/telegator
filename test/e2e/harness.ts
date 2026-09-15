@@ -7,15 +7,20 @@ import { runAnalyze } from "../../lib/pipeline/analyze/index";
 import { runPublish } from "../../lib/pipeline/publish/index";
 import { runScrape } from "../../lib/pipeline/scrape/index";
 import type { QueueMessage } from "../../lib/queues/ports";
-import type { FakeMessageRepo, FakeSourceRepo } from "../fakes/db";
+import {
+  type FakeMessageRepo,
+  type FakeSourceRepo,
+  type FakeTargetRepo,
+  fakeTargetRepo,
+} from "../fakes/db";
 import { recordingSink } from "../fakes/logging";
 import { recordingMetrics } from "../fakes/metrics";
 import { fakeQueueProducer } from "../fakes/queues";
 import type { FakeBot, FakeFetcher } from "../fakes/telegram";
 
 /**
- * §11.2's end-to-end harness: all four stages of §3.1–3.4 wired together over
- * in-memory fakes (R18 — §11.1's DynamoDB Local and ElasticMQ need Docker).
+ * §10.2's end-to-end harness: all four stages of §3.1–3.4 wired together over
+ * in-memory fakes (R18 — §10.1's DynamoDB Local and ElasticMQ need Docker).
  *
  * The stages are wired the way SQS wires them and no more tightly than that.
  * Each stage's output is a queue message; the harness turns those into the
@@ -29,20 +34,28 @@ export interface PipelineWorld {
   readonly fetcher: FakeFetcher;
   readonly sources: FakeSourceRepo;
   readonly classifier: Classifier;
-  /** R46 — resolves §6's ambiguous band; §5.3's embedder is gone. */
+  /** R46 — resolves §6's ambiguous band; §6's embedder is gone. */
   readonly adjudicator: Adjudicator;
   readonly messages: FakeMessageRepo;
   readonly bot: FakeBot;
   readonly clock: Clock;
   readonly band?: Band;
+  /**
+   * target-table#5.3 — the target registry.
+   *
+   * Optional: a run that does not care about templates gets a fresh empty one,
+   * which is the no-template path it would have taken anyway. A criterion that
+   * asserts on the rows supplies its own and reads them back.
+   */
+  readonly targets?: FakeTargetRepo;
 }
 
 export interface PipelineRun {
-  /** Stage A payloads the scraper enqueued (§2.2 L120). */
+  /** Stage A payloads the scraper enqueued (§2.2 L130). */
   readonly analyzeMessages: QueueMessage[];
-  /** Stage B payloads analyze enqueued (§2.2 L132). */
+  /** Stage B payloads analyze enqueued (§2.2 L142). */
   readonly aggregateMessages: QueueMessage[];
-  /** `{messageId}` envelopes aggregate enqueued (§7.3 L608). */
+  /** `{messageId}` envelopes aggregate enqueued (§7.3 L652). */
   readonly publishMessages: QueueMessage[];
   readonly scrape: Awaited<ReturnType<typeof runScrape>>;
   /**
@@ -65,7 +78,7 @@ const asRecords = (messages: readonly QueueMessage[], prefix: string) =>
 /**
  * Run one pass of the whole pipeline.
  *
- * One pass, not a loop to fixpoint: every §11.2 criterion is about what a single
+ * One pass, not a loop to fixpoint: every §10.2 criterion is about what a single
  * traversal produces, and a loop would hide a stage that only converges after
  * being run twice.
  */
@@ -107,6 +120,7 @@ export async function runPipeline(world: PipelineWorld): Promise<PipelineRun> {
 
   await runPublish(asRecords(publishQueue.sent, "publish"), {
     messages: world.messages,
+    targets: world.targets ?? fakeTargetRepo(),
     bot: world.bot,
     metrics,
     clock: world.clock,

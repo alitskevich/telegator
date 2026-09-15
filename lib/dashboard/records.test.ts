@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { FakeCookieJar, FakeUserStatusReader } from "../../test/fakes/auth";
 import { manualClock } from "../../test/fakes/clock";
-import { fakeMessageRepo, fakeSourceRepo } from "../../test/fakes/db";
+import { fakeMessageRepo, fakeSourceRepo, fakeTargetRepo } from "../../test/fakes/db";
 import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "../auth/session";
 import type { Message } from "../domain/message";
 import type { Source } from "../domain/source";
@@ -10,6 +10,7 @@ import {
   loadMembers,
   MESSAGE_WRITABLE_FIELDS,
   SOURCE_WRITABLE_FIELDS,
+  TARGET_WRITABLE_FIELDS,
   upsertRecord,
 } from "./records";
 
@@ -19,7 +20,7 @@ const SUB = "e4f1a2b3-0000-4000-8000-000000000001";
 const source = (id: string): Source => ({
   id,
   status: "ok",
-  tgChannel: "@target",
+  target: "@target",
   category: "politics",
   lastCount: 4,
   lastUpdated: NOW,
@@ -41,6 +42,7 @@ const message = (n: number): Message => ({
   keyTitle: [],
   keyTags: [],
   memberIds: [],
+  posts: {},
 });
 
 let jar: FakeCookieJar;
@@ -49,6 +51,7 @@ let key: Uint8Array;
 let revalidated: string[];
 let sources: ReturnType<typeof fakeSourceRepo>;
 let messages: ReturnType<typeof fakeMessageRepo>;
+let targets: ReturnType<typeof fakeTargetRepo>;
 const clock = manualClock(NOW);
 
 beforeEach(() => {
@@ -58,6 +61,7 @@ beforeEach(() => {
   revalidated = [];
   sources = fakeSourceRepo([source("channel-a")]);
   messages = fakeMessageRepo([message(1), message(2)]);
+  targets = fakeTargetRepo([{ id: "a", type: "telegram_channel" }]);
 });
 
 function signedInAs(...roles: string[]) {
@@ -73,11 +77,12 @@ function signedInAs(...roles: string[]) {
 const deps = () => ({
   sources,
   messages,
+  targets,
   auth: { jar, key, clock, status },
   revalidate: (path: string) => revalidated.push(path),
 });
 
-describe("upsertRecord — §8.4 L749", () => {
+describe("upsertRecord — §8.4 L812", () => {
   test("an editor may patch a writable source field", async () => {
     signedInAs("editor");
 
@@ -97,7 +102,7 @@ describe("upsertRecord — §8.4 L749", () => {
   });
 
   /**
-   * §8.4 L757 — "every action ... re-checks the caller's role server-side". The
+   * §8.4 L823 — "every action ... re-checks the caller's role server-side". The
    * action is the boundary; a hidden button is not one.
    */
   test("a viewer is rejected and writes nothing", async () => {
@@ -127,8 +132,8 @@ describe("upsertRecord — §8.4 L749", () => {
 
   describe("the writable-field allowlist", () => {
     /**
-     * §2.1 L102-106's "Written by" column. `lastItemId` is the scrape cursor and
-     * "the sole duplicate-suppression mechanism" (§2.1 L107) — an operator
+     * §2.1 L110-114's "Written by" column. `lastItemId` is the scrape cursor and
+     * "the sole duplicate-suppression mechanism" (§2.1 L115) — an operator
      * editing it would silently re-scrape or skip a range of history.
      */
     test("a scrape-owned source field is rejected", async () => {
@@ -144,15 +149,26 @@ describe("upsertRecord — §8.4 L749", () => {
     test("the source allowlist is §2.1's operator column", () => {
       expect([...SOURCE_WRITABLE_FIELDS]).toEqual([
         "status",
-        "tgChannel",
+        "target",
         "category",
         "tags",
         "teaser",
       ]);
     });
 
+    test("MT-18: a source delta may name target, never tgChannel", async () => {
+      signedInAs("editor");
+
+      await upsertRecord({ table: "sources", id: "channel-a", delta: { target: "a, @b" } }, deps());
+      expect((await sources.get("channel-a"))?.target).toBe("a, @b");
+
+      await expect(
+        upsertRecord({ table: "sources", id: "channel-a", delta: { tgChannel: "x" } }, deps()),
+      ).rejects.toThrow(/writable|unrecognized|unknown/i);
+    });
+
     /**
-     * R37. `memberCount` is `size(members)` by §2.3 L145's invariant, `status`
+     * R37. `memberCount` is `size(members)` by §2.3 L155's invariant, `status`
      * is a pipeline state machine with `republishMessage` as its only correct
      * transition, and `date` partitions `date-index`.
      */
@@ -166,7 +182,7 @@ describe("upsertRecord — §8.4 L749", () => {
       }
     });
 
-    test("the message allowlist is §8.3 L742's descriptive columns", () => {
+    test("the message allowlist is §8.3 L802's descriptive columns", () => {
       expect([...MESSAGE_WRITABLE_FIELDS]).toEqual(["title", "category", "tgChannel"]);
     });
 
@@ -222,7 +238,7 @@ describe("upsertRecord — §8.4 L749", () => {
   });
 });
 
-describe("deleteRecords — §8.4 L750", () => {
+describe("deleteRecords — §8.4 L813", () => {
   /** "soft delete, sets `deleted: true`". The row survives; R16 hides it from reads. */
   test("sets the flag rather than removing the row", async () => {
     signedInAs("editor");
@@ -268,9 +284,9 @@ describe("deleteRecords — §8.4 L750", () => {
   });
 });
 
-describe('upsertRecord as add — §8.3 L741\'s "add"', () => {
+describe('upsertRecord as add — §8.3 L801\'s "add"', () => {
   /**
-   * §8.4 L749 calls this `upsertRecord`, and the Sources table offers "add", so
+   * §8.4 L812 calls this `upsertRecord`, and the Sources table offers "add", so
    * a delta for an id that does not exist creates the row. A bare UpdateItem
    * would create a *partial* one — no `lastCount`, no `zeroYieldRuns` — and
    * §3.1's refresh heuristic and §4.1's staleness alarm both read those, so the
@@ -280,12 +296,12 @@ describe('upsertRecord as add — §8.3 L741\'s "add"', () => {
     signedInAs("editor");
 
     await upsertRecord(
-      { table: "sources", id: "channel-new", delta: { status: "ok", tgChannel: "@t" } },
+      { table: "sources", id: "channel-new", delta: { status: "ok", target: "@t" } },
       deps(),
     );
 
     const created = await sources.get("channel-new");
-    expect(created).toMatchObject({ id: "channel-new", status: "ok", tgChannel: "@t" });
+    expect(created).toMatchObject({ id: "channel-new", status: "ok", target: "@t" });
     expect(created?.lastCount).toBe(0);
     expect(created?.zeroYieldRuns).toBe(0);
   });
@@ -328,7 +344,7 @@ describe('upsertRecord as add — §8.3 L741\'s "add"', () => {
 
 describe("loadMembers — R26", () => {
   /**
-   * §8.3 L742 wants an expandable member list, and §7.2 L598 projects `members`
+   * §8.3 L802 wants an expandable member list, and §7.2 L640 projects `members`
    * on no index. So the list query returns `memberCount` and expanding one row
    * issues a base-table GetItem — this action. Rendering every member list from
    * the index result is the defect R26 exists to prevent, and it would fail
@@ -353,7 +369,7 @@ describe("loadMembers — R26", () => {
     expect(members[0]?.summary).toBe("first");
   });
 
-  /** §3.4 L318 sorts members by `ts` for stable ordering; the list shows the same. */
+  /** §3.4 L323 sorts members by `ts` for stable ordering; the list shows the same. */
   test("orders members oldest first, as the published message does", async () => {
     signedInAs("viewer");
     messages = fakeMessageRepo([
@@ -373,7 +389,7 @@ describe("loadMembers — R26", () => {
     ]);
   });
 
-  /** §8.4 L755 makes reading a `viewer` right; every action still re-checks. */
+  /** §8.4 L816 makes reading a `viewer` right; every action still re-checks. */
   test("an unauthenticated caller is rejected", async () => {
     await expect(loadMembers({ messageId: "example/1" }, deps())).rejects.toBeInstanceOf(
       AuthorizationError,
@@ -390,5 +406,70 @@ describe("loadMembers — R26", () => {
     await expect(loadMembers({ messageId: "example/99" }, deps())).rejects.toThrow(
       /no such message/,
     );
+  });
+});
+
+describe("upsertRecord on targets — target-table#3.2", () => {
+  test("TT-19: an editor may set a messageTemplate on an existing row", async () => {
+    signedInAs("editor");
+
+    await upsertRecord(
+      { table: "targets", id: "a", delta: { messageTemplate: "{header}\n\n{body}" } },
+      deps(),
+    );
+
+    await expect(targets.get("a")).resolves.toMatchObject({
+      messageTemplate: "{header}\n\n{body}",
+    });
+    expect(revalidated).toContain("/targets");
+  });
+
+  test("TT-19: a create supplies the schema's defaults", async () => {
+    signedInAs("editor");
+
+    await upsertRecord(
+      { table: "targets", id: "fresh", delta: { messageTemplate: "{body}" } },
+      deps(),
+    );
+
+    await expect(targets.get("fresh")).resolves.toEqual({
+      id: "fresh",
+      type: "telegram_channel",
+      messageTemplate: "{body}",
+    });
+  });
+
+  test.each([
+    { lastPostedDate: "2026-09-08T10:00:00.000Z" },
+    { lastPostedMessageId: "chan_a/1" },
+    {},
+  ])("TT-19: rejects the delta %o", async (delta) => {
+    signedInAs("editor");
+
+    await expect(upsertRecord({ table: "targets", id: "a", delta }, deps())).rejects.toThrow();
+  });
+
+  test("TT-19: a viewer may not write a target", async () => {
+    signedInAs("viewer");
+
+    await expect(
+      upsertRecord({ table: "targets", id: "a", delta: { messageTemplate: "{body}" } }, deps()),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  /** Plan ruling P1 — one allowlist, read by the schema and by the table alike. */
+  test("TARGET_WRITABLE_FIELDS is exactly what the schema accepts", () => {
+    expect([...TARGET_WRITABLE_FIELDS].sort()).toEqual(["messageTemplate", "type"]);
+  });
+});
+
+describe("deleteRecords on targets — §8.4 L814", () => {
+  test("TT-20: an editor soft-deletes a target", async () => {
+    signedInAs("editor");
+
+    await deleteRecords({ table: "targets", ids: ["a"] }, deps());
+
+    await expect(targets.listAll()).resolves.toEqual([]);
+    expect(revalidated).toContain("/targets");
   });
 });
