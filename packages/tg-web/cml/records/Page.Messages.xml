@@ -1,0 +1,24 @@
+<Component id="Page.Messages">
+  <Signature purpose="§8.3 — the Messages table by status tab, with Publish now on the backlog for an admin"
+    description="The tab is `?status=` on the hash route, so a reload or a shared link shows the same one." />
+
+  <GridService Ref="grid" table="messages" status="{@nav.params.status}" api="@api"
+    canEdit="{@api.canEdit}" />
+
+  <PageTitle title="{R.tables.messages.title}" subtitle="{R.tables.messages.subtitle}">
+    <Fragment If="{@api.canAdmin AND @grid.status == 'topublish'}">
+      <label class="input sm:input-sm w-44">
+        <span class="text-base-content/60">{R.pipeline.publishMax}</span>
+        <input type="number" min="1" max="10" class="grow" value="{@grid.publishMax}"
+          input="-> @grid.setPublishMax(event)" />
+      </label>
+      <Btn class="sm:btn-sm" type="primary" icon="send" text="{R.pipeline.publishNow}"
+        busy="{@api.busy.publishPending}" click="-> @grid.publishNow()" />
+    </Fragment>
+  </PageTitle>
+
+  <Tabs items="{R.messageTabs}" value="{@grid.status}"
+    change="-> @nav.updateParam('status=' + event.value)" />
+
+  <RecordsTable table="messages" />
+</Component>

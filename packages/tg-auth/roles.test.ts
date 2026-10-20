@@ -6,7 +6,7 @@ const principal = (roles: readonly string[], enabled = true) => ({ roles, enable
 
 describe("ROLE_GROUPS", () => {
   /**
-   * §8.6 L844 — "one group per role", and the table at L842-846 lists exactly
+   * §8.6 L855 — "one group per role", and the table at L842-846 lists exactly
    * three. This module is the single definition; `tg-infra/lib/auth-stack.ts`
    * imports it to name the Cognito groups. The dependency runs this way and not
    * the other because the dashboard would otherwise pull `aws-cdk-lib` into its
@@ -30,7 +30,7 @@ describe("ROLE_GROUPS", () => {
 
 describe("hasRole", () => {
   /**
-   * §8.6 L848-849 — the grants are cumulative: `editor` is viewer "+", `admin`
+   * §8.6 L859-860 — the grants are cumulative: `editor` is viewer "+", `admin`
    * is editor "+". So a check is a floor, not an equality.
    */
   test("an admin satisfies an editor check", () => {
@@ -82,7 +82,7 @@ describe("hasRole", () => {
   });
 
   /**
-   * §8.6 L875 — "a new user is created **disabled** with no roles and must be
+   * §8.6 L882 — "a new user is created **disabled** with no roles and must be
    * enabled manually; **a disabled user is rejected at every action**." Disabling
    * is the revocation mechanism, so it has to outrank group membership: an
    * operator who disables a compromised admin has not removed them from the
@@ -95,7 +95,7 @@ describe("hasRole", () => {
   });
 
   /**
-   * §8.4 L823 — "every action ... re-checks the caller's role server-side". An
+   * §8.4 L820 — "every action ... re-checks the caller's role server-side". An
    * unauthenticated caller has no principal at all, and the check must answer
    * that question rather than throw, so a missing session cannot become a 500
    * that some error boundary swallows into a success.

@@ -1,0 +1,19 @@
+{
+  "name": "tg-api",
+  "version": "1.0.0",
+  "description": "The dashboard API (§8.4): one authenticated RPC endpoint over the actions, as a Lambda behind API Gateway.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "tg-actions": "*",
+    "tg-auth": "*",
+    "tg-aws": "*",
+    "tg-configs": "*",
+    "tg-enums": "*",
+    "tg-ports": "*",
+    "tg-utils": "*"
+  }
+}

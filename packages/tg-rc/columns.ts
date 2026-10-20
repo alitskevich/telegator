@@ -1,13 +1,13 @@
 /**
- * §8.3 L805 and L802's table columns.
+ * §8.3 L812 and L802's table columns.
  *
- * One definition per table, shared by the page and by §8.4 L816's export — L801
+ * One definition per table, shared by the page and by §8.4 L825's export — L801
  * ties them together ("filters across visible columns"), and an export whose
  * columns differed from the table it was taken from would be quietly wrong.
  */
 
 /**
- * §8.3 L801 — the Sources table; `target` replaces `tgChannel` (multi-target#3.6,
+ * §8.3 L804 — the Sources table; `target` replaces `tgChannel` (multi-target#3.6,
  * R54), and `via` shows R63's reader.
  */
 export const SOURCE_COLUMNS = [
@@ -22,7 +22,7 @@ export const SOURCE_COLUMNS = [
   "zeroYieldRuns",
 ] as const;
 
-/** §8.3 L802 — the Messages table, minus the expandable member list. */
+/** §8.3 L809 — the Messages table, minus the expandable member list. */
 export const MESSAGE_COLUMNS = [
   "id",
   "title",

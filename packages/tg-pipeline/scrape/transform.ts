@@ -7,8 +7,8 @@ import type { ItemKind } from "tg-enums/itemKind";
 import type { ChannelPost } from "tg-ports/telegram";
 
 /**
- * §3.1 L225 — the per-post transform: a parsed post plus its source become one
- * Stage A item payload (§2.2 L130–140).
+ * §3.1 L226 — the per-post transform: a parsed post plus its source become one
+ * Stage A item payload (§2.2 L131–141).
  *
  * "Per post: `id = \"{sourceId}/{messageId}\"`; strip the source's `teaser` from
  * the body; stamp `target`, `category`, `tags`, `date` = today; set `kind` to
@@ -16,12 +16,12 @@ import type { ChannelPost } from "tg-ports/telegram";
  */
 
 /**
- * The parse output of §3.1 L213–221 — R63's `ChannelPost`, which both readers
+ * The parse output of §3.1 L214–222 — R63's `ChannelPost`, which both readers
  * produce, so this transform cannot tell the web preview from MTProto.
  */
 export type TransformInput = ChannelPost;
 
-/** §3.1 L227 — "older than **3 days**". */
+/** §3.1 L228 — "older than **3 days**". */
 export const MAX_POST_AGE_DAYS = 3;
 const HOURS_PER_DAY = 24;
 const MINUTES_PER_HOUR = 60;
@@ -32,7 +32,7 @@ export const MAX_POST_AGE_MS =
   MAX_POST_AGE_DAYS * HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MS_PER_SECOND;
 
 /**
- * §3.1 L227 — is this post too old to be news?
+ * §3.1 L228 — is this post too old to be news?
  *
  * A post exactly at the cutoff is kept: the rule drops posts *older than* three
  * days, so the boundary belongs to the fresh side.
@@ -54,9 +54,9 @@ function isObsolete(postedAt: string | undefined, now: number): boolean {
 
 /**
  * Removes the source's teaser — the promotional tail an operator curates away
- * (§2.1 L114).
+ * (§2.1 L115).
  *
- * §3.1 L225 says only "strip the source's `teaser` from the body" and leaves
+ * §3.1 L226 says only "strip the source's `teaser` from the body" and leaves
  * three questions open. Recorded decisions, all three:
  *  - **All occurrences**, not the first: a teaser repeated as a header *and* a
  *    footer is the common Telegram shape, and leaving one behind would ship it.
@@ -64,14 +64,14 @@ function isObsolete(postedAt: string | undefined, now: number): boolean {
  *    channel, so it matches the post's casing already; a case-insensitive match
  *    would also eat ordinary prose that merely shares the wording.
  *  - **Re-trim afterwards**, since removing a trailing teaser leaves the
- *    separator whitespace §3.1 L217 had collapsed behind it, and that whitespace
+ *    separator whitespace §3.1 L218 had collapsed behind it, and that whitespace
  *    would otherwise decide `kind` below.
  *
  * Skipped entirely when the teaser is absent or empty — an empty needle would
  * match nothing yet still trim, changing a body the operator never asked to
  * touch.
  *
- * Note this runs on the **already tokenised** body (§3.1 L215), so a teaser
+ * Note this runs on the **already tokenised** body (§3.1 L216), so a teaser
  * containing a link — `<a href="…">Subscribe</a>` in the channel's HTML — will
  * not match `[Subscribe](#1)` and will survive. Matching HTML would mean
  * running before tokenisation, which L224 places after parsing.
@@ -87,9 +87,9 @@ function stripTeaser(body: string, teaser: string | undefined): string {
 }
 
 /**
- * §3.1 L225's classification. The order is normative: `forward` is tested
+ * §3.1 L226's classification. The order is normative: `forward` is tested
  * before `empty`, so a forwarded post with a blank body is a `forward`. Both
- * are dropped by §3.1 L227, but the counter metric there distinguishes them.
+ * are dropped by §3.1 L228, but the counter metric there distinguishes them.
  *
  * An empty-string `forwardedFrom` counts as *not* forwarded — recorded decision;
  * the spec says "if forwarded", and a blank origin channel is the parser having
@@ -104,7 +104,7 @@ function classify(
   postedAt: string | undefined,
   now: number,
 ): ItemKind {
-  // §3.1 L227 is tested first: age decides whether the post is wanted at all,
+  // §3.1 L228 is tested first: age decides whether the post is wanted at all,
   // and a stale forward is better counted as stale than as a forward.
   if (isObsolete(postedAt, now)) {
     return "obsolete";
@@ -120,7 +120,7 @@ function classify(
  *
  * `date` is a parameter rather than a clock reading: item 2.3 exports
  * `todayKey(clock)` and the orchestrator (item 3.5) calls it **once per run**,
- * so every post of a run shares one date key. That matters because §2.2 L137
+ * so every post of a run shares one date key. That matters because §2.2 L138
  * makes the key both the dedup partition and the FIFO `MessageGroupId` — a run
  * that straddled midnight would otherwise split one batch across two groups.
  *
@@ -142,7 +142,7 @@ export function transformPost(
     links: post.links,
     image: post.image,
     forwardedFrom: post.forwardedFrom,
-    // Stamped from the source; §2.2 L138 lets the analyze stage overwrite
+    // Stamped from the source; §2.2 L139 lets the analyze stage overwrite
     // `category` and merge `tags`. `target` (multi-target#3.1) passes through
     // untouched all the way to publish.
     target: source.target,

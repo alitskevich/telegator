@@ -1,0 +1,54 @@
+<Component id="Page.Dashboard">
+  <Signature purpose="§8.3 — pipeline health at a glance: the 24 h figures, the two charts and the latest messages" />
+
+  <OverviewService Ref="overview" api="@api" />
+
+  <PageTitle title="{R.dashboard.title}" subtitle="{R.common.updated} {@overview.updatedAt | clock}">
+    <Btn class="sm:btn-sm" mode="soft" icon="refresh-cw" text="{R.common.refresh}"
+      busy="{@overview.loading}" click="-> @overview.load()" />
+  </PageTitle>
+
+  <ErrorBanner If="@overview.error" text="{@overview.error}" />
+
+  <This-Stats />
+
+  <div class="grid gap-4 lg:grid-cols-3">
+    <Donut title="{R.dashboard.status}" chart="{@overview.statusChart}" empty="{R.dashboard.noData}" />
+    <Donut title="{R.dashboard.categories}" chart="{@overview.categoryChart}" empty="{R.dashboard.noData}" />
+    <This-Recent />
+  </div>
+
+  <Subcomponent id="Stats">
+    <Signature purpose="The five headline figures; unread ones show a dash, the errors card turns red above zero" />
+    <div class="grid gap-4 grid-cols-2 lg:grid-cols-5 {@overview.data ? '' : 'animate-pulse'}">
+      <StatCard label="{R.dashboard.scraped}" value="{@overview.data.scraped}" note="{R.dashboard.last24h}" />
+      <StatCard label="{R.dashboard.analyzed}" value="{@overview.data.analyzed}" note="{R.dashboard.last24h}" />
+      <StatCard label="{R.dashboard.skipped}" value="{@overview.data.skipped.total}" note="{@overview.skipped || R.dashboard.last24h}" />
+      <StatCard label="{R.dashboard.published}" value="{@overview.data.published}" note="{R.dashboard.allTime}" />
+      <div class="col-span-2 lg:col-span-1">
+        <StatCard label="{R.dashboard.errors}" value="{@overview.data.errors}" note="{R.dashboard.allDlqs}"
+          alert="{@overview.data.errors GT 0}" />
+      </div>
+    </div>
+  </Subcomponent>
+
+  <Subcomponent id="Recent">
+    <Signature purpose="The ten most recent messages, newest first" />
+    <section class="bg-base-100 rounded-box p-4 flex flex-col gap-3 min-w-0">
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="text-lg font-semibold">{R.dashboard.recent}</h2>
+        <a href="#/messages" class="btn btn-xs btn-ghost text-base-content/70">{R.dashboard.allMessages}</a>
+      </div>
+      <ul If="@overview.data.recent.length" class="flex flex-col divide-y divide-base-200">
+        <li Each="message of @overview.data.recent" class="py-2 flex flex-col gap-1 min-w-0">
+          <div class="flex items-center gap-2 min-w-0">
+            <StatusBadge status="{message.status}" />
+            <span class="truncate text-sm" title="{message.title ?? message.id}">{message.title ?? message.id}</span>
+          </div>
+          <span class="text-xs text-base-content/60">{message.category ?? '—'} · {message.date}</span>
+        </li>
+      </ul>
+      <p If="{!@overview.data.recent.length}" class="text-sm text-base-content/60 py-10">{R.dashboard.noMessages}</p>
+    </section>
+  </Subcomponent>
+</Component>

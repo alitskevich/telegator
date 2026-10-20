@@ -12,9 +12,9 @@ import { createLogger, stdoutSink } from "tg-utils/logger";
 import { runScrape, type ScrapeSummary, webReader } from "../scrape/index";
 
 /**
- * The `telegator-scrape` entry point (§7.5 L693, EventBridge `rate(30 minutes)`).
+ * The `telegator-scrape` entry point (§7.5 L694, EventBridge `rate(30 minutes)`).
  *
- * A thin wrapper, per §8.2 L792: `tg-pipeline/` holds the single
+ * A thin wrapper, per §8.2 L788: `tg-pipeline/` holds the single
  * implementation and this file only wires adapters to it.
  *
  * Everything is built on first invocation and reused after, so a cold start

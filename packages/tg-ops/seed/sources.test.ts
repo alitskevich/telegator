@@ -14,7 +14,7 @@ const exported = (extra: Record<string, unknown> = {}) => ({
   lastCount: "12",
   lastUpdated: "1770000000000",
   lastResult: "2026-02-01T00:00:00.000Z",
-  // Stat columns §9.4 L969 says to drop.
+  // Stat columns §9.4 L957 says to drop.
   members: "18432",
   views: "99120",
   adv_price: "300",
@@ -24,7 +24,7 @@ const exported = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
-describe("toSeedSource — §9.4 L969 as a migration", () => {
+describe("toSeedSource — §9.4 L957 as a migration", () => {
   test("keeps exactly §2.1's fields", () => {
     const seeded = toSeedSource(exported());
 
@@ -46,7 +46,7 @@ describe("toSeedSource — §9.4 L969 as a migration", () => {
   });
 
   /**
-   * §9.4 L969 — "minus unused stat columns". They are dropped rather than
+   * §9.4 L957 — "minus unused stat columns". They are dropped rather than
    * carried because §2.3's schema is closed (R7), and a record with extra
    * attributes would fail `SourceSchema` on the first read after seeding.
    */
@@ -66,7 +66,7 @@ describe("toSeedSource — §9.4 L969 as a migration", () => {
   });
 
   /**
-   * The export writes every field as a string. `lastCount` drives §3.1 L202's
+   * The export writes every field as a string. `lastCount` drives §3.1 L203's
    * refresh heuristic, which compares it numerically — `"12" > 20` is false but
    * `"5" > 20` is also false, and `"120" > 20` is false too, so a string cursor
    * would silently pin every source to the slowest poll rate.
@@ -117,7 +117,7 @@ describe("toSeedSource — §9.4 L969 as a migration", () => {
     /**
      * An empty string cannot be a GSI partition key — DynamoDB rejects the write
      * outright. Omitting the attribute leaves the record out of the sparse
-     * `status-index`, which is exactly what §2.1 L110 means by "any value other
+     * `status-index`, which is exactly what §2.1 L111 means by "any value other
      * than `ok` disables the source".
      */
     test("omits an empty status rather than writing one", () => {

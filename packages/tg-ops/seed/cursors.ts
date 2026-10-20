@@ -13,7 +13,7 @@ import type { Source } from "tg-domain/source";
  * The spec names no source for the live values, so they arrive as a JSON map.
  */
 
-/** §3.1 L213 captures the id from `href="https://t.me/{any}/{digits}"`. */
+/** §3.1 L214 captures the id from `href="https://t.me/{any}/{digits}"`. */
 const TELEGRAM_MESSAGE_ID = /^\d+$/;
 
 export type CursorMap = Readonly<Record<string, string>>;
@@ -55,7 +55,7 @@ export interface CursorPlan {
 /**
  * Work out what to write, without writing it.
  *
- * A backwards move is refused rather than applied. §9.5 L982 is the invariant of
+ * A backwards move is refused rather than applied. §9.5 L970 is the invariant of
  * the whole cutover — "The two systems must never publish the same Telegram
  * content concurrently — they would double-post" — and moving a cursor back
  * makes AWS re-scrape posts it has already published, which is that failure
@@ -86,7 +86,7 @@ export function planCursorReseed(sources: readonly Source[], cursors: CursorMap)
     const update = { id, from, lastItemId };
 
     if (from === undefined) {
-      // No cursor at all is the case this step exists for: §3.1 L207 omits
+      // No cursor at all is the case this step exists for: §3.1 L208 omits
       // `?after=` without one, so the first poll re-scrapes the whole visible
       // history of the channel.
       updates.push(update);

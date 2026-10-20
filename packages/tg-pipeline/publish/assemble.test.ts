@@ -90,7 +90,7 @@ function memberBlockCount(text: string): number {
 }
 
 describe("buildHeader", () => {
-  test("§3.4 L331 — <b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location, category}</b>", () => {
+  test("§3.4 L332 — <b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location, category}</b>", () => {
     const header = buildHeader({
       date: DEFAULT_DATE,
       country: "Belarus",
@@ -101,7 +101,7 @@ describe("buildHeader", () => {
     expect(header).toBe("<b>⚡️</b> <i>2026-08-29</i> <b>BELARUS, Minsk, politics</b>");
   });
 
-  test("§3.4 L340 — country is uppercased, location and category are not", () => {
+  test("§3.4 L341 — country is uppercased, location and category are not", () => {
     const header = buildHeader({
       date: DEFAULT_DATE,
       country: "belarus",
@@ -112,7 +112,7 @@ describe("buildHeader", () => {
     expect(header).toContain("<b>BELARUS, Minsk, politics</b>");
   });
 
-  test("§3.4 L340 — an absent part is omitted, and no separator is left behind", () => {
+  test("§3.4 L341 — an absent part is omitted, and no separator is left behind", () => {
     expect(buildHeader({ date: DEFAULT_DATE, country: "Belarus", category: "politics" })).toBe(
       "<b>⚡️</b> <i>2026-08-29</i> <b>BELARUS, politics</b>",
     );
@@ -121,7 +121,7 @@ describe("buildHeader", () => {
     );
   });
 
-  test("an empty or whitespace-only part counts as absent (§3.4 L340, 'non-empty')", () => {
+  test("an empty or whitespace-only part counts as absent (§3.4 L341, 'non-empty')", () => {
     expect(buildHeader({ date: DEFAULT_DATE, country: "", location: "   ", category: "war" })).toBe(
       "<b>⚡️</b> <i>2026-08-29</i> <b>war</b>",
     );
@@ -139,7 +139,7 @@ describe("buildHeader", () => {
 });
 
 describe("assembleMessage — layout", () => {
-  test("§3.4 L331–338 — header, one blank line, then the member blocks", () => {
+  test("§3.4 L332–339 — header, one blank line, then the member blocks", () => {
     const assembled = assemble(
       message({
         country: "Belarus",
@@ -200,14 +200,14 @@ describe("assembleMessage — send mode", () => {
     expect(PHOTO_SUPPRESSION_LIMIT).toBe(1012);
   });
 
-  test("§3.4 L348 — no tgId and no image is a plain sendMessage", () => {
+  test("§3.4 L349 — no tgId and no image is a plain sendMessage", () => {
     const assembled = assemble(message());
 
     expect(assembled.method).toBe("sendMessage");
     expect(assembled.photo).toBeUndefined();
   });
 
-  test("AC-4.1 / §3.4 L349 — a tgId edits, and never re-sends the photo", () => {
+  test("AC-4.1 / §3.4 L350 — a tgId edits, and never re-sends the photo", () => {
     const assembled = assemble(message({ image: "https://e.by/p.jpg" }), "4711");
 
     expect(assembled.method).toBe("editMessageText");
@@ -230,20 +230,20 @@ describe("assembleMessage — send mode", () => {
     );
   });
 
-  test("§3.4 L351 — link preview is disabled when the message has a title", () => {
+  test("§3.4 L352 — link preview is disabled when the message has a title", () => {
     expect(assemble(message({ title: "Blast in Minsk" })).disableWebPagePreview).toBe(true);
   });
 
-  test("§3.4 L351 — link preview is disabled when the message has an image", () => {
+  test("§3.4 L352 — link preview is disabled when the message has an image", () => {
     expect(assemble(message({ image: "https://e.by/p.jpg" })).disableWebPagePreview).toBe(true);
   });
 
-  test("§3.4 L351 — link preview stays enabled with neither title nor image", () => {
+  test("§3.4 L352 — link preview stays enabled with neither title nor image", () => {
     expect(assemble(message()).disableWebPagePreview).toBe(false);
   });
 });
 
-describe("assembleMessage — overflow (recorded rule, §3.4 L344 gives no truncation)", () => {
+describe("assembleMessage — overflow (recorded rule, §3.4 L345 gives no truncation)", () => {
   /** 80 distinct tokens, enough hashtag line to push a full message over 4096. */
   const MANY_TAGS = Array.from({ length: 80 }, (_, i) => `overflowtag${i}`).join(",");
 

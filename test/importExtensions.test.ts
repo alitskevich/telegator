@@ -62,23 +62,13 @@ function relativeSpecifiersIn(source: string): string[] {
 
 describe("relative import specifiers carry no extension", () => {
   /**
-   * The dashboard is bundled by Turbopack, and Turbopack does not perform
-   * TypeScript's extension substitution: `"../lib/clock.js"` is looked up as
-   * that literal path, which does not exist, and every route 500s with
-   * `Module not found`.
-   *
-   * This was invisible for the whole build because the other four consumers of
-   * this source all *do* substitute — `tsc` under `moduleResolution: "bundler"`,
-   * Vite under vitest, esbuild under `NodejsFunction`, and tsx under
-   * `cdk synth`. All four gates were green against an app that could not serve
-   * a single page.
-   *
-   * Turbopack offers no way back: its `tsconfig.json` support is `paths` and
-   * `baseUrl`, `resolveAlias` and `resolveExtensions` are next.config options
-   * for other problems, and `experimental.extensionAlias` — webpack's answer —
-   * is on Turbopack's explicit unsupported list. Extensionless is what
-   * `moduleResolution: "bundler"` means, and it is what every one of the five
-   * resolvers accepts.
+   * R62 found this the hard way: the Next.js dashboard was bundled by
+   * Turbopack, which does not perform TypeScript's extension substitution, so
+   * `"../lib/clock.js"` was looked up as that literal path and every route
+   * 500'd while all four gates stayed green. The console is esbuild-bundled now,
+   * which does substitute, but extensionless is what `moduleResolution:
+   * "bundler"` means and the one form every resolver here accepts — so the
+   * rule stays, and a future bundler cannot reopen the hole.
    */
   test("no shipped source imports a relative path with a .js extension", () => {
     const offenders = shippedSources().flatMap((path) =>

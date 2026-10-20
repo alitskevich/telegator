@@ -13,6 +13,7 @@ import { cdkContext } from "../../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../../test/support/cdkOutdir";
 import { ROLE_GROUPS, TelegatorAuthStack } from "./auth-stack";
 import { resolveConfig } from "./config";
+import { DEFAULT_WEB_ORIGINS } from "./web";
 
 // Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
 afterAll(removeIsolatedOutdirs);
@@ -40,12 +41,12 @@ const groups = (t: Template) =>
   );
 
 describe("TelegatorAuthStack", () => {
-  test("declares one user pool (§8.6 L844)", () => {
+  test("declares one user pool (§8.6 L855)", () => {
     stackFor().template.resourceCountIs("AWS::Cognito::UserPool", 1);
   });
 
   /**
-   * §8.6 L875 — "a new user is created **disabled** with no roles and must be
+   * §8.6 L882 — "a new user is created **disabled** with no roles and must be
    * enabled manually". Self-sign-up would let anyone create an enabled account
    * with no operator in the loop, so AdminCreateUser has to be the only path.
    * This is the single most security-relevant assertion in the stack.
@@ -56,7 +57,7 @@ describe("TelegatorAuthStack", () => {
     });
   });
 
-  test("declares one group per role (§8.6 L846-850)", () => {
+  test("declares one group per role (§8.6 L857-861)", () => {
     expect(groups(stackFor().template).sort()).toEqual(["admin", "editor", "viewer"]);
   });
 
@@ -76,12 +77,12 @@ describe("TelegatorAuthStack", () => {
     expect(byName.editor).toBeLessThan(byName.viewer ?? 0);
   });
 
-  /** §8.6 L844 — "hosted UI", which needs a domain. */
+  /** §8.6 L855 — "hosted UI", which needs a domain. */
   test("declares a hosted-UI domain", () => {
     stackFor().template.resourceCountIs("AWS::Cognito::UserPoolDomain", 1);
   });
 
-  test("names the pool and domain with the §9.2 L900 environment prefix", () => {
+  test("names the pool and domain with the §9.2 L906 environment prefix", () => {
     const { template } = stackFor({ env: "prod" });
 
     expect(pool(template)?.UserPoolName).toBe("telegator-prod-users");
@@ -95,26 +96,44 @@ describe("TelegatorAuthStack", () => {
   });
 
   /**
-   * The callback URL is a context parameter because §9.1 L894 deploys Auth
-   * *before* App, so the Amplify domain does not exist yet — and a lookup would
-   * break the credential-free synth gate.
+   * §9.3 — the SPA signs in and out at its root, on every origin it is served
+   * from; the same list is the API's CORS allow-list (`./web.ts`).
    */
-  test("takes its callback URLs from context", () => {
-    const { template } = stackFor({ callbackUrls: ["https://example.test/api/auth/callback"] });
-    const client = Object.values(template.findResources("AWS::Cognito::UserPoolClient"))[0];
-
-    expect(client?.Properties?.CallbackURLs).toEqual(["https://example.test/api/auth/callback"]);
-  });
-
-  test("falls back to a localhost callback so a dev synth needs no context", () => {
+  test("registers each web origin's root as a callback and a logout URL", () => {
     const client = Object.values(
       stackFor().template.findResources("AWS::Cognito::UserPoolClient"),
-    )[0];
-    const urls = client?.Properties?.CallbackURLs;
+    )[0]?.Properties;
+    const expected = DEFAULT_WEB_ORIGINS.map((origin) => `${origin}/`);
 
-    if (!Array.isArray(urls)) throw new Error("the app client declares no callback URLs");
-    expect(urls).toHaveLength(1);
-    expect(String(urls[0])).toContain("localhost");
+    expect(client?.CallbackURLs).toEqual(expected);
+    expect(client?.LogoutURLs).toEqual(expected);
+    expect(expected).toContain("https://telegator-581db.web.app/");
+    expect(expected).toContain("http://localhost:8080/");
+  });
+
+  test("takes its origins from context", () => {
+    const { template } = stackFor({ webOrigins: "https://a.example, https://b.example" });
+    const client = Object.values(template.findResources("AWS::Cognito::UserPoolClient"))[0];
+
+    expect(client?.Properties?.CallbackURLs).toEqual(["https://a.example/", "https://b.example/"]);
+  });
+
+  /** A browser cannot keep a secret; PKCE is what replaces one. */
+  test("is a public client using the authorization-code flow only", () => {
+    const client = Object.values(
+      stackFor().template.findResources("AWS::Cognito::UserPoolClient"),
+    )[0]?.Properties;
+
+    expect(client?.GenerateSecret).toBe(false);
+    expect(client?.AllowedOAuthFlows).toEqual(["code"]);
+  });
+
+  test("outputs what the console needs to start a sign-in", () => {
+    const outputs = Object.keys(stackFor().template.findOutputs("*"));
+
+    expect(outputs).toEqual(
+      expect.arrayContaining(["UserPoolId", "UserPoolClientId", "HostedUiDomain"]),
+    );
   });
 
   test("exposes the pool and client to the App stack", () => {

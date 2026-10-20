@@ -1,11 +1,12 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
+import { resources } from "tg-rc/web";
 import { describe, expect, test } from "vitest";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 
 /**
- * R62 — §8.2 L782–790's `lib/` directories, as npm workspaces under
+ * R62 — §8.2 L788–786's `lib/` directories, as npm workspaces under
  * `packages/`. The tree is still not decoration: `tg-pipeline` is the single
  * implementation of every stage, with the Lambda handlers as thin wrappers
  * beside it, and a second copy of a stage growing anywhere else is the failure
@@ -26,6 +27,7 @@ const PACKAGES = [
   "tg-auth",
   "tg-pipeline",
   "tg-actions",
+  "tg-api",
   "tg-web",
   "tg-infra",
   "tg-mcp",
@@ -143,7 +145,7 @@ describe("the package graph (R62)", () => {
     },
   );
 
-  /** §8.2 L792 at package level: only the Lambda bundles may contain a stage. */
+  /** §8.2 L776 at package level: only the Lambda bundles may contain a stage. */
   test("no workspace depends on tg-pipeline", () => {
     const dependents = PACKAGES.filter(
       (name) => manifest(name).dependencies?.["tg-pipeline"] !== undefined,
@@ -156,12 +158,20 @@ describe("the package graph (R62)", () => {
 describe("the nav (target-table#3.2)", () => {
   /** A page nothing links to is a page nobody finds. */
   test("TT-22: lists Targets between Sources and Messages", () => {
-    const layout = readFileSync(resolve(repoRoot, "packages/tg-web/app/layout.tsx"), "utf8");
-    const order = ["/sources", "/targets", "/messages"].map((href) =>
-      layout.indexOf(`href: "${href}"`),
-    );
+    const ids = resources.nav.map((item) => item.id);
+    const order = ["sources", "targets", "messages"].map((id) => ids.indexOf(id));
 
     expect(order.every((index) => index >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  /** Every nav entry is a page the shell can render, or it would land on not-found. */
+  test("every nav entry has its page template", () => {
+    const pages = readdirSync(resolve(repoRoot, "packages/tg-web/cml"), { recursive: true })
+      .map(String)
+      .filter((file) => /Page\.\w+\.xml$/.test(file))
+      .map((file) => file.replace(/^.*Page\.(\w+)\.xml$/, "$1").toLowerCase());
+
+    for (const { id } of resources.nav) expect(pages).toContain(id);
   });
 });

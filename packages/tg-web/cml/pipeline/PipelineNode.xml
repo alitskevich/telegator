@@ -1,0 +1,24 @@
+<Component id="PipelineNode">
+  <Signature purpose="One node of the pipeline diagram: a stage, a queue, the clock or Telegram"
+    description="A queue shows its depth and a DLQ chip that turns red when anything is dead-lettered; a stage shows its count. Pressing it selects it. Text wraps rather than truncates: the diagram is read, not skimmed.">
+    <Prop id="node" type="object" required="true" description="A `PipelineNode` from `src/pipeline/nodes.ts`" />
+    <Prop id="select" type="action" required="true" description="Called with `{ id }`" />
+  </Signature>
+
+  <button type="button" data-id="{node.id}" click="{select}"
+    aria-pressed="{node.selected ? 'true' : 'false'}"
+    class="w-full h-full min-w-0 text-left rounded-box border p-3 flex flex-col gap-1 cursor-pointer transition-colors duration-150 motion-safe:active:scale-[0.98] {node.selected ? 'border-primary bg-base-200' : 'border-base-200 bg-base-100 hover:border-base-content/30'} {node.alert ? 'ring-1 ring-error/60' : ''}">
+    <span class="flex items-start gap-2 text-sm font-medium leading-tight">
+      <span aria-hidden="true"
+        class="icon icon-{node.icon} shrink-0 pt-0.5 {node.kind == 'function' ? 'text-primary' : 'text-base-content/60'}"></span>
+      <span>{node.title}</span>
+    </span>
+    <span class="text-xs text-base-content/60 leading-snug">{node.caption}</span>
+    <span If="node.hasValue" class="mt-auto pt-2 flex flex-col">
+      <span class="text-2xl font-semibold leading-none">{node.value | num}</span>
+      <span class="text-xs text-base-content/60 pt-1">{node.valueLabel}</span>
+    </span>
+    <span If="{node.kind == 'queue'}"
+      class="badge badge-sm self-start mt-1 {node.alert ? 'badge-error' : 'badge-ghost'}">{R.pipeline.dlq} {node.dlq | num}</span>
+  </button>
+</Component>

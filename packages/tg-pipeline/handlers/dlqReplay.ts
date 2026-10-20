@@ -7,12 +7,12 @@ import { type DlqReplaySummary, replayDlq } from "../dlqReplay";
 
 export type { ReplayableQueue };
 /**
- * The `telegator-dlq-replay` entry point (§7.5 L697) — manual, invoked from the
- * dashboard (§8.4 L821, `admin` only).
+ * The `telegator-dlq-replay` entry point (§7.5 L698) — manual, invoked from the
+ * dashboard (§8.4 L830, `admin` only).
  *
- * A thin wrapper per §8.2 L792. Which DLQ to drain is the operator's choice, so
+ * A thin wrapper per §8.2 L788. Which DLQ to drain is the operator's choice, so
  * it arrives in the event rather than the environment; the queue pairs are
- * fixed by §7.3 L654's "each has a matching DLQ".
+ * fixed by §7.3 L655's "each has a matching DLQ".
  */
 export { REPLAYABLE_QUEUES };
 

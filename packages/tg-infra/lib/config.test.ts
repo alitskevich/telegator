@@ -14,7 +14,7 @@ import { resourceName } from "./naming";
 vi.setConfig({ testTimeout: 60_000 });
 
 describe("resourceName", () => {
-  /** §9.2 L900 requires environment-prefixed names but never gives the form. */
+  /** §9.2 L906 requires environment-prefixed names but never gives the form. */
   test("applies the telegator-{env}-{resource} scheme", () => {
     expect(resourceName("dev", "messages")).toBe("telegator-dev-messages");
     expect(resourceName("prod", "analyze")).toBe("telegator-prod-analyze");
@@ -24,7 +24,7 @@ describe("resourceName", () => {
     expect(resourceName("dev", "sources")).toBe(resourceName("dev", "sources"));
   });
 
-  /** A FIFO queue's name must end in `.fifo`; §7.3 L651-652's names omit it. */
+  /** A FIFO queue's name must end in `.fifo`; §7.3 L652-653's names omit it. */
   test("appends the .fifo suffix when asked", () => {
     expect(resourceName("dev", "aggregate", { fifo: true })).toBe("telegator-dev-aggregate.fifo");
   });
@@ -108,8 +108,8 @@ describe("resolveConfig", () => {
     expect(resolveConfig(appWith({ scheduleEnabled: "false" })).scheduleEnabled).toBe(false);
   });
 
-  /** §11.4 L1047 calls 300 s "a starting value", which makes configurability binding (R19). */
-  test("defaults the settle delay to the §3.3 L296 value", () => {
+  /** §11.4 L1035 calls 300 s "a starting value", which makes configurability binding (R19). */
+  test("defaults the settle delay to the §3.3 L297 value", () => {
     expect(resolveConfig(appWith({})).settleDelaySeconds).toBe(SETTLE_DELAY_SECONDS);
   });
 

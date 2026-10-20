@@ -1,0 +1,16 @@
+<Component id="StatCard">
+  <Signature purpose="One headline figure with its label and a short note">
+    <Prop id="label" type="string" required="true" />
+    <Prop id="value" type="any" description="The figure; null shows as an em dash, never as 0" />
+    <Prop id="note" type="string" />
+    <Prop id="alert" type="boolean" description="Someone has to act: the figure and its edge turn red" />
+    <Prop id="surface" type="enum" enum="panel,zone" default="panel"
+      description="`zone` when the card sits inside a panel, so the two never share a grade" />
+  </Signature>
+
+  <article class="{surface == 'zone' ? 'bg-base-200' : 'bg-base-100'} rounded-box p-4 flex flex-col gap-1 border-l-4 {alert ? 'border-error' : 'border-transparent'}">
+    <span class="text-sm text-base-content/70">{label}</span>
+    <span class="text-3xl font-semibold {alert ? 'text-error' : ''}">{value | num}</span>
+    <span If="note" class="text-xs text-base-content/60 truncate" title="{note}">{note}</span>
+  </article>
+</Component>

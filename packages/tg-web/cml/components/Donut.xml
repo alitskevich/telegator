@@ -1,0 +1,33 @@
+<Component id="Donut">
+  <Signature purpose="A donut chart with its legend, drawn as one CSS conic-gradient"
+    description="`chart` is `{ slices, background }` from `OverviewService`; an empty chart says so rather than drawing a hole.">
+    <Prop id="title" type="string" required="true" />
+    <Prop id="chart" type="object" required="true" />
+    <Prop id="empty" type="string" description="What an empty chart says" />
+  </Signature>
+
+  <section class="bg-base-100 rounded-box p-4 flex flex-col gap-4 min-w-0">
+    <h2 class="text-lg font-semibold">{title}</h2>
+    <Fragment If="chart.slices.length">
+      <Then>
+        <div class="flex flex-col sm:flex-row sm:items-center gap-6">
+          <div class="relative size-36 shrink-0 rounded-full" style="background: {chart.background}"
+            role="img" aria-label="{title}">
+            <div class="absolute inset-5 rounded-full bg-base-100"></div>
+          </div>
+          <ul class="flex-1 min-w-0 w-full flex flex-col gap-1.5 text-sm">
+            <li Each="slice of chart.slices" class="flex items-center gap-2">
+              <span class="size-2.5 rounded-full shrink-0" style="background: {slice.color}"></span>
+              <span class="flex-1 truncate">{slice.label}</span>
+              <span class="text-base-content/70">{slice.value | num}</span>
+              <span class="w-10 text-right text-base-content/50">{slice.fraction | share}</span>
+            </li>
+          </ul>
+        </div>
+      </Then>
+      <Else>
+        <p class="text-sm text-base-content/60 py-10">{empty}</p>
+      </Else>
+    </Fragment>
+  </section>
+</Component>

@@ -1,4 +1,4 @@
-import { RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
+import { CfnOutput, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
 import {
   AccountRecovery,
   CfnUserPoolGroup,
@@ -10,11 +10,12 @@ import {
 import type { Construct } from "constructs";
 import { ROLE_GROUPS } from "tg-enums/roles";
 import type { TelegatorConfig } from "./config";
+import { callbackUrl, webOrigins } from "./web";
 
 /**
- * §9.1 L889 — Cognito user pool, groups, app client.
+ * §9.1 L896 — Cognito user pool, groups, app client.
  *
- * §8.6 L877 is a prohibition this stack has to honour structurally: "The
+ * §8.6 L884 is a prohibition this stack has to honour structurally: "The
  * source's API handler bypasses authentication entirely when an emulator
  * environment variable is set... No code path skips authorisation." That is why
  * local development points at a real dev pool rather than at a stub, and why
@@ -32,9 +33,6 @@ export interface TelegatorAuthStackProps extends StackProps {
  */
 export { ROLE_GROUPS };
 
-/** A dev synth must not require context, so the callback falls back to localhost. */
-const DEFAULT_CALLBACK_URLS = ["http://localhost:3000/api/auth/callback"];
-
 export class TelegatorAuthStack extends Stack {
   public readonly userPool: UserPool;
   public readonly userPoolClient: UserPoolClient;
@@ -49,7 +47,7 @@ export class TelegatorAuthStack extends Stack {
     this.userPool = new UserPool(this, "UserPool", {
       userPoolName: poolName,
       /**
-       * §8.6 L875 — "a new user is created **disabled** with no roles and must be
+       * §8.6 L882 — "a new user is created **disabled** with no roles and must be
        * enabled manually". Self-sign-up would let anyone create an enabled
        * account with no operator in the loop, so `AdminCreateUser` is the only
        * path in. This is the security-critical property of the whole stack.
@@ -63,29 +61,29 @@ export class TelegatorAuthStack extends Stack {
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
-    /** §8.6 L844 — "hosted UI", which requires a domain. */
+    /** §8.6 L855 — "hosted UI", which requires a domain. */
     this.userPoolDomain = this.userPool.addDomain("HostedUiDomain", {
       cognitoDomain: { domainPrefix: poolName },
     });
 
     /**
-     * §9.1 L894 deploys Auth **before** App, so the Amplify domain does not
-     * exist yet and the callback URL cannot be derived from it. A context
-     * parameter rather than a lookup: `valueFromLookup` would turn synth into an
-     * authenticated call and break the only infrastructure gate this build has.
+     * §9.3 — the console is a static SPA that signs in and out at its root, so
+     * each origin it is served from is both a callback and a logout URL. The
+     * list is shared with the API's CORS (`./web.ts`).
      */
-    const callbackUrls = readUrls(this.node.tryGetContext("callbackUrls"), DEFAULT_CALLBACK_URLS);
-    const logoutUrls = readUrls(this.node.tryGetContext("logoutUrls"), callbackUrls);
+    const callbackUrls = webOrigins(this.node).map(callbackUrl);
 
     this.userPoolClient = this.userPool.addClient("DashboardClient", {
       userPoolClientName: config.name("dashboard"),
-      // Authorization-code flow: the implicit flow returns tokens in the URL
-      // fragment, where they land in browser history and referrer headers.
+      // Authorization-code flow with PKCE: the implicit flow returns tokens in
+      // the URL fragment, where they land in browser history and referrer
+      // headers. A public client — a browser cannot keep a secret — so the
+      // code verifier is what binds the exchange to the tab that started it.
       oAuth: {
         flows: { authorizationCodeGrant: true },
         scopes: [OAuthScope.OPENID, OAuthScope.EMAIL, OAuthScope.PROFILE],
         callbackUrls,
-        logoutUrls,
+        logoutUrls: callbackUrls,
       },
       generateSecret: false,
     });
@@ -100,12 +98,11 @@ export class TelegatorAuthStack extends Stack {
         precedence: ROLE_GROUPS.length - index,
       });
     });
-  }
-}
 
-function readUrls(raw: unknown, fallback: readonly string[]): string[] {
-  if (raw === undefined) return [...fallback];
-  if (Array.isArray(raw) && raw.every((entry) => typeof entry === "string")) return raw;
-  if (typeof raw === "string") return raw.split(",").map((url) => url.trim());
-  throw new Error(`expected a list of URLs, received ${String(raw)}`);
+    // §9.3 — what the console needs to start a sign-in; none of it is secret.
+    // `scripts/deploy-web.ts` reads these to write the console's `config.json`.
+    new CfnOutput(this, "UserPoolId", { value: this.userPool.userPoolId });
+    new CfnOutput(this, "UserPoolClientId", { value: this.userPoolClient.userPoolClientId });
+    new CfnOutput(this, "HostedUiDomain", { value: this.userPoolDomain.baseUrl() });
+  }
 }

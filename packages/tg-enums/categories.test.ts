@@ -3,7 +3,7 @@ import { CATEGORIES, CategorySchema, DROPPED_CATEGORY } from "./categories";
 
 describe("CATEGORIES", () => {
   /**
-   * R4. §5.4's heading reads "Categories (35)", §5.2 L457 says "One of the 35
+   * R4. §5.4's heading reads "Categories (35)", §5.2 L458 says "One of the 35
    * values in §5.4", and §7.7 L741 reasons from "Thirty-five category
    * dimensions". The fenced block at L498–505 contains 29 tokens. Two entries
    * (`human-rights`, `nature`) sit off the block's four-column grid, which is
@@ -16,10 +16,10 @@ describe("CATEGORIES", () => {
 
   /**
    * Asserted as the whole list, in document order. This enum constrains model
-   * output (§5.2 L431/L453) and other stages route on it, so an edit here
+   * output (§5.2 L432/L453) and other stages route on it, so an edit here
    * changes what the classifier is able to say — it must be deliberate.
    */
-  test("is §5.4 L498-505 verbatim, in document order", () => {
+  test("is §5.4 L499-506 verbatim, in document order", () => {
     expect([...CATEGORIES]).toEqual([
       "art&fashion",
       "crime",
@@ -78,8 +78,8 @@ describe("CategorySchema", () => {
 
 describe("DROPPED_CATEGORY (R5)", () => {
   /**
-   * §3.2 L257 drops items whose `category === "crime&law"`. §5.4 contains
-   * `crime`, and no `crime&law`. §5.2 L431 constrains the model's output to the
+   * §3.2 L258 drops items whose `category === "crime&law"`. §5.4 contains
+   * `crime`, and no `crime&law`. §5.2 L432 constrains the model's output to the
    * §5.4 enum via output_config.format, so the model cannot emit "crime&law" —
    * the drop rule is unreachable, its ItemsSkipped{Reason=category} metric
    * (§7.7 L733) is always zero, and crime content is published.
@@ -89,7 +89,7 @@ describe("DROPPED_CATEGORY (R5)", () => {
    * string would change what reaches production channels, which is the spec
    * owner's call and not this build's.
    */
-  test("is the literal §3.2 L257 routes on", () => {
+  test("is the literal §3.2 L258 routes on", () => {
     expect(DROPPED_CATEGORY).toBe("crime&law");
   });
 

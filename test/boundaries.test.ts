@@ -12,32 +12,38 @@ const repoRoot = resolve(import.meta.dirname, "..");
 const under = (path: string, directory: string) => path.startsWith(join(repoRoot, directory));
 
 /**
- * Shipped dashboard source only. The scan reads file *text* looking for banned
+ * Shipped source only. The scans read file *text* looking for banned
  * substrings, so a test file naming what it forbids would match itself — an
  * assertion that fails on its own vocabulary and passes once someone renames a
  * variable proves nothing about the code. The boundary being defended is what
- * the dashboard host serves (§9.3), and that is exactly the non-test tree.
+ * ships (§9.3), and that is exactly the non-test tree.
  */
-function dashboardSources(): string[] {
-  const walk = (dir: string): string[] => {
+function shippedTs(dir: string): string[] {
+  const walk = (current: string): string[] => {
     let entries: string[];
     try {
-      entries = readdirSync(dir);
+      entries = readdirSync(current);
     } catch {
       return [];
     }
     return entries.flatMap((entry) => {
-      if (entry === "node_modules" || entry === ".next") return [];
-      const path = join(dir, entry);
+      if (entry === "node_modules" || entry === "www") return [];
+      const path = join(current, entry);
       if (statSync(path).isDirectory()) return walk(path);
-      return /\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path) ? [path] : [];
+      return /\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path) && !path.endsWith(".d.ts")
+        ? [path]
+        : [];
     });
   };
-
-  return [join(repoRoot, "packages/tg-web"), join(repoRoot, "packages/tg-actions")].flatMap(walk);
+  return walk(join(repoRoot, dir));
 }
 
-describe("the §8.2 L792 boundary", () => {
+/** The dashboard: the console the browser runs, and the API that serves it. */
+function dashboardSources(): string[] {
+  return ["packages/tg-web", "packages/tg-api", "packages/tg-actions"].flatMap(shippedTs);
+}
+
+describe("the §8.2 L788 boundary", () => {
   /**
    * "**`tg-pipeline/` holds the single implementation of every stage.** The
    * Lambda handlers are thin wrappers around it... The dashboard does **not**
@@ -45,7 +51,7 @@ describe("the §8.2 L792 boundary", () => {
    * function, so 'run this now' executes the exact deployed artefact."
    *
    * A dashboard that imported a stage would run its *own copy* of that code,
-   * bundled by Amplify at a different time from the Lambda artefact. "Run this
+   * bundled into the API Lambda at a different time from the stage's artefact. "Run this
    * now" would quietly stop meaning what §8.2 says it means, and every test in
    * this build would still pass.
    */
@@ -100,10 +106,10 @@ describe("the §8.2 L792 boundary", () => {
   });
 
   /**
-   * §9.3 L910 deploys this on Amplify. A CDK import would pull the whole
-   * construct library into the server bundle to read a constant — which is what
-   * `tg-actions/context.ts` briefly did in item 5.10 for `DASHBOARD_ENV_VARS`, and
-   * what moving `ROLE_GROUPS` avoided in item 5.2.
+   * A CDK import would pull the whole construct library into the API bundle to
+   * read a constant — which is what the old `tg-actions/context.ts` briefly did
+   * in item 5.10 for `DASHBOARD_ENV_VARS`, and what moving `ROLE_GROUPS` avoided
+   * in item 5.2.
    */
   test("no infrastructure library is reachable from the dashboard", () => {
     const { packages } = reachableFrom(dashboardSources());
@@ -125,7 +131,7 @@ describe("the §8.2 L792 boundary", () => {
   });
 
   /**
-   * §8.1 L764-768 is a deletion, and it is the point of the section: the
+   * §8.1 L764-770 is a deletion, and it is the point of the section: the
    * offline-first layer is gone, "**Removed:** IndexedDB schema and stores, the
    * `downstream`/`since` protocol, `upsertBatch` reconciliation, soft-delete
    * tombstone propagation, `resetDb`, and the client cache-invalidation
@@ -148,6 +154,46 @@ describe("the §8.2 L792 boundary", () => {
    */
   test("the dashboard tree exists to be constrained", () => {
     expect(dashboardSources().length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * §8.1 — the console runs in a browser that holds no AWS credential. Whatever
+ * it bundles must therefore reach AWS only through `tg-api`, over HTTP: an SDK
+ * client compiled into the page would either fail for want of credentials or,
+ * worse, invite someone to give it some. Measured over the transitive closure,
+ * because that is what esbuild bundles.
+ */
+describe("the browser boundary (§8.1)", () => {
+  const consoleSources = () => shippedTs("packages/tg-web/src");
+
+  test("nothing the console bundles reaches the AWS SDK", () => {
+    const { packages } = reachableFrom(consoleSources());
+
+    expect([...packages].filter((name) => name.startsWith("@aws-sdk/"))).toEqual([]);
+  });
+
+  test("nor the server-side workspaces", () => {
+    const reached = [...reachableFrom(consoleSources()).files].filter((path) =>
+      ["tg-aws", "tg-api", "tg-pipeline", "tg-infra"].some((name) =>
+        under(path, `packages/${name}`),
+      ),
+    );
+
+    expect(reached).toEqual([]);
+  });
+
+  /** A browser has no `node:crypto`; one import of it breaks the bundle or the page. */
+  test("nor a Node built-in", () => {
+    const offenders = [...reachableFrom(consoleSources()).files].filter((path) =>
+      /\bfrom\s*["']node:/.test(readFileSync(path, "utf8")),
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
+  test("the console tree exists to be constrained", () => {
+    expect(consoleSources().length).toBeGreaterThan(5);
   });
 });
 
@@ -193,7 +239,7 @@ describe("the mcp-server#5.5 and #6.2 boundaries", () => {
   });
 
   /**
-   * mcp-server#6.2 — the same rule §8.2 L792 gives the dashboard, over the
+   * mcp-server#6.2 — the same rule §8.2 L788 gives the dashboard, over the
    * transitive closure: a tool must never run a local copy of a deployed
    * stage.
    */

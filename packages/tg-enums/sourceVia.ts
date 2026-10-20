@@ -1,7 +1,7 @@
 /**
  * R63 — how a source is read.
  *
- * `web` is §3.1 L207's anonymous `t.me/s/{id}` preview, which serves public
+ * `web` is §3.1 L208's anonymous `t.me/s/{id}` preview, which serves public
  * channels only. `mtproto` reads through a logged-in user account (GramJS), so
  * it also reaches groups and chats the preview cannot render.
  */

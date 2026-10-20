@@ -1,10 +1,10 @@
-import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "tg-auth/session";
+import { AuthorizationError, type Session } from "tg-auth/session";
 import type { LambdaInvoker } from "tg-aws/lambda";
 import type { Message } from "tg-domain/message";
 import type { Source } from "tg-domain/source";
 import { SOURCE_COLUMNS, TARGET_COLUMNS } from "tg-rc/columns";
 import { beforeEach, describe, expect, test } from "vitest";
-import { FakeCookieJar, FakeUserStatusReader } from "../../../test/fakes/auth";
+import { FakeUserStatusReader, sessionWith } from "../../../test/fakes/auth";
 import { manualClock } from "../../../test/fakes/clock";
 import { fakeMessageRepo, fakeSourceRepo, fakeTargetRepo } from "../../../test/fakes/db";
 import { fakeQueueProducer } from "../../../test/fakes/queues";
@@ -51,16 +51,14 @@ const message = (n: number, extra: Partial<Message> = {}): Message => ({
   ...extra,
 });
 
-let jar: FakeCookieJar;
+let session: Session | null;
 let status: FakeUserStatusReader;
-let key: Uint8Array;
 let invocations: { functionName: string; payload: unknown }[];
 let lambdaResult: unknown;
 let messages: ReturnType<typeof fakeMessageRepo>;
 let sources: ReturnType<typeof fakeSourceRepo>;
 let targets: ReturnType<typeof fakeTargetRepo>;
 let publishQueue: ReturnType<typeof fakeQueueProducer>;
-let revalidated: string[];
 const clock = manualClock(NOW);
 
 const lambda: LambdaInvoker = {
@@ -71,30 +69,23 @@ const lambda: LambdaInvoker = {
 };
 
 beforeEach(() => {
-  jar = new FakeCookieJar();
+  session = null;
   status = new FakeUserStatusReader();
-  key = newSessionKey();
   invocations = [];
   lambdaResult = {};
   messages = fakeMessageRepo([message(1), message(2, { status: "error" })]);
   sources = fakeSourceRepo([source("channel-a"), source("channel-b", { status: "paused" })]);
   targets = fakeTargetRepo([{ id: "a", type: "telegram_channel" }]);
   publishQueue = fakeQueueProducer();
-  revalidated = [];
 });
 
 function signedInAs(...roles: string[]) {
-  jar.set(SESSION_COOKIE, sealSession({ sub: SUB, roles, expiresAt: NOW + 3_600_000 }, key), {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-  });
+  session = sessionWith(SUB, roles);
   status.enable(SUB);
 }
 
 const deps = () => ({
-  auth: { jar, key, clock, status },
+  auth: { session, status },
   clock,
   lambda,
   functions: {
@@ -107,12 +98,11 @@ const deps = () => ({
   sources,
   targets,
   publishQueue,
-  revalidate: (path: string) => revalidated.push(path),
 });
 
-describe("runScraper — §8.4 L818", () => {
+describe("runScraper — §8.4 L827", () => {
   /**
-   * §8.2 L792 — "manual triggers call `lambda:InvokeFunction` on the deployed
+   * §8.2 L788 — "manual triggers call `lambda:InvokeFunction` on the deployed
    * function, so 'run this now' executes the exact deployed artefact". Importing
    * the stage instead would run the dashboard's own copy of it.
    */
@@ -145,7 +135,7 @@ describe("runScraper — §8.4 L818", () => {
   });
 });
 
-describe("replayDlq — §8.4 L821", () => {
+describe("replayDlq — §8.4 L830", () => {
   test("invokes the replay handler with the operator's choice", async () => {
     signedInAs("admin");
     lambdaResult = { replayed: 4, failed: 0 };
@@ -182,9 +172,9 @@ describe("replayDlq — §8.4 L821", () => {
   });
 });
 
-describe("republishMessage — §8.4 L819", () => {
+describe("republishMessage — §8.4 L828", () => {
   /**
-   * The ordering the ledger names. §3.4 L321 has the publish stage load the
+   * The ordering the ledger names. §3.4 L322 has the publish stage load the
    * message and drop anything not in `topublish`; a request that arrived before
    * the status write landed would be silently discarded, and the operator would
    * see a button that did nothing.
@@ -247,12 +237,6 @@ describe("republishMessage — §8.4 L819", () => {
     expect(publishQueue.sent).toHaveLength(0);
   });
 
-  test("revalidates the messages page", async () => {
-    signedInAs("admin");
-    await republishMessage({ messageId: "example/1" }, deps());
-    expect(revalidated).toEqual(["/messages"]);
-  });
-
   /**
    * multi-target#3.5 — every recorded post is current while `post.tgAt >=
    * message.ts` (D4), so without this bump a republish would send nothing.
@@ -272,7 +256,7 @@ describe("republishMessage — §8.4 L819", () => {
 
 describe("consumeQueue — R61", () => {
   /**
-   * §8.2 L792 — the dashboard runs a stage by invoking a deployed function, and
+   * §8.2 L788 — the dashboard runs a stage by invoking a deployed function, and
    * never by importing one. R61's pump is what holds the queue grants, so the
    * event names which queue rather than the dashboard reading it.
    */
@@ -287,7 +271,6 @@ describe("consumeQueue — R61", () => {
     expect(invocations).toEqual([
       { functionName: "telegator-consume", payload: { queueName: "analyze", max: 10 } },
     ]);
-    expect(revalidated).toEqual(["/queues"]);
   });
 
   /** Bounded here as well as inside the function: every message is real work. */
@@ -331,15 +314,13 @@ describe("resetSourceCursors — R60", () => {
 
     for (const id of ["channel-a", "channel-b"]) {
       const after = await sources.get(id);
-      // §3.1 L207 — an empty cursor is the no-cursor case: the base
+      // §3.1 L208 — an empty cursor is the no-cursor case: the base
       // `t.me/s/{id}`, which serves the channel's newest posts.
       expect(after?.lastItemId).toBe("");
-      // §3.1 L202 — otherwise a "Scrape now" straight after would poll nothing.
+      // §3.1 L203 — otherwise a "Scrape now" straight after would poll nothing.
       expect(after?.lastUpdated).toBe(0);
       expect(after?.zeroYieldRuns).toBe(0);
     }
-
-    expect(revalidated).toEqual(["/sources"]);
   });
 
   /** A disabled source is not polled, but it must start from the latest message
@@ -353,7 +334,7 @@ describe("resetSourceCursors — R60", () => {
     expect(paused?.lastItemId).toBe("");
   });
 
-  /** §2.1 L110-114 — the operator's own columns are not the cursor's to touch. */
+  /** §2.1 L111-115 — the operator's own columns are not the cursor's to touch. */
   test("leaves operator-owned fields alone", async () => {
     signedInAs("admin");
     await resetSourceCursors(deps());
@@ -371,7 +352,7 @@ describe("resetSourceCursors — R60", () => {
   });
 });
 
-describe("exportTable — §8.4 L816", () => {
+describe("exportTable — §8.4 L825", () => {
   test("a viewer may export", async () => {
     signedInAs("viewer");
     expect(await exportTable({ table: "sources" }, deps())).toContain("channel-a");
@@ -404,7 +385,7 @@ describe("exportTable — §8.4 L816", () => {
     ]);
   });
 
-  test("the header row is §8.3 L802's message columns", async () => {
+  test("the header row is §8.3 L809's message columns", async () => {
     signedInAs("viewer");
     const [header] = (await exportTable({ table: "messages" }, deps())).split("\n");
 
@@ -473,7 +454,7 @@ describe("exportTable — §8.4 L816", () => {
   });
 });
 
-describe("exportTable on targets — §8.4 L816", () => {
+describe("exportTable on targets — §8.4 L825", () => {
   test("TT-20: emits the TARGET_COLUMNS header", async () => {
     signedInAs("viewer");
 
@@ -510,7 +491,7 @@ describe("publishPending — R53", () => {
   });
 
   /**
-   * The whole point of the trigger: §7.3 L652 gives the publish queue a
+   * The whole point of the trigger: §7.3 L653 gives the publish queue a
    * queue-level `DelaySeconds 300` and FIFO has no per-message delay, so
    * anything enqueued waits five minutes. Only an invoke is "now".
    */
@@ -535,7 +516,7 @@ describe("publishPending — R53", () => {
   });
 
   /**
-   * §3 L193 reports a failed send in `batchItemFailures` rather than throwing,
+   * §3 L194 reports a failed send in `batchItemFailures` rather than throwing,
    * so a stage that failed answers HTTP 200 with a summary. Counting only thrown
    * invokes would show an operator three publishes when one never sent.
    */
@@ -616,12 +597,5 @@ describe("publishPending — R53", () => {
 
     await expect(publishPending({ max: 10 }, deps())).rejects.toBeInstanceOf(AuthorizationError);
     expect(invocations).toEqual([]);
-  });
-
-  test("revalidates the messages page", async () => {
-    signedInAs("admin");
-
-    await publishPending({ max: 10 }, deps());
-    expect(revalidated).toEqual(["/messages"]);
   });
 });

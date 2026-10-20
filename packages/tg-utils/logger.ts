@@ -51,7 +51,7 @@ function encode(level: LogLevel, msg: string, fields: LogFields | undefined): st
  * A structured logger emitting one JSON object per line.
  *
  * The shape is load-bearing, not cosmetic: §7.7 L741 refuses a per-category
- * CloudWatch metric and sources the dashboard's category chart (§8.5 L835) from
+ * CloudWatch metric and sources the dashboard's category chart (§8.5 L846) from
  * a Logs Insights query over analyze's logs instead. Insights discovers fields
  * from the top level of each JSON line, so caller fields are lifted there.
  */

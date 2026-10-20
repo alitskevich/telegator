@@ -17,12 +17,12 @@ import { z } from "zod";
  * do because only publish's payload is a message id.
  *
  * This is that operation for any of the three queues, and it is a Lambda rather
- * than a dashboard action for the reason §8.2 L792 gives: the dashboard must not
+ * than a dashboard action for the reason §8.2 L788 gives: the dashboard must not
  * import `tg-pipeline/`, and consuming a queue means running a stage. Its role
  * — not the web role — holds the receive and delete on the live work queues.
  *
  * It is exactly what an event source mapping does with a partial batch response
- * (§7.3 L668): receive, run, delete what did not fail. A message the stage
+ * (§7.3 L669): receive, run, delete what did not fail. A message the stage
  * reports stays on the queue for its next delivery.
  */
 
@@ -33,13 +33,13 @@ export const ConsumeInputSchema = z.object({
   max: z.number().int().positive().max(MAX_CONSUME),
 });
 
-/** One record as a stage sees it — §7.3 L668's shape, and the handlers'. */
+/** One record as a stage sees it — §7.3 L669's shape, and the handlers'. */
 export interface StageRecord {
   readonly messageId: string;
   readonly body: string;
 }
 
-/** §7.3 L668 — what a stage answers: the items it could not process. */
+/** §7.3 L669 — what a stage answers: the items it could not process. */
 export type StageRun = (records: readonly StageRecord[]) => Promise<{
   readonly batchItemFailures: ReadonlyArray<{ readonly itemIdentifier: string }>;
 }>;
@@ -74,7 +74,7 @@ export async function runConsume(input: unknown, deps: ConsumeDeps): Promise<Con
   /**
    * A throw here deletes nothing. The stage has processed an unknown amount of
    * the batch, and a redelivery is harmless — every stage is idempotent by
-   * §2.3 L180 and R51 — where a silent drop is not (§1.3 L69).
+   * §2.3 L181 and R51 — where a silent drop is not (§1.3 L69).
    */
   const { batchItemFailures } = await deps.stages[queueName](
     received.map((message) => ({ messageId: message.messageId, body: message.body })),
@@ -84,7 +84,7 @@ export async function runConsume(input: unknown, deps: ConsumeDeps): Promise<Con
 
   let consumed = 0;
   for (const message of received) {
-    // §7.3 L668 — a reported item stays on the queue. Deleting it would drop
+    // §7.3 L669 — a reported item stays on the queue. Deleting it would drop
     // work the stage has just said it could not do.
     if (failed.has(message.messageId)) continue;
     await deps.queues[queueName].delete(message.receiptHandle);

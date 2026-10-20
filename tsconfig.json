@@ -19,26 +19,23 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "jsx": "react-jsx",
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "allowJs": true,
     "incremental": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "paths": {
+      "arrmatura-web": [
+        "./packages/tg-web/src/types/arrmatura-web.d.ts"
+      ]
+    }
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx",
-    "packages/tg-web/.next/types/**/*.ts",
-    "packages/tg-web/.next/dev/types/**/*.ts"
+    "**/*.tsx"
   ],
   "exclude": [
     "node_modules",
     "cdk.out",
-    "**/.next",
-    "coverage"
+    "coverage",
+    "**/www/dist"
   ]
 }

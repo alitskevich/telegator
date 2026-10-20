@@ -1,0 +1,17 @@
+<Component id="PageTitle">
+  <Signature purpose="A page's title row: title, one line of context, and its actions on the right">
+    <Prop id="title" type="string" required="true" />
+    <Prop id="subtitle" type="string" />
+    <Slot name="default" description="The page's actions" />
+  </Signature>
+
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div class="min-w-0 flex flex-col gap-1">
+      <h1 class="text-3xl font-semibold tracking-tight">{title}</h1>
+      <p If="subtitle" class="text-sm text-base-content/70">{subtitle}</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <Slot />
+    </div>
+  </div>
+</Component>

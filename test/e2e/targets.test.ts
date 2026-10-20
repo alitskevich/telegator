@@ -55,7 +55,7 @@ beforeEach(() => {
   bot = fakeBot();
 
   world = {
-    // Re-dated to this run's clock: §3.1 L234 drops a post older than 3 days,
+    // Re-dated to this run's clock: §3.1 L235 drops a post older than 3 days,
     // and the recording's own timestamp is fixed in the past.
     fetcher: fakeFetcher({ [URL]: datedTelegramFixture("multiPost", NOW) }),
     sources: fakeSourceRepo([

@@ -23,21 +23,29 @@ npm run typecheck   # tsc --noEmit
 npm test            # vitest run
 npm run lint        # biome check .
 npm run synth       # cdk synth — no credentials needed
-npm run dev         # the dashboard (packages/tg-web), at localhost:3000
+npm run dev         # the console (packages/tg-web), at localhost:8080
 ```
 
 The first four need nothing else: no AWS account, no credentials, no network.
 
-`npm run dev` does. The dashboard reads live DynamoDB, SQS, CloudWatch and
-Cognito, so copy `packages/tg-web/.env.local.example` to `.env.local` beside it
-and fill it in — every
-variable is documented there, and §29 says where each value comes from. Without
-it the server starts and answers every route with `missing required environment
-variable`; with it but without credentials for that account, the pages render and
-the data reads fail with `AccessDeniedException`.
+`npm install` also links the private Arrmatura framework from sibling checkouts
+(`~/Projects/arrmatura`, `arrmatura-web`, `ultimus`); the console cannot build
+without them.
 
-No gate above runs a bundler, so a change can break the dashboard at runtime and
-still pass all four (§32.2).
+`npm run dev` needs the deployed stacks. The console is static: it signs in with
+Cognito in the browser and calls the dashboard API (§8, §9.3). It learns where
+both are from `packages/tg-web/www/config.json`, which
+`npm run deploy:web -- --config-only` writes from the stacks' outputs.
+
+No gate above runs the console in a browser, so a template change can render
+nothing and still pass all four (§32.2). Look at the page.
+
+## Deploying
+
+```bash
+npm run deploy                    # the stacks — a diff only; add -- --execute
+npm run deploy:web -- --execute   # the console, to Firebase Hosting (telegator-581db)
+```
 
 ## MCP server
 

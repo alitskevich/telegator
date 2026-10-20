@@ -1,9 +1,8 @@
-import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "tg-auth/session";
+import { AuthorizationError, type Session } from "tg-auth/session";
 import type { Message } from "tg-domain/message";
 import type { Source } from "tg-domain/source";
 import { beforeEach, describe, expect, test } from "vitest";
-import { FakeCookieJar, FakeUserStatusReader } from "../../../test/fakes/auth";
-import { manualClock } from "../../../test/fakes/clock";
+import { FakeUserStatusReader, sessionWith } from "../../../test/fakes/auth";
 import { fakeMessageRepo, fakeSourceRepo, fakeTargetRepo } from "../../../test/fakes/db";
 import {
   deleteRecords,
@@ -45,32 +44,22 @@ const message = (n: number): Message => ({
   posts: {},
 });
 
-let jar: FakeCookieJar;
+let session: Session | null;
 let status: FakeUserStatusReader;
-let key: Uint8Array;
-let revalidated: string[];
 let sources: ReturnType<typeof fakeSourceRepo>;
 let messages: ReturnType<typeof fakeMessageRepo>;
 let targets: ReturnType<typeof fakeTargetRepo>;
-const clock = manualClock(NOW);
 
 beforeEach(() => {
-  jar = new FakeCookieJar();
+  session = null;
   status = new FakeUserStatusReader();
-  key = newSessionKey();
-  revalidated = [];
   sources = fakeSourceRepo([source("channel-a")]);
   messages = fakeMessageRepo([message(1), message(2)]);
   targets = fakeTargetRepo([{ id: "a", type: "telegram_channel" }]);
 });
 
 function signedInAs(...roles: string[]) {
-  jar.set(SESSION_COOKIE, sealSession({ sub: SUB, roles, expiresAt: NOW + 3_600_000 }, key), {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-  });
+  session = sessionWith(SUB, roles);
   status.enable(SUB);
 }
 
@@ -78,11 +67,10 @@ const deps = () => ({
   sources,
   messages,
   targets,
-  auth: { jar, key, clock, status },
-  revalidate: (path: string) => revalidated.push(path),
+  auth: { session, status },
 });
 
-describe("upsertRecord — §8.4 L812", () => {
+describe("upsertRecord — §8.4 L821", () => {
   test("an editor may patch a writable source field", async () => {
     signedInAs("editor");
 
@@ -102,7 +90,7 @@ describe("upsertRecord — §8.4 L812", () => {
   });
 
   /**
-   * §8.4 L823 — "every action ... re-checks the caller's role server-side". The
+   * §8.4 L820 — "every action ... re-checks the caller's role server-side". The
    * action is the boundary; a hidden button is not one.
    */
   test("a viewer is rejected and writes nothing", async () => {
@@ -132,8 +120,8 @@ describe("upsertRecord — §8.4 L812", () => {
 
   describe("the writable-field allowlist", () => {
     /**
-     * §2.1 L110-114's "Written by" column. `lastItemId` is the scrape cursor and
-     * "the sole duplicate-suppression mechanism" (§2.1 L115) — an operator
+     * §2.1 L111-115's "Written by" column. `lastItemId` is the scrape cursor and
+     * "the sole duplicate-suppression mechanism" (§2.1 L116) — an operator
      * editing it would silently re-scrape or skip a range of history.
      */
     test("a scrape-owned source field is rejected", async () => {
@@ -170,7 +158,7 @@ describe("upsertRecord — §8.4 L812", () => {
     });
 
     /**
-     * R37. `memberCount` is `size(members)` by §2.3 L155's invariant, `status`
+     * R37. `memberCount` is `size(members)` by §2.3 L156's invariant, `status`
      * is a pipeline state machine with `republishMessage` as its only correct
      * transition, and `date` partitions `date-index`.
      */
@@ -184,7 +172,7 @@ describe("upsertRecord — §8.4 L812", () => {
       }
     });
 
-    test("the message allowlist is §8.3 L802's descriptive columns", () => {
+    test("the message allowlist is §8.3 L809's descriptive columns", () => {
       expect([...MESSAGE_WRITABLE_FIELDS]).toEqual(["title", "category", "tgChannel"]);
     });
 
@@ -219,28 +207,9 @@ describe("upsertRecord — §8.4 L812", () => {
       ).rejects.toThrow();
     });
   });
-
-  test("revalidates the table's page", async () => {
-    signedInAs("editor");
-    await upsertRecord(
-      { table: "sources", id: "channel-a", delta: { category: "sports" } },
-      deps(),
-    );
-
-    expect(revalidated).toEqual(["/sources"]);
-  });
-
-  test("does not revalidate when the write was refused", async () => {
-    signedInAs("viewer");
-    await expect(
-      upsertRecord({ table: "sources", id: "channel-a", delta: { category: "s" } }, deps()),
-    ).rejects.toThrow();
-
-    expect(revalidated).toEqual([]);
-  });
 });
 
-describe("deleteRecords — §8.4 L813", () => {
+describe("deleteRecords — §8.4 L822", () => {
   /** "soft delete, sets `deleted: true`". The row survives; R16 hides it from reads. */
   test("sets the flag rather than removing the row", async () => {
     signedInAs("editor");
@@ -277,18 +246,11 @@ describe("deleteRecords — §8.4 L813", () => {
     signedInAs("editor");
     await expect(deleteRecords({ table: "messages", ids: [] }, deps())).rejects.toThrow();
   });
-
-  test("revalidates the table's page", async () => {
-    signedInAs("editor");
-    await deleteRecords({ table: "sources", ids: ["channel-a"] }, deps());
-
-    expect(revalidated).toEqual(["/sources"]);
-  });
 });
 
-describe('upsertRecord as add — §8.3 L801\'s "add"', () => {
+describe('upsertRecord as add — §8.3 L804\'s "add"', () => {
   /**
-   * §8.4 L812 calls this `upsertRecord`, and the Sources table offers "add", so
+   * §8.4 L821 calls this `upsertRecord`, and the Sources table offers "add", so
    * a delta for an id that does not exist creates the row. A bare UpdateItem
    * would create a *partial* one — no `lastCount`, no `zeroYieldRuns` — and
    * §3.1's refresh heuristic and §4.1's staleness alarm both read those, so the
@@ -346,7 +308,7 @@ describe('upsertRecord as add — §8.3 L801\'s "add"', () => {
 
 describe("loadMembers — R26", () => {
   /**
-   * §8.3 L802 wants an expandable member list, and §7.2 L640 projects `members`
+   * §8.3 L809 wants an expandable member list, and §7.2 L641 projects `members`
    * on no index. So the list query returns `memberCount` and expanding one row
    * issues a base-table GetItem — this action. Rendering every member list from
    * the index result is the defect R26 exists to prevent, and it would fail
@@ -371,7 +333,7 @@ describe("loadMembers — R26", () => {
     expect(members[0]?.summary).toBe("first");
   });
 
-  /** §3.4 L323 sorts members by `ts` for stable ordering; the list shows the same. */
+  /** §3.4 L324 sorts members by `ts` for stable ordering; the list shows the same. */
   test("orders members oldest first, as the published message does", async () => {
     signedInAs("viewer");
     messages = fakeMessageRepo([
@@ -391,7 +353,7 @@ describe("loadMembers — R26", () => {
     ]);
   });
 
-  /** §8.4 L816 makes reading a `viewer` right; every action still re-checks. */
+  /** §8.4 L825 makes reading a `viewer` right; every action still re-checks. */
   test("an unauthenticated caller is rejected", async () => {
     await expect(loadMembers({ messageId: "example/1" }, deps())).rejects.toBeInstanceOf(
       AuthorizationError,
@@ -423,7 +385,6 @@ describe("upsertRecord on targets — target-table#3.2", () => {
     await expect(targets.get("a")).resolves.toMatchObject({
       messageTemplate: "{header}\n\n{body}",
     });
-    expect(revalidated).toContain("/targets");
   });
 
   test("TT-19: a create supplies the schema's defaults", async () => {
@@ -465,13 +426,12 @@ describe("upsertRecord on targets — target-table#3.2", () => {
   });
 });
 
-describe("deleteRecords on targets — §8.4 L814", () => {
+describe("deleteRecords on targets — §8.4 L823", () => {
   test("TT-20: an editor soft-deletes a target", async () => {
     signedInAs("editor");
 
     await deleteRecords({ table: "targets", ids: ["a"] }, deps());
 
     await expect(targets.listAll()).resolves.toEqual([]);
-    expect(revalidated).toContain("/targets");
   });
 });

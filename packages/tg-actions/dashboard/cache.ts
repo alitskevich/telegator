@@ -3,7 +3,7 @@ import type { MetricDimensionName, MetricName } from "tg-ports/metrics";
 import type { Clock } from "tg-utils/clock";
 
 /**
- * §8.5 L838 — "All CloudWatch reads are cached 60 s ... so a refresh does not
+ * §8.5 L849 — "All CloudWatch reads are cached 60 s ... so a refresh does not
  * re-query."
  *
  * Applied by decorating the ports rather than by wrapping each card, so the rule

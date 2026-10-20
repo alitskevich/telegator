@@ -19,7 +19,7 @@ export const METRIC_NAMES = [
   "MessagesMerged", // aggregate
   "MessagesPublished", // publish
   "MessagesEdited", // publish
-  "DedupCandidateCount", // aggregate, alarms above 500 (§7.2 L644)
+  "DedupCandidateCount", // aggregate, alarms above 500 (§7.2 L645)
   "MemberCapReached", // aggregate
   "TelegramApiErrors", // publish,   dim Method
   "SourceStale", // scrape,    dim Source
@@ -34,14 +34,14 @@ export const METRIC_NAMES = [
    * can recover afterwards.
    */
   "DedupAdjudicated", // aggregate, R50 — band pairs sent to the model
-  "DedupAdjudicationFailed", // aggregate, R50 — failed calls, which split (§10.3 L1011)
+  "DedupAdjudicationFailed", // aggregate, R50 — failed calls, which split (§10.3 L999)
 ] as const;
 
 export type MetricName = (typeof METRIC_NAMES)[number];
 
 /**
  * The three dimension names §7.7 uses. Casing is the spec's: §7.7 L731/L729 write
- * `Reason` while §3.2 L257 writes `reason`, and CloudWatch dimension names are
+ * `Reason` while §3.2 L258 writes `reason`, and CloudWatch dimension names are
  * case-sensitive — two spellings would split one metric into two (R31).
  */
 export type MetricDimensionName = "Source" | "Reason" | "Method";
@@ -52,7 +52,7 @@ export type MetricDimensions = Partial<Record<MetricDimensionName, string>>;
  * §7.7 L733 — the values `ItemsSkipped` carries in its `Reason` dimension.
  *
  * Here rather than in `tg-pipeline/analyze/route.ts` because both the stage that
- * emits them and §8.5 L831's card that reads them need the same list, and §8.2
+ * emits them and §8.5 L842's card that reads them need the same list, and §8.2
  * L788 forbids the dashboard from reaching a pipeline stage to get it.
  * CloudWatch cannot enumerate a dimension's values, so this list is the only
  * thing keeping the emitted set and the queried set in step.

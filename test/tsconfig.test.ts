@@ -25,15 +25,10 @@ const tsconfig = () =>
  */
 describe("the tsc gate covers the whole tree", () => {
   /**
-   * Contains the two wide globs, rather than being exactly them.
-   *
-   * `next dev` rewrites this file — it adds `.next/types/**` to `include`, sets
-   * `jsx`, and expands the formatting — so pinning the array made the tree dirty
-   * every time anyone started the dev server, and the guard failed for a reason
-   * that had nothing to do with coverage. What matters is that no file is left
-   * unchecked, and that survives Next's additions.
+   * Contains the two wide globs, rather than being exactly them: what matters is
+   * that no file is left unchecked, not the array's exact spelling.
    */
-  test("include carries the two wide globs, whatever else Next adds", () => {
+  test("include carries the two wide globs", () => {
     const include = tsconfig().include ?? [];
 
     expect(include).toContain("**/*.ts");
@@ -42,27 +37,24 @@ describe("the tsc gate covers the whole tree", () => {
 
   /**
    * A directory-scoped entry is the shape the old `include` had, and the one
-   * that left four categories of file unchecked. Next only ever adds globs
-   * under `.next/`, so anything else scoped to a source directory is a
-   * regression rather than tooling.
+   * that left four categories of file unchecked, so anything scoped to a source
+   * directory is a regression.
    */
   test("no include entry narrows the tree to a source directory", () => {
-    const narrowing = (tsconfig().include ?? []).filter(
-      (pattern) => !pattern.startsWith("**/") && !pattern.includes(".next/"),
-    );
+    const narrowing = (tsconfig().include ?? []).filter((pattern) => !pattern.startsWith("**/"));
 
     expect(narrowing).toEqual([]);
   });
 
   /**
    * Without these, the widened include drags in every generated artefact:
-   * `.next/` alone contains thousands of files, and `cdk.out/` holds bundled
-   * Lambda output that was never written to be type-checked.
+   * `cdk.out/` holds bundled Lambda output and `www/dist/` the console's bundle,
+   * neither written to be type-checked.
    */
   test("only build output is excluded", () => {
     const exclude = tsconfig().exclude ?? [];
 
-    for (const directory of ["node_modules", "cdk.out", "**/.next"]) {
+    for (const directory of ["node_modules", "cdk.out", "**/www/dist"]) {
       expect(exclude).toContain(directory);
     }
   });

@@ -1,0 +1,96 @@
+<Component id="PipelinePanel">
+  <Signature purpose="What the selected node holds and what an operator may do to it"
+    description="Reads `@pipeline`. Admin actions render only for an admin; the API re-checks the role regardless (§8.4)." />
+
+  <!-- Bare `section` with an id: `PipelineService.select` scrolls to it on a phone. -->
+  <section id="pipeline-panel" class="bg-base-100 rounded-box p-4 sm:p-6 flex flex-col gap-4 scroll-mt-20">
+    <Selector On="{@pipeline.selected.kind}">
+      <Case When="queue"><This-Queue /></Case>
+      <Case When="function"><This-Stage /></Case>
+      <Case When="trigger"><This-Stage /></Case>
+      <Case When="sink"><This-Stage /></Case>
+      <Case When="default">
+        <p class="text-sm text-base-content/60">{R.pipeline.selectHint}</p>
+      </Case>
+    </Selector>
+  </section>
+
+  <Subcomponent id="Heading">
+    <Signature purpose="The selected node's icon, title and caption" />
+    <div class="flex items-center gap-3">
+      <span class="icon icon-{@pipeline.selected.icon} text-2xl text-primary" aria-hidden="true"></span>
+      <div class="flex flex-col">
+        <h2 class="text-lg font-semibold">{@pipeline.selected.title}</h2>
+        <span class="text-xs text-base-content/60">{@pipeline.selected.caption}</span>
+      </div>
+    </div>
+  </Subcomponent>
+
+  <Subcomponent id="Stage">
+    <Signature purpose="A stage, the clock or Telegram: what it does, and its trigger when it has one" />
+    <This-Heading />
+    <p If="@pipeline.selected.detail" class="text-sm text-base-content/70 max-w-[65ch]">{@pipeline.selected.detail}</p>
+    <div If="{@api.canAdmin AND @pipeline.selected.id == 'scrape'}" class="flex flex-wrap gap-2">
+      <Btn type="primary" class="sm:btn-sm" icon="play" text="{R.pipeline.scrapeNow}"
+        busy="{@api.busy.runScraper}" click="-> @pipeline.scrapeNow()" />
+    </div>
+    <div If="{@pipeline.selected.id == 'publish'}" class="flex flex-wrap items-center gap-2">
+      <Fragment If="@api.canAdmin">
+        <label class="input sm:input-sm w-44">
+          <span class="text-base-content/60">{R.pipeline.publishMax}</span>
+          <input type="number" min="1" max="10" class="grow" value="{@pipeline.publishMax}"
+            input="-> @pipeline.setPublishMax(event)" />
+        </label>
+        <Btn type="primary" class="sm:btn-sm" icon="send" text="{R.pipeline.publishNow}"
+          busy="{@api.busy.publishPending}" click="-> @pipeline.publishNow()" />
+      </Fragment>
+      <a href="#/messages?status=topublish" class="btn btn-sm btn-ghost">{R.pipeline.openMessages}</a>
+    </div>
+  </Subcomponent>
+
+  <Subcomponent id="Queue">
+    <Signature purpose="A queue: depth, dead letters, the four queue actions and the last DLQ peek" />
+    <This-Heading />
+    <div class="grid grid-cols-2 gap-4 max-w-md">
+      <StatCard label="{R.pipeline.inQueue}" value="{@pipeline.selected.value}" surface="zone" />
+      <StatCard label="{R.pipeline.deadLetters}" value="{@pipeline.selected.dlq}"
+        alert="{@pipeline.selected.alert}" surface="zone" />
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <Btn class="sm:btn-sm" mode="soft" icon="eye" text="{R.pipeline.inspect}"
+        busy="{@api.busy.inspect}" click="-> @pipeline.inspect()" />
+      <Btn If="{@api.canAdmin AND @pipeline.selected.value GT 0}" class="sm:btn-sm" mode="soft" icon="zap"
+        text="{@pipeline.consumeLabel}" busy="{@api.busy.consume}" click="-> @pipeline.consume()" />
+      <Fragment If="{@api.canAdmin AND @pipeline.selected.dlq GT 0}">
+        <This-Recovery />
+      </Fragment>
+    </div>
+    <This-Peek />
+  </Subcomponent>
+
+  <Subcomponent id="Recovery">
+    <Signature purpose="Replay or discard a non-empty DLQ; the discard is armed by its first press" />
+    <label class="input sm:input-sm w-40">
+      <span class="text-base-content/60">{R.pipeline.replayMax}</span>
+      <input type="number" min="1" class="grow" value="{@pipeline.replayMax}"
+        input="-> @pipeline.setReplayMax(event)" />
+    </label>
+    <Btn class="sm:btn-sm" type="primary" icon="rotate-ccw" text="{R.pipeline.replay}"
+      busy="{@api.busy.replay}" click="-> @pipeline.replay()" />
+    <Btn class="sm:btn-sm" type="error" mode="{@pipeline.armedPurge ? null : 'soft'}" icon="trash-2"
+      text="{@pipeline.purgeLabel}" busy="{@api.busy.purge}" click="-> @pipeline.purge()" />
+  </Subcomponent>
+
+  <Subcomponent id="Peek">
+    <Signature purpose="The bodies read from the DLQ, as text: a payload is third-party content" />
+    <Fragment If="@pipeline.peek">
+      <p If="{!@pipeline.peek.length}" class="text-sm text-base-content/60">{R.pipeline.emptyDlq}</p>
+      <ul If="@pipeline.peek.length" class="flex flex-col gap-2">
+        <li Each="letter of @pipeline.peek" class="bg-base-200 rounded-box p-3 flex flex-col gap-1">
+          <span class="text-xs text-base-content/60">{letter.attempts}</span>
+          <code class="text-xs whitespace-pre-wrap break-all">{letter.body}</code>
+        </li>
+      </ul>
+    </Fragment>
+  </Subcomponent>
+</Component>

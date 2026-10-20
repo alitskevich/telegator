@@ -1,0 +1,27 @@
+<Component id="Page.Pipeline">
+  <Signature purpose="§8.3 — the whole pipeline as one live diagram, with every manual trigger on the node it acts on"
+    description="Select a stage or a queue; its panel below holds its figures and its actions. Depths refresh every 30 s." />
+
+  <PipelineService Ref="pipeline" api="@api" />
+
+  <PageTitle title="{R.pipeline.title}" subtitle="{R.pipeline.subtitle}">
+    <span class="text-xs text-base-content/60">{R.common.updated} {@pipeline.updatedAt | clock}</span>
+    <Btn class="sm:btn-sm" mode="soft" icon="refresh-cw" text="{R.common.refresh}"
+      busy="{@pipeline.loading}" click="-> @pipeline.load()" />
+  </PageTitle>
+
+  <ErrorBanner If="@pipeline.error" text="{@pipeline.error}" />
+
+  <section class="bg-base-100 rounded-box p-4 sm:p-6 overflow-x-auto">
+    <ol class="flex flex-col xl:flex-row xl:items-stretch gap-1.5 min-w-0">
+      <li Each="node of @pipeline.nodes"
+        class="flex flex-col xl:flex-row items-center gap-1.5 {node.kind == 'function' ? 'xl:flex-[1.3]' : 'xl:flex-1'} min-w-0">
+        <PipelineNode node="{node}" select="-> @pipeline.select(event)" />
+        <span If="{node.kind != 'sink'}" aria-hidden="true"
+          class="icon icon-arrow-right shrink-0 text-base-content/30 rotate-90 xl:rotate-0"></span>
+      </li>
+    </ol>
+  </section>
+
+  <PipelinePanel />
+</Component>

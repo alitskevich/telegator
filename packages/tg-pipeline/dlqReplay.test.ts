@@ -63,7 +63,7 @@ describe("replayDlq", () => {
     expect(dlq.deleted).toEqual(["rh-a/1", "rh-a/3"]);
   });
 
-  /** §8.4 L821 — `replayDlq(queueName, max)`; the operator bounds the drain. */
+  /** §8.4 L830 — `replayDlq(queueName, max)`; the operator bounds the drain. */
   test("moves at most max messages", async () => {
     const { dlq, source, logger } = setup([message("a/1"), message("a/2"), message("a/3")]);
 
@@ -92,7 +92,7 @@ describe("replayDlq", () => {
   });
 
   /**
-   * §3.3 L276 relies on the FIFO group to serialise one date's items; losing it
+   * §3.3 L277 relies on the FIFO group to serialise one date's items; losing it
    * on a replay would let two invocations process the same date concurrently
    * and create duplicate messages.
    */
@@ -107,7 +107,7 @@ describe("replayDlq", () => {
   /**
    * The deduplication id is deliberately NOT reused. SQS silently discards a
    * FIFO message repeating a MessageDeduplicationId inside the five-minute
-   * window, so a prompt replay would vanish with no error. §3.5 L370 is what
+   * window, so a prompt replay would vanish with no error. §3.5 L371 is what
    * makes a fresh id safe: "Because aggregate is idempotent (§2.3) and publish
    * checks status before sending, replay is safe at any time." A duplicate
    * delivery is harmless; a silently swallowed replay is not.
@@ -138,7 +138,7 @@ describe("replayDlq", () => {
     expect(source.sent[0]?.body).toBe(JSON.stringify({ messageId: "a/1" }));
   });
 
-  test("logs the replay count, the operator's only receipt (§3.5 L368)", async () => {
+  test("logs the replay count, the operator's only receipt (§3.5 L369)", async () => {
     const { dlq, source, sink, logger } = setup([message("a/1")]);
 
     await replayDlq({ dlq, source, logger }, { max: 10 });

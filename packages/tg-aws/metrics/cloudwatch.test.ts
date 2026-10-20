@@ -117,7 +117,7 @@ describe("createCloudWatchMetrics", () => {
   });
 
   /**
-   * §8.5 L829-831 reads these with the `Sum` statistic, so N identical data
+   * §8.5 L840-842 reads these with the `Sum` statistic, so N identical data
    * points and one summed datum chart the same — and one datum is cheaper.
    */
   test("aggregates repeated counts of the same name and dimensions into one summed datum", async () => {

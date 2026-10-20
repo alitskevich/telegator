@@ -1,0 +1,14 @@
+<Component id="Infra">
+  <Signature purpose="Platform services every screen relies on: toasts, hash routing and the browser bridge"
+    description="Wraps the whole app, so `@toaster`, `@nav` and `@browser` resolve from anywhere below it." />
+
+  <ToastService Ref="toaster" />
+  <NavigationService Ref="nav" />
+  <BrowserService Ref="browser" title="{R.app.name}" />
+
+  <Slot />
+
+  <!-- Bottom right, clear of every page's title-row actions. Inline style:
+       ToastList's own `top-16` would otherwise win over a class. -->
+  <ToastList style="top: auto; bottom: 1.5rem" />
+</Component>

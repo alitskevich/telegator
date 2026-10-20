@@ -1,15 +1,15 @@
 import { z } from "zod";
 
 /**
- * The boundaries of §8.6 L844's Cognito hosted UI. Each is an interface with an
- * in-memory fake because every one of them is a network call, and no test in
- * this build touches the network.
+ * The boundaries of §8.6's Cognito sign-in, as the API sees it. Each is an
+ * interface with an in-memory fake because every one of them is a network call,
+ * and no test in this build touches the network.
  */
 
 /**
- * The claims the dashboard reads from a verified ID token. Cognito sends more;
- * this is the subset authorisation depends on, so an unexpected claim cannot
- * quietly become an input to a role decision.
+ * The claims the API reads from a verified ID token. Cognito sends more; this is
+ * the subset authorisation depends on, so an unexpected claim cannot quietly
+ * become an input to a role decision.
  */
 export const IdTokenClaimsSchema = z.object({
   sub: z.string().min(1),
@@ -22,51 +22,19 @@ export const IdTokenClaimsSchema = z.object({
 
 export type IdTokenClaims = z.infer<typeof IdTokenClaimsSchema>;
 
-/** An OIDC token response from the Cognito `/oauth2/token` endpoint. */
-export interface TokenSet {
-  readonly idToken: string;
-  readonly accessToken: string;
-  readonly refreshToken?: string;
-  readonly expiresIn: number;
-}
-
-/** §8.2 L779 — `api/auth/[...]/route.ts`, the authorization-code exchange. */
-export interface TokenEndpoint {
-  exchangeAuthorizationCode(code: string, redirectUri: string): Promise<TokenSet>;
-}
-
 /** Verifies an ID token's signature, issuer, audience and expiry. Throws if invalid. */
 export interface IdTokenVerifier {
   verify(idToken: string): Promise<IdTokenClaims>;
 }
 
 /**
- * §8.6 L875 — "a new user is created **disabled** ... a disabled user is
- * rejected at every action".
+ * §8.6 — "a new user is created **disabled** ... a disabled user is rejected at
+ * every action".
  *
- * A port rather than a cookie field, because the whole point of the rule is that
- * it takes effect for a session that is already signed in. Anything cached at
- * sign-in would leave a disabled operator working until their token expired.
+ * A port rather than a token claim, because the whole point of the rule is that
+ * it takes effect for a caller who is already signed in. Anything read from the
+ * token would leave a disabled operator working until it expired.
  */
 export interface UserStatusReader {
   isEnabled(sub: string): Promise<boolean>;
-}
-
-export interface CookieOptions {
-  readonly httpOnly: boolean;
-  readonly secure: boolean;
-  readonly sameSite: "lax" | "strict" | "none";
-  readonly path: string;
-  readonly maxAge?: number;
-}
-
-/**
- * The subset of Next's cookie store this uses. Narrow on purpose: `cookies()`
- * is request-scoped and async, and injecting it keeps the session logic testable
- * without a request.
- */
-export interface CookieJar {
-  get(name: string): string | undefined;
-  set(name: string, value: string, options: CookieOptions): void;
-  delete(name: string): void;
 }

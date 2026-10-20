@@ -12,7 +12,7 @@ import { type NameOptions, resourceName } from "./naming";
  * infrastructure gate into an authenticated call.
  */
 
-/** §9.2 L900 — two environments, isolated by AWS account. */
+/** §9.2 L906 — two environments, isolated by AWS account. */
 export const ENVIRONMENTS = ["dev", "prod"] as const;
 
 export type Environment = (typeof ENVIRONMENTS)[number];
@@ -27,14 +27,14 @@ export interface TelegatorConfig {
    */
   readonly scheduleEnabled: boolean;
   /**
-   * §3.3 L296 and §7.3 L652. §11.4 L1047 records 300 s as "a starting value",
+   * §3.3 L297 and §7.3 L653. §11.4 L1035 records 300 s as "a starting value",
    * which makes configurability binding (R19) — and R19 also records that SQS
    * FIFO supports only a queue-level delay, so this is a stack parameter rather
    * than something a producer sets per message.
    */
   readonly settleDelaySeconds: number;
   /**
-   * R40 — §7.5 L699: a reservation is creatable only while the account keeps 5
+   * R40 — §7.5 L700: a reservation is creatable only while the account keeps 5
    * concurrent executions unreserved, and a cold account's entire quota is 5.
    *
    * Its own parameter rather than a dev-only branch, for R23's reason: the

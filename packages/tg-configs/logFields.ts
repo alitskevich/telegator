@@ -1,9 +1,9 @@
 /**
  * Log field and message names that something other than the emitting stage reads.
  *
- * `tg-aws/observability.ts` builds §8.5 L835's Logs Insights query from these,
+ * `tg-aws/observability.ts` builds §8.5 L846's Logs Insights query from these,
  * so the query cannot drift from what the analyze stage writes. They live here
- * rather than in `tg-pipeline/analyze/index.ts` because §8.2 L792 forbids the
+ * rather than in `tg-pipeline/analyze/index.ts` because §8.2 L788 forbids the
  * dashboard from reaching a pipeline stage at all — and importing a stage for
  * two string constants would put it in the Amplify bundle, which is exactly the
  * dependency the section exists to prevent.

@@ -13,7 +13,7 @@ import type { Clock } from "tg-utils/clock";
 import type { Slice } from "tg-utils/ui/pie";
 
 /**
- * §8.5 L827-836 — one named function per card.
+ * §8.5 L838-847 — one named function per card.
  *
  * Named rather than assembled inline in the page so each is testable against the
  * fakes, and so §8.5's table maps onto something a reader can find. Every
@@ -23,7 +23,7 @@ import type { Slice } from "tg-utils/ui/pie";
 export const DAY_MS = 86_400_000;
 export const WEEK_MS = 604_800_000;
 
-/** §8.5 L836 — "first 10". */
+/** §8.5 L847 — "first 10". */
 export const RECENT_MESSAGE_LIMIT = 10;
 
 export const last24Hours = (clock: Clock): TimeWindow => ({
@@ -48,7 +48,7 @@ export interface SkippedItems {
 }
 
 /**
- * §8.5 L831 — Sum by `Reason`.
+ * §8.5 L842 — Sum by `Reason`.
  *
  * The reasons come from `SKIP_REASONS`, the list the analyze stage dimensions
  * with, so every reason appears with a zero rather than vanishing from the card
@@ -79,12 +79,12 @@ export const messagesPublished = (messages: MessageRepo): Promise<number> =>
  *
  * The reader itself keeps throwing. An adapter that swallowed its own errors
  * would hide a deleted queue or a lost IAM grant from every caller — including
- * the queues page of §8.2 L780, where the state of a specific queue is the
+ * the queues page of §8.2 L776, where the state of a specific queue is the
  * thing an operator is looking at. This is only the *overview* deciding that
  * one dead source is worth less than the seven cards that do not depend on it,
  * which is the argument `categoryChart` already makes for Logs Insights.
  *
- * `null` and not `0`: §8.5 L833 makes DLQ depth the "Errors" card, and a zero
+ * `null` and not `0`: §8.5 L844 makes DLQ depth the "Errors" card, and a zero
  * there is a specific, load-bearing claim that the pipeline is healthy.
  */
 export async function readDepth(
@@ -99,7 +99,7 @@ export async function readDepth(
 }
 
 /**
- * §8.5 L833 — "Sum of all DLQ depths", current.
+ * §8.5 L844 — "Sum of all DLQ depths", current.
  *
  * In-flight messages count: a message a replay is mid-way through is still a
  * failure that has not been resolved, and omitting it would make the card dip
@@ -132,7 +132,7 @@ export interface PipelineQueueUrls {
   readonly publish: string;
 }
 
-/** §8.5 L834 — "Queue depths + message status counts", current. */
+/** §8.5 L845 — "Queue depths + message status counts", current. */
 export async function statusChart(
   queues: QueueDepthReader,
   messages: MessageRepo,
@@ -164,7 +164,7 @@ export async function statusChart(
 }
 
 /**
- * §8.5 L835 — the category distribution, over 7 days of analyze logs.
+ * §8.5 L846 — the category distribution, over 7 days of analyze logs.
  *
  * A failed or timed-out query yields no slices instead of propagating. Logs
  * Insights is the slowest and least reliable of §8.5's four sources, and the
@@ -181,7 +181,7 @@ export async function categoryChart(logs: CategoryLogReader, window: TimeWindow)
 }
 
 /**
- * §8.5 L836 — "`status-index`, `ts` descending, first 10" (R36).
+ * §8.5 L847 — "`status-index`, `ts` descending, first 10" (R36).
  *
  * `status-index` is partitioned by status, so there is no single query for "the
  * newest messages" regardless of status. Each status is queried for its newest

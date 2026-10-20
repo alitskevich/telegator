@@ -25,7 +25,7 @@ import { parseTarget, REGION } from "tg-ops/target";
  * this script exists to find.
  */
 
-/** §7.2 L637's table, environment-prefixed per §9.2 L900. */
+/** §7.2 L638's table, environment-prefixed per §9.2 L906. */
 const SOURCES_RESOURCE = "sources";
 
 const WRITE = "--write";

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * §8.6 L844-850. One Cognito group per role, least privileged first.
+ * §8.6 L855-861. One Cognito group per role, least privileged first.
  *
  * This module — not the CDK stack — is where the list lives. `tg-infra/lib/auth-stack.ts`
  * imports it to name the groups, so the Cognito group names and the dashboard's

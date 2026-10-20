@@ -2,11 +2,15 @@
 node_modules/
 
 # build output
-.next/
 out/
 dist/
 cdk.out/
 *.tsbuildinfo
+.firebase/
+firebase-debug.log
+
+# §9.3 — written by `npm run deploy:web` from the stacks' outputs, per environment.
+packages/tg-web/www/config.json
 
 # environment
 .env*
@@ -34,3 +38,6 @@ data/
 .spectomat/state.json
 .spectomat/state.json.tmp.*
 .spectomat/pointer.md
+
+# Browser-check scratch (Playwright MCP screenshots and harnesses).
+.playwright-mcp/

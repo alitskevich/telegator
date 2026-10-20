@@ -9,7 +9,7 @@
  */
 
 /**
- * §9.2 L900 — one region.
+ * §9.2 L906 — one region.
  *
  * Not a flag. A script pointed at another region does not fail; it builds or
  * addresses a second, silent copy of the pipeline, which is far worse than an
@@ -23,7 +23,7 @@ const DEFAULT_ENV = "dev";
 
 export interface Target {
   /**
-   * §9.2 L900's environment. Passed through as a string rather than validated
+   * §9.2 L906's environment. Passed through as a string rather than validated
    * against a list: `resolveConfig` already rejects an unknown one by name, and
    * `tg-ops` does not import `tg-infra` — the dependency runs the other way.
    */

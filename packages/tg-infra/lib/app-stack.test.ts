@@ -3,21 +3,18 @@ import { Template } from "aws-cdk-lib/assertions";
 import { afterAll, describe, expect, test, vi } from "vitest";
 import { cdkContext } from "../../../test/support/cdkContext";
 import { isolatedOutdir, removeIsolatedOutdirs } from "../../../test/support/cdkOutdir";
-import { DASHBOARD_APP_ROOT, TelegatorAppStack } from "./app-stack";
+import { RPC_PATH, TelegatorAppStack } from "./app-stack";
 import { TelegatorAuthStack } from "./auth-stack";
 import { resolveConfig } from "./config";
 import { TelegatorDataStack } from "./data-stack";
 import { TelegatorPipelineStack } from "./pipeline-stack";
 import { TelegatorQueueStack } from "./queue-stack";
+import { DEFAULT_WEB_ORIGINS } from "./web";
 
 // Item 10.0 — without this each synth leaves ~9 MB of bundles behind.
 afterAll(removeIsolatedOutdirs);
 
 vi.setConfig({ testTimeout: 60_000 });
-
-/** A syntactically real ARN with a zeroed account id — no account id enters this repo. */
-const SESSION_SECRET_ARN =
-  "arn:aws:secretsmanager:eu-central-1:000000000000:secret:telegator/session-key-AbCdEf";
 
 const cache = new Map<string, Template>();
 
@@ -44,21 +41,10 @@ function templateFor(context: Record<string, unknown> = {}): Template {
   return template;
 }
 
-const amplifyApp = (t: Template) =>
-  Object.values(t.findResources("AWS::Amplify::App"))[0]?.Properties;
-
-const amplifyBranch = (t: Template) =>
-  Object.values(t.findResources("AWS::Amplify::Branch"))[0]?.Properties;
-
-/**
- * The context a real deploy supplies. Both keys are required together —
- * `repositoryConnection` returns nothing on either alone — so they travel as
- * one object rather than as two arguments a test could half-apply.
- */
-const CONNECTED = {
-  repository: "https://github.com/example/telegator",
-  githubTokenSecretName: "telegator-dev-github-token",
-} as const;
+const apiFunction = (t: Template) =>
+  Object.values(t.findResources("AWS::Lambda::Function")).find(
+    (r) => r.Properties?.FunctionName === "telegator-dev-api",
+  )?.Properties;
 
 const policyStatements = (t: Template) =>
   Object.values(t.findResources("AWS::IAM::Policy")).flatMap(
@@ -70,49 +56,60 @@ const policyStatements = (t: Template) =>
 const actionsOf = (statement: Record<string, unknown>) => [statement.Action].flat().map(String);
 
 describe("TelegatorAppStack", () => {
-  test("declares one Amplify app (§9.1 L891)", () => {
-    templateFor().resourceCountIs("AWS::Amplify::App", 1);
+  test("declares the API function, named with the §9.2 environment prefix", () => {
+    expect(apiFunction(templateFor())).toBeDefined();
+  });
+
+  /** §8.4 — one route, and it is authorised at the edge as well as in the Lambda. */
+  test("routes POST /rpc through the Cognito JWT authorizer", () => {
+    const template = templateFor();
+    const routes = Object.values(template.findResources("AWS::ApiGatewayV2::Route"));
+
+    expect(routes).toHaveLength(1);
+    expect(routes[0]?.Properties?.RouteKey).toBe(`POST ${RPC_PATH}`);
+    expect(routes[0]?.Properties?.AuthorizationType).toBe("JWT");
+    template.resourceCountIs("AWS::ApiGatewayV2::Authorizer", 1);
+  });
+
+  /** The authorizer accepts only this pool's ID tokens for this app client. */
+  test("the authorizer checks the pool's issuer and the client's audience", () => {
+    const authorizer = Object.values(
+      templateFor().findResources("AWS::ApiGatewayV2::Authorizer"),
+    )[0]?.Properties;
+
+    expect(authorizer?.AuthorizerType).toBe("JWT");
+    expect(JSON.stringify(authorizer?.JwtConfiguration?.Issuer)).toContain("cognito-idp");
+    expect(authorizer?.JwtConfiguration?.Audience).toHaveLength(1);
   });
 
   /**
-   * The app must actually carry the role, not merely coexist with it. The L1
-   * construct accepts an unknown property silently, so a misspelled key here
-   * synthesises an app with no role and every §8.5 query fails at runtime with
-   * an access error naming nothing useful.
+   * §9.3 — the browser calls from the Hosting origin, so the API must answer
+   * its preflight; the origins are the same list Cognito's callbacks use.
    */
-  test("attaches the dashboard role to the app", () => {
-    expect(amplifyApp(templateFor())?.IAMServiceRole).toBeDefined();
+  test("allows CORS from exactly the web origins", () => {
+    const api = Object.values(templateFor().findResources("AWS::ApiGatewayV2::Api"))[0]?.Properties;
+
+    expect(api?.CorsConfiguration?.AllowOrigins).toEqual([...DEFAULT_WEB_ORIGINS]);
+    expect(api?.CorsConfiguration?.AllowHeaders).toEqual(
+      expect.arrayContaining(["authorization", "content-type"]),
+    );
   });
 
-  /**
-   * §9.3 L910 — Amplify Hosting "supports the App Router (SSR, server actions,
-   * streaming) natively with no OpenNext adapter or Fargate service". Only the
-   * WEB_COMPUTE platform runs server-side; WEB would deploy a static export and
-   * every server action in §8.4 would 404.
-   */
-  test("runs on WEB_COMPUTE, the only platform that serves §8.4's server actions", () => {
-    expect(amplifyApp(templateFor())?.Platform).toBe("WEB_COMPUTE");
+  test("outputs the RPC url the console calls", () => {
+    expect(Object.keys(templateFor().findOutputs("*"))).toContain("ApiUrl");
   });
 
-  test("names the app with the §9.2 L900 environment prefix", () => {
-    expect(amplifyApp(templateFor({ env: "prod" }))?.Name).toBe("telegator-prod-dashboard");
+  /** API Gateway gives up at 30 s; a longer Lambda would run on unobserved. */
+  test("times out inside API Gateway's 30 s ceiling", () => {
+    expect(apiFunction(templateFor())?.Timeout).toBeLessThan(30);
   });
 
   describe("environment variables", () => {
-    const variables = (t: Template): Record<string, string> => {
-      const declared = amplifyApp(t)?.EnvironmentVariables;
-      if (!Array.isArray(declared)) throw new Error("the app declares no environment variables");
-      return Object.fromEntries(
-        declared.map((entry: { Name: string; Value: string }) => [entry.Name, entry.Value]),
-      );
+    const variables = (t: Template): Record<string, unknown> => {
+      const declared = apiFunction(t)?.Environment?.Variables;
+      if (declared === undefined) throw new Error("the function declares no environment variables");
+      return declared as Record<string, unknown>;
     };
-
-    /** R62 — Amplify finds a workspace app only when both of these name it. */
-    test("names the tg-web workspace as the monorepo app root", () => {
-      expect(DASHBOARD_APP_ROOT).toBe("packages/tg-web");
-      expect(variables(templateFor()).AMPLIFY_MONOREPO_APP_ROOT).toBe(DASHBOARD_APP_ROOT);
-      expect(amplifyApp(templateFor())?.BuildSpec).toContain(`appRoot: ${DASHBOARD_APP_ROOT}`);
-    });
 
     test("carries both table names, so §8.5's cards can query them", () => {
       const names = Object.keys(variables(templateFor()));
@@ -121,7 +118,7 @@ describe("TelegatorAppStack", () => {
       expect(names).toContain("TELEGATOR_MESSAGES_TABLE");
     });
 
-    test("carries every queue and DLQ url §8.5 L833 and §8.2 L780 need", () => {
+    test("carries every queue and DLQ url §8.5 L844 and §8.2 L788 need", () => {
       const names = Object.keys(variables(templateFor()));
 
       for (const name of [
@@ -135,22 +132,16 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
-     * §8.6's hosted UI. `readAuthConfig` in `tg-configs/auth.ts` requires six
-     * variables; the stack must set the five it owns, or every sign-in fails at
-     * runtime with a message naming one of them.
+     * §8.6 — `readAuthConfig` in `tg-configs/auth.ts` needs the pool and the
+     * client to verify a token, and nothing else: there is no cookie key and
+     * no app URL any more, because the browser owns the sign-in.
      */
-    test("carries the hosted-UI configuration the dashboard reads", () => {
+    test("carries the Cognito ids the verifier needs, and no session secret", () => {
       const names = Object.keys(variables(templateFor()));
 
-      for (const required of [
-        "TELEGATOR_USER_POOL_ID",
-        "TELEGATOR_USER_POOL_CLIENT_ID",
-        "TELEGATOR_COGNITO_DOMAIN",
-        "TELEGATOR_APP_URL",
-        "TELEGATOR_SESSION_SECRET_ARN",
-      ]) {
-        expect(names).toContain(required);
-      }
+      expect(names).toContain("TELEGATOR_USER_POOL_ID");
+      expect(names).toContain("TELEGATOR_USER_POOL_CLIENT_ID");
+      expect(names).not.toContain("TELEGATOR_SESSION_SECRET_ARN");
     });
 
     const dynamoStatements = (t: Template) =>
@@ -163,7 +154,7 @@ describe("TelegatorAppStack", () => {
      * calls `get`, `listAll` (a Scan), `put`, `patch` and `softDelete` on
      * sources, and `get`, `queryByStatus`, `countByStatus`, `patch` and
      * `softDelete` on messages. Every write is an UpdateItem or a PutItem —
-     * §8.4 L814's delete is soft, so it is an update.
+     * §8.4 L823's delete is soft, so it is an update.
      */
     test("holds only the DynamoDB actions §8.4's pages and actions perform", () => {
       const actions = new Set(
@@ -184,7 +175,7 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
-     * The rule §8.4 L814 states — "Deletes are **soft**, matching the source" —
+     * The rule §8.4 L823 states — "Deletes are **soft**, matching the source" —
      * expressed as a permission. An operator's delete sets `deleted: true`; a
      * role that could also delete the row makes that promise unenforceable.
      */
@@ -205,7 +196,7 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
-     * §8.5 L835's category chart is a Logs Insights query over the analyze log
+     * §8.5 L846's category chart is a Logs Insights query over the analyze log
      * group, and `logsInsightsCategoryReader` takes the group name as an
      * argument. Without this variable the chart has nothing to query, and the
      * role's existing logs:StartQuery grant would be pointed at nothing.
@@ -214,17 +205,7 @@ describe("TelegatorAppStack", () => {
       expect(Object.keys(variables(templateFor()))).toContain("TELEGATOR_ANALYZE_LOG_GROUP");
     });
 
-    /**
-     * The secret's ARN is configuration; its value never is. A literal key here
-     * would put it in the CloudFormation template and in this repository.
-     */
-    test("carries the session secret's arn and not its value", () => {
-      const declared = variables(templateFor({ sessionSecretArn: SESSION_SECRET_ARN }));
-
-      expect(declared.TELEGATOR_SESSION_SECRET_ARN).toBe(SESSION_SECRET_ARN);
-    });
-
-    /** §8.4 L818/L817 — runScraper and replayDlq invoke by function name. */
+    /** §8.4 L827/L817 — runScraper and replayDlq invoke by function name. */
     test("carries the two function names the manual triggers invoke", () => {
       const names = Object.keys(variables(templateFor()));
 
@@ -232,13 +213,6 @@ describe("TelegatorAppStack", () => {
       expect(names).toContain("TELEGATOR_DLQ_REPLAY_FUNCTION_NAME");
       // R53 — "Publish now" invokes the publish stage, so its name travels too.
       expect(names).toContain("TELEGATOR_PUBLISH_FUNCTION_NAME");
-    });
-
-    test("carries the Cognito ids the session layer needs (§8.6 L844)", () => {
-      const names = Object.keys(variables(templateFor()));
-
-      expect(names).toContain("TELEGATOR_USER_POOL_ID");
-      expect(names).toContain("TELEGATOR_USER_POOL_CLIENT_ID");
     });
   });
 
@@ -253,7 +227,7 @@ describe("TelegatorAppStack", () => {
 
     /**
      * §7.6 L716 scopes the invoke grant to "the scraper and the replay
-     * handler". §8.2 L792 is why that matters: the dashboard must not import
+     * handler". §8.2 L776 is why that matters: the dashboard must not import
      * tg-pipeline/, so invoking is its only route into the pipeline — and a
      * broader grant would let it invoke the stages directly, defeating the
      * boundary.
@@ -276,7 +250,7 @@ describe("TelegatorAppStack", () => {
       expect(serialised).toContain("consumeFunction");
     });
 
-    /** R24 — §8.5 L835's chart needs GetQueryResults; StartQuery alone returns nothing. */
+    /** R24 — §8.5 L846's chart needs GetQueryResults; StartQuery alone returns nothing. */
     test("may both start a Logs Insights query and read its results", () => {
       const logs = policyStatements(templateFor()).flatMap(actionsOf);
 
@@ -284,7 +258,7 @@ describe("TelegatorAppStack", () => {
       expect(logs).toContain("logs:GetQueryResults");
     });
 
-    /** R24 — §8.4 L819's republishMessage "enqueues", which §7.6 L716 omits. */
+    /** R24 — §8.4 L828's republishMessage "enqueues", which §7.6 L716 omits. */
     test("may send to the publish queue, which republishMessage requires", () => {
       const sends = policyStatements(templateFor()).filter((s) =>
         actionsOf(s).includes("sqs:SendMessage"),
@@ -293,7 +267,7 @@ describe("TelegatorAppStack", () => {
       expect(sends.length).toBeGreaterThan(0);
     });
 
-    /** R24 — §8.2 L780's "DLQ inspection" needs more than queue depth. */
+    /** R24 — §8.2 L776's "DLQ inspection" needs more than queue depth. */
     test("may receive from the DLQs, which DLQ inspection requires", () => {
       const receives = policyStatements(templateFor()).flatMap(actionsOf);
 
@@ -327,7 +301,7 @@ describe("TelegatorAppStack", () => {
     });
 
     /**
-     * R34 revises R24, narrowing rather than relaxing it: §8.6 L875 requires
+     * R34 revises R24, narrowing rather than relaxing it: §8.6 L882 requires
      * that a disabled user is rejected at every action, and enforcing that needs
      * a live read of one field. `AdminGetUser` is that read, and the only
      * Cognito action this role may hold.
@@ -342,7 +316,7 @@ describe("TelegatorAppStack", () => {
 
     /**
      * Named individually, because "exactly one action" is a rule a future edit
-     * can satisfy while swapping which one. These are the §8.6 L850 grants that
+     * can satisfy while swapping which one. These are the §8.6 L861 grants that
      * have no route, page or action behind them.
      */
     test("is granted no user-management API", () => {
@@ -364,7 +338,7 @@ describe("TelegatorAppStack", () => {
 
     /**
      * `logs:StartQuery` supports resource-level scoping, and the dashboard
-     * queries exactly one log group — §8.5 L835's category chart over the
+     * queries exactly one log group — §8.5 L846's category chart over the
      * analyze logs, the only group `tg-aws/observability.ts` is ever
      * constructed with. On `*` this role could run Insights queries against
      * every log group in the account, which for an operator console is a
@@ -383,7 +357,7 @@ describe("TelegatorAppStack", () => {
        *
        * R41 makes the group a construct this stack owns and hands to the
        * function, so the reference is an `Fn::ImportValue` of its `Arn`. The
-       * implicitly managed group it replaced was not the 90-day one §11.5 L1048
+       * implicitly managed group it replaced was not the 90-day one §11.5 L1036
        * requires. What is asserted is unchanged: one statement, never `*`.
        */
       const resource = JSON.stringify(starts[0]?.Resource);
@@ -407,19 +381,11 @@ describe("TelegatorAppStack", () => {
       expect(actionsOf(reads[0] ?? {})).not.toContain("logs:StartQuery");
     });
 
-    /**
-     * The cookie sealing key forges admin sessions, so the role reads it from
-     * Secrets Manager at runtime (`tg-pipeline/handlers/publish.ts` does the same for the
-     * bot token) rather than carrying it as an Amplify environment variable
-     * anyone who can describe the app could read.
-     */
-    test("may read the session secret, and only that secret", () => {
-      const reads = policyStatements(templateFor({ sessionSecretArn: SESSION_SECRET_ARN })).filter(
-        (statement) => actionsOf(statement).includes("secretsmanager:GetSecretValue"),
-      );
+    /** The browser owns the sign-in now, so the API reads no secret at all. */
+    test("may read no secret", () => {
+      const actions = policyStatements(templateFor()).flatMap(actionsOf);
 
-      expect(reads).toHaveLength(1);
-      expect(reads[0]?.Resource).toBe(SESSION_SECRET_ARN);
+      expect(actions).not.toContain("secretsmanager:GetSecretValue");
     });
 
     /**
@@ -460,57 +426,6 @@ describe("TelegatorAppStack", () => {
       expect(new Set(actionsOf(onTargets[0] ?? {}))).toEqual(
         new Set(["dynamodb:GetItem", "dynamodb:Scan", "dynamodb:PutItem", "dynamodb:UpdateItem"]),
       );
-    });
-  });
-
-  /**
-   * R52. The branch, which is what Amplify actually builds and serves — see
-   * `addBranch` in the stack for why §9.1 L891 does not list it.
-   */
-  describe("the deployed branch", () => {
-    /**
-     * The property the whole infrastructure gate rests on: a synth with no
-     * context must stay credential-free and must not declare a branch Amplify
-     * has no repository to build from.
-     */
-    test("is absent until a repository is connected", () => {
-      templateFor().resourceCountIs("AWS::Amplify::Branch", 0);
-    });
-
-    test("is declared once the repository context is supplied", () => {
-      templateFor(CONNECTED).resourceCountIs("AWS::Amplify::Branch", 1);
-    });
-
-    /**
-     * An Amplify app's `Ref` is its ARN and the branch takes the bare id, so
-     * this asserts the resolved shape rather than merely that something is set:
-     * the ARN form deploys and then fails to build.
-     */
-    test("takes the app's id rather than its arn", () => {
-      expect(amplifyBranch(templateFor(CONNECTED))?.AppId).toEqual({
-        "Fn::GetAtt": [expect.stringContaining("DashboardApp"), "AppId"],
-      });
-    });
-
-    /**
-     * The `WEB_COMPUTE`/`WEB` mistake one level down: `Framework` is free text,
-     * so a value Amplify does not recognise is accepted and the branch builds
-     * as a static site, where every server action of §8.4 would 404.
-     */
-    test("builds Next.js server-side, so §8.4's server actions run", () => {
-      expect(amplifyBranch(templateFor(CONNECTED))?.Framework).toBe("Next.js - SSR");
-    });
-
-    test("defaults to the trunk and takes a branch from context", () => {
-      expect(amplifyBranch(templateFor(CONNECTED))?.BranchName).toBe("main");
-      expect(amplifyBranch(templateFor({ ...CONNECTED, branch: "release" }))?.BranchName).toBe(
-        "release",
-      );
-    });
-
-    test("marks the §9.2 L900 environment on the branch", () => {
-      expect(amplifyBranch(templateFor(CONNECTED))?.Stage).toBe("DEVELOPMENT");
-      expect(amplifyBranch(templateFor({ ...CONNECTED, env: "prod" }))?.Stage).toBe("PRODUCTION");
     });
   });
 

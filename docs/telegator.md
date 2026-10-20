@@ -6,7 +6,7 @@ keywords: [telegator, aws, nextjs, specification, pipeline, sqs, dynamodb, openr
 
 # Telegator
 
-An automated news pipeline on AWS, with a Next.js operator dashboard.
+An automated news pipeline on AWS, with an operator console on Firebase Hosting.
 
 This is the project's only document. It has three parts, and they answer three
 different questions:
@@ -17,7 +17,7 @@ different questions:
 | **II — AWS explained** (§12–§24) | What are these services, and what do they cost you? | New to AWS, or new to this repository |
 | **III — Record** (§25–§27) | Why is the code not exactly Part I? | A comment cites `R#`, or something surprises you |
 
-**Part I is normative.** Code cites it by section and line (`§3.4 L316`), and
+**Part I is normative.** Code cites it by section and line (`§3.4 L317`), and
 `test/specCitations.test.ts` fails if a citation stops resolving. Where the code
 diverges from Part I, the divergence is a **reconciliation** with a number, and
 §25 is the register of all of them.
@@ -87,14 +87,15 @@ flowchart TD
   Agg --> AI
   Pub --> SM["Secrets Manager<br/>bot token"]
   Scrape & Analyze & Agg & Pub --> CW["CloudWatch<br/>metrics, logs, alarms"]
-  Dash["Next.js dashboard"] --> DDB
-  Dash --> CW
-  Dash --> Cog["Cognito<br/>who is signed in"]
+  Dash["Console<br/>Firebase Hosting"] --> Cog["Cognito<br/>who is signed in"]
+  Dash --> Api["Dashboard API<br/>API Gateway + Lambda"]
+  Api --> DDB
+  Api --> CW
 ```
 
 **scrape → analyse → aggregate → publish.** Posts are classified, deduplicated into stories, and published — each story as a single Telegram message that is edited in place as more sources report it.
 
-The dashboard never calls pipeline code directly. It reads the same tables and may invoke two Lambdas by name; `test/boundaries.test.ts` enforces that wall (§8.2).
+The dashboard never calls pipeline code directly. Its API reads the same tables and may invoke the deployed functions by name; `test/boundaries.test.ts` enforces that wall (§8.2).
 
 ---
 
@@ -621,11 +622,11 @@ This is recorded, not fixed. Correcting it means changing the rule — a contain
 | Duplicate detection | Firestore `findNearest` | Date-partitioned query + in-memory scoring (§6) |
 | Scraper | Cloud Scheduler + Functions | EventBridge rule + Lambda |
 | Stage execution | Scheduled polling | SQS event source mappings |
-| HTTP API | `onRequest` handler | Next.js server actions |
+| HTTP API | `onRequest` handler | API Gateway HTTP API + one Lambda (§8.4) |
 | Auth | Firebase Auth | Amazon Cognito |
 | Secrets | Firebase secrets | Secrets Manager (Telegram + OpenRouter) |
 | AI | Gemini REST | OpenRouter (Claude, Messages API) |
-| Hosting | Firebase Hosting | §9.3 |
+| Hosting | Firebase Hosting | Firebase Hosting, static (§9.3) |
 | Pipeline metrics | Table scans in the browser | CloudWatch metrics + Logs Insights |
 
 ### 7.2 DynamoDB design
@@ -704,7 +705,6 @@ Reserved concurrency is creatable only while the account keeps 5 concurrent exec
 | --- | --- | --- |
 | `telegator/telegram-bot-token` | Secrets Manager | `publish` |
 | `telegator/openrouter-api-key` | Secrets Manager | `analyze`, `aggregate` |
-| session-cookie key | Secrets Manager | dashboard |
 
 Per-function least privilege:
 
@@ -713,7 +713,7 @@ Per-function least privilege:
 - `aggregate` → consume the aggregate queue; read/write `messages`; `sqs:SendMessage` on publish; `secretsmanager:GetSecretValue` on the OpenRouter key ARN
 - `publish` → consume the publish queue; `GetItem`/`UpdateItem` on `messages`; `secretsmanager:GetSecretValue` on the bot-token ARN
 - `dlq-replay` → receive on all DLQs, send on all source queues
-- Dashboard role → read both tables, write `sources`/`messages`, `cloudwatch:GetMetricData`, `cloudwatch:PutMetricData` (namespace-conditioned), `logs:StartQuery`, `sqs:GetQueueAttributes`, `lambda:InvokeFunction` on the scraper and the replay handler, `cognito-idp:AdminGetUser`
+- Dashboard API role → read both tables, write `sources`/`messages`, `cloudwatch:GetMetricData`, `cloudwatch:PutMetricData` (namespace-conditioned), `logs:StartQuery`, `sqs:GetQueueAttributes`, `lambda:InvokeFunction` on the scraper and the replay handler, `cognito-idp:AdminGetUser`
 
 "Read/write" is a description, not a grant: a stage that never deletes does not get `DeleteItem`. And a `Query` against an index authorises against the **index ARN**, not the table's — a grant on the table alone passes every test and fails at runtime.
 
@@ -761,52 +761,61 @@ Both literals are shared constants, because the emitter and the query are in lay
 
 ### 8.1 Architecture decision
 
-**Server-rendered. The offline-first layer is deleted.**
+**A static console over an authenticated API. The offline-first layer stays deleted.**
 
-The source dashboard maintained an IndexedDB mirror of all seven collections, filled by a delta-sync protocol with a per-collection `ts` watermark. For an internal operator dashboard over a small dataset, App Router server components querying DynamoDB per request give the same UX with none of that machinery.
+The console is an Arrmatura single-page app, served as static files from Firebase Hosting (§9.3). It holds no AWS credential. Everything it shows or changes goes through one HTTP endpoint — `POST /rpc` on an API Gateway HTTP API — backed by one Lambda that runs §8.4's actions under the dashboard role of §7.6.
+
+The source dashboard maintained an IndexedDB mirror of all seven collections, filled by a delta-sync protocol with a per-collection `ts` watermark. For an internal operator dashboard over a small dataset, one API read per page gives the same UX with none of that machinery.
 
 **Removed:** IndexedDB schema and stores, the `downstream`/`since` protocol, `upsertBatch` reconciliation, soft-delete tombstone propagation, `resetDb`, and the client cache-invalidation surface.
 
-**Cost:** filtering and sorting become server round-trips. At these volumes it is not perceptible.
+**Cost:** search, filters and sort run in the browser over the rows one read returned, and every write is followed by a reload. At these volumes it is not perceptible.
 
-### 8.2 Route tree
+### 8.2 Layout and routes
 
 ```
-app/
-  layout.tsx                      Shell, nav, Cognito session provider
-  page.tsx                        Dashboard — pipeline health
-  sources/page.tsx
-  messages/page.tsx               ?status=topublish
-  queues/page.tsx                 Queue depths + DLQ inspection/replay
-  api/auth/[...cognito]/route.ts  Cognito callbacks
-lib/
-  db/                             DynamoDB clients — sources.ts, messages.ts
-  queues/                         SQS producers and payload schemas (Zod)
-  pipeline/                       Stage implementations
-  telegram/                       Bot client, HTML parser
-  ai/                             OpenRouter classification and adjudication
-  dedup/                          Match key, score, batch algorithm
-actions/                          Server actions (§8.4)
+packages/
+  tg-web/              The console (Arrmatura): static, served by Firebase Hosting
+    cml/               Templates — app shell, dashboard, pipeline, records
+    src/services/      AuthService, ApiService, GridService, OverviewService, PipelineService
+    src/               Pure logic — auth/ (PKCE, hosted-UI URLs), grid/, pipeline/, api/
+    www/               The hosted root — index.html, dist/ (build output), config.json
+  tg-api/              The API Lambda — actions.ts (the registry), http.ts (RPC), handler.ts
+  tg-actions/          The actions' cores (§8.4) and the §8.5 computations
+  tg-pipeline/         Stage implementations — never reached by the dashboard
 ```
 
-**`lib/pipeline/` holds the single implementation of every stage.** The Lambda handlers are thin wrappers around it, built from this same repository. The dashboard does **not** import it — manual triggers call `lambda:InvokeFunction` on the deployed function, so "run this now" executes the exact deployed artefact.
+**`tg-pipeline` holds the single implementation of every stage.** The Lambda handlers are thin wrappers around it, built from this same repository. The dashboard does **not** import it — manual triggers call `lambda:InvokeFunction` on the deployed function, so "run this now" executes the exact deployed artefact.
 
-`test/boundaries.test.ts` checks this over the **transitive** closure of `app/` and `actions/`, along with `aws-cdk-lib`. A constant needed by both layers moves to a module neither owns.
+`test/boundaries.test.ts` checks this over the **transitive** closure of `tg-web`, `tg-api` and `tg-actions`, along with `aws-cdk-lib`. A constant needed by both layers moves to a module neither owns. A second wall stands in front of the browser: nothing the console bundles may reach the AWS SDK, `tg-aws`, `tg-api` or a Node built-in.
+
+The routes are hash routes, so the host serves one `index.html` for every path:
+
+| Route | Page |
+| --- | --- |
+| `#/` | Dashboard — pipeline health |
+| `#/pipeline` | The pipeline as one diagram, with every manual trigger |
+| `#/sources` | Sources |
+| `#/targets` | Targets |
+| `#/messages?status=topublish` | Messages, one tab per status |
 
 ### 8.3 Pages
 
 | Page | Content |
 | --- | --- |
-| **Dashboard** | Stat cards (items scraped / analysed / skipped 24 h, messages published), status and category charts from CloudWatch, queue-depth strip, 10 most recent messages |
-| **Sources** | Table of id, status, tgChannel, category, `teaser`, lastCount, lastResult, `zeroYieldRuns`; inline edit; add; delete; export; **Scrape now** trigger |
+| **Dashboard** | Stat cards (items scraped / analysed / skipped 24 h, messages published, dead letters), status and category charts, 10 most recent messages |
+| **Pipeline** | §1.4's chain as one interactive diagram — the schedule, the four stages, the three queues between them, Telegram — with each queue's depth and dead-letter count, refreshed every 30 s. Selecting a node opens its panel: a stage's purpose and trigger (**Scrape now**, **Publish now**); a queue's **Consume one batch**, DLQ inspection, **Replay** and an armed **Discard all** |
+| **Sources** | Table of id, status, target, category, `teaser`, via, lastCount, lastResult, `zeroYieldRuns`; inline edit; add; delete; export; **Scrape now**; an armed **Reset all cursors** |
 | **Messages** | Status tabs; table of id, title, category, status, date, tgChannel, `memberCount`, with an expandable member list; inline edit; **Re-publish**; **Publish now** on the `topublish` tab; delete selected; export |
-| **Queues** | Per-queue depth, DLQ inspection, replay |
+| **Targets** | Table of id, type, the two `lastPosted*` mirrors and the template; inline edit; add; delete; export |
 
 Every table offers a keyword search across visible columns, per-column filters ANDed together, and column sort. Sorting is numeric-aware for numeric columns and locale-aware for strings — the content is Dutch and Russian as well as English. When filters narrow the result to nothing, the empty state renders *inside* the table so the controls stay reachable.
 
 The expandable member list is a per-row base-table `GetItem`, because no index projects `members`. Rendering it from the list query instead would fail silently — the map is simply absent, so every row would expand to nothing.
 
-### 8.4 Server actions
+**Mobile first.** On a phone each record is a card — the id as its title, every field labelled — with a sort select in the toolbar; from `md` the same markup is a table with sortable headings and a filter row. The pipeline diagram is a column until `xl` and a row from it. No page scrolls sideways at 390 px.
+
+### 8.4 Actions
 
 | Action | Signature | Authorisation |
 | --- | --- | --- |
@@ -814,13 +823,15 @@ The expandable member list is a per-row base-table `GetItem`, because no index p
 | `deleteRecords` | `(table, ids[]) => void` | `editor` — soft delete, sets `deleted: true` |
 | `loadMembers` | `(messageId) => MemberRow[]` | `viewer` |
 | `exportTable` | `(table) => string` | `viewer` |
-| `inspectDlq` | `(queueName) => DlqMessage[]` | `admin` |
+| `inspectDlq` | `(queueName) => DlqMessage[]` | `viewer` — reading is not acting; replay and purge are `admin` |
 | `runScraper` | `() => {processed}` | `admin` — invokes the scraper Lambda |
 | `republishMessage` | `(messageId) => void` | `admin` — sets `topublish`, enqueues |
 | `publishPending` | `(max) => {published, failed}` | `admin` — drains the `topublish` backlog, capped server-side |
 | `replayDlq` | `(queueName, max) => {replayed}` | `admin` — invokes the replay handler |
 
-Deletes are **soft**. Every action validates input with Zod and re-checks the caller's role server-side.
+Deletes are **soft**. Every action validates input with Zod and re-checks the caller's role server-side. The reads the pages make — `whoami`, `overview`, `listSources`, `listTargets`, `listMessages`, `loadQueues` — are `viewer`.
+
+**Transport.** One route, `POST /rpc`, with `{ action, input }`, answered with `{ result }` or `{ error }`: **401** for an absent or rejected token, **403** for `disabled` or `forbidden`, **400** for input its schema rejects, **500** with the action's own message otherwise — an operator needs "no such message: x" in the failure toast. An anonymous caller is refused before the body is read, so it learns neither the action names nor which inputs validate. One route rather than one per action, because `tg-api/actions.ts` is already a closed registry; a route per action would restate it in API Gateway, and the two would drift.
 
 ### 8.5 Dashboard computations
 
@@ -837,7 +848,7 @@ Deletes are **soft**. Every action validates input with Zod and re-checks the ca
 
 All CloudWatch reads are cached 60 s so a refresh does not re-query. The cache decorates the ports rather than wrapping each card, so the rule holds for reads added later.
 
-The pie charts keep the source's hand-built SVG arc geometry (centre 100,100, radius 80, `M cx cy L … A r r 0 large 1 … Z`, with the full-circle special case) and its 10-colour palette. No charting library is needed for two pie charts.
+The two donut charts are one CSS `conic-gradient` each over the source's 10-colour palette, less its red: red is kept for dead letters and failures alone. The browser does the arc geometry, so a single slice needs no special case. No charting library is needed for two charts. A number that could not be read shows as `—`, never as `0`.
 
 ### 8.6 Authentication and authorisation
 
@@ -849,28 +860,24 @@ The pie charts keep the source's hand-built SVG arc geometry (centre 100,100, ra
 | `editor` | + inline edit, add, delete |
 | `admin` | + manual triggers, DLQ replay, re-publish, publish-now |
 
-**Every `app/**/page.tsx` calls `requireRole("viewer", …)`** — pinned by `test/pageAuth.test.ts`.
+**Every action calls `requireRole`, at `viewer` or above** — pinned by `tg-api/actions.test.ts`, which calls each one anonymously and as a disabled admin.
 
 Roles are **ordered**, `viewer` < `editor` < `admin`, and one array is the single source of that order: the Cognito group precedences, the `RoleSchema` enum and every `requireRole` comparison are all derived from it, so they cannot drift. Cognito precedence counts the other way — lower is more privileged — so the number is computed, never written by hand.
 
-**The sign-in flow.** One catch-all route, `app/api/auth/[...cognito]/route.ts`, serves exactly three segments:
+**The sign-in flow** is the browser's own: authorization code with PKCE (RFC 7636). The app client is public and has no secret; the code verifier is what binds the exchange to the tab that started it.
 
-| Segment | Does |
+| Step | Does |
 | --- | --- |
-| `login` | Generates a random `state`, stores it in a short-lived cookie, redirects to the hosted UI |
-| `callback` | Compares the returned `state` to the cookie, exchanges the code for tokens, verifies the ID token against Cognito's JWKS, reads the group list, opens a session |
-| `logout` | Clears the session cookie and redirects to the hosted UI's logout endpoint |
+| Sign in | Generates a `code_verifier` and a `state`, keeps both in `sessionStorage`, redirects to the hosted UI with the S256 challenge |
+| Return | Cognito redirects to the site's root with `?code&state`. The console removes both from the address bar, refuses a `state` it did not issue, and exchanges code and verifier at `/oauth2/token` |
+| Use | Sends the ID token as `Authorization: Bearer` on every call, refreshing it a minute before it expires |
+| Sign out | Forgets the tokens and redirects to the hosted UI's logout endpoint |
 
-Two cookies, both `httpOnly`, `secure`, `sameSite=lax`, path `/`:
+The tokens are kept in `localStorage`, so a reload or a second tab stays signed in. That makes script injection on the console's origin a token theft, which is why §9.3's headers carry a strict Content-Security-Policy: scripts from the origin only, no inline script, no `eval`.
 
-| Cookie | Lifetime |
-| --- | --- |
-| `telegator_oauth_state` | 600 s — long enough for a sign-in, short enough that a stale attempt is refused rather than replayed |
-| `telegator_session` | Exactly as long as the ID token it was opened from |
+**Two checks per call.** API Gateway's JWT authorizer refuses any token not issued by this pool for this client, before the Lambda runs. The Lambda then verifies the token again against the pool's JWKS — HTTP API flattens `cognito:groups` into a string, so the role must be read from the real claim — and the action re-checks role and status.
 
-The session is a **sealed** payload, not a bearer copy of the ID token, keyed by a 32-byte secret held in Secrets Manager and fetched at runtime (§7.6). Expiry is re-checked on read rather than trusted to the cookie's own `maxAge`, because a client controls what it sends back.
-
-**A refused sign-in renders a page, not a bare 400.** It is the likeliest thing in the flow to go wrong — a sign-in that pauses longer than the state TTL arrives with nothing to match — and the page must contain **fixed strings only**: `state` and `code` are attacker-supplied, so echoing either would put reflected XSS on the operator console's own origin. Every refusal renders the same page, so a prober learns nothing about which check rejected it.
+**Access is the API's answer, not the token's.** After sign-in the console calls `whoami`, and only `granted` opens it. A 403 shows a fixed explanation — disabled, or no role. A refused sign-in shows a fixed sentence too: the hosted UI's `error` text is attacker-supplied, so echoing it would put reflected XSS on the operator console's own origin.
 
 Ported rules: a new user is created **disabled** with no roles and must be enabled manually; a disabled user is rejected at every action, which needs a live read of one field.
 
@@ -888,8 +895,7 @@ Ported rules: a new user is created **disabled** with no roles and must be enabl
 | `TelegatorQueueStack` | 3 queues + 3 DLQs, redrive policies | built |
 | `TelegatorAuthStack` | Cognito user pool, groups, app client | built |
 | `TelegatorPipelineStack` | 5 Lambdas, 1 EventBridge rule, 3 event source mappings, IAM roles, log groups, alarms | built |
-| `TelegatorAppStack` | Serves the dashboard — see §9.3 | built (Amplify), blocked |
-| `TelegatorRegistryStack` | ECR repository with a lifecycle rule | planned (§9.3) |
+| `TelegatorAppStack` | The dashboard API: one Lambda behind an HTTP API with a Cognito JWT authorizer — see §9.3 | built |
 
 Order: `Data`, `Queue`, `Auth` → `Pipeline` → `App`.
 
@@ -903,62 +909,44 @@ Deploy with `npm run deploy`, never a bare `cdk deploy`: a bare one omits the tw
 
 ### 9.3 Hosting
 
-The dashboard's hosting is the one part of the design that changed twice.
+The dashboard's hosting is the one part of the design that changed four times.
 
 | Stage | Status | Outcome |
 | --- | --- | --- |
 | **Amplify Hosting** | built, undeployable | `CreateApp` returns 401 — "please open a Billing Support Case". `amplify:ListApps` succeeds and the deploy identity holds AdministratorAccess, so this is **account standing**, not IAM and not the template. Nothing in this repository can work around it. |
 | **App Runner** | probed, rejected | `CreateService` was accepted; the service settled at `CREATE_FAILED`. Not a demonstrated escape either. The probe resources were deleted. |
-| **ECS Fargate + ALB + CloudFront** | **planned** | The approved design, below. |
+| **ECS Fargate + ALB + CloudFront** | designed, superseded | ~$77/mo of VPC, NAT gateway, load balancer and an always-on task — to serve pages that need no server once sign-in moves into the browser. |
+| **Firebase Hosting + API Gateway** | **built** | The current design, below. |
 
-Fargate was chosen partly *because* it is more manual: the operator wants to work with VPC, ECS, ALB and PrivateLink directly. Construct-level choices are made for legibility, not for the shortest path to a running service — `ecs-patterns.ApplicationLoadBalancedFargateService` is rejected because it hides the VPC, security groups, target group and health check, which are the parts to be learned and the parts most likely to misbehave.
-
-**The planned topology:**
+**Why it works.** The Next.js dashboard needed a server for two things only: AWS credentials and a cookie key. With the sign-in in the browser (§8.6) and every action behind one Lambda (§8.4), the console is static. Firebase Hosting serves it over HTTPS on its own domain at no cost, and the server side becomes pay-per-request.
 
 ```
-Internet
-   │  HTTPS  (*.cloudfront.net)
-   ▼
-CloudFront distribution
-   │  HTTP   (origin: ALB DNS)
-   ▼
-ALB :80 ────────────── public subnets, 2 AZs
-   │                    SG-alb: ingress 80 from 0.0.0.0/0
-   ▼
-Target group :3000     health check: /api/health = 200
+Browser ──HTTPS──► Firebase Hosting   telegator-581db.web.app — index.html, dist/, config.json
    │
-   ▼
-Fargate task ───────── private-with-egress subnets
-                        SG-task: ingress 3000 from SG-alb ONLY
+   ├──HTTPS──► Cognito hosted UI      sign-in, /oauth2/token (PKCE)
    │
-   ├── NAT gateway ──► Cognito hosted UI /oauth2/token, Secrets Manager,
-   │                   SQS, Lambda, CloudWatch, cognito-idp
-   ├── S3 gateway endpoint ──────► ECR image layers
-   └── DynamoDB gateway endpoint ► sources, messages
+   └──HTTPS──► API Gateway HTTP API   POST /rpc — JWT authorizer, CORS for the web origins
+                 │
+                 ▼
+               telegator-{env}-api    Lambda (tg-api), the dashboard role of §7.6
+                 ├── DynamoDB, SQS, CloudWatch, Logs Insights
+                 ├── lambda:InvokeFunction on scrape, dlq-replay, publish, consume
+                 └── cognito-idp:AdminGetUser
 ```
 
-**Four findings constrain it, and each is pinned by a test:**
+**Three findings constrain it, and each is pinned by a test:**
 
-1. **Cognito requires HTTPS callbacks**, with `http://localhost` as the only exception. An ALB serves HTTP on `*.elb.amazonaws.com` and cannot obtain an ACM certificate, because ACM issues only for domains whose control can be proven. CloudFront supplies HTTPS on its own domain at no cost — so it is not optional decoration; without it no login can complete.
-2. **PrivateLink cannot reach the Cognito hosted UI.** Of the 393 endpoint services in `eu-central-1`, the only two matching Cognito are `cognito-identity` and `cognito-idp`; there is **no endpoint for the hosted-UI domain**. A fully private task would reach every AWS API it needs and still hang at the token exchange, with all four gates green. **A NAT gateway is therefore mandatory, not a cost choice**, and eight interface endpoints (~$58/mo) would remove nothing. A test pins "zero interface endpoints" so a later cost review cannot silently break login.
-3. **The default ALB health check kills every task.** It polls `/` expecting 200, but every page requires login, so `/` answers 401 or a redirect. The target is unhealthy, ECS replaces the task, and the service crashloops forever while `cdk synth` stays green. Resolved by a dedicated unauthenticated `app/api/health/route.ts` — a `route.ts`, not a `page.tsx`, so `test/pageAuth.test.ts` is unaffected by construction rather than by exemption. It must remain the only unauthenticated surface, and a test asserts that.
-4. **The image must exist before the service.** A stack creating an empty ECR repository *and* a service pulling from it waits out the CloudFormation timeout and rolls back. Hence a separate `TelegatorRegistryStack`, deployed and populated first.
+1. **One origin list, two consumers.** Cognito redirects only to a registered callback, and the API answers CORS only for an allowed origin; an origin in one list and not the other signs in and then fails every call. `tg-infra/lib/web.ts` holds the one list — `http://localhost:8080` and the site's two domains — and both stacks read it. `-c webOrigins=` overrides it.
+2. **API Gateway gives up at 30 s.** The function's timeout is 29 s, so a long "Scrape now" fails where the operator can see it, rather than running on after the browser was told it failed.
+3. **A static site cannot be built per environment.** The console reads `/config.json` — the API URL, the client id, the hosted-UI domain — before it starts. `npm run deploy:web` writes it from the Auth and App stacks' outputs, so nothing in it is typed by hand, and nothing in it is secret.
 
-**Resources**, hand-wired L2: `Vpc` (2 AZs — an ALB requires two subnets even for one task; `natGateways: 1`); S3 and DynamoDB gateway endpoints; `SG-alb` and `SG-task`, the latter's ingress sourced from the former **by security group, not by CIDR**; `Cluster`; `FargateTaskDefinition` (512 CPU / 1024 MiB, `cpuArchitecture: ARM64`, separate task and execution roles); `FargateService` (`desiredCount: 1`, private subnets); `ApplicationLoadBalancer`; `Distribution`.
+**Headers** (`firebase.json`). A Content-Security-Policy that allows scripts from the origin only; styles and fonts from Google Fonts and unpkg, which serves the Lucide icon font; `connect-src` to `*.execute-api.eu-central-1.amazonaws.com` and `*.auth.eu-central-1.amazoncognito.com`; `frame-ancestors 'none'` and `form-action 'none'`. Inline `style` attributes are allowed through `style-src-attr`, because Arrmatura writes them; nothing needs `eval`. `index.html` and `config.json` are never cached, and every path rewrites to `index.html`.
 
-**The two roles are not interchangeable.** The task role carries the whole application permission set of §7.6, reused verbatim — only the principal moves, to `ecs-tasks.amazonaws.com`. The execution role pulls the image and writes logs, and nothing else. Granting the application's permissions to the execution role is the classic ECS IAM bug.
+**Deploy sequence.** `npm run deploy -- --execute` (§9.1's order, Auth before App) → `npm run deploy:web -- --execute`. The callback URLs are known before the first deploy, so the two-phase dance Amplify and Fargate both required is gone.
 
-**Every CloudFront setting is load-bearing**, because each default breaks something specific: `ALLOW_ALL` methods because server actions are POST and the default answers 405; `CACHING_DISABLED` because §8.3's pages exist to show live queue depths; `ALL_VIEWER` origin request policy because without cookie forwarding the session cookie never reaches the origin and nobody stays signed in.
+**Cost:** the HTTP API at ~$1 per million calls, the Lambda inside the free tier at these volumes, Firebase Hosting's free tier — **about $0/mo**.
 
-**Container.** `next.config.ts` gains `output: "standalone"`. A multi-stage `Dockerfile` builds for `linux/arm64` and runs `.next/standalone` as a non-root user on port 3000 with **`HOSTNAME=0.0.0.0`** — Next's standalone server binds loopback otherwise, which presents as a healthy container whose every health check fails. `ContainerImage.fromEcrRepository(repo, tag)` with the tag from context: `fromAsset` would run Docker during `cdk synth` and break the credential-free gate, and a test asserts no image asset appears in the template.
-
-**Deploy sequence.** Delete the `ROLLBACK_COMPLETE` app stack (it cannot be updated) → deploy `Registry` → build and push the image → deploy `Data`, `Queue`, `Auth`, `Pipeline` → deploy `App` with `-c imageTag=` → read back the CloudFront domain → redeploy `Auth` and `App` with `-c appUrl=` and `-c callbackUrls=`. The last two steps are the same two-phase dance Amplify required, for the same reason: the origin's domain does not exist until after its first deploy.
-
-**Cost:** ALB ~$21/mo, NAT ~$38, Fargate 0.5 vCPU / 1 GiB always-on ~$16, CloudFront ~$1, ECR ~$1 — **~$77/mo**. Public subnets with no NAT would be ~$39. The difference buys the private egress design, chosen deliberately for its learning value.
-
-**Out of scope:** a custom domain and ACM certificate; autoscaling (`desiredCount` is fixed at 1); CI/CD — the image is built and pushed by a script under `scripts/`.
-
-**Open risk:** `next build` evaluates module top-level code, and `lib/auth/config.ts` calls `required(env, …)`. If that executes during the build rather than per-request, the Docker build fails on absent environment variables. Mitigation is build-time placeholders or a lazy read.
+**Out of scope:** a custom domain; a second Hosting site per environment.
 
 ### 9.4 Seeding
 
@@ -1310,16 +1298,14 @@ flowchart LR
 sequenceDiagram
   participant B as Browser
   participant H as Cognito hosted UI
-  participant A as Dashboard (Next.js)
-  B->>A: open /messages (no session)
-  A->>B: redirect to hosted UI
-  B->>H: sign in (email + password)
-  H->>B: redirect back with a one-time code
-  B->>A: /api/auth/callback?code=...
-  A->>H: exchange code for tokens (POST /oauth2/token)
-  H->>A: id token (a signed JWT)
-  A->>A: verify signature via JWKS, read groups
-  A->>B: set sealed session cookie
+  participant A as Dashboard API
+  B->>B: open the console (no token), make a PKCE verifier
+  B->>H: redirect to hosted UI with the challenge
+  H->>B: sign in (email + password), redirect back with a one-time code
+  B->>H: exchange code + verifier for tokens (POST /oauth2/token)
+  H->>B: id token (a signed JWT)
+  B->>A: POST /rpc, Authorization: Bearer id token
+  A->>A: verify signature via JWKS, read groups, check enabled
 ```
 
 | Concept | One-line meaning |
@@ -1327,7 +1313,8 @@ sequenceDiagram
 | **User pool** | The user directory: accounts, passwords, groups |
 | **App client** | One application's registration with the pool — its id, allowed callback URLs, allowed OAuth flows |
 | **Hosted UI** | Cognito's own login pages on `<prefix>.auth.<region>.amazoncognito.com`; needs a domain to exist |
-| **Authorization-code flow** | The browser gets a one-time code; the server swaps it for tokens; tokens never sit in a URL |
+| **Authorization-code flow** | The browser gets a one-time code and swaps it for tokens; tokens never sit in a URL |
+| **PKCE** | A one-time secret the browser makes before sign-in and proves at the swap — what lets a client with no secret use the code flow safely |
 | **Callback URL** | Where Cognito may send the browser back to; anything not on the list is refused |
 | **JWT / id token** | A signed statement of who the user is and which groups they are in |
 | **JWKS** | The public keys used to check that signature, fetched from Cognito |
@@ -1335,12 +1322,12 @@ sequenceDiagram
 | **Precedence** | Group ordering where a **lower number wins** |
 | **AdminCreateUser** | The only way into this pool: self-sign-up is disabled, an operator creates each user |
 
-- **Benefit** — passwords, reset, login pages and token signing are AWS's problem; the app only verifies a signature and reads a group list.
+- **Benefit** — passwords, reset, login pages and token signing are AWS's problem; the API only verifies a signature and reads a group list.
 - **Tradeoffs** — OAuth has many moving parts for what feels like a simple need; the hosted UI is barely customisable; configuration spreads across stack, environment and context.
 
 **Traps**
 
-- **Callbacks must be HTTPS**, with `http://localhost` as the only exception. This tiny rule shaped the whole hosting design (§9.3): an ALB has no free HTTPS, so CloudFront became mandatory.
+- **Callbacks must be HTTPS**, with `http://localhost` as the only exception. This tiny rule shaped the hosting design twice (§9.3): an ALB has no free HTTPS, which made CloudFront mandatory for Fargate; Firebase Hosting has it on its own domain.
 - **The implicit flow is a security hole** — it returns tokens in the URL, where they land in browser history. Only the authorization-code flow is enabled.
 - **Precedence is upside down** — lower is more powerful. The numbers are derived from the roles array so the two cannot drift.
 - **Self-sign-up is one boolean away** from letting strangers register. `selfSignUpEnabled: false` is the security-critical property of that stack.
@@ -1457,14 +1444,14 @@ everything else is context.
 | **EC2** | A rented virtual machine billed per second; you own patching and scaling | context |
 | **Auto Scaling Group** | A fleet of EC2 held at a target size, replacing what fails | context |
 | **EKS** | Managed upstream Kubernetes; AWS runs the control plane | context |
-| **ECS** | AWS's own container orchestrator: describe a task, it keeps N copies running | planned — §9.3 |
-| **Fargate** | The "no servers" way to run ECS tasks: AWS supplies the machines, you pay per vCPU-second and GB-second | planned — §9.3 |
-| **ECR** | The private Docker image registry, with lifecycle rules to expire old images | planned — §9.3 |
+| **ECS** | AWS's own container orchestrator: describe a task, it keeps N copies running | context — §9.3's superseded design |
+| **Fargate** | The "no servers" way to run ECS tasks: AWS supplies the machines, you pay per vCPU-second and GB-second | context — §9.3's superseded design |
+| **ECR** | The private Docker image registry, with lifecycle rules to expire old images | context |
 | **App Runner** | Image in, HTTPS out — the "easy mode" of what §9.3 builds by hand | probed, rejected |
-| **Graviton** | AWS's ARM processors; the reason the Lambdas and the planned task say ARM64 | used — §7.5, §9.3 |
+| **Graviton** | AWS's ARM processors; the reason every Lambda says ARM64 | used — §7.5 |
 | **Spot / Savings Plan** | Discounts for interruptible or committed workloads | context |
 
-### Networking (all planned, §9.3)
+### Networking (context — the superseded Fargate design of §9.3)
 
 | Concept | One line |
 | --- | --- |
@@ -1485,7 +1472,7 @@ everything else is context.
 
 | Concept | One line | Here |
 | --- | --- | --- |
-| **S3** | Object storage by key; very durable, no filesystem | mentioned — the planned gateway endpoint serves ECR layers from it |
+| **S3** | Object storage by key; very durable, no filesystem | context |
 | **EBS / EFS** | A block disk for one instance / a shared filesystem for many | context |
 | **RDS / Aurora** | Managed relational databases; the road not taken — this data is key-value shaped | context |
 | **ElastiCache** | Managed Redis/Memcached for repeated reads | context |
@@ -1493,7 +1480,7 @@ everything else is context.
 | **SNS** | One message fanned out to many subscribers; SQS is one-to-one | context |
 | **Kinesis / MSK** | Ordered, replayable streams; readers keep a position instead of consuming | context |
 | **Step Functions** | A state machine coordinating services with retries and waits as data | context — the queues *are* Telegator's state machine |
-| **API Gateway** | A managed HTTP front door with auth and throttling | context — server actions play that role here |
+| **API Gateway** | A managed HTTP front door with auth and throttling | used — §9.3: the dashboard API's front door, with a JWT authorizer |
 | **CloudTrail** | The audit log of every API call in the account | context |
 | **AWS Config** | Configuration history of resources, judged against compliance rules | context |
 | **X-Ray** | Tracing one request's path across services | context |
@@ -1575,16 +1562,16 @@ Numbers are permanent. `R6` was never issued.
 | **R51** | AC-3.7, §7.2 | Byte-identical replay is guaranteed by an explicit item-id short-circuit over the projected `memberIds`, rather than emerging from idempotent member writes. The wording of AC-3.7 is unchanged; how it holds is not. It has to be identity-based, because §3.3 lets the newest item overwrite the descriptive fields, so a replayed item may no longer resemble the message it belongs to. |
 | **R52** | §9.1 | The app stack also declares the branch its host builds, which §9.1's inventory does not name. A host with no branch has nothing to build and serves nothing. |
 | **R53** | §8.4 | "Publish now" is `admin` only, offered only on the `topublish` tab, and capped server-side rather than trusting the caller's number. |
-| **R54** | §2.1, §3.1, §8.3, §8.4, §9.4 | `sources.tgChannel` is `sources.target`, a **comma-separated list** of target ids carried verbatim into the item payload as `target` and into `messages.tgChannel`, whose name is kept because it sits in the `status-index` projection (§7.2 L638). A stored `tgChannel` on a source is an orphan the schema strips; `scripts/migrate-targets.ts` copies it across before deploy. The full account is `.spectomat/done/multi-target.spec.md` (or `specs/` while it is being built). |
+| **R54** | §2.1, §3.1, §8.3, §8.4, §9.4 | `sources.tgChannel` is `sources.target`, a **comma-separated list** of target ids carried verbatim into the item payload as `target` and into `messages.tgChannel`, whose name is kept because it sits in the `status-index` projection (§7.2 L639). A stored `tgChannel` on a source is an orphan the schema strips; `scripts/migrate-targets.ts` copies it across before deploy. The full account is `.spectomat/done/multi-target.spec.md` (or `specs/` while it is being built). |
 | **R55** | §2.3, §3.3, §3.4, §8.4 | Publish sends **once per target**: `messages.posts` maps each canonical target id to its `{tgId, tgAt}`, written whole after every send; `tgId`/`tgAt` are frozen legacy fields read only by the first-target fallback. A post is current when `tgAt >= ts` and is skipped; a rejected send fails the record so the redelivery sends to the rest; a sent-but-unrecorded post is acknowledged. `republishMessage` bumps `ts` so every post is re-sent. Base table only; no projection changes. |
-| **R56** | §8.3 | Both tables' toolbars gain a **select all**, which §8.3 L797-798 does not list: a bulk delete over a narrowed table is what the per-column filters were added to produce, and a checkbox per row is the only way to address one. "All" is the rows the filters and sort left on screen, and the click **replaces** the selection rather than adding to it — the button sits beside "Delete selected", so a selection made before a filter narrowed the table would otherwise delete rows the operator cannot see. A second click clears; an empty table disables it. The set arithmetic is `tg-utils/ui/selection`, shared by both tables. |
+| **R56** | §8.3 | Both tables' toolbars gain a **select all**, which §8.3 L803-804 does not list: a bulk delete over a narrowed table is what the per-column filters were added to produce, and a checkbox per row is the only way to address one. "All" is the rows the filters and sort left on screen, and the click **replaces** the selection rather than adding to it — the button sits beside "Delete selected", so a selection made before a filter narrowed the table would otherwise delete rows the operator cannot see. A second click clears; an empty table disables it. The set arithmetic is `tg-utils/ui/selection`, shared by both tables. |
 | **R57** | §8.4, §7.6 | **"Cleanup all"** — `purgeDlq(queueName) => {discarded}`, `admin`. §8.4 lists no such action and §7.6 L712 grants the dashboard role no queue write, yet §3.5's replay is the only exit a DLQ has: a backlog that will never drain cleanly — a poison payload, a batch a later scrape superseded — keeps §7.7's depth alarm lit for good, and an operator learns to ignore the one signal that means act. It is one `PurgeQueue` call with no pipeline behind it, so it runs from the dashboard's own SQS client like §8.2 L776's inspection rather than through the replay Lambda, and `sqs:PurgeQueue` is granted **per dead-letter queue only**. Irreversible in a way replay is not (§1.3 L69 makes the DLQ the last copy), so the panel arms on one press and fires on a second, and the confirmation names the count. |
 | **R58** | §2, §7.2, §8.2, §8.3, §8.4, §9.1, §29 | A **third table**, `telegator-{env}-targets`, gives every publish destination a row: `id`, `type` (`telegram_channel` today), `lastPostedDate`, `lastPostedMessageId`, `messageTemplate` and the usual soft-delete flag. PK `id`, `PAY_PER_REQUEST`, `RETAIN`, and **no GSI** — tens of rows, one `GetItem` and one `Scan`. It is a **registry, not an allowlist**: a target with no row publishes normally, and publish's own write creates the row, so a forgotten row can never become silent non-publication. Publish mirrors the two `lastPosted*` fields after `recordPosts` and only logs if that write fails; `messages.posts` remains the authority for the edit decision. §8.2's route tree gains `/targets` and §29's map gains `TELEGATOR_TARGETS_TABLE`. The full account is `.spectomat/done/target-table.spec.md` (or `specs/` while it is being built). |
 | **R59** | §3.4 | A target may carry a `messageTemplate`, and §3.4's composition step then runs through it: literal operator-authored HTML with `{header}`, `{body}`, `{hashtags}`, `{title}`, `{category}`, `{country}`, `{location}` and `{date}` substituted, unknown names rendering empty, and runs of blank lines collapsed. The overflow ladder is unchanged in order — hashtags before member blocks, never below one — but parameterised by the composer, so both paths shorten the same way. A target with no template takes §3.4's built-in layout byte for byte, so there is no default template and nothing changes for a target nobody configured. |
-| **R60** | §8.3, §8.4, §2.1, §3.1 | **"Reset all"** — `resetSourceCursors() => {reset}`, `admin`. §8.4 lists no such action and §2.1 L115 makes `lastItemId` scrape-owned, which is why it cannot be an inline edit: `SOURCE_WRITABLE_FIELDS` deliberately excludes it. It exists because a cursor can end up pointing deep in a channel's history — a re-seed from a stale export (§9.5 L975), or a channel that removed the post the cursor names — and §3.1 L207 then re-fetches the same dead window every run, yielding nothing while the table shows a source polling normally. One `updateCursor` per source clears three fields: `lastItemId` to empty, which §3.1 L207 already reads as no cursor and therefore as the bare `t.me/s/{id}` — the channel's newest page; `lastUpdated` to 0, so §3.1 L202 makes every source due at once and a "Scrape now" pressed straight after actually polls; and `zeroYieldRuns` to 0, since §4.1 L378's counter describes the window just discarded. Disabled sources are reset too — they are not polled, but they must start from the latest message when re-enabled. **It is a stored-state write and nothing else**: DynamoDB only, instant, no Telegram fetch to fail halfway. The price is that with no cursor nothing suppresses duplicates (§3.1 L222), so each channel's newest window is enqueued as new and whatever §6 does not match to an existing message is published again — which is why the button arms on one press and fires on a second, exactly as R57's "Cleanup all" does. `scripts/set-cursors-now.ts` remains the other operation, writing each channel's *newest* id to skip that window; it stays a script because it needs the network. |
-| **R61** | §7.5, §7.6, §8.2 | **"Consume now"** — `consumeQueue({queueName, max}) => {consumed, failed}`, `admin`, one button per queue card capped at `MAX_CONSUME`. §7.5 drives every stage from an event source mapping and §8.4 offers no way to ask for a batch: a trigger invokes a *function*, and a stage function does nothing unless handed records. R53's "Publish now" only works around that for publish, whose payload happens to be a message id. The mechanism is a **sixth Lambda**, `telegator-{env}-consume` (1024 MB, reserved concurrency 1): it receives up to ten messages off the named live queue, runs that stage — through the stage's own handler, so it cannot drift from what the mapping calls — and deletes what §7.3 L664's partial batch response did not report, exactly as the mapping would. A stage that throws deletes nothing, because redelivery is harmless (§2.3 L180, R51) and a silent drop is not (§1.3 L69). It is a function rather than dashboard logic to *keep* §7.6 L712 and §8.2 L788 intact: consuming a queue means running a stage, so doing it in the dashboard would have put `sqs:ReceiveMessage`, `sqs:DeleteMessage` and invokes on both analysis stages onto the **web role**, reachable by every request the console serves. Instead the pump holds the union of the three stages' grants plus receive/delete on the three live queues, and the app role gains one more invoke — `analyze` and `aggregate` stay ungranted there, still asserted by the stack test. |
+| **R60** | §8.3, §8.4, §2.1, §3.1 | **"Reset all"** — `resetSourceCursors() => {reset}`, `admin`. §8.4 lists no such action and §2.1 L116 makes `lastItemId` scrape-owned, which is why it cannot be an inline edit: `SOURCE_WRITABLE_FIELDS` deliberately excludes it. It exists because a cursor can end up pointing deep in a channel's history — a re-seed from a stale export (§9.5 L963), or a channel that removed the post the cursor names — and §3.1 L208 then re-fetches the same dead window every run, yielding nothing while the table shows a source polling normally. One `updateCursor` per source clears three fields: `lastItemId` to empty, which §3.1 L208 already reads as no cursor and therefore as the bare `t.me/s/{id}` — the channel's newest page; `lastUpdated` to 0, so §3.1 L203 makes every source due at once and a "Scrape now" pressed straight after actually polls; and `zeroYieldRuns` to 0, since §4.1 L379's counter describes the window just discarded. Disabled sources are reset too — they are not polled, but they must start from the latest message when re-enabled. **It is a stored-state write and nothing else**: DynamoDB only, instant, no Telegram fetch to fail halfway. The price is that with no cursor nothing suppresses duplicates (§3.1 L223), so each channel's newest window is enqueued as new and whatever §6 does not match to an existing message is published again — which is why the button arms on one press and fires on a second, exactly as R57's "Cleanup all" does. `scripts/set-cursors-now.ts` remains the other operation, writing each channel's *newest* id to skip that window; it stays a script because it needs the network. |
+| **R61** | §7.5, §7.6, §8.2 | **"Consume now"** — `consumeQueue({queueName, max}) => {consumed, failed}`, `admin`, one button per queue card capped at `MAX_CONSUME`. §7.5 drives every stage from an event source mapping and §8.4 offers no way to ask for a batch: a trigger invokes a *function*, and a stage function does nothing unless handed records. R53's "Publish now" only works around that for publish, whose payload happens to be a message id. The mechanism is a **sixth Lambda**, `telegator-{env}-consume` (1024 MB, reserved concurrency 1): it receives up to ten messages off the named live queue, runs that stage — through the stage's own handler, so it cannot drift from what the mapping calls — and deletes what §7.3 L665's partial batch response did not report, exactly as the mapping would. A stage that throws deletes nothing, because redelivery is harmless (§2.3 L181, R51) and a silent drop is not (§1.3 L69). It is a function rather than dashboard logic to *keep* §7.6 L712 and §8.2 L776 intact: consuming a queue means running a stage, so doing it in the dashboard would have put `sqs:ReceiveMessage`, `sqs:DeleteMessage` and invokes on both analysis stages onto the **web role**, reachable by every request the console serves. Instead the pump holds the union of the three stages' grants plus receive/delete on the three live queues, and the app role gains one more invoke — `analyze` and `aggregate` stay ungranted there, still asserted by the stack test. |
 | **R62** | §8.2 | The route tree's `lib/` directories are **npm workspaces** under `packages/`, the layout of the sibling `bombarbia` project: `tg-enums`, `tg-rc`, `tg-configs`, `tg-utils`, `tg-domain`, `tg-ports`, `tg-dedup`, `tg-aws`, `tg-ai`, `tg-telegram`, `tg-auth`, `tg-pipeline`, `tg-actions`, `tg-web`, `tg-infra`, `tg-mcp`, `tg-ops` (§28 maps each). §8.2's rule is unchanged and now holds at two levels: `tg-pipeline` is the single implementation of every stage and no workspace depends on it, while `test/boundaries.test.ts` still checks the dashboard's transitive closure file by file. The split surfaced four cycles the flat tree hid — `ai`↔`pipeline`, `configs`↔`domain`, `ui`↔`dashboard`, `domain`↔`ports` — and each was cut by moving the shared piece down: the §5.2 request builder to `tg-ai`, `MEMBER_RENDER_LIMIT` to `tg-configs`, `Slice` and `Clock` to `tg-utils`, and §6 into its own package. Workspaces reach each other by name (`tg-domain/message`) through `"./*": "./*.ts"` exports and no barrels, so a bundle still holds only the files it imports. The dashboard builds from `packages/tg-web`, which Amplify must be told: the build spec's `appRoot` and `AMPLIFY_MONOREPO_APP_ROOT`. |
-| **R63** | §2.1, §3.1, §4.1, §7.5, §7.6 | **A second scrape transport, MTProto**, for the chats §3.1 L207's `t.me/s/` preview cannot render — groups and private chats. A source opts in with **`via: "mtproto"`** (absent means `web`), an operator-writable field shown on the Sources table. The stage is **not** copied: §3.1's fetch becomes a `ChannelReader` port (`tg-ports/telegram`), `webReader` wraps the preview fetch and parse, and the new **`tg-mtproto`** package implements the port over GramJS through a logged-in **user account**. `selectSources` takes the reader's `via`, so each run polls only its own sources and one cursor is never advanced by two readers. The same guards, enqueue rule and cursor write apply unchanged. A **seventh Lambda**, `telegator-{env}-scrape-mtproto` (512 MB, reserved concurrency 1), runs on its own `rate(30 minutes)` rule behind R23's switch. The concurrency of 1 matters more here: one session opened twice at once is revoked by Telegram (`AUTH_KEY_DUPLICATED`). It holds `scrape`'s two grants plus `GetSecretValue` on a **third secret**, `telegator-{env}-mtproto-session`: JSON `{apiId, apiHash, session}`, written by `npm run mtproto:login`, which is a one-time interactive login. The session *is* a login to the account. A run reads at most `MTPROTO_PAGE_SIZE` posts after the cursor, oldest first, or the newest page when there is no cursor, so a missing cursor never replays the chat's history. A numeric `-100…` source id resolves through one dialog-list load per run. Three differences from the preview: links come from message entities, a forward is marked by its origin's name or peer id, and **there is no `image`**, because an MTProto photo has no public URL to give `sendPhoto`, so photo posts publish as text. |
+| **R63** | §2.1, §3.1, §4.1, §7.5, §7.6 | **A second scrape transport, MTProto**, for the chats §3.1 L208's `t.me/s/` preview cannot render — groups and private chats. A source opts in with **`via: "mtproto"`** (absent means `web`), an operator-writable field shown on the Sources table. The stage is **not** copied: §3.1's fetch becomes a `ChannelReader` port (`tg-ports/telegram`), `webReader` wraps the preview fetch and parse, and the new **`tg-mtproto`** package implements the port over GramJS through a logged-in **user account**. `selectSources` takes the reader's `via`, so each run polls only its own sources and one cursor is never advanced by two readers. The same guards, enqueue rule and cursor write apply unchanged. A **seventh Lambda**, `telegator-{env}-scrape-mtproto` (512 MB, reserved concurrency 1), runs on its own `rate(30 minutes)` rule behind R23's switch. The concurrency of 1 matters more here: one session opened twice at once is revoked by Telegram (`AUTH_KEY_DUPLICATED`). It holds `scrape`'s two grants plus `GetSecretValue` on a **third secret**, `telegator-{env}-mtproto-session`: JSON `{apiId, apiHash, session}`, written by `npm run mtproto:login`, which is a one-time interactive login. The session *is* a login to the account. A run reads at most `MTPROTO_PAGE_SIZE` posts after the cursor, oldest first, or the newest page when there is no cursor, so a missing cursor never replays the chat's history. A numeric `-100…` source id resolves through one dialog-list load per run. Three differences from the preview: links come from message entities, a forward is marked by its origin's name or peer id, and **there is no `image`**, because an MTProto photo has no public URL to give `sendPhoto`, so photo posts publish as text. |
 
 ## 26. Traps this project actually hit
 
@@ -1658,10 +1645,10 @@ have to re-derive all of it.
 | `@anthropic-ai/sdk` | §5.1's client. Its default export takes `baseURL` + `apiKey`, which is what makes OpenRouter a two-line swap. |
 | `@aws-sdk/client-*` v3 | One client per service, plus `lib-dynamodb` for the document interface. The Lambda runtime ships the SDK, so it is excluded from the bundle. |
 | `aws-cdk-lib` 2 + `constructs` | §9's infrastructure. |
-| `next` 16, `react` 19 | §8's App Router dashboard. |
+| `arrmatura`, `arrmatura-web`, `ultimus` | §8's console framework: CML templates and services. Private sibling checkouts, linked into `node_modules` by `postinstall` (`scripts/link-packages.sh`). They ship TypeScript written to looser settings than this repository's, so `tsc` reads `tg-web/src/types/arrmatura-web.d.ts` in their place and esbuild bundles the real source. |
+| `esbuild`, `tailwindcss` 4.1.14, `daisyui` 5.0.0-beta.9 | The console's bundle and stylesheet (`scripts/web.ts`). |
 | `jose` | ID-token verification against Cognito's JWKS (§8.6). |
-| `server-only` | Marks modules that must never reach a client bundle. |
-| `vitest` 4 | The suite. **Vitest 4 uses oxc, not esbuild**: JSX goes in `oxc: { jsx: { runtime: "automatic" } }`, and an `esbuild.jsx` setting is accepted and then silently ignored. |
+| `vitest` 4 | The suite. |
 | `@biomejs/biome` 2 | Lint and format, in one tool. |
 | `tsx` | Runs the `scripts/` entry points directly. |
 | `aws-sdk-client-mock` | Declared, and deliberately **unused**: its `mockClient()` signature is built against an older `@smithy/types` than the installed SDK and does not typecheck against it, and 4.1.0 is the latest release. Inject a structural client port and stub that instead. |
@@ -1672,7 +1659,7 @@ rule lives in a package; `scripts/` and `test/` wrap them.
 ```
 packages/
   tg-enums/     closed vocabularies: categories, roles, statuses, item kinds, target types, queues
-  tg-rc/        resources: the §5.2 prompt, the dashboard's column definitions
+  tg-rc/        resources: the §5.2 prompt, the console's columns, words and pipeline stages
   tg-configs/   the §29 env contract, the §31 constants, auth config, shared log field names
   tg-utils/     the injected clock, the structured logger, table and chart helpers
   tg-domain/    Zod schemas and derived types: source, item, message, target, ids, tags, dates
@@ -1682,10 +1669,11 @@ packages/
   tg-ai/        the §5.2 request, the classifier and adjudicator adapters
   tg-telegram/  HTML parser, bot client, HTTP adapters
   tg-mtproto/   R63's MTProto reader: the GramJS client, the secret's schema, message mapping
-  tg-auth/      Cognito OAuth, JWT verification, session, roles
+  tg-auth/      ID-token verification, the session it yields, roles
   tg-pipeline/  the four stages plus the DLQ replay; tg-pipeline/handlers/ are the Lambda entry points
-  tg-actions/   server actions (§8.4); dashboard/ holds the §8.5 computations, caching, triggers
-  tg-web/       the Next.js app: tg-web/app/ routes (§8.2), tg-web/components/
+  tg-actions/   the actions' cores (§8.4) in dashboard/, with the §8.5 computations and caching
+  tg-api/       the dashboard API Lambda: the action registry and the RPC transport
+  tg-web/       the console (Arrmatura): cml/ templates, src/ services and logic, www/ the hosted root
   tg-infra/     the CDK stacks of §9.1
   tg-mcp/       the MCP server
   tg-ops/       seeding (§9.4), deploy arguments, target parsing for the scripts
@@ -1695,13 +1683,13 @@ test/           cross-cutting invariants, fakes, fixtures; unit tests sit beside
 
 Dependencies point down the list: vocabularies, resources, configs and utils
 first; then domain, ports, dedup and the adapters; then the pipeline and the
-actions; the web app and the stacks last. `test/layout.test.ts` fails on a cycle
+actions; the API, the console and the stacks last. `test/layout.test.ts` fails on a cycle
 between packages, and on any package that depends on `tg-pipeline`.
 
 **Conventions that are enforced, not preferred:**
 
 - **Across packages, import by name; inside one, relatively.** Write `"tg-domain/message"`, never `"../../tg-domain/message"`. Each package exports `"./*": "./*.ts"` and has no barrel file, so a bundle holds only the files it imports — the unit §8.2's boundary is measured in.
-- **Relative imports carry no extension.** Write `"./clock"`, never `"./clock.js"`. `tsc`, Vite, esbuild and tsx all perform the `.js` → `.ts` substitution; **Turbopack does not**, so the extension form passes every check and then makes every dashboard route 500 with `Module not found`. There is no Turbopack setting that restores it.
+- **Relative imports carry no extension.** Write `"./clock"`, never `"./clock.js"`. `tsc`, Vite, esbuild and tsx all perform the `.js` → `.ts` substitution. The Next.js dashboard's Turbopack did not, and every route 500'd with `Module not found` while all four gates stayed green; extensionless is the one form every resolver accepts, so the rule outlived the bundler.
 - **A constant needed by two layers moves to a module neither owns.** The dashboard may not import `tg-pipeline` (§8.2), so a shared literal cannot live in either.
 - `console` belongs in `scripts/` only. Everywhere else, the injected logger.
 - Magic numbers are banned in every package but `tg-web` and `tg-infra`. Every value in §31 is a named constant.
@@ -1729,7 +1717,7 @@ then a grep away rather than a runtime discovery.
 | `TELEGATOR_OPENROUTER_SECRET_ARN` | §7.6's model-key secret |
 | `TELEGATOR_MTPROTO_SECRET_ARN` | the MTProto session secret (§25, R63) |
 
-**The dashboard's, in addition:**
+**The dashboard API's, in addition:**
 
 | Variable | Carries |
 | --- | --- |
@@ -1737,11 +1725,8 @@ then a grep away rather than a runtime discovery.
 | `TELEGATOR_DLQ_REPLAY_FUNCTION_NAME` | the replay target |
 | `TELEGATOR_PUBLISH_FUNCTION_NAME` | the "Publish now" target (§25, R53) |
 | `TELEGATOR_CONSUME_FUNCTION_NAME` | the "Consume now" pump (§25, R61) |
-| `TELEGATOR_USER_POOL_ID` | §8.6's pool |
-| `TELEGATOR_USER_POOL_CLIENT_ID` | |
-| `TELEGATOR_COGNITO_DOMAIN` | the hosted-UI domain |
-| `TELEGATOR_APP_URL` | this app's own origin, for callback construction |
-| `TELEGATOR_SESSION_SECRET_ARN` | the session key's **ARN** — never its value |
+| `TELEGATOR_USER_POOL_ID` | §8.6's pool, the token's issuer |
+| `TELEGATOR_USER_POOL_CLIENT_ID` | the token's audience |
 | `TELEGATOR_ANALYZE_LOG_GROUP` | the group §7.7's category query runs over |
 
 **`AWS_REGION` is deliberately absent.** Lambda sets it and CloudFormation
@@ -1760,9 +1745,9 @@ without a `fromLookup` (§22):
 | `scheduleEnabled` | §9.2's opt-in; also triggers §10.3's production gate |
 | `reserveConcurrency` | §25 R40's escape hatch for a cold account |
 | `settleDelaySeconds` | §7.3's publish-queue delay |
-| `sessionSecretArn` | §8.6's session key |
-| `appUrl`, `callbackUrls`, `logoutUrls` | the two-phase deploy of §9.3 |
-| `repository`, `branch`, `githubTokenSecretName` | the current host's build source |
+| `webOrigins` | §9.3's origins: Cognito's callbacks and the API's CORS |
+
+**The console's own configuration** is `packages/tg-web/www/config.json` — the API URL, the client id and the hosted-UI domain (§9.3) — written by `npm run deploy:web` from the stacks' outputs.
 
 ## 30. Boundaries: ports and fakes
 
@@ -1773,7 +1758,7 @@ forbids it, and the build machine can reach neither AWS nor a model provider.
 | Port | Behind it |
 | --- | --- |
 | `tg-ports/ai.ts` | `Classifier` (§5.2) and `Adjudicator` (§5.3) |
-| `tg-ports/auth.ts` | token exchange, JWKS, the cookie jar, the disabled-user read |
+| `tg-ports/auth.ts` | ID-token verification (JWKS) and the disabled-user read |
 | `tg-ports/aws.ts` | CloudWatch metric reads, Logs Insights, queue attributes |
 | `tg-ports/db.ts` | the two repositories of §2 |
 | `tg-ports/metrics.ts` | §7.7's counters |
@@ -1853,9 +1838,8 @@ pass:** no skipped test, no `any`, no error suppression, no lint exception.
 Each of these has shipped a green suite over a broken system:
 
 - **No gate makes a model call**, and none can. A base URL that composes to the wrong path, an unrecognised auth header, or an `output_config` the tier rejects all pass every gate against an adapter that cannot classify a single item. Cover it with an offline smoke test over the real adapter and a canned far end, with an opt-in flag for one live call.
-- **No gate runs a bundler.** Only a real `next build` compiles `tg-web/app/`, and it needs §29's environment, so it is not one of the four. Run the dev server and request the routes before believing the dashboard works.
+- **No gate runs the console in a browser.** `npm run build` bundles it, but a CML mistake compiles and then renders nothing, often logging nothing. Run `npm run dev` and look at every page you touched, at phone width too; `test/webCml.test.ts` proves only that each template is registered.
 - **`cdk synth` checks shape; AWS checks meaning.** Metric math, GSI projection updates and account quotas are all validated at deploy time (§26).
-- An invalid `experimental` option in the Next config is warned about once at startup and then **dropped whole**, taking its valid siblings with it.
 
 ### 32.3 The invariants that must be tests
 
@@ -1865,17 +1849,14 @@ Each of these was violated at least once, and each is now pinned:
 | --- | --- |
 | Every AC in §3.1–3.4 is named by a test, **and** no test names one this document does not declare | A dropped criterion is invisible; the audit runs both ways |
 | The dashboard never reaches `tg-pipeline/` (§8.2), over the **transitive** closure, and never imports `aws-cdk-lib` | A direct-import rule misses the second hop |
-| Every `tg-web/app/**/page.tsx` calls `requireRole("viewer", …)` | The dashboard root shipped once without it |
+| Every API action calls `requireRole` at `viewer` or above | The dashboard root once shipped without it |
+| Nothing the console bundles reaches the AWS SDK, a server workspace or a Node built-in | The browser holds no credential, and the bundle would carry the code anyway |
 | Every relative import is extension-free | All four gates pass against an app that cannot serve a page |
 | Every `§x.y L###` citation resolves inside the section it names | 16 of 1,503 had already rotted, silently |
-| `tsconfig.json` still includes `**/*.ts` and `**/*.tsx` | `next dev` rewrites the file; a directory-scoped include left four categories unchecked |
+| `tsconfig.json` still includes `**/*.ts` and `**/*.tsx` | A directory-scoped include once left four categories unchecked |
 | The Logs Insights query still matches what `analyze` writes | §7.7's contract, whose failure mode is an empty chart and no error |
 | The synthesised template carries the log retention, the narrow IAM, and no Docker image asset | The parts AWS validates only at deploy |
 | Publish's role has no `DeleteItem` | §7.6's narrow reading, which a helper would silently widen |
-
-`next dev` rewrites `tsconfig.json` and `next-env.d.ts` on every run, and
-appends its own `include` entries. That is expected; keep the formatter off both
-files and let the test defend the entries that matter.
 
 ## 33. Operator entry points
 
@@ -1885,6 +1866,8 @@ Everything below is a `scripts/` entry point, run with `tsx`, and the only place
 | Script | Does |
 | --- | --- |
 | `deploy` | The only supported deploy. Resolves all three secret ARNs by name (R63 added the MTProto session, so `mtproto:login` must run first), refuses to run as the account root (which cannot assume the bootstrap roles), and **diffs by default** — `--execute` is the opt-in. A bare `cdk deploy` omits the ARNs and the stack falls back rather than failing, so it creates cleanly and then fails on its first message. |
+| `deploy:web` | §9.3's console deploy. Writes `www/config.json` from the Auth and App stacks' outputs, builds, and stops; `--execute` publishes to Firebase Hosting, `--config-only` writes the config for `npm run dev` and nothing else. |
+| `dev`, `build` | The console: `scripts/web.ts` regenerates the CML index, compiles Tailwind and bundles with esbuild — served with live reload on `localhost:8080`, or once into `www/dist/`. |
 | `seed` | §9.4's migration. `--data-dir` is required (the export lives outside the repository) and writing is opt-in. |
 | `reseed-cursors` | §9.5 step 5 — carries `lastItemId` across from the legacy system so AWS resumes rather than re-scraping. |
 | `set-cursors-now` | Fast-forwards every cursor to the current head, for a dev environment that should not replay history. |
@@ -1902,7 +1885,7 @@ Bottom-up, because every layer above is a wrapper. Each step ends with all four
 gates green.
 
 1. **Toolchain** — the dependencies of §28, the four gate commands, the Biome and
-   Vitest configuration (including `oxc.jsx`), and `tsconfig`.
+   Vitest configuration, and `tsconfig`.
 2. **Domain** — §2's Zod schemas and derived types, ids, tags, the date key, the
    clock port. Nothing here has a dependency.
 3. **Ports and fakes** — §30's seven interfaces and their in-memory doubles,
@@ -1916,7 +1899,7 @@ gates green.
 7. **Infrastructure** — §9.1's stacks in dependency order, each with assertion
    tests over the synthesised template.
 8. **Dashboard** — §8's auth first (nothing renders without it), then the
-   computations, then the pages, then the server actions.
+   computations and the actions, then the API, then the console.
 9. **Operations** — §33's scripts, and §10.3's calibration harness.
 10. **Cross-cutting** — §32.3's invariant tests, and the end-to-end harness of
     §10.1, which wires the stages the way SQS wires them: every hand-off is a

@@ -68,7 +68,7 @@ describe("runConsume — R61", () => {
   });
 
   /**
-   * §7.3 L668's partial batch failures are what an event source mapping honours:
+   * §7.3 L669's partial batch failures are what an event source mapping honours:
    * a reported item stays on the queue for its next delivery. Deleting it here
    * would drop work the stage said it could not do — and §1.3 L69 has no table
    * to recover it from.

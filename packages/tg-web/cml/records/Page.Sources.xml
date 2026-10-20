@@ -1,0 +1,16 @@
+<Component id="Page.Sources">
+  <Signature purpose="§8.3 — the Sources table, with Scrape now and the armed cursor reset for an admin" />
+
+  <GridService Ref="grid" table="sources" api="@api" canEdit="{@api.canEdit}" />
+
+  <PageTitle title="{R.tables.sources.title}" subtitle="{R.tables.sources.subtitle}">
+    <Fragment If="@api.canAdmin">
+      <Btn class="sm:btn-sm" type="primary" icon="play" text="{R.pipeline.scrapeNow}"
+        busy="{@api.busy.runScraper}" click="-> @grid.scrapeNow()" />
+      <Btn class="sm:btn-sm" type="{@grid.armedReset ? 'error' : 'neutral'}" mode="soft" icon="rotate-ccw"
+        text="{@grid.resetLabel}" busy="{@api.busy.resetSourceCursors}" click="-> @grid.resetAll()" />
+    </Fragment>
+  </PageTitle>
+
+  <RecordsTable table="sources" />
+</Component>

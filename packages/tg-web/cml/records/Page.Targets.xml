@@ -1,0 +1,9 @@
+<Component id="Page.Targets">
+  <Signature purpose="target-table#3.2 — the Targets table: where stories are published, and with which template" />
+
+  <GridService Ref="grid" table="targets" api="@api" canEdit="{@api.canEdit}" />
+
+  <PageTitle title="{R.tables.targets.title}" subtitle="{R.tables.targets.subtitle}" />
+
+  <RecordsTable table="targets" />
+</Component>

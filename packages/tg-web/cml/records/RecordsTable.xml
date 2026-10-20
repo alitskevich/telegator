@@ -1,0 +1,147 @@
+<Component id="RecordsTable">
+  <Signature purpose="§8.3's table: search, per-column filters, sort, selection, inline edit and export"
+    description="Mobile first: on a phone each record is a card — the id as its title, every field labelled — and from `md` the same markup is a table with a header and a filter row. Reads the page's `@grid`. The empty state renders inside the table, so the filters that emptied it stay reachable.">
+    <Prop id="table" type="enum" enum="sources,targets,messages" required="true" />
+  </Signature>
+
+  <section class="bg-base-100 rounded-box flex flex-col min-w-0">
+    <This-Toolbar table="{table}" />
+    <div If="@grid.error" class="px-3 pt-3"><ErrorBanner text="{@grid.error}" /></div>
+    <div class="md:overflow-x-auto">
+      <table class="table table-sm block md:table">
+        <This-Head table="{table}" />
+        <tbody Each="row of @grid.view.rows" class="block md:table-row-group border-b border-base-200 last:border-b-0">
+          <This-Row row="{row}" table="{table}" />
+        </tbody>
+        <tbody If="{!@grid.view.rows.length}" class="block md:table-row-group">
+          <tr class="block md:table-row">
+            <td colspan="20" class="block md:table-cell py-12 text-center text-base-content/60">
+              <Loading If="@grid.loading" size="sm" />
+              <span If="{!@grid.loading}">{R.tables[table].empty}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <Subcomponent id="Toolbar">
+    <Signature purpose="Search, sort on a phone, the row count, add, bulk select and delete, and export">
+      <Prop id="table" type="string" required="true" />
+    </Signature>
+    <div class="flex flex-wrap items-center gap-2 p-3 border-b border-base-200">
+      <label class="input w-full sm:input-sm sm:w-72">
+        <span class="icon icon-search text-base-content/50" aria-hidden="true"></span>
+        <input type="search" class="grow" placeholder="{R.common.search}" aria-label="{R.common.search}"
+          value="{@grid.keyword}" input="-> @grid.search(event)" />
+      </label>
+      <This-PhoneSort table="{table}" />
+      <span class="text-xs text-base-content/60">{@grid.view.rows.length} / {@grid.view.total}</span>
+      <div class="hidden sm:block flex-1"></div>
+      <Fragment If="{@grid.canEdit AND table != 'messages'}">
+        <input class="input grow sm:input-sm sm:w-40 sm:grow-0" placeholder="{R.common.newId}"
+          aria-label="{R.common.newId}" value="{@grid.newId}" input="-> @grid.setNewId(event)"
+          enter="-> @grid.add()" />
+        <Btn class="sm:btn-sm" mode="soft" icon="plus" text="{R.common.add}" busy="{@api.busy.add}"
+          click="-> @grid.add()" />
+      </Fragment>
+      <Fragment If="@grid.canEdit">
+        <Btn class="sm:btn-sm" type="ghost" text="{@grid.view.allSelected ? R.common.clearSelection : R.common.selectAll}"
+          disabled="{!@grid.view.ids.length}" click="-> @grid.toggleAll()" />
+        <Btn class="sm:btn-sm" type="error" mode="soft" icon="trash-2" text="{R.common.delete}"
+          disabled="{!@grid.view.selectedCount}" busy="{@api.busy.delete}" click="-> @grid.removeSelected()" />
+      </Fragment>
+      <Btn class="sm:btn-sm" mode="soft" icon="file-down" text="{R.common.export}" busy="{@api.busy.export}"
+        click="-> @grid.exportCsv()" />
+    </div>
+  </Subcomponent>
+
+  <Subcomponent id="PhoneSort">
+    <Signature purpose="Until `md` there is no header row to press, so the sort is a select and a flip">
+      <Prop id="table" type="string" required="true" />
+    </Signature>
+    <div class="flex w-full items-center gap-2 md:hidden">
+      <select class="select grow" aria-label="{R.common.sortBy}" change="-> @grid.sortColumn(event)">
+        <option value="">{R.common.sortBy}</option>
+        <option Each="column of R.tables[table].columns" value="{column.id}"
+          selected="{@grid.sort.column == column.id}">{column.name}</option>
+      </select>
+      <IBtn icon="{sortIcon(@grid.sort, @grid.sort.column)}" title="{R.common.flipSort}"
+        disabled="{!@grid.sort}" click="-> @grid.flipSort()" />
+    </div>
+  </Subcomponent>
+
+  <Subcomponent id="Head">
+    <Signature purpose="From `md`: column headings that sort on press, and one filter box under each">
+      <Prop id="table" type="string" required="true" />
+    </Signature>
+    <thead class="hidden md:table-header-group bg-base-200 text-base-content/80">
+      <tr>
+        <th If="@grid.canEdit" class="w-8">
+          <input type="checkbox" class="checkbox checkbox-xs rounded-[0.25rem]" aria-label="{R.common.selectAll}"
+            checked="{@grid.view.allSelected}" toggle="-> @grid.toggleAll()" />
+        </th>
+        <th If="{table == 'messages'}" class="w-8"></th>
+        <th Each="column of R.tables[table].columns" aria-sort="{ariaSort(@grid.sort, column.id)}">
+          <button type="button" data-column="{column.id}" click="-> @grid.sortBy(event)"
+            class="inline-flex items-center gap-1 font-medium whitespace-nowrap cursor-pointer hover:text-base-content {column.numeric ? 'w-full justify-end' : ''}">
+            {column.name}
+            <span class="icon icon-{sortIcon(@grid.sort, column.id)} text-base-content/40" aria-hidden="true"></span>
+          </button>
+        </th>
+        <th If="{@grid.canEdit OR (table == 'messages' AND @api.canAdmin)}"></th>
+      </tr>
+      <tr>
+        <th If="@grid.canEdit"></th>
+        <th If="{table == 'messages'}"></th>
+        <th Each="column of R.tables[table].columns" class="py-1.5 font-normal">
+          <input type="search" class="input input-xs w-full min-w-[5rem]" placeholder="{R.common.filter}"
+            aria-label="{R.common.filter} {column.name}" data-column="{column.id}"
+            value="{@grid.filters[column.id] ?? ''}" input="-> @grid.filter(event)" />
+        </th>
+        <th If="{@grid.canEdit OR (table == 'messages' AND @api.canAdmin)}"></th>
+      </tr>
+    </thead>
+  </Subcomponent>
+
+  <Subcomponent id="Row">
+    <Signature purpose="One record — a card on a phone, a table row from `md` — with its actions and, for a message, its member panel">
+      <Prop id="row" type="object" required="true" description="A `ViewRow` from `src/grid/view.ts`" />
+      <Prop id="table" type="string" required="true" />
+    </Signature>
+    <tr class="flex flex-wrap items-start gap-x-4 gap-y-3 p-4 md:table-row md:p-0 transition-colors duration-150 {row.selected ? 'bg-primary/5' : 'md:hover:bg-base-200/50'}">
+      <td If="@grid.canEdit" class="order-1 block p-0 pt-1 md:table-cell md:align-top md:px-3 md:pt-2.5">
+        <input type="checkbox" class="checkbox checkbox-sm md:checkbox-xs rounded-[0.25rem]" aria-label="{row.id}"
+          checked="{row.selected}" data-id="{row.id}" toggle="-> @grid.toggle(event)" />
+      </td>
+      <td If="{table == 'messages'}" class="order-3 block p-0 md:table-cell md:align-top md:px-3 md:py-2">
+        <IBtn icon="{row.expanded ? 'chevron-down' : 'chevron-right'}" title="{R.common.members}"
+          class="md:btn-xs" click="-> @grid.expand(row.id)" />
+      </td>
+      <td Each="cell of row.cells"
+        class="block p-0 min-w-0 md:table-cell md:align-top md:px-3 md:py-2 {cell.primary ? 'order-2 basis-[calc(100%-6rem)] grow font-medium' : (cell.multiline ? 'order-4 basis-full' : 'order-4 basis-[calc(50%-0.5rem)]')}">
+        <RecordCell cell="{cell}" rowId="{row.id}" />
+      </td>
+      <td If="{@grid.canEdit OR (table == 'messages' AND @api.canAdmin)}"
+        class="order-5 basis-full flex justify-end gap-2 p-0 md:table-cell md:align-top md:px-3 md:py-2 md:text-right md:whitespace-nowrap">
+        <Btn If="@grid.canEdit" class="md:btn-xs" mode="soft" type="{row.dirty ? 'primary' : 'neutral'}"
+          text="{R.common.save}" disabled="{!row.dirty}" busy="{@api.busy['save:' + row.id]}"
+          click="-> @grid.save(row.id)" />
+        <Btn If="{table == 'messages' AND @api.canAdmin}" class="md:btn-xs" mode="soft" text="{R.records.republish}"
+          busy="{@api.busy['republish:' + row.id]}" click="-> @grid.republish(row.id)" />
+      </td>
+    </tr>
+    <tr If="row.expanded" class="block md:table-row bg-base-200">
+      <td colspan="20" class="block md:table-cell px-4 py-3 md:px-6">
+        <Loading If="row.membersLoading" size="sm" />
+        <p If="{!row.membersLoading AND !row.members.length}" class="text-sm text-base-content/60">{R.common.noMembers}</p>
+        <ul If="row.members.length" class="flex flex-col gap-2 text-sm max-w-[80ch]">
+          <li Each="member of row.members" class="flex flex-col sm:flex-row gap-x-3">
+            <span class="text-primary shrink-0">@{member.channel}</span>
+            <span class="text-base-content/80">{member.summary}</span>
+          </li>
+        </ul>
+      </td>
+    </tr>
+  </Subcomponent>
+</Component>

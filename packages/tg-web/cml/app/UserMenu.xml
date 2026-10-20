@@ -1,0 +1,11 @@
+<Component id="UserMenu">
+  <Signature purpose="Who is signed in, with which roles, and the way out" />
+
+  <div class="flex items-center gap-3 shrink-0">
+    <div class="hidden lg:block text-right leading-tight">
+      <div class="text-sm">{@api.user.email ?? ''}</div>
+      <div class="text-xs text-base-content/60">{@api.user.roles | arrayJoin:', '}</div>
+    </div>
+    <IBtn icon="log-out" title="{R.auth.signOut}" click="-> @auth.signOut()" />
+  </div>
+</Component>

@@ -1,57 +1,44 @@
-import { AuthorizationError, newSessionKey, SESSION_COOKIE, sealSession } from "tg-auth/session";
+import { AuthorizationError, type Session } from "tg-auth/session";
 import { beforeEach, describe, expect, test } from "vitest";
-import { FakeCookieJar, FakeUserStatusReader } from "../../../test/fakes/auth";
-import { manualClock } from "../../../test/fakes/clock";
+import { FakeUserStatusReader, sessionWith } from "../../../test/fakes/auth";
 import { FakeQueueDepthReader } from "../../../test/fakes/observability";
 import { FakeDlqInspector, FakeDlqPurger } from "../../../test/fakes/queues";
 import { inspectDlq, loadQueues, purgeDlq } from "./queues";
 
-const NOW = 1_770_000_000_000;
 const SUB = "e4f1a2b3-0000-4000-8000-000000000001";
 
 const QUEUES = { analyze: "q/analyze", aggregate: "q/aggregate", publish: "q/publish" };
 const DLQS = { analyze: "dlq/analyze", aggregate: "dlq/aggregate", publish: "dlq/publish" };
 
-let jar: FakeCookieJar;
+let session: Session | null;
 let status: FakeUserStatusReader;
-let key: Uint8Array;
 let queues: FakeQueueDepthReader;
 let inspector: FakeDlqInspector;
 let purger: FakeDlqPurger;
-let revalidated: string[];
-const clock = manualClock(NOW);
 
 beforeEach(() => {
-  jar = new FakeCookieJar();
+  session = null;
   status = new FakeUserStatusReader();
-  key = newSessionKey();
   queues = new FakeQueueDepthReader();
   inspector = new FakeDlqInspector();
   purger = new FakeDlqPurger();
-  revalidated = [];
 });
 
 function signedInAs(...roles: string[]) {
-  jar.set(SESSION_COOKIE, sealSession({ sub: SUB, roles, expiresAt: NOW + 3_600_000 }, key), {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-  });
+  session = sessionWith(SUB, roles);
   status.enable(SUB);
 }
 
 const deps = () => ({
-  auth: { jar, key, clock, status },
+  auth: { session, status },
   queues,
   inspector,
   purger,
   queueUrls: QUEUES,
   dlqUrls: DLQS,
-  revalidate: (path: string) => revalidated.push(path),
 });
 
-describe("loadQueues — §8.2 L780", () => {
+describe("loadQueues — §8.2 L776", () => {
   test("carries every stage with both depths", async () => {
     queues.set(QUEUES.analyze, { available: 4, inFlight: 1 });
     queues.set(DLQS.analyze, { available: 2, inFlight: 0 });
@@ -74,10 +61,10 @@ describe("loadQueues — §8.2 L780", () => {
   });
 });
 
-describe("inspectDlq — §8.2 L780", () => {
+describe("inspectDlq — §8.2 L776", () => {
   const body = { messageId: "m1", body: '{"id":"example/1"}', receiveCount: 3 };
 
-  /** §8.6 L847 — `viewer` reads all pages, and this is part of one. */
+  /** §8.6 L858 — `viewer` reads all pages, and this is part of one. */
   test("a viewer may inspect", async () => {
     signedInAs("viewer");
     inspector.set(DLQS.publish, [body]);
@@ -128,7 +115,7 @@ describe("purgeDlq — R57", () => {
     expect(await purgeDlq({ queueName: "analyze" }, deps())).toEqual({ discarded: 9 });
   });
 
-  /** §8.4 L821's replay is `admin`; ending messages outright cannot be less. */
+  /** §8.4 L830's replay is `admin`; ending messages outright cannot be less. */
   test("a viewer may not purge", async () => {
     signedInAs("viewer");
 
@@ -164,20 +151,11 @@ describe("purgeDlq — R57", () => {
     expect(purger.purged).not.toContain(QUEUES.publish);
   });
 
-  /** Otherwise the card keeps showing the depth the queue had before the purge. */
-  test("revalidates the page so the card stops showing a stale depth", async () => {
-    signedInAs("admin");
-    await purgeDlq({ queueName: "analyze" }, deps());
-
-    expect(revalidated).toEqual(["/queues"]);
-  });
-
   /** SQS's 60 s cooldown surfaces to the operator rather than reading as success. */
   test("a refused purge does not report a discard", async () => {
     signedInAs("admin");
     purger.error = new Error("a purge of this DLQ is already in progress");
 
     await expect(purgeDlq({ queueName: "analyze" }, deps())).rejects.toThrow(/already in progress/);
-    expect(revalidated).toEqual([]);
   });
 });

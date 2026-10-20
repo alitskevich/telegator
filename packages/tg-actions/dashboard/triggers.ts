@@ -6,6 +6,7 @@ import { REPLAYABLE_QUEUES } from "tg-enums/queueName";
 import type { MessageRepo, SourceRepo, TargetRepo } from "tg-ports/db";
 import {
   MAX_CONSUME,
+  MAX_PUBLISH_NOW,
   type PublishQueuePayload,
   publishQueueMessage,
   type QueueProducer,
@@ -16,9 +17,9 @@ import { toCsv } from "tg-utils/ui/csv";
 import { z } from "zod";
 
 /**
- * §8.4 L818-816 — the three `admin` triggers and the `viewer` export.
+ * §8.4 L827-827 — the three `admin` triggers and the `viewer` export.
  *
- * None of this imports `tg-pipeline/`. §8.2 L792 makes that the point rather
+ * None of this imports `tg-pipeline/`. §8.2 L788 makes that the point rather
  * than a style rule: a trigger must run "the exact deployed artefact", which
  * only an invoke does.
  */
@@ -40,13 +41,12 @@ export interface TriggerDeps {
   readonly sources: SourceRepo;
   readonly targets: TargetRepo;
   readonly publishQueue: QueueProducer;
-  readonly revalidate: (path: string) => void;
 }
 
-/** §3.1's summary, narrowed to what §8.4 L818 returns. */
+/** §3.1's summary, narrowed to what §8.4 L827 returns. */
 const ScrapeReplySchema = z.object({ processed: z.number().int().nonnegative() });
 
-/** §7.5 L697's replay summary, narrowed to what §8.4 L821 returns. */
+/** §7.5 L698's replay summary, narrowed to what §8.4 L830 returns. */
 const ReplayReplySchema = z.object({ replayed: z.number().int().nonnegative() });
 
 export async function runScraper(deps: TriggerDeps): Promise<{ processed: number }> {
@@ -58,7 +58,6 @@ export async function runScraper(deps: TriggerDeps): Promise<{ processed: number
   // failed in a way it did not report, and defaulting to zero would show an
   // operator a successful trigger that scraped nothing.
   const { processed } = ScrapeReplySchema.parse(reply);
-  deps.revalidate("/sources");
   return { processed };
 }
 
@@ -66,26 +65,26 @@ export async function runScraper(deps: TriggerDeps): Promise<{ processed: number
  * R60 — **"Reset all"**: clears every source's scrape cursor, so the next poll
  * starts from each channel's latest page instead of resuming a stale position.
  *
- * §8.4 lists no such action, and it cannot be an inline edit either: §2.1 L115
+ * §8.4 lists no such action, and it cannot be an inline edit either: §2.1 L116
  * calls `lastItemId` "the sole duplicate-suppression mechanism", which is why
  * `SOURCE_WRITABLE_FIELDS` keeps it out of the operator's reach. It exists
  * because a cursor can end up pointing deep in a channel's history — a re-seed
- * from a stale export (§9.5 L979), or a channel that removed the post the
- * cursor names — and §3.1 L207 then re-fetches that same dead window every run,
+ * from a stale export (§9.5 L967), or a channel that removed the post the
+ * cursor names — and §3.1 L208 then re-fetches that same dead window every run,
  * yielding nothing while the table shows a source polling normally.
  *
  * Three fields, not one:
- *  - `lastItemId` empty is the no-cursor case §3.1 L207 already handles: the
+ *  - `lastItemId` empty is the no-cursor case §3.1 L208 already handles: the
  *    bare `t.me/s/{id}`, which serves the channel's newest posts.
- *  - `lastUpdated: 0` makes every source due under §3.1 L202 immediately.
+ *  - `lastUpdated: 0` makes every source due under §3.1 L203 immediately.
  *    Without it a "Scrape now" pressed straight after the reset would poll
  *    nothing for the next 30 minutes, and the reset would read as broken.
- *  - `zeroYieldRuns: 0` because §4.1 L382's counter describes the window that
+ *  - `zeroYieldRuns: 0` because §4.1 L383's counter describes the window that
  *    was just discarded; carrying it over would fire `SourceStale` on a source
  *    that has been given a fresh start.
  *
  * **What it costs.** With no cursor there is nothing suppressing duplicates
- * (§3.1 L223), so each channel's newest window — some twenty posts — is
+ * (§3.1 L224), so each channel's newest window — some twenty posts — is
  * enqueued as new, and anything in it that §6 does not match to an existing
  * message is published again. That is the price of this being a stored-state
  * write and nothing else: it touches DynamoDB only, so it is instant and cannot
@@ -97,13 +96,13 @@ export async function runScraper(deps: TriggerDeps): Promise<{ processed: number
  * "Cleanup all" does.
  */
 
-/** §3.1 L207 — the cursor is appended "only when one exists"; empty is none. */
+/** §3.1 L208 — the cursor is appended "only when one exists"; empty is none. */
 const NO_CURSOR = "";
 
-/** §3.1 L202 — `now - 0` clears any interval, so the source is due next run. */
+/** §3.1 L203 — `now - 0` clears any interval, so the source is due next run. */
 const DUE_NOW = 0;
 
-/** §3.1 L221 — the same reset a successful parse performs. */
+/** §3.1 L222 — the same reset a successful parse performs. */
 const NO_ZERO_YIELD_RUNS = 0;
 
 export async function resetSourceCursors(deps: TriggerDeps): Promise<{ reset: number }> {
@@ -117,15 +116,13 @@ export async function resetSourceCursors(deps: TriggerDeps): Promise<{ reset: nu
   for (const source of sources) {
     // A patch, not a put: `updateCursor` writes only the attributes named, so
     // an operator's concurrent edit to `category` or `status` survives the
-    // reset (§2.1 L110-114).
+    // reset (§2.1 L111-115).
     await deps.sources.updateCursor(source.id, {
       lastItemId: NO_CURSOR,
       lastUpdated: DUE_NOW,
       zeroYieldRuns: NO_ZERO_YIELD_RUNS,
     });
   }
-
-  deps.revalidate("/sources");
   return { reset: sources.length };
 }
 
@@ -143,7 +140,6 @@ export async function replayDlq(input: unknown, deps: TriggerDeps): Promise<{ re
   const reply = await deps.lambda.invoke(deps.functions.dlqReplay, event);
 
   const { replayed } = ReplayReplySchema.parse(reply);
-  deps.revalidate("/queues");
   return { replayed };
 }
 
@@ -152,7 +148,7 @@ export async function replayDlq(input: unknown, deps: TriggerDeps): Promise<{ re
  * queue, instead of waiting for the event source mapping to reach them.
  *
  * §8.4 lists no such action. What makes it a *trigger* rather than logic here is
- * §8.2 L792: consuming a queue means running a stage, and the dashboard must not
+ * §8.2 L788: consuming a queue means running a stage, and the dashboard must not
  * import one — so this invokes `telegator-consume`, which is the only thing
  * holding receive and delete on the live queues. §7.6 L716's boundary is
  * untouched by design: the web role still cannot invoke `analyze` or
@@ -186,17 +182,15 @@ export async function consumeQueue(
   // summary means the function failed in a way it did not report, and a
   // defaulted zero would show an operator a queue that had been drained.
   const summary = ConsumeReplySchema.parse(reply);
-
-  deps.revalidate("/queues");
   return summary;
 }
 
 const RepublishInputSchema = z.object({ messageId: ItemIdSchema });
 
 /**
- * §8.4 L819 — "sets `topublish`, enqueues", in that order and for that reason.
+ * §8.4 L828 — "sets `topublish`, enqueues", in that order and for that reason.
  *
- * §3.4 L321 has the publish stage load the message and drop anything not in
+ * §3.4 L322 has the publish stage load the message and drop anything not in
  * `topublish`. A request that arrived before the status write landed would be
  * silently discarded, and the operator would see a button that did nothing.
  * multi-target#3.5 adds the `ts` bump.
@@ -217,8 +211,6 @@ export async function republishMessage(input: unknown, deps: TriggerDeps): Promi
   // `post.tgAt >= ts` (D4), so the status alone would republish nothing.
   await deps.messages.patch(messageId, { status: "topublish", ts: deps.clock.now() });
   await deps.publishQueue.send([publishQueueMessage(messageId)]);
-
-  deps.revalidate("/messages");
 }
 
 /**
@@ -226,20 +218,19 @@ export async function republishMessage(input: unknown, deps: TriggerDeps): Promi
  * now. §8.4 lists no such action, and this is a divergence from §7.6 L716's
  * two-function invoke grant, recorded here with its reason.
  *
- * §8.4 L819's `republishMessage` is the queue route and cannot be "now": §7.3
+ * §8.4 L828's `republishMessage` is the queue route and cannot be "now": §7.3
  * L648 gives `telegator-publish` a queue-level `DelaySeconds 300`, FIFO offers
  * no per-message delay, and `MessageDeduplicationId = messageId` collapses a
  * repeat request inside the same five minutes — so a second press inside that
  * window does nothing at all, silently. Invoking is the only route that sends
- * on the operator's timescale, and §8.2 L792 already makes invoking the
+ * on the operator's timescale, and §8.2 L788 already makes invoking the
  * deployed function the sanctioned way to run a stage by hand.
  *
  * The two stay separate rather than one replacing the other: `republishMessage`
  * *changes* a message's status back to `topublish`, which is the queue's job to
  * pick up; this one changes nothing and only runs what is already pending.
+ * The cap, `MAX_PUBLISH_NOW`, is in `tg-ports/queues.ts`.
  */
-const MAX_PUBLISH_NOW = 10;
-
 const PublishPendingInputSchema = z.object({
   // Capped, not merely defaulted. Every invoke is a real Telegram send and the
   // backlog is unbounded — dev held 137 `topublish` messages when this was
@@ -247,15 +238,15 @@ const PublishPendingInputSchema = z.object({
   max: z.number().int().positive().max(MAX_PUBLISH_NOW),
 });
 
-/** §3.4 L352's summary. A failed send is reported here, not thrown (L152). */
+/** §3.4 L353's summary. A failed send is reported here, not thrown (L152). */
 const PublishReplySchema = z.object({
   batchItemFailures: z.array(z.object({ itemIdentifier: z.string() })),
 });
 
 /**
- * The one-record SQS event `tg-pipeline/handlers/publish.ts` expects (§7.5 L696, batch size
+ * The one-record SQS event `tg-pipeline/handlers/publish.ts` expects (§7.5 L697, batch size
  * 1). Built here rather than imported: the dashboard must not reach into
- * `tg-pipeline/handlers/` or `tg-pipeline/` (§8.2 L792), and the body is
+ * `tg-pipeline/handlers/` or `tg-pipeline/` (§8.2 L788), and the body is
  * `PublishQueuePayload` either way. `messageId` carries the message id so a
  * reported `itemIdentifier` names the story an operator can find.
  */
@@ -281,7 +272,7 @@ export async function publishPending(
   let failed = 0;
 
   for (const message of pending) {
-    // Sequential: §3.4 L352 paces Telegram calls, and the FIFO group already
+    // Sequential: §3.4 L353 paces Telegram calls, and the FIFO group already
     // serialises per message. Parallel invokes would race the same channel.
     try {
       const reply = await deps.lambda.invoke(
@@ -297,8 +288,6 @@ export async function publishPending(
       failed += 1;
     }
   }
-
-  deps.revalidate("/messages");
   return { published, failed };
 }
 
@@ -315,7 +304,7 @@ export {
 const ExportInputSchema = z.object({ table: z.enum(["sources", "messages", "targets"]) });
 
 /**
- * §8.4 L816 — `exportTable`, `viewer`.
+ * §8.4 L825 — `exportTable`, `viewer`.
  *
  * Returns CSV text rather than a `Blob`: a server action's return value is
  * serialised, and the page turns this into a download. The columns are §8.3's,

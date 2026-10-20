@@ -5,7 +5,7 @@ import { createLogger, type LogSink } from "tg-utils/logger";
 import { describe, expect, test } from "vitest";
 
 /**
- * §8.5 L835's category chart spans two modules that never call each other: the
+ * §8.5 L846's category chart spans two modules that never call each other: the
  * analyze stage writes a log line, and `logsInsightsCategoryReader` writes a
  * query that reads it. Each is already tested against its own expectations, and
  * both would keep passing if the two stopped agreeing — the chart would just be
@@ -102,7 +102,7 @@ describe("the analyze log line is what the category query reads", () => {
 
   /**
    * The audit proper: run the query's own filter and grouping over lines the
-   * stage really produced, and check the counts §8.5 L835's chart would show.
+   * stage really produced, and check the counts §8.5 L846's chart would show.
    */
   test("the query's filter and grouping reproduce the category distribution", async () => {
     const query = await productionQuery();
@@ -137,7 +137,7 @@ describe("the analyze log line is what the category query reads", () => {
    * dimensions would create 35 billable metrics for a chart nobody watches
    * minute-to-minute" — which is precisely why the chart comes from logs. If a
    * dropped item stopped being logged, the distribution would silently become
-   * one of enqueued items only, understating exactly the categories §5.2 L459
+   * one of enqueued items only, understating exactly the categories §5.2 L460
    * tells the model to diminish.
    */
   test("a dropped item is logged too, so the distribution is of what was classified", () => {

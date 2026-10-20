@@ -1,28 +1,28 @@
-/** A pie slice, in the shape §8.5 L840's chart consumes. */
+/** A pie slice, in the shape §8.5's charts consume. */
 export interface Slice {
   readonly label: string;
   readonly value: number;
 }
 
 /**
- * §8.5 L840 — "the source's hand-built SVG arc geometry (centre 100,100, radius
- * 80, `M cx cy L … A r r 0 large 1 … Z`, with the full-circle special case) and
- * its 10-colour palette. No charting library is needed for two pie charts."
+ * §8.5 — the two donut charts, drawn as one CSS `conic-gradient` rather than
+ * as SVG paths. The browser does the arc geometry, so there is no path string
+ * to get wrong and no full-circle special case: a single slice is simply a
+ * gradient from 0% to 100%. No charting library is needed for two charts.
  *
- * Kept as pure functions rather than inside the component so the arithmetic is
- * testable without rendering: a path string is exactly the kind of thing that
- * looks plausible and is wrong.
+ * Kept as pure functions so the arithmetic is testable without rendering.
  */
 
-export const PIE_CENTRE = 100;
-export const PIE_RADIUS = 80;
-
-/** Ten colours, cycled across the 29 categories of §5.4 (R4). */
+/**
+ * Ten colours, cycled across the 29 categories of §5.4 (R4), tuned for the dark
+ * theme. No red: the console keeps red for dead letters and failures alone, so
+ * a category drawn in it would read as an alarm.
+ */
 export const PIE_PALETTE = [
   "#4a9eff",
   "#3fb950",
   "#d29922",
-  "#f85149",
+  "#c3cfe0",
   "#a371f7",
   "#39c5cf",
   "#db6d28",
@@ -32,98 +32,59 @@ export const PIE_PALETTE = [
 ] as const;
 
 export function sliceColor(index: number): string {
-  // `at` with a modulus rather than an index, so a caller passing 29 gets a
-  // colour instead of `undefined` painted as black.
+  // A modulus rather than a bare index, so a caller passing 29 gets a colour
+  // instead of `undefined` painted as nothing.
   return PIE_PALETTE[index % PIE_PALETTE.length] ?? PIE_PALETTE[0];
 }
 
 export interface PieSlice {
+  /** The label doubles as the `Each` key in the legend, so it is also the id. */
+  readonly id: string;
   readonly label: string;
   readonly value: number;
-  /** Share of the whole, for the legend. */
+  /** Share of the whole, 0–1, for the legend. */
   readonly fraction: number;
   readonly color: string;
-  /**
-   * `circle` when this slice is the entire chart. At 100% the arc's start and
-   * end points coincide and SVG draws nothing, so the chart would render empty
-   * rather than full — §8.5 L840 calls the case out for that reason.
-   */
-  readonly kind: "path" | "circle";
-  /** Absent for the `circle` case. */
-  readonly path?: string;
 }
 
-/** Three decimals is finer than a 200px viewBox can show, and keeps paths readable. */
-const PRECISION = 1000;
-
-/** Half the circle — the threshold SVG's large-arc flag turns on at. */
-const HALF = 0.5;
-
-const FULL_TURN = 2 * Math.PI;
-const QUARTER_TURN = Math.PI / 2;
-
-function round(value: number): number {
-  // `+0` collapses the -0 that `cos(-90°)` produces, which would otherwise print
-  // as "-0" in the middle of a path.
-  return Math.round(value * PRECISION) / PRECISION + 0;
-}
-
-/** Angle in radians for a fraction of the circle, starting at twelve o'clock. */
-const angleAt = (fraction: number): number => fraction * FULL_TURN - QUARTER_TURN;
-
-const pointAt = (fraction: number): [number, number] => {
-  const angle = angleAt(fraction);
-  return [
-    round(PIE_CENTRE + PIE_RADIUS * Math.cos(angle)),
-    round(PIE_CENTRE + PIE_RADIUS * Math.sin(angle)),
-  ];
-};
+const PERCENT = 100;
 
 /**
- * Turn labelled values into drawable slices.
+ * Turn labelled values into slices.
  *
- * Zero and negative values are dropped: a zero slice draws a hairline at its
- * start angle and adds a legend row for nothing, and a negative one winds the
- * arc backwards over its neighbours.
+ * Zero and negative values are dropped: a zero slice adds a legend row for
+ * nothing, and a negative one would eat into its neighbours.
  */
 export function toPieSlices(values: readonly Slice[]): PieSlice[] {
   const usable = values.filter((slice) => slice.value > 0);
   const total = usable.reduce((sum, slice) => sum + slice.value, 0);
   if (total === 0) return [];
 
-  // Colour index counts over the *input* order so a chart's colours do not shift
-  // when a category drops to zero between refreshes.
-  const colorFor = (slice: Slice) => sliceColor(values.indexOf(slice));
+  // Colour index counts over the *input* order, so a chart's colours do not
+  // shift when a category drops to zero between refreshes.
+  return usable.map((slice) => ({
+    id: slice.label,
+    label: slice.label,
+    value: slice.value,
+    fraction: slice.value / total,
+    color: sliceColor(values.indexOf(slice)),
+  }));
+}
 
-  if (usable.length === 1) {
-    const [only] = usable;
-    if (only === undefined) return [];
-    return [
-      { label: only.label, value: only.value, fraction: 1, color: colorFor(only), kind: "circle" },
-    ];
-  }
+/** Two decimals of a percent is finer than any donut on a screen can show. */
+const round = (value: number): number => Math.round(value * PERCENT * PERCENT) / PERCENT;
 
+/**
+ * `conic-gradient(#4a9eff 0% 25%, #3fb950 25% 100%)` — each slice a hard stop
+ * from where the last one ended, clockwise from twelve o'clock.
+ */
+export function conicGradient(slices: readonly PieSlice[]): string {
   let start = 0;
-
-  return usable.map((slice) => {
-    const fraction = slice.value / total;
-    const end = start + fraction;
-
-    const [x1, y1] = pointAt(start);
-    const [x2, y2] = pointAt(end);
-    // The large-arc flag. Wrong, and every slice over half the circle renders as
-    // its own complement: a 60% slice drawn as 40%, silently and plausibly.
-    const large = fraction > HALF ? 1 : 0;
-
+  const stops = slices.map((slice) => {
+    const end = start + slice.fraction;
+    const stop = `${slice.color} ${round(start)}% ${round(end)}%`;
     start = end;
-
-    return {
-      label: slice.label,
-      value: slice.value,
-      fraction,
-      color: colorFor(slice),
-      kind: "path" as const,
-      path: `M ${PIE_CENTRE} ${PIE_CENTRE} L ${x1} ${y1} A ${PIE_RADIUS} ${PIE_RADIUS} 0 ${large} 1 ${x2} ${y2} Z`,
-    };
+    return stop;
   });
+  return `conic-gradient(${stops.join(", ")})`;
 }

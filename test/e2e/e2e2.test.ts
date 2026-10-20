@@ -13,7 +13,7 @@ import { telegramFixture } from "../fixtures/telegram/index";
 import { runPipeline } from "./harness";
 
 /**
- * E2E-2 (§10.2 L999) — "Two near-identical posts from different sources on the
+ * E2E-2 (§10.2 L987) — "Two near-identical posts from different sources on the
  * same date produce **one** message with two members."
  *
  * What this can and cannot prove. "Near-identical" is a *semantic* claim, and
@@ -128,7 +128,7 @@ describe("E2E-2 fixtures", () => {
   });
 });
 
-describe("E2E-2 (§10.2 L999) — the same event", () => {
+describe("E2E-2 (§10.2 L987) — the same event", () => {
   const ABOVE = true;
 
   test("two different sources each contribute one item", async () => {
@@ -156,12 +156,12 @@ describe("E2E-2 (§10.2 L999) — the same event", () => {
     const record = await messages.get(only?.id ?? "");
 
     expect(Object.keys(record?.members ?? {})).toEqual([`source_a/${POST}`, `source_b/${POST}`]);
-    // §2.3 L155's invariant — the cached count and the map agree.
+    // §2.3 L156's invariant — the cached count and the map agree.
     expect(record?.memberCount).toBe(2);
   });
 
   /**
-   * §3.3 L294 groups the publish queue by message id, so a merge that produced
+   * §3.3 L295 groups the publish queue by message id, so a merge that produced
    * two enqueues would still send twice — the member count and the send count
    * are separate claims.
    */
@@ -172,7 +172,7 @@ describe("E2E-2 (§10.2 L999) — the same event", () => {
     expect(run.telegramCalls).toHaveLength(1);
   });
 
-  test("the merged message keeps one id, the first item's (§2.3 L152)", async () => {
+  test("the merged message keeps one id, the first item's (§2.3 L153)", async () => {
     await runPipeline(world(ABOVE));
 
     const [only] = await messages.queryByStatus("published");

@@ -14,7 +14,7 @@ export function isRole(value: unknown): value is Role {
 export interface Principal {
   /** Raw `cognito:groups`. Arbitrary strings — anything unrecognised is ignored. */
   readonly roles: readonly string[];
-  /** §8.6 L875. False for a user who has not been enabled, or has been disabled. */
+  /** §8.6 L882. False for a user who has not been enabled, or has been disabled. */
   readonly enabled: boolean;
 }
 
@@ -28,9 +28,9 @@ function rankOf(value: string): number | undefined {
  * L844-845 — `editor` is viewer "+", `admin` is editor "+" — so a check is a
  * floor and not an equality.
  *
- * Rejects, in order: an absent principal (§8.4 L823 re-checks server-side, and an
+ * Rejects, in order: an absent principal (§8.4 L820 re-checks server-side, and an
  * unauthenticated caller must answer `false` rather than throw); a disabled user
- * (§8.6 L875, "rejected at every action" — disabling is the revocation mechanism,
+ * (§8.6 L882, "rejected at every action" — disabling is the revocation mechanism,
  * so it has to outrank group membership, because an operator disabling a
  * compromised admin does not also remove them from the `admin` group); and any
  * group name that is not one of the three, which carries no privilege rather than

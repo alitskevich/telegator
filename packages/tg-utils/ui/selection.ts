@@ -1,7 +1,7 @@
 /**
  * The select-all control §8.3's tables share.
  *
- * *Reconciliation R56.* §8.3 L801-802 lists each table's toolbar — add, delete
+ * *Reconciliation R56.* §8.3 L804-809 lists each table's toolbar — add, delete
  * selected, export, the triggers — and names no select-all, so an operator
  * addresses a set one checkbox at a time. That is the set the per-column filters
  * exist to produce, and a bulk delete of a narrowed table is the case they were

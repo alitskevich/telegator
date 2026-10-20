@@ -36,7 +36,7 @@ function dashboardSources(): string[] {
   return [join(repoRoot, "app"), join(repoRoot, "actions")].flatMap(walk);
 }
 
-describe("the §8.2 L792 boundary", () => {
+describe("the §8.2 L788 boundary", () => {
   /**
    * "**`lib/pipeline/` holds the single implementation of every stage.** The
    * Lambda handlers are thin wrappers around it... The dashboard does **not**
@@ -96,7 +96,7 @@ describe("the §8.2 L792 boundary", () => {
   });
 
   /**
-   * §9.3 L910 deploys this on Amplify. A CDK import would pull the whole
+   * §9.3 L916 deploys this on Amplify. A CDK import would pull the whole
    * construct library into the server bundle to read a constant — which is what
    * `actions/context.ts` briefly did in item 5.10 for `DASHBOARD_ENV_VARS`, and
    * what moving `ROLE_GROUPS` avoided in item 5.2.
@@ -121,7 +121,7 @@ describe("the §8.2 L792 boundary", () => {
   });
 
   /**
-   * §8.1 L764-768 is a deletion, and it is the point of the section: the
+   * §8.1 L764-770 is a deletion, and it is the point of the section: the
    * offline-first layer is gone, "**Removed:** IndexedDB schema and stores, the
    * `downstream`/`since` protocol, `upsertBatch` reconciliation, soft-delete
    * tombstone propagation, `resetDb`, and the client cache-invalidation
@@ -188,7 +188,7 @@ describe("the mcp-server#5.5 and #6.2 boundaries", () => {
   });
 
   /**
-   * mcp-server#6.2 — the same rule §8.2 L792 gives the dashboard, over the
+   * mcp-server#6.2 — the same rule §8.2 L788 gives the dashboard, over the
    * transitive closure: a tool must never run a local copy of a deployed
    * stage.
    */

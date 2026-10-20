@@ -70,7 +70,7 @@ const NAMES = [
 
 describe("TelegatorPipelineStack functions", () => {
   /**
-   * §8.5 L835's category chart is a Logs Insights query grouping by a top-level
+   * §8.5 L846's category chart is a Logs Insights query grouping by a top-level
    * `category` field, which only works if Lambda emits the line the analyze
    * stage produced and nothing else. `LoggingFormat.JSON` wraps every record in
    * an envelope and carries ours as a `message` string, so the query would match
@@ -78,7 +78,7 @@ describe("TelegatorPipelineStack functions", () => {
    * TEXT is today's default; declaring it means a future default cannot change
    * that silently.
    */
-  test("logs in TEXT format, which §8.5 L835's query depends on", () => {
+  test("logs in TEXT format, which §8.5 L846's query depends on", () => {
     const formats = functions(stackFor().template).map(
       (fn) => (fn.LoggingConfig as { LogFormat?: string } | undefined)?.LogFormat,
     );
@@ -88,11 +88,11 @@ describe("TelegatorPipelineStack functions", () => {
   });
 
   /**
-   * §7.5 L689 — "Five functions, down from the source system's seven", plus
+   * §7.5 L690 — "Five functions, down from the source system's seven", plus
    * R61's `consume` and R63's `scrape-mtproto`. Counted against the inventory
    * rather than a literal, so adding an eighth is still a deliberate act.
    */
-  test("declares exactly the functions §7.5 L693-697 inventories, plus R61's and R63's", () => {
+  test("declares exactly the functions §7.5 L694-698 inventories, plus R61's and R63's", () => {
     expect(functions(stackFor().template)).toHaveLength(NAMES.length);
   });
 
@@ -100,7 +100,7 @@ describe("TelegatorPipelineStack functions", () => {
     expect(named(stackFor().template, name)).toBeDefined();
   });
 
-  /** §7.5 L689 — "All Node.js 22, ARM64, bundled with esbuild." */
+  /** §7.5 L690 — "All Node.js 22, ARM64, bundled with esbuild." */
   test.each(NAMES)("%s runs Node.js 22 on ARM64", (name) => {
     const fn = named(stackFor().template, name);
 
@@ -116,7 +116,7 @@ describe("TelegatorPipelineStack functions", () => {
   test.each([
     ["telegator-dev-scrape", 512],
     ["telegator-dev-analyze", 512],
-    // §7.5 L695 — "aggregate is given 1024 MB because it holds a day of 4 KB
+    // §7.5 L696 — "aggregate is given 1024 MB because it holds a day of 4 KB
     // vectors plus a 10-item embedding batch".
     ["telegator-dev-aggregate", 1024],
     ["telegator-dev-publish", 512],
@@ -126,7 +126,7 @@ describe("TelegatorPipelineStack functions", () => {
     expect(named(stackFor().template, name)?.MemorySize).toBe(memory);
   });
 
-  describe("reserved concurrency (§7.5 L693-697)", () => {
+  describe("reserved concurrency (§7.5 L694-698)", () => {
     test.each([
       ["telegator-dev-scrape", 1],
       ["telegator-dev-analyze", 5],
@@ -138,7 +138,7 @@ describe("TelegatorPipelineStack functions", () => {
     });
 
     /**
-     * §7.5 L695-696 say "by message group" rather than a number, and §3.3 L276
+     * §7.5 L696-697 say "by message group" rather than a number, and §3.3 L277
      * is explicit that this "replaces a blunt reserved-concurrency-of-1".
      * Reserving here would serialise across dates too, undoing the parallelism
      * FIFO groups exist to allow.
@@ -151,7 +151,7 @@ describe("TelegatorPipelineStack functions", () => {
     );
 
     /**
-     * §3.1 L197's scrape, §3.5's replay, R61's consume and R63's MTProto scrape
+     * §3.1 L198's scrape, §3.5's replay, R61's consume and R63's MTProto scrape
      * — the four that an operator or a schedule starts — plus analyze. The two
      * driven by FIFO groups reserve nothing, which is the assertion above.
      */
@@ -167,8 +167,8 @@ describe("TelegatorPipelineStack functions", () => {
      * R40 — `reserveConcurrency=false` drops every reservation.
      *
      * A cold account's whole quota is 5, so AWS rejects *any* reservation and
-     * §3.1 L197 and §3.2 L245 become undeployable through no fault of the
-     * template (§7.5 L699).
+     * §3.1 L198 and §3.2 L246 become undeployable through no fault of the
+     * template (§7.5 L700).
      *
      * Its own parameter rather than a dev-only branch, for R23's reason: the
      * driver is the account's quota, not the environment name. The default stays
@@ -194,7 +194,7 @@ describe("TelegatorPipelineStack functions", () => {
     });
   });
 
-  /** §11.5 L1048 — analyze's logs are the source of §8.5 L835's category chart. */
+  /** §11.5 L1036 — analyze's logs are the source of §8.5 L846's category chart. */
   test("retains analyze logs for 90 days", () => {
     const groups = Object.values(stackFor().template.findResources("AWS::Logs::LogGroup")).map(
       (r) => r.Properties ?? {},
@@ -300,7 +300,7 @@ describe("TelegatorPipelineStack functions", () => {
     }
   });
 
-  test("names functions with the §9.2 L900 environment prefix", () => {
+  test("names functions with the §9.2 L906 environment prefix", () => {
     expect(named(stackFor({ env: "prod" }).template, "telegator-prod-scrape")).toBeDefined();
   });
 

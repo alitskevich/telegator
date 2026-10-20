@@ -1,0 +1,64 @@
+{
+  "hosting": {
+    "site": "telegator-581db",
+    "public": "packages/tg-web/www",
+    "ignore": ["firebase.json", "**/.*", "**/*.map"],
+    "cleanUrls": true,
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com https://unpkg.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com https://unpkg.com; img-src 'self' data:; connect-src 'self' https://*.execute-api.eu-central-1.amazonaws.com https://*.auth.eu-central-1.amazoncognito.com; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), microphone=(), geolocation=()"
+          }
+        ]
+      },
+      {
+        "source": "/",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "/@(index.html|config.json)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "/dist/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300"
+          }
+        ]
+      }
+    ]
+  }
+}

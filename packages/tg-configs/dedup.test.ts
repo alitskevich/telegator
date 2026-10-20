@@ -17,11 +17,11 @@ describe("the §6 CONST block (L546-279)", () => {
 });
 
 describe("constants §6 references but does not declare", () => {
-  test("MAX_BATCH_SIZE is 10, the batch §6 L560 and §7.3 L651 both cap", () => {
+  test("MAX_BATCH_SIZE is 10, the batch §6 L561 and §7.3 L652 both cap", () => {
     expect(MAX_BATCH_SIZE).toBe(10);
   });
 
-  /** §3.3 L296 and §7.3 L652; §11.4 L1047 records 300 s as "a starting value". */
+  /** §3.3 L297 and §7.3 L653; §11.4 L1035 records 300 s as "a starting value". */
   test("SETTLE_DELAY_SECONDS is 300", () => {
     expect(SETTLE_DELAY_SECONDS).toBe(300);
   });
@@ -37,7 +37,7 @@ describe("constants §6 references but does not declare", () => {
   });
 });
 
-describe("the §3.4 L323 render limit", () => {
+describe("the §3.4 L324 render limit", () => {
   test("MEMBER_RENDER_LIMIT is 12", () => {
     expect(MEMBER_RENDER_LIMIT).toBe(12);
   });

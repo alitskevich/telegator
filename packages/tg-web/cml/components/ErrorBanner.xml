@@ -1,0 +1,10 @@
+<Component id="ErrorBanner">
+  <Signature purpose="An inline failure, in plain words, beside the block it belongs to">
+    <Prop id="text" type="string" required="true" />
+  </Signature>
+
+  <div role="alert" class="alert alert-error alert-soft text-sm">
+    <span class="icon icon-circle-alert" aria-hidden="true"></span>
+    <span class="break-words">{text}</span>
+  </div>
+</Component>

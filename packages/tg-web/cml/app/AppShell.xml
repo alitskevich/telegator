@@ -1,0 +1,11 @@
+<Component id="AppShell">
+  <Signature purpose="The signed-in console: header, then the page the hash route names"
+    description="An unknown route renders `Page`, the not-found screen, by CML's dotted-prefix fallback." />
+
+  <div class="min-h-screen flex flex-col">
+    <AppHeader />
+    <main class="w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-6 flex flex-col gap-4">
+      <Dynamic As="Page.{capitalize(@nav.page || 'dashboard')}" />
+    </main>
+  </div>
+</Component>

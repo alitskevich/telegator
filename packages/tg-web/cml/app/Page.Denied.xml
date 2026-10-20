@@ -1,0 +1,17 @@
+<Component id="Page.Denied">
+  <Signature purpose="Signed in, and the API said no: a disabled account, no role, or the API unreachable" />
+
+  <div class="min-h-screen grid place-items-center px-4">
+    <section class="w-full max-w-md bg-base-100 rounded-box p-8 flex flex-col gap-5">
+      <span class="icon icon-shield-x text-4xl text-error" aria-hidden="true"></span>
+      <h1 class="text-3xl font-semibold tracking-tight">{R.auth.deniedTitle}</h1>
+      <p If="{@api.denial == 'disabled'}" class="text-base-content/70">{R.auth.disabled}</p>
+      <p If="{@api.denial == 'forbidden'}" class="text-base-content/70">{R.auth.forbidden}</p>
+      <ErrorBanner If="{@api.denial != 'disabled' AND @api.denial != 'forbidden'}" text="{@api.denial}" />
+      <div class="flex gap-2">
+        <a href="/" class="btn btn-primary">{R.auth.retry}</a>
+        <Btn mode="soft" icon="log-out" text="{R.auth.signOut}" click="-> @auth.signOut()" />
+      </div>
+    </section>
+  </div>
+</Component>

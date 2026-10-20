@@ -1,0 +1,10 @@
+<Component id="Page.Checking">
+  <Signature purpose="Between the token and the API's answer: nothing to show yet but that it is working" />
+
+  <div class="min-h-screen grid place-items-center">
+    <div class="flex items-center gap-3 text-base-content/70" role="status">
+      <Loading size="sm" />
+      <span>{R.auth.checking}</span>
+    </div>
+  </div>
+</Component>

@@ -109,7 +109,7 @@ export function createCloudWatchMetrics(options: CloudWatchMetricsOptions): Clou
         buffered.set(key, { name, dimensions, value });
         return;
       }
-      // §8.5 L829–831 reads these with the `Sum` statistic, so N identical data
+      // §8.5 L840–842 reads these with the `Sum` statistic, so N identical data
       // points and one summed datum chart identically — and one datum is cheaper.
       existing.value += value;
     },

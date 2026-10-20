@@ -1,0 +1,14 @@
+<Component id="App">
+  <Signature purpose="Signs the operator in, then switches between sign-in, access check, refusal and the console"
+    description="`@api.access` is the API's answer to `whoami`, not the token's: only the API can read whether the account is still enabled (§8.6)." />
+
+  <AuthService Ref="auth" config="{R.config}" />
+  <ApiService Ref="api" auth="@auth" config="{R.config}" />
+
+  <Selector On="{@api.access}">
+    <Case When="granted"><AppShell /></Case>
+    <Case When="signedOut"><Page.SignIn /></Case>
+    <Case When="denied"><Page.Denied /></Case>
+    <Case When="default"><Page.Checking /></Case>
+  </Selector>
+</Component>

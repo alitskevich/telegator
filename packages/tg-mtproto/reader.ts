@@ -5,18 +5,18 @@ import type { ChannelPost, ChannelReader } from "tg-ports/telegram";
 
 /**
  * R63 — the `via: "mtproto"` reader: `ChannelReader` over a logged-in GramJS
- * client, mapping each message to the shape §3.1 L213–219's parser produces, so
+ * client, mapping each message to the shape §3.1 L214–220's parser produces, so
  * `transformPost` and every guard after it cannot tell the two transports apart.
  */
 
 /**
  * R63 — one run reads at most a `t.me/s/` page's worth of posts, matching what
- * the web reader sees: §3.1 L205's hot tier and the cursor catch a busy chat up
+ * the web reader sees: §3.1 L206's hot tier and the cursor catch a busy chat up
  * over successive runs instead of one run carrying its whole backlog.
  */
 export const MTPROTO_PAGE_SIZE = 20;
 
-/** §3.1 L215 — "N from 1". */
+/** §3.1 L216 — "N from 1". */
 const FIRST_LINK_ID = 1;
 
 const MS_PER_SECOND = 1000;
@@ -26,7 +26,7 @@ const NUMERIC_PEER_PATTERN = /^-?\d+$/;
 
 /**
  * Set when GramJS reports a forward with neither a name nor a peer. Only
- * non-emptiness matters: §3.1 L225 classifies on it and L229 drops the post.
+ * non-emptiness matters: §3.1 L226 classifies on it and L229 drops the post.
  */
 export const UNKNOWN_FORWARD_ORIGIN = "unknown";
 
@@ -59,7 +59,7 @@ export function pageAfter(afterId: string | undefined): MessagePage {
 }
 
 /**
- * §3.1 L215's `[text](#N)` tokens, from MTProto entities instead of `<a>` tags.
+ * §3.1 L216's `[text](#N)` tokens, from MTProto entities instead of `<a>` tags.
  *
  * A `MessageEntityUrl` is a bare link, its own text; a `MessageEntityTextUrl`
  * is a labelled one. Entity offsets count UTF-16 code units, which is what a
@@ -109,7 +109,7 @@ function forwardOrigin(header: Api.TypeMessageFwdHeader | undefined): string | u
  * and re-hosted. A photo post therefore publishes as text.
  *
  * A service message (a join, a pin) has no text, so it becomes `empty` and is
- * dropped by §3.1 L229 — yet still counts toward the cursor, as L115 requires.
+ * dropped by §3.1 L230 — yet still counts toward the cursor, as L115 requires.
  */
 export function toChannelPost(message: Api.Message): ChannelPost {
   const { body, links } = tokeniseLinks(message.message ?? "", message.entities ?? []);

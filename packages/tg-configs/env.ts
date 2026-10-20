@@ -17,7 +17,7 @@ export const ENV_VARS = {
   analyzeQueueUrl: "TELEGATOR_ANALYZE_QUEUE_URL",
   aggregateQueueUrl: "TELEGATOR_AGGREGATE_QUEUE_URL",
   publishQueueUrl: "TELEGATOR_PUBLISH_QUEUE_URL",
-  // §7.3 L654 — "Each has a matching DLQ"; §3.5's replay handler drains them.
+  // §7.3 L655 — "Each has a matching DLQ"; §3.5's replay handler drains them.
   analyzeDlqUrl: "TELEGATOR_ANALYZE_DLQ_URL",
   aggregateDlqUrl: "TELEGATOR_AGGREGATE_DLQ_URL",
   publishDlqUrl: "TELEGATOR_PUBLISH_DLQ_URL",
@@ -47,12 +47,12 @@ export function requireEnv(name: string): string {
 }
 
 /**
- * The variables only the dashboard reads (§8.4 L818/L817, §8.6 L844).
+ * The variables only the dashboard API reads (§8.4, §8.6).
  *
  * Here rather than in `tg-infra/lib/app-stack.ts`, for the reason `ROLE_GROUPS`
- * moved out of the auth stack: a server action importing the stack would pull
- * `aws-cdk-lib` into the Next bundle to learn four strings. The stack imports
- * this instead.
+ * moved out of the auth stack: the API Lambda importing the stack would pull
+ * `aws-cdk-lib` into its bundle to learn a few strings. The stack imports this
+ * instead.
  */
 export const DASHBOARD_ENV_VARS = {
   scrapeFunctionName: "TELEGATOR_SCRAPE_FUNCTION_NAME",
@@ -63,10 +63,6 @@ export const DASHBOARD_ENV_VARS = {
   consumeFunctionName: "TELEGATOR_CONSUME_FUNCTION_NAME",
   userPoolId: "TELEGATOR_USER_POOL_ID",
   userPoolClientId: "TELEGATOR_USER_POOL_CLIENT_ID",
-  hostedUiDomain: "TELEGATOR_COGNITO_DOMAIN",
-  appUrl: "TELEGATOR_APP_URL",
-  /** The ARN. The key itself is fetched at runtime — see `grantAppPermissions`. */
-  sessionSecretArn: "TELEGATOR_SESSION_SECRET_ARN",
-  /** §8.5 L835 — the log group the category chart runs Logs Insights over. */
+  /** §8.5 L846 — the log group the category chart runs Logs Insights over. */
   analyzeLogGroup: "TELEGATOR_ANALYZE_LOG_GROUP",
 } as const;

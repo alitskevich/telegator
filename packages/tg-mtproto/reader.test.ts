@@ -45,7 +45,7 @@ function fakeClient(messages: readonly Api.Message[] = []): FakeClient {
   return client;
 }
 
-describe("tokeniseLinks (§3.1 L215 over MTProto entities)", () => {
+describe("tokeniseLinks (§3.1 L216 over MTProto entities)", () => {
   test("replaces labelled and bare links with numbered tokens", () => {
     const text = "see docs and https://x.io now";
     const entities = [
@@ -106,7 +106,7 @@ describe("toChannelPost", () => {
     );
   });
 
-  test("a message with no text has an empty body, for §3.1 L229 to drop", () => {
+  test("a message with no text has an empty body, for §3.1 L230 to drop", () => {
     expect(toChannelPost(message({ message: "" })).body).toBe("");
   });
 });

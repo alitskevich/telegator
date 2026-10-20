@@ -60,7 +60,7 @@ describe("recordingMetrics", () => {
   });
 
   /**
-   * §3.2 L257-258 routes drops by reason, and §8.5 L831 charts items skipped
+   * §3.2 L258-259 routes drops by reason, and §8.5 L842 charts items skipped
    * "Sum by Reason". A fake that collapsed the dimension would let a test pass
    * while the stage attributed every skip to the wrong cause.
    */

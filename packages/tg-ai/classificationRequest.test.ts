@@ -4,7 +4,7 @@ import { SYSTEM_PROMPT } from "tg-rc/prompt";
 import { describe, expect, test } from "vitest";
 import { buildClassificationRequest } from "./classificationRequest";
 
-describe("buildClassificationRequest — §5.2 L426–435", () => {
+describe("buildClassificationRequest — §5.2 L427–436", () => {
   test("carries the model, max_tokens, system prompt, schema and the item body", () => {
     const request = buildClassificationRequest("Prose to classify.");
 
@@ -34,7 +34,7 @@ describe("buildClassificationRequest — §5.2 L426–435", () => {
     expect(JSON.parse(JSON.stringify(request)).output_config).not.toHaveProperty("effort");
   });
 
-  test("§5.2 L465 — neither temperature nor top_p is carried over", () => {
+  test("§5.2 L466 — neither temperature nor top_p is carried over", () => {
     const request = buildClassificationRequest("Prose to classify.");
 
     expect(request).not.toHaveProperty("temperature");

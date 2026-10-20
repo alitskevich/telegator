@@ -1,52 +1,6 @@
-import type {
-  CookieJar,
-  CookieOptions,
-  IdTokenClaims,
-  IdTokenVerifier,
-  TokenEndpoint,
-  TokenSet,
-  UserStatusReader,
-} from "tg-ports/auth";
+import type { Session } from "tg-auth/session";
+import type { IdTokenClaims, IdTokenVerifier, UserStatusReader } from "tg-ports/auth";
 import { IdTokenClaimsSchema } from "tg-ports/auth";
-
-/** An in-memory cookie store that also records the options each cookie was set with. */
-export class FakeCookieJar implements CookieJar {
-  private readonly jar = new Map<string, { value: string; options: CookieOptions }>();
-
-  get(name: string): string | undefined {
-    return this.jar.get(name)?.value;
-  }
-
-  set(name: string, value: string, options: CookieOptions): void {
-    this.jar.set(name, { value, options });
-  }
-
-  delete(name: string): void {
-    this.jar.delete(name);
-  }
-
-  /** The full record, so a test can assert `httpOnly` and friends. */
-  written(name: string): { value: string; options: CookieOptions } | undefined {
-    return this.jar.get(name);
-  }
-}
-
-/** A token endpoint that answers only for codes a test has registered. */
-export class FakeTokenEndpoint implements TokenEndpoint {
-  readonly exchanges: { code: string; redirectUri: string }[] = [];
-  private readonly responses = new Map<string, TokenSet>();
-
-  expect(code: string, tokens: TokenSet): void {
-    this.responses.set(code, tokens);
-  }
-
-  async exchangeAuthorizationCode(code: string, redirectUri: string): Promise<TokenSet> {
-    this.exchanges.push({ code, redirectUri });
-    const tokens = this.responses.get(code);
-    if (!tokens) throw new Error(`invalid_grant: ${code}`);
-    return tokens;
-  }
-}
 
 /**
  * A verifier that accepts only tokens a test has registered — the default is
@@ -68,8 +22,8 @@ export class FakeIdTokenVerifier implements IdTokenVerifier {
 }
 
 /**
- * A user directory. Unknown subjects are disabled, matching §8.6 L875's "a new
- * user is created **disabled**" — the safe default is also the specified one.
+ * A user directory. Unknown subjects are disabled, matching §8.6's "a new user
+ * is created **disabled**" — the safe default is also the specified one.
  */
 export class FakeUserStatusReader implements UserStatusReader {
   reads = 0;
@@ -88,3 +42,11 @@ export class FakeUserStatusReader implements UserStatusReader {
     return this.enabled.has(sub);
   }
 }
+
+/** A verified caller holding `roles`, as `sessionFromIdToken` would produce one. */
+export const sessionWith = (sub: string, roles: readonly string[]): Session => ({
+  sub,
+  roles: [...roles],
+  // Far enough ahead that no test runs into it; expiry is the verifier's check.
+  expiresAt: Number.MAX_SAFE_INTEGER,
+});

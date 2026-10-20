@@ -12,7 +12,7 @@ import { handler as publishHandler } from "./publish";
  * R61 — the `telegator-consume` entry point: one operator-initiated batch
  * through one stage.
  *
- * A thin wrapper per §8.2 L792. What is particular to this one is that the
+ * A thin wrapper per §8.2 L788. What is particular to this one is that the
  * stages are reached through **their own handlers**, not through
  * `tg-pipeline/`'s stage functions directly. That is deliberate: those
  * handlers are what the event source mappings call, they own the dependency
@@ -25,7 +25,7 @@ import { handler as publishHandler } from "./publish";
  * than holding those permissions itself (§7.6 L716).
  */
 
-/** §7.3 L648-652 — the live queue behind each stage, not its dead-letter twin. */
+/** §7.3 L649-653 — the live queue behind each stage, not its dead-letter twin. */
 const QUEUE_ENV: Record<ReplayableQueue, string> = {
   analyze: ENV_VARS.analyzeQueueUrl,
   aggregate: ENV_VARS.aggregateQueueUrl,
@@ -33,7 +33,7 @@ const QUEUE_ENV: Record<ReplayableQueue, string> = {
 };
 
 /**
- * Each handler answers §7.3 L668's `{batchItemFailures}` and takes `Records`,
+ * Each handler answers §7.3 L669's `{batchItemFailures}` and takes `Records`,
  * so the shapes already line up; this only names the mapping.
  */
 const STAGES: Record<ReplayableQueue, StageRun> = {

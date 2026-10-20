@@ -9,7 +9,7 @@ import { z } from "zod";
  * it lives in Secrets Manager beside §7.6's two secrets and nowhere else.
  */
 
-/** R63 — the secret's resource segment, named by §9.2 L900's `telegator-{env}-{resource}`. */
+/** R63 — the secret's resource segment, named by §9.2 L906's `telegator-{env}-{resource}`. */
 export const MTPROTO_SECRET_RESOURCE = "mtproto-session";
 
 /** my.telegram.org issues `api_hash` as 32 lowercase hex digits. */

@@ -1,0 +1,21 @@
+<Component id="RecordCell">
+  <Signature purpose="One table cell: an input where the operator may write, a badge for a status, text otherwise"
+    description="On a phone the cell carries its column's name, since there is no header row; the row's first cell is the card's title and needs none. Edits go to `@grid.edit` on every keystroke; nothing is sent until the row's Save.">
+    <Prop id="cell" type="object" required="true" description="A `Cell` from `src/grid/view.ts`" />
+    <Prop id="rowId" type="string" required="true" />
+  </Signature>
+
+  <div class="flex flex-col gap-1 min-w-0">
+    <span If="{!cell.primary}" class="text-xs text-base-content/60 md:hidden">{cell.name}</span>
+    <input If="{cell.editable AND !cell.multiline}" class="input input-sm md:input-xs w-full md:min-w-[8rem]"
+      aria-label="{cell.name}" value="{cell.value}" data-id="{rowId}" data-field="{cell.id}"
+      input="-> @grid.edit(event)" />
+    <textarea If="{cell.editable AND cell.multiline}" rows="3"
+      class="textarea textarea-sm md:textarea-xs w-full md:min-w-[16rem] leading-snug"
+      aria-label="{cell.name}" value="{cell.value}" data-id="{rowId}" data-field="{cell.id}"
+      input="-> @grid.edit(event)"></textarea>
+    <StatusBadge If="{!cell.editable AND cell.badge}" status="{cell.value}" />
+    <span If="{!cell.editable AND !cell.badge}" title="{cell.value}"
+      class="block break-words md:max-w-[28rem] md:truncate {cell.numeric ? 'md:text-right' : ''}">{cell.value || '—'}</span>
+  </div>
+</Component>

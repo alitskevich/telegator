@@ -3,7 +3,7 @@ import { NEWS_ITEM_SCHEMA } from "tg-domain/newsItemSchema";
 import { SYSTEM_PROMPT } from "tg-rc/prompt";
 
 /**
- * The `output_config.format` of §5.2 L431.
+ * The `output_config.format` of §5.2 L432.
  *
  * `schema` is typed from `NEWS_ITEM_SCHEMA` rather than restated, so the JSON
  * Schema the model is held to has exactly one definition (item 2.13).
@@ -25,9 +25,9 @@ export interface ClassificationMessage {
 }
 
 /**
- * The §5.2 L426–435 request body.
+ * The §5.2 L427–436 request body.
  *
- * §5.2 L465: `temperature` and `top_p` are **not** carried over — they are
+ * §5.2 L466: `temperature` and `top_p` are **not** carried over — they are
  * removed on current Claude models and return 400 — so there is no property for
  * them to occupy. Depth is `output_config.effort` instead.
  */
@@ -43,7 +43,7 @@ export interface ClassificationRequestOptions {
   /**
    * R3 — `false` omits `output_config.effort` entirely.
    *
-   * §5.2 L429 sets `effort: "low"` and L465 makes it the replacement for the
+   * §5.2 L430 sets `effort: "low"` and L465 makes it the replacement for the
    * removed sampling parameters, so it is the default. But effort is not
    * available on every Claude tier, and this build cannot reach a provider to
    * establish whether R2's `CLASSIFIER_MODEL_ID` accepts it. Configurable and
@@ -54,7 +54,7 @@ export interface ClassificationRequestOptions {
 }
 
 /**
- * Builds the classification request of §5.2 L426–435.
+ * Builds the classification request of §5.2 L427–436.
  *
  * Pure, and deliberately not a provider call: the adapter that owns the SDK
  * client implements `Classifier` (item 2.14), which keeps the wire shape unit

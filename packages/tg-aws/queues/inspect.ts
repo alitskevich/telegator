@@ -3,9 +3,10 @@ import {
   ReceiveMessageCommand,
   type ReceiveMessageCommandOutput,
 } from "@aws-sdk/client-sqs";
+import type { DlqMessage } from "tg-ports/queues";
 
 /**
- * §8.2 L780 — "Queue depths + DLQ inspection/replay".
+ * §8.2 L776 — "Queue depths + DLQ inspection/replay".
  *
  * Depths come from `GetQueueAttributes` (`tg-aws/observability.ts`); this is the
  * other half, which reads what is actually sitting in a DLQ. R24 added
@@ -16,12 +17,8 @@ import {
 /** SQS returns at most ten messages per receive, and a panel wants no more. */
 export const DLQ_PEEK_LIMIT = 10;
 
-export interface DlqMessage {
-  readonly messageId: string;
-  readonly body: string;
-  /** `ApproximateReceiveCount` — how many times delivery has been attempted. */
-  readonly receiveCount: number;
-}
+/** Defined in `tg-ports/queues.ts`, so the console can type a peek without reaching SQS. */
+export type { DlqMessage };
 
 export interface DlqInspector {
   peek(queueUrl: string): Promise<DlqMessage[]>;

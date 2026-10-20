@@ -30,13 +30,13 @@ function ids(sources: readonly Source[]): string[] {
 }
 
 describe("selectSources — acceptance criteria", () => {
-  test("AC-1.1 (§3.1 L235) a source polled 5 minutes ago with lastCount = 3 is not selected", () => {
+  test("AC-1.1 (§3.1 L236) a source polled 5 minutes ago with lastCount = 3 is not selected", () => {
     const warm = source({ id: "warm", lastCount: 3, lastUpdated: polledMinutesAgo(5) });
 
     expect(selectSources([warm], NOW, "web")).toEqual([]);
   });
 
-  test("AC-1.2 (§3.1 L236) a source with lastCount = 25 is selected regardless of lastUpdated", () => {
+  test("AC-1.2 (§3.1 L237) a source with lastCount = 25 is selected regardless of lastUpdated", () => {
     const justPolled = source({ id: "hot", lastCount: 25, lastUpdated: NOW });
     const polledAMinuteAgo = source({
       id: "hot2",
@@ -49,7 +49,7 @@ describe("selectSources — acceptance criteria", () => {
   });
 });
 
-describe("selectSources — the three tiers of §3.1 L205", () => {
+describe("selectSources — the three tiers of §3.1 L206", () => {
   test("a cold source (lastCount = 0) is excluded at 239 minutes and included at 241", () => {
     const tooSoon = source({ id: "cold-239", lastCount: 0, lastUpdated: polledMinutesAgo(239) });
     const dueNow = source({ id: "cold-241", lastCount: 0, lastUpdated: polledMinutesAgo(241) });
@@ -104,7 +104,7 @@ describe("selectSources — the three tiers of §3.1 L205", () => {
 });
 
 describe("selectSources — filters", () => {
-  test("a source whose status is not `ok` is excluded, however overdue (§3.1 L199)", () => {
+  test("a source whose status is not `ok` is excluded, however overdue (§3.1 L200)", () => {
     const disabled = source({ id: "off", status: "disabled", lastCount: 25, lastUpdated: 0 });
     const noStatus = source({ id: "blank", status: undefined, lastCount: 25, lastUpdated: 0 });
 
@@ -112,7 +112,7 @@ describe("selectSources — filters", () => {
   });
 
   /**
-   * R16: §8.4 L814's soft delete sets `deleted: true`, and §3.1 has no filter for
+   * R16: §8.4 L823's soft delete sets `deleted: true`, and §3.1 has no filter for
    * it — a deleted source would keep being polled and keep publishing.
    */
   test("a soft-deleted source is excluded even while status stays `ok` (R16)", () => {
@@ -124,7 +124,7 @@ describe("selectSources — filters", () => {
 });
 
 describe("selectSources — cap and ordering", () => {
-  test("takes at most 10 sources (§3.1 L205)", () => {
+  test("takes at most 10 sources (§3.1 L206)", () => {
     const many = Array.from({ length: 25 }, (_, i) =>
       source({ id: `s${i}`, lastCount: 25, lastUpdated: NOW }),
     );

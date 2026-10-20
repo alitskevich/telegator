@@ -13,9 +13,9 @@ import { createLogger, stdoutSink } from "tg-utils/logger";
 import { type PublishResultSummary, runPublish } from "../publish/index";
 
 /**
- * The `telegator-publish` entry point (§7.5 L696, SQS FIFO, batch size 1).
+ * The `telegator-publish` entry point (§7.5 L697, SQS FIFO, batch size 1).
  *
- * A thin wrapper per §8.2 L792; the status guard of §3.4 L321 and the send-mode
+ * A thin wrapper per §8.2 L788; the status guard of §3.4 L322 and the send-mode
  * decision live in `tg-pipeline/publish/`.
  */
 export interface SqsEvent {
@@ -26,7 +26,7 @@ let cached: ReturnType<typeof buildDeps> | undefined;
 
 function buildDeps() {
   /**
-   * §7.6 L705's bot token, fetched on first use and cached for the life of the
+   * §7.6 L706's bot token, fetched on first use and cached for the life of the
    * container — the scope where that lifetime is known. R50 moved the
    * fetch-once body to `./secrets`, which analyze and aggregate share.
    */
@@ -55,7 +55,7 @@ function buildDeps() {
     bot: createTelegramBot({
       http: createHttpPost(),
       tokenProvider: readToken,
-      // §3.4 L352's pacing. Real time here; the stage's tests inject their own.
+      // §3.4 L353's pacing. Real time here; the stage's tests inject their own.
       sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
       logger: createLogger(stdoutSink),
       metrics,

@@ -5,7 +5,7 @@ import { z } from "zod";
  * order.
  *
  * R4 — 29 entries, where earlier drafts asserted 35 and the six missing names
- * were not recoverable. It matters beyond arithmetic: §5.2 L431 constrains model
+ * were not recoverable. It matters beyond arithmetic: §5.2 L432 constrains model
  * output to this enum, so a wrong list makes a legitimate category unsayable and
  * forces the classifier into `other`, degrading §3.2's routing silently.
  */
@@ -46,11 +46,11 @@ export const CategorySchema = z.enum(CATEGORIES);
 export type Category = z.infer<typeof CategorySchema>;
 
 /**
- * The literal §3.2 L257 routes on: `category === "crime&law"` → drop, metric
+ * The literal §3.2 L258 routes on: `category === "crime&law"` → drop, metric
  * `ItemsSkipped{Reason=category}`.
  *
  * R5 — typed `string`, not `Category`, because it is **not** one of §5.4's
- * values. §5.2 L431 constrains model output to that enum, so `crime&law` is
+ * values. §5.2 L432 constrains model output to that enum, so `crime&law` is
  * unsayable: the drop rule can never fire and crime content is published.
  *
  * §3.2 is the normative stage spec, so the rule ships exactly as written and the

@@ -11,17 +11,17 @@ import { normalizeAnalyzed, prefilter, route, skippedDimensions } from "./route"
 export { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE };
 
 /**
- * Stage 2 — the `analyze` SQS consumer (§3.2 L243–262).
+ * Stage 2 — the `analyze` SQS consumer (§3.2 L244–263).
  *
  * The stage owns effects only. Every decision it takes comes from `route.ts`
- * (item 3.6): the pre-filter, the routing table and the §3.2 L260 normalisers
+ * (item 3.6): the pre-filter, the routing table and the §3.2 L261 normalisers
  * are pure functions there, and nothing in this file re-decides them. What is
  * left here is the batch loop, the one classifier call per surviving item
  * (L247), the enqueue, the metrics, the category log line and — the part with
  * real money attached — per-message failure reporting.
  */
 
-/** §7.3 L650 and §3.2 L245 — the event source mapping delivers at most ten records. */
+/** §7.3 L651 and §3.2 L246 — the event source mapping delivers at most ten records. */
 export const ANALYZE_BATCH_SIZE = 10;
 
 /** One item, one count. Named because `style/noMagicNumbers` is an error in `packages/`. */
@@ -40,7 +40,7 @@ export interface AnalyzeDeps {
   readonly logger: Logger;
 }
 
-/** §7.3 L668 — the `ReportBatchItemFailures` response shape. */
+/** §7.3 L669 — the `ReportBatchItemFailures` response shape. */
 export interface AnalyzeResult {
   readonly batchItemFailures: Array<{ itemIdentifier: string }>;
 }
@@ -60,9 +60,9 @@ function describeError(error: unknown): string {
 }
 
 /**
- * Consumes one batch of analyze-queue records (§3.2 L243–262).
+ * Consumes one batch of analyze-queue records (§3.2 L244–263).
  *
- * Items are classified **sequentially**. §7.5 L693 gives the function 300 s for
+ * Items are classified **sequentially**. §7.5 L694 gives the function 300 s for
  * ten items and §7.5 caps the stage at five concurrent invocations, so the
  * throughput ceiling is the reserved concurrency, not the loop; running the ten
  * calls in parallel would multiply this stage's instantaneous OpenRouter rate by
@@ -84,7 +84,7 @@ export async function runAnalyze(
     try {
       const item = parsePayload(sqsRecord.body);
 
-      // §3.2 L247 — empty or bare-link bodies are dropped before the AI call.
+      // §3.2 L248 — empty or bare-link bodies are dropped before the AI call.
       // The `continue` is the whole point: no request is made, so the drop is
       // free.
       const skipped = prefilter(item.body);
@@ -101,8 +101,8 @@ export async function runAnalyze(
         continue;
       }
 
-      // §3.2 L251 — one request per item. A provider error propagates out of
-      // `classify` (tg-ports/ai.ts) into the catch below, which is §3.2 L262's
+      // §3.2 L252 — one request per item. A provider error propagates out of
+      // `classify` (tg-ports/ai.ts) into the catch below, which is §3.2 L263's
       // rule: a provider error is transient, so the message is failed back to
       // SQS rather than dropped.
       const classified = await deps.classifier.classify(item.body);
@@ -112,20 +112,20 @@ export async function runAnalyze(
         itemId: item.id,
         [CATEGORY_LOG_FIELD]: classified.category,
         importance: classified.importance,
-        // Carried so §8.5 L835's chart can be narrowed to enqueued items later
+        // Carried so §8.5 L846's chart can be narrowed to enqueued items later
         // without changing what this stage logs. Every classified item is
         // logged, dropped ones included: the distribution is of what the
         // classifier saw, and a chart missing every `low` item would understate
-        // exactly the categories §5.2 L459 tells the model to diminish.
+        // exactly the categories §5.2 L460 tells the model to diminish.
         decision: decision.kind,
       });
 
       if (decision.kind === "retry") {
-        // §3.2 L253 — "No category returned" shares the provider-error row of
+        // §3.2 L254 — "No category returned" shares the provider-error row of
         // the routing table, so it takes the same throw-retry-DLQ path.
         //
         // Unreachable through the typed `Classifier` port, in the same way R5's
-        // `crime&law` branch is: §5.2 L431 constrains the response to §5.4's
+        // `crime&law` branch is: §5.2 L432 constrains the response to §5.4's
         // enum, so a validated `NewsItem` always carries a category. It is
         // implemented anyway because the port is an interface — an adapter that
         // relaxes validation must not silently start dropping items — and
@@ -134,7 +134,7 @@ export async function runAnalyze(
       }
 
       if (decision.kind === "drop") {
-        // §3.2 L262 — a `skip` decision is final. No throw, no failure id: the
+        // §3.2 L263 — a `skip` decision is final. No throw, no failure id: the
         // message is acked and the item ends here.
         deps.metrics.count("ItemsSkipped", ONE_ITEM, skippedDimensions(decision.reason));
         continue;
@@ -145,7 +145,7 @@ export async function runAnalyze(
         message: aggregateQueueMessage(normalizeAnalyzed(item, classified)),
       });
     } catch (error) {
-      // §7.3 L668 — exactly this message fails. Without per-message reporting
+      // §7.3 L669 — exactly this message fails. Without per-message reporting
       // one poison item forces the whole batch to retry, re-billing the nine
       // successful OpenRouter calls.
       batchItemFailures.push({ itemIdentifier: sqsRecord.messageId });
@@ -184,7 +184,7 @@ async function sendCandidates(
       if (candidates[index] === undefined) continue;
       // §7.7 L732 — `ItemsAnalyzed` counts items that actually reached the next
       // stage, so it stays disjoint from `ItemsSkipped` and the two add up to
-      // what §8.5 L830–832's cards claim.
+      // what §8.5 L841–843's cards claim.
       deps.metrics.count("ItemsAnalyzed", ONE_ITEM);
     }
 
@@ -201,7 +201,7 @@ async function sendCandidates(
   } catch (error) {
     // The adapter itself failed — every survivor is unsent, so every survivor's
     // message must be retried. Their classifications are lost with them; that
-    // cost is the point of §7.3 L668's per-message reporting being applied to
+    // cost is the point of §7.3 L669's per-message reporting being applied to
     // the send as well as to the classify.
     for (const candidate of candidates) {
       batchItemFailures.push({ itemIdentifier: candidate.messageId });
