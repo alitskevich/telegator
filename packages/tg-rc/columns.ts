@@ -6,13 +6,17 @@
  * columns differed from the table it was taken from would be quietly wrong.
  */
 
-/** §8.3 L801 — the Sources table; `target` replaces `tgChannel` (multi-target#3.6, R54). */
+/**
+ * §8.3 L801 — the Sources table; `target` replaces `tgChannel` (multi-target#3.6,
+ * R54), and `via` shows R63's reader.
+ */
 export const SOURCE_COLUMNS = [
   "id",
   "status",
   "target",
   "category",
   "teaser",
+  "via",
   "lastCount",
   "lastResult",
   "zeroYieldRuns",

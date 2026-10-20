@@ -112,6 +112,17 @@ describe("the EventBridge schedule (§7.5 L693, R22, R23)", () => {
   test("targets the scraper", () => {
     templateFor().hasResourceProperties("AWS::Events::Rule", { Targets: Match.anyValue() });
   });
+
+  /** R63 — one rule per scraper, both behind R23's single switch. */
+  test("schedules both scrapers, and both obey the switch", () => {
+    const rules = (context: Record<string, unknown>) =>
+      Object.values(templateFor(context).findResources("AWS::Events::Rule")).map(
+        (rule) => rule.Properties?.State,
+      );
+
+    expect(rules({})).toEqual(["DISABLED", "DISABLED"]);
+    expect(rules({ scheduleEnabled: true })).toEqual(["ENABLED", "ENABLED"]);
+  });
 });
 
 describe("IAM (§7.6 L711-716, R24)", () => {
@@ -189,6 +200,8 @@ describe("IAM (§7.6 L711-716, R24)", () => {
       "arn:aws:secretsmanager:eu-central-1:111122223333:secret:telegator/openrouter-AbCdEf",
     telegramSecretArn:
       "arn:aws:secretsmanager:eu-central-1:111122223333:secret:telegator/telegram-ZyXwVu",
+    mtprotoSecretArn:
+      "arn:aws:secretsmanager:eu-central-1:111122223333:secret:telegator-dev-mtproto-session-QwErTy",
   };
 
   const secretsFor = (template: Template, functionName: string) =>
@@ -224,14 +237,14 @@ describe("IAM (§7.6 L711-716, R24)", () => {
    * R61's `consume` runs any of those stages on demand, so it holds both keys —
    * a fourth statement, naming two resources rather than one. That union is the
    * reason it exists as a function of its own rather than as permissions on the
-   * web role.
+   * web role. R63's `scrape-mtproto` reads its session: a fifth.
    */
-  test("grants GetSecretValue to exactly four statements, none of them wildcarded", () => {
+  test("grants GetSecretValue to exactly five statements, none of them wildcarded", () => {
     const statements = policyStatements(templateFor(SECRET_ARNS)).filter((statement) =>
       [statement.Action].flat().map(String).includes("secretsmanager:GetSecretValue"),
     );
 
-    expect(statements).toHaveLength(4);
+    expect(statements).toHaveLength(5);
     for (const statement of statements) {
       expect(statement.Resource).not.toBe("*");
     }
@@ -274,6 +287,24 @@ describe("IAM (§7.6 L711-716, R24)", () => {
 
     expect(granted).toContain(SECRET_ARNS.telegramSecretArn);
     expect(granted).not.toContain(SECRET_ARNS.openRouterSecretArn);
+  });
+
+  /** R63 — the session is a login to an account; nothing else may read it. */
+  test("scrape-mtproto may read its session and nothing else", () => {
+    const template = templateFor(SECRET_ARNS);
+
+    const granted = secretsFor(template, "telegator-dev-scrape-mtproto");
+
+    expect(granted).toContain(SECRET_ARNS.mtprotoSecretArn);
+    expect(granted).not.toContain(SECRET_ARNS.telegramSecretArn);
+    expect(granted).not.toContain(SECRET_ARNS.openRouterSecretArn);
+    for (const name of [
+      "telegator-dev-analyze",
+      "telegator-dev-consume",
+      "telegator-dev-publish",
+    ]) {
+      expect(secretsFor(template, name)).not.toContain(SECRET_ARNS.mtprotoSecretArn);
+    }
   });
 
   /** scrape and dlq-replay call neither a model nor Telegram. */
@@ -383,6 +414,13 @@ describe("IAM (§7.6 L711-716, R24)", () => {
    */
   test("scrape may query and update sources, and nothing more", () => {
     expect(dynamoActionsFor(templateFor(), "telegator-dev-scrape")).toEqual(
+      new Set(["dynamodb:Query", "dynamodb:UpdateItem"]),
+    );
+  });
+
+  /** R63 — the same stage, so exactly the same table grant. */
+  test("scrape-mtproto may query and update sources, and nothing more", () => {
+    expect(dynamoActionsFor(templateFor(), "telegator-dev-scrape-mtproto")).toEqual(
       new Set(["dynamodb:Query", "dynamodb:UpdateItem"]),
     );
   });

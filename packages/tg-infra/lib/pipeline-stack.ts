@@ -39,6 +39,8 @@ export const PIPELINE_FUNCTIONS = [
   "dlqReplay",
   /** R61 — "Consume now": one operator-initiated batch through one stage. */
   "consume",
+  /** R63 — §3.1's stage again, reading `via: "mtproto"` sources through GramJS. */
+  "scrapeMtproto",
 ] as const;
 
 export type PipelineFunction = (typeof PIPELINE_FUNCTIONS)[number];
@@ -134,6 +136,18 @@ const SPECS: readonly FunctionSpec[] = [
     memorySize: 1024,
     reservedConcurrency: 1,
   },
+  /**
+   * R63 — reserved at 1 like `scrape`, and for a harder reason: two runs would
+   * open one MTProto session twice at once, which Telegram answers by revoking
+   * it (`AUTH_KEY_DUPLICATED`), and only a fresh interactive login restores it.
+   */
+  {
+    key: "scrapeMtproto",
+    name: "scrape-mtproto",
+    entry: "scrapeMtproto.ts",
+    memorySize: 512,
+    reservedConcurrency: 1,
+  },
 ];
 
 export class TelegatorPipelineStack extends Stack {
@@ -170,6 +184,8 @@ export class TelegatorPipelineStack extends Stack {
       // "**No secret** — IAM role policy"; an OpenRouter key is a bearer token,
       // so it is configured and granted exactly like the bot token above.
       [ENV_VARS.openRouterSecretArn]: secretArn(this, "openRouterSecretArn"),
+      // R63 — the third secret: the MTProto session, a login to an account.
+      [ENV_VARS.mtprotoSecretArn]: secretArn(this, "mtprotoSecretArn"),
     };
 
     const built = SPECS.map((spec) => {
@@ -278,11 +294,21 @@ export class TelegatorPipelineStack extends Stack {
       enabled: config.scheduleEnabled,
       targets: [new LambdaTarget(this.functions.scrape)],
     });
+
+    // R63 — the same cadence and the same R23 switch: an MTProto source is
+    // polled exactly as often as a preview one.
+    new Rule(this, "ScrapeMtprotoSchedule", {
+      ruleName: config.name("scrape-mtproto-schedule"),
+      schedule: Schedule.expression("rate(30 minutes)"),
+      enabled: config.scheduleEnabled,
+      targets: [new LambdaTarget(this.functions.scrapeMtproto)],
+    });
   }
 
   /** §7.6 L711–716's per-function grants, plus R24's additions. */
   private grantLeastPrivilege(data: TelegatorDataStack, queues: TelegatorQueueStack): void {
-    const { scrape, analyze, aggregate, publish, dlqReplay, consume } = this.functions;
+    const { scrape, analyze, aggregate, publish, dlqReplay, consume, scrapeMtproto } =
+      this.functions;
 
     // §7.6 L711 — scrape reads and writes `sources` and sends to analyze.
     // §3.1 L199 selects sources with a Query on `status-index`; §3.1 L231
@@ -290,6 +316,11 @@ export class TelegatorPipelineStack extends Stack {
     // none and deletes none.
     grantTableActions(data.sources, scrape, "dynamodb:Query", "dynamodb:UpdateItem");
     queues.analyze.grantSendMessages(scrape);
+
+    // R63 — the same stage, so the same two grants, plus its one secret.
+    grantTableActions(data.sources, scrapeMtproto, "dynamodb:Query", "dynamodb:UpdateItem");
+    queues.analyze.grantSendMessages(scrapeMtproto);
+    scrapeMtproto.addToRolePolicy(readSecret(secretArn(this, "mtprotoSecretArn")));
 
     // §7.6 L712.
     queues.analyze.grantConsumeMessages(analyze);
@@ -379,7 +410,7 @@ export class TelegatorPipelineStack extends Stack {
      * `PutMetricData` takes no resource-level ARN, so `*` is unavoidable; the
      * namespace condition is what keeps it least-privilege.
      */
-    for (const fn of [scrape, analyze, aggregate, publish, dlqReplay, consume]) {
+    for (const fn of [scrape, analyze, aggregate, publish, dlqReplay, consume, scrapeMtproto]) {
       fn.addToRolePolicy(
         new PolicyStatement({
           effect: Effect.ALLOW,

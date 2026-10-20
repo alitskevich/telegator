@@ -1,3 +1,4 @@
+import { DEFAULT_SOURCE_VIA, SOURCE_VIAS, type SourceVia } from "tg-enums/sourceVia";
 import { z } from "zod";
 
 /**
@@ -46,6 +47,8 @@ const field = {
   category: z.string().optional(),
   tags: z.string().optional(),
   teaser: z.string().optional(),
+  /** R63 — which reader polls this source; absent means `web` (`sourceVia`). */
+  via: z.enum(SOURCE_VIAS).optional(),
 
   // Written by scrape (§2.1 L115–119).
   /** The `?after=` cursor, and the sole duplicate-suppression mechanism (§3.1 L223). */
@@ -92,6 +95,7 @@ export const SourceConfigInput = z
     category: field.category,
     tags: field.tags,
     teaser: field.teaser,
+    via: field.via,
   })
   .partial()
   .strict();
@@ -123,3 +127,8 @@ export const SourceCursorUpdate = z
   .strict();
 
 export type SourceCursor = z.infer<typeof SourceCursorUpdate>;
+
+/** R63 — the reader a source belongs to, with the legacy default applied. */
+export function sourceVia(source: Pick<Source, "via">): SourceVia {
+  return source.via ?? DEFAULT_SOURCE_VIA;
+}

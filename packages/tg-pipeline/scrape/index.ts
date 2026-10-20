@@ -7,8 +7,7 @@ import type { SourceRepo } from "tg-ports/db";
 import type { MetricSink } from "tg-ports/metrics";
 import type { QueueMessage, QueueProducer } from "tg-ports/queues";
 import { analyzeQueueMessage, SQS_MAX_BATCH_ENTRIES } from "tg-ports/queues";
-import type { HttpFetcher } from "tg-ports/telegram";
-import type { ParsedPost } from "tg-telegram/parse";
+import type { ChannelPost, ChannelReader, HttpFetcher } from "tg-ports/telegram";
 import { parseTelegramPage } from "tg-telegram/parse";
 import type { Clock } from "tg-utils/clock";
 import type { Logger } from "tg-utils/logger";
@@ -23,6 +22,10 @@ import { transformPost } from "./transform";
  * an effect lives here: the fetch, the guards, the enqueue and the cursor write.
  * The pure parts it composes are already built — `selectSources` (§3.1 L199–205),
  * `parseTelegramPage` (§3.1 L209–221) and `transformPost` (§3.1 L225).
+ *
+ * R63 — the fetch is a `ChannelReader`, so the same stage serves both
+ * transports: `webReader` below for §3.1 L207's preview, and `tg-mtproto` for
+ * sources that set `via: "mtproto"`. Each run polls only its reader's sources.
  *
  * Every boundary arrives as a `ScrapeDeps` field. Nothing here reads the clock,
  * the network, the environment or `console`.
@@ -67,7 +70,7 @@ const ONE_RUN = 1;
 const NO_POSTS = 0;
 
 export interface ScrapeDeps {
-  readonly fetcher: HttpFetcher;
+  readonly reader: ChannelReader;
   readonly sources: SourceRepo;
   readonly queue: QueueProducer;
   readonly metrics: MetricSink;
@@ -87,10 +90,31 @@ export interface ScrapeSummary {
  * an empty value is a different page from no query string at all — Telegram
  * answers it with the channel's oldest posts, which would re-enqueue history.
  */
-function scrapeUrl(source: Source): string {
-  const base = `${TELEGRAM_PREVIEW_BASE}${source.id}`;
-  const cursor = source.lastItemId;
+function scrapeUrl(channel: string, cursor: string | undefined): string {
+  const base = `${TELEGRAM_PREVIEW_BASE}${channel}`;
   return cursor === undefined || cursor === "" ? base : `${base}${CURSOR_PARAM}${cursor}`;
+}
+
+/**
+ * R63 — §3.1 L207–221's fetch and parse as a `ChannelReader`.
+ *
+ * §3.1 L221 lists three zero-yield triggers — an empty fetch, no chunks, and a
+ * first chunk with no id — which all reduce to "the parse produced no posts":
+ * `parseTelegramPage` already discards an id-less chunk (§3.1 L213, L221).
+ *
+ * Recorded decision: a page whose *first* chunk lacks an id but whose later
+ * chunks parse is treated as a success, not a zero-yield run. Reading L220
+ * literally there would discard real posts on the strength of one malformed
+ * chunk, and §1.3 L69 has no table to recover them from.
+ */
+export function webReader(fetcher: HttpFetcher): ChannelReader {
+  return {
+    via: "web",
+    async read(channel, afterId) {
+      const html = await fetcher.get(scrapeUrl(channel, afterId), SCRAPE_HEADERS);
+      return html === "" ? [] : parseTelegramPage(html);
+    },
+  };
 }
 
 /**
@@ -106,7 +130,7 @@ function scrapeUrl(source: Source): string {
  *    them would leave a forward-heavy channel's newest posts outside the window
  *    forever, re-fetching and re-dropping them every run.
  */
-function newestItemId(posts: readonly ParsedPost[]): string | undefined {
+function newestItemId(posts: readonly ChannelPost[]): string | undefined {
   let newest: string | undefined;
   for (const post of posts) {
     if (newest === undefined || Number(post.id) > Number(newest)) {
@@ -180,19 +204,7 @@ async function scrapeSource(
   now: number,
   date: DateKey,
 ): Promise<{ readonly processed: number; readonly enqueued: number }> {
-  const html = await deps.fetcher.get(scrapeUrl(source), SCRAPE_HEADERS);
-
-  /**
-   * §3.1 L221 lists three zero-yield triggers — an empty fetch, no chunks, and a
-   * first chunk with no id — which all reduce to "the parse produced no posts":
-   * `parseTelegramPage` already discards an id-less chunk (§3.1 L213, L221).
-   *
-   * Recorded decision: a page whose *first* chunk lacks an id but whose later
-   * chunks parse is treated as a success, not a zero-yield run. Reading L220
-   * literally there would discard real posts on the strength of one malformed
-   * chunk, and §1.3 L69 has no table to recover them from.
-   */
-  const posts = html === "" ? [] : parseTelegramPage(html);
+  const posts = await deps.reader.read(source.id, source.lastItemId);
   if (posts.length === NO_POSTS) {
     await recordZeroYield(deps, source, now);
     return { processed: NO_POSTS, enqueued: NO_POSTS };
@@ -280,9 +292,10 @@ export async function runScrape(deps: ScrapeDeps): Promise<ScrapeSummary> {
 
   /** §3.1 L199 — "Query `sources` by `status-index` for `status = "ok"`." */
   const candidates = await deps.sources.listByStatus(SOURCE_STATUS_OK);
-  const selected = selectSources(candidates, now);
+  const selected = selectSources(candidates, now, deps.reader.via);
 
   deps.logger.info("scrape run started", {
+    via: deps.reader.via,
     date,
     candidates: candidates.length,
     selected: selected.length,
@@ -308,7 +321,7 @@ export async function runScrape(deps: ScrapeDeps): Promise<ScrapeSummary> {
     }
   }
 
-  deps.logger.info("scrape run finished", { date, processed, enqueued });
+  deps.logger.info("scrape run finished", { via: deps.reader.via, date, processed, enqueued });
 
   return { processed, enqueued };
 }

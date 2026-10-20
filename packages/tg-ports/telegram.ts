@@ -1,8 +1,11 @@
+import type { Link } from "tg-domain/item";
+import type { SourceVia } from "tg-enums/sourceVia";
+
 /**
- * The two Telegram boundaries: the anonymous web-preview scrape (§4.1) and the
- * Bot API sink (§4.2).
+ * The Telegram boundaries: the anonymous web-preview scrape (§4.1), the reader
+ * port both scrape transports implement (R63), and the Bot API sink (§4.2).
  *
- * Both sit behind interfaces so no test touches the network. §4.1 L380 calls
+ * All three sit behind interfaces so no test touches the network. §4.1 L380 calls
  * the scrape "the system's most fragile dependency" — it depends on four
  * literal CSS class names — so its input is a recorded fixture rather than a
  * live page, and a markup change is something the parser tests can be updated
@@ -30,6 +33,41 @@ export interface HttpFetcher {
    * counter untouched, so a silently-broken source would stay silent.
    */
   get(url: string, headers?: Readonly<Record<string, string>>): Promise<string>;
+}
+
+/**
+ * R63 — one post as a reader hands it to the scrape stage: §3.1 L213–219's
+ * parse output, whichever transport produced it.
+ */
+export interface ChannelPost {
+  /** The Telegram message id alone — digits (§3.1 L213), not the composite id. */
+  readonly id: string;
+  /** Plain text with inline links replaced by `[text](#N)` tokens (§3.1 L215). */
+  readonly body: string;
+  readonly links: readonly Link[];
+  readonly image?: string;
+  readonly forwardedFrom?: string;
+  /** ISO-8601 (§3.1 L219). */
+  readonly postedAt?: string;
+}
+
+/**
+ * R63 — the stage's one fetch boundary, so §3.1's guards, enqueue and cursor
+ * rules exist once for both transports.
+ *
+ * `[]` is a zero-yield run (§3.1 L221), never an error: a reader that throws
+ * for "nothing new" would leave `zeroYieldRuns` untouched and §4.1 L382's
+ * staleness alarm unreachable — the same reason `HttpFetcher` returns `""`.
+ */
+export interface ChannelReader {
+  /** The sources this reader polls; the others belong to the other reader. */
+  readonly via: SourceVia;
+  /**
+   * Posts after `afterId`, or the channel's newest page when there is no
+   * cursor. Order is not significant: the stage takes the numeric maximum as the
+   * next cursor (§2.1 L115).
+   */
+  read(channel: string, afterId: string | undefined): Promise<ChannelPost[]>;
 }
 
 /**

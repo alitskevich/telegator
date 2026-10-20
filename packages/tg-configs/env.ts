@@ -28,6 +28,8 @@ export const ENV_VARS = {
    * one the way publish reads the bot token.
    */
   openRouterSecretArn: "TELEGATOR_OPENROUTER_SECRET_ARN",
+  /** R63 — the MTProto scraper's `{apiId, apiHash, session}`: a login to a Telegram account. */
+  mtprotoSecretArn: "TELEGATOR_MTPROTO_SECRET_ARN",
 } as const;
 
 /**

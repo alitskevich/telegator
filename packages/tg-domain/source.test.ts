@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { SOURCE_STATUS_OK, SourceConfigInput, SourceCursorUpdate, SourceSchema } from "./source";
+import {
+  SOURCE_STATUS_OK,
+  SourceConfigInput,
+  SourceCursorUpdate,
+  SourceSchema,
+  sourceVia,
+} from "./source";
 
 const seedRecord = {
   id: "yigal_levin",
@@ -143,6 +149,17 @@ describe("target — multi-target#2.2 (R54)", () => {
 
     expect(parsed).not.toHaveProperty("tgChannel");
     expect(parsed.target).toBeUndefined();
+  });
+
+  /** R63 — an operator chooses the reader; only the two known ones are accepted. */
+  test("SourceConfigInput accepts a known via and rejects an unknown one", () => {
+    expect(SourceConfigInput.parse({ via: "mtproto" })).toEqual({ via: "mtproto" });
+    expect(SourceConfigInput.safeParse({ via: "rss" }).success).toBe(false);
+  });
+
+  test("sourceVia reads an absent via as web", () => {
+    expect(sourceVia(SourceSchema.parse(seedRecord))).toBe("web");
+    expect(sourceVia(SourceSchema.parse({ ...seedRecord, via: "mtproto" }))).toBe("mtproto");
   });
 
   test("MT-3: SourceConfigInput accepts target and rejects tgChannel", () => {

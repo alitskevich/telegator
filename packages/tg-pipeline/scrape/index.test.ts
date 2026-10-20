@@ -2,6 +2,7 @@ import type { Source } from "tg-domain/source";
 import { SOURCE_STATUS_OK, SourceSchema } from "tg-domain/source";
 import type { QueueMessage, QueueProducer, SendResult } from "tg-ports/queues";
 import { SQS_MAX_BATCH_ENTRIES } from "tg-ports/queues";
+import type { ChannelReader } from "tg-ports/telegram";
 import { createLogger } from "tg-utils/logger";
 import { describe, expect, test } from "vitest";
 import { fixedClock } from "../../../test/fakes/clock";
@@ -21,6 +22,7 @@ import {
   SCRAPE_HEADERS,
   SCRAPE_USER_AGENT,
   STALE_ZERO_YIELD_RUNS,
+  webReader,
 } from "./index";
 import { COLD_INTERVAL_MS } from "./select";
 
@@ -105,7 +107,7 @@ function harness(options: HarnessOptions) {
     metrics,
     logs,
     deps: {
-      fetcher,
+      reader: webReader(fetcher),
       sources: repo,
       queue,
       metrics,
@@ -157,14 +159,14 @@ describe("runScrape — acceptance criteria", () => {
     });
     const failing = {
       ...h.deps,
-      fetcher: {
+      reader: webReader({
         get: async (url: string, headers?: Readonly<Record<string, string>>) => {
           if (url === urlFor(CHANNEL)) {
             throw new Error("connection reset");
           }
           return h.fetcher.get(url, headers);
         },
-      },
+      }),
     };
 
     const result = await runScrape(failing);
@@ -309,6 +311,36 @@ describe("runScrape — fetch", () => {
     expect(SCRAPE_USER_AGENT).toContain("Macintosh");
     expect(SCRAPE_USER_AGENT).toContain("Chrome/120");
     expect(SCRAPE_ACCEPT_LANGUAGE).toBe("en-US,en;q=0.9,ru;q=0.8,be;q=0.7");
+  });
+
+  /**
+   * R63 — the MTProto reader runs this same stage: only its own sources are
+   * read, its posts are enqueued and its cursor advances exactly as a web
+   * source's does, and a web source is left for the web run.
+   */
+  test("R63 a reader polls only its own sources, through the same stage", async () => {
+    const h = harness({
+      sources: [
+        source({ id: "web_chan" }),
+        source({ id: "group", via: "mtproto", lastItemId: "4" }),
+      ],
+    });
+    const reads: { channel: string; afterId: string | undefined }[] = [];
+    const reader: ChannelReader = {
+      via: "mtproto",
+      async read(channel, afterId) {
+        reads.push({ channel, afterId });
+        return [{ id: "5", body: "news", links: [], postedAt: new Date(NOW).toISOString() }];
+      },
+    };
+
+    const result = await runScrape({ ...h.deps, reader });
+
+    expect(reads).toEqual([{ channel: "group", afterId: "4" }]);
+    expect(result).toEqual({ processed: 1, enqueued: 1 });
+    expect(h.queue.sent.map((message) => JSON.parse(message.body).id)).toEqual(["group/5"]);
+    expect((await readBack(h.repo, "group")).lastItemId).toBe("5");
+    expect(h.fetcher.requests).toEqual([]);
   });
 });
 

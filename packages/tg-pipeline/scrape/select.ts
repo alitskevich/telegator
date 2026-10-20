@@ -1,5 +1,6 @@
 import type { Source } from "tg-domain/source";
-import { SOURCE_STATUS_OK } from "tg-domain/source";
+import { SOURCE_STATUS_OK, sourceVia } from "tg-domain/source";
+import type { SourceVia } from "tg-enums/sourceVia";
 
 /** One minute in milliseconds — the unit §3.1 L202 writes as `* 60_000`. */
 const MINUTE_MS = 60_000;
@@ -53,11 +54,16 @@ function isDue(source: Source, now: number): boolean {
  * **R16.** §8.4 L814's `deleteRecords` is a soft delete that sets `deleted: true`,
  * and §3.1 never filters on it — a deleted source would keep being polled and keep
  * publishing, since nothing else in the pipeline consults the flag.
+ *
+ * **R63.** Only the sources of the calling reader's `via`: each transport runs
+ * on its own schedule, and a source polled by both would be enqueued twice and
+ * have its one cursor advanced by two readers that page it differently.
  */
-export function selectSources(sources: readonly Source[], now: number): Source[] {
+export function selectSources(sources: readonly Source[], now: number, via: SourceVia): Source[] {
   return (
     sources
       .filter((source) => source.status === SOURCE_STATUS_OK && source.deleted !== true)
+      .filter((source) => sourceVia(source) === via)
       .filter((source) => isDue(source, now))
       // L205 says "the first 10" without saying first by what. Recorded decision,
       // not spec text: oldest `lastUpdated` first, so the most overdue sources take

@@ -153,6 +153,8 @@ describe("upsertRecord — §8.4 L812", () => {
         "category",
         "tags",
         "teaser",
+        // R63 — which reader polls the source.
+        "via",
       ]);
     });
 

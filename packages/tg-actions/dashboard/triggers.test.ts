@@ -387,7 +387,7 @@ describe("exportTable — §8.4 L816", () => {
     signedInAs("viewer");
     const [header] = (await exportTable({ table: "sources" }, deps())).split("\n");
 
-    expect(header).toBe("id,status,target,category,teaser,lastCount,lastResult,zeroYieldRuns");
+    expect(header).toBe("id,status,target,category,teaser,via,lastCount,lastResult,zeroYieldRuns");
   });
 
   test("MT-17: SOURCE_COLUMNS is the export header", () => {
@@ -397,6 +397,7 @@ describe("exportTable — §8.4 L816", () => {
       "target",
       "category",
       "teaser",
+      "via",
       "lastCount",
       "lastResult",
       "zeroYieldRuns",

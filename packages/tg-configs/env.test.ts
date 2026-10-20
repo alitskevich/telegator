@@ -51,6 +51,8 @@ describe("ENV_VARS", () => {
       telegramSecretArn: "TELEGATOR_TELEGRAM_SECRET_ARN",
       // R50 — the second secret, which Bedrock's IAM auth did not need.
       openRouterSecretArn: "TELEGATOR_OPENROUTER_SECRET_ARN",
+      // R63 — the third: the MTProto session.
+      mtprotoSecretArn: "TELEGATOR_MTPROTO_SECRET_ARN",
     });
   });
 

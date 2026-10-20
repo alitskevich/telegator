@@ -9,7 +9,7 @@ import { ENV_VARS, requireEnv } from "tg-configs/env";
 import { createHttpFetcher } from "tg-telegram/http";
 import { systemClock } from "tg-utils/clock";
 import { createLogger, stdoutSink } from "tg-utils/logger";
-import { runScrape, type ScrapeSummary } from "../scrape/index";
+import { runScrape, type ScrapeSummary, webReader } from "../scrape/index";
 
 /**
  * The `telegator-scrape` entry point (§7.5 L693, EventBridge `rate(30 minutes)`).
@@ -31,7 +31,7 @@ function buildDeps() {
   });
 
   return {
-    fetcher: createHttpFetcher(),
+    reader: webReader(createHttpFetcher()),
     sources: createSourceRepo({
       client: DynamoDBDocumentClient.from(new DynamoDBClient({})),
       tableName: requireEnv(ENV_VARS.sourcesTable),

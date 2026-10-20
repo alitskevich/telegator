@@ -1,17 +1,20 @@
 {
   "name": "telegator",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "private": true,
-  "description": "Telegram news pipeline on AWS (SQS, Lambda, DynamoDB) with Claude via OpenRouter and a Next.js operator dashboard",
+  "description": "Telegram news pipeline on AWS",
   "license": "ISC",
   "type": "module",
   "workspaces": [
-    "packages/tg-*"
+    "packages/*"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
+    "dev": "npm -w tg-web run dev",
+    "start": "npm -w tg-web run start",
+    "build": "npm -w tg-web run build",
     "gates": "npx --yes npm-run-all --parallel --continue-on-error --aggregate-output typecheck test lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -24,10 +27,8 @@
     "cursors:now": "tsx scripts/set-cursors-now.ts --write",
     "migrate:targets": "tsx scripts/migrate-targets.ts --write",
     "mcp": "tsx scripts/mcp.ts",
-    "smoke:openrouter": "export OPENROUTER_API_KEY=$(cat $HOME/.keys/openrouter-api.key) &&tsx scripts/smoke-openrouter.ts",
-    "dev": "npm -w tg-web run dev",
-    "build": "npm -w tg-web run build",
-    "start": "npm -w tg-web run start"
+    "mtproto:login": "export TG_API_ID=$(cat $HOME/.keys/tg-api-id.key) TG_API_HASH=$(cat $HOME/.keys/tg-api-hash.key) && tsx scripts/mtproto-login.ts",
+    "smoke:openrouter": "export OPENROUTER_API_KEY=$(cat $HOME/.keys/openrouter-api.key) && tsx scripts/smoke-openrouter.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
@@ -45,6 +46,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "server-only": "^0.0.1",
+    "telegram": "^2.26.22",
     "zod": "^4.5.2"
   },
   "devDependencies": {

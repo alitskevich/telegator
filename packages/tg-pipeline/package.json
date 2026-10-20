@@ -14,6 +14,7 @@
     "tg-dedup": "*",
     "tg-domain": "*",
     "tg-enums": "*",
+    "tg-mtproto": "*",
     "tg-ports": "*",
     "tg-telegram": "*",
     "tg-utils": "*"

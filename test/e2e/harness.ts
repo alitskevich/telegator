@@ -2,7 +2,7 @@ import type { Band } from "tg-dedup/score";
 import { runAggregate } from "tg-pipeline/aggregate/index";
 import { runAnalyze } from "tg-pipeline/analyze/index";
 import { runPublish } from "tg-pipeline/publish/index";
-import { runScrape } from "tg-pipeline/scrape/index";
+import { runScrape, webReader } from "tg-pipeline/scrape/index";
 import type { Adjudicator, Classifier } from "tg-ports/ai";
 import type { QueueMessage } from "tg-ports/queues";
 import type { Clock } from "tg-utils/clock";
@@ -93,7 +93,7 @@ export async function runPipeline(world: PipelineWorld): Promise<PipelineRun> {
   const publishQueue = fakeQueueProducer();
 
   const scrape = await runScrape({
-    fetcher: world.fetcher,
+    reader: webReader(world.fetcher),
     sources: world.sources,
     queue: analyzeQueue,
     metrics,

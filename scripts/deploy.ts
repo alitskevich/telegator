@@ -3,6 +3,7 @@ import { DescribeSecretCommand, SecretsManagerClient } from "@aws-sdk/client-sec
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import type { Environment } from "tg-infra/lib/config";
 import { resourceName } from "tg-infra/lib/naming";
+import { MTPROTO_SECRET_RESOURCE } from "tg-mtproto/credentials";
 import { cdkArgs, type DeploySecrets, parseDeployArgs } from "tg-ops/deploy/args";
 import { REGION } from "tg-ops/target";
 
@@ -39,12 +40,13 @@ import { REGION } from "tg-ops/target";
  *
  * Either can be overridden by name when a secret does not follow the scheme.
  */
-function secretNames(env: string): { telegram: string; openRouter: string } {
+function secretNames(env: string): { telegram: string; openRouter: string; mtproto: string } {
   const named = (resource: string) => resourceName(env as Environment, resource);
 
   return {
     telegram: process.env.TELEGATOR_TELEGRAM_SECRET_NAME ?? named("telegram-token"),
     openRouter: process.env.TELEGATOR_OPENROUTER_SECRET_NAME ?? named("openrouter-key"),
+    mtproto: process.env.TELEGATOR_MTPROTO_SECRET_NAME ?? named(MTPROTO_SECRET_RESOURCE),
   };
 }
 
@@ -102,6 +104,7 @@ async function main(): Promise<void> {
   const secrets: DeploySecrets = {
     telegramSecretArn: await resolveSecret(client, names.telegram),
     openRouterSecretArn: await resolveSecret(client, names.openRouter),
+    mtprotoSecretArn: await resolveSecret(client, names.mtproto),
   };
 
   console.log(`env      ${args.env}`);
@@ -110,6 +113,7 @@ async function main(): Promise<void> {
   console.log(`schedule ${args.scheduleEnabled ? "ENABLED" : "disabled"}`);
   console.log(`telegram ${secrets.telegramSecretArn}`);
   console.log(`model    ${secrets.openRouterSecretArn}`);
+  console.log(`mtproto  ${secrets.mtprotoSecretArn}`);
   console.log(
     args.execute
       ? "\nDeploying for real.\n"

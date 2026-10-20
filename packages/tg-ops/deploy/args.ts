@@ -77,12 +77,14 @@ export function parseDeployArgs(argv: readonly string[]): DeployArgs {
   return { env, execute, scheduleEnabled, reserveConcurrency };
 }
 
-/** The two Secrets Manager ARNs the pipeline's functions are granted and read. */
+/** The three Secrets Manager ARNs the pipeline's functions are granted and read. */
 export interface DeploySecrets {
   /** §7.6 L705 — `publish` reads the bot token. */
   readonly telegramSecretArn: string;
   /** §7.6, as revised by R50 — `analyze` and `aggregate` read the model key. */
   readonly openRouterSecretArn: string;
+  /** R63 — `scrape-mtproto` reads the session `scripts/mtproto-login.ts` saved. */
+  readonly mtprotoSecretArn: string;
 }
 
 /**
@@ -110,5 +112,7 @@ export function cdkArgs(args: DeployArgs, secrets: DeploySecrets): string[] {
     `telegramSecretArn=${secrets.telegramSecretArn}`,
     "-c",
     `openRouterSecretArn=${secrets.openRouterSecretArn}`,
+    "-c",
+    `mtprotoSecretArn=${secrets.mtprotoSecretArn}`,
   ];
 }

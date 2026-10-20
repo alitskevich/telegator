@@ -4,6 +4,8 @@ import { cdkArgs, parseDeployArgs } from "./args";
 const SECRETS = {
   telegramSecretArn: "arn:aws:secretsmanager:eu-central-1:1:secret:telegator/telegram-abc",
   openRouterSecretArn: "arn:aws:secretsmanager:eu-central-1:1:secret:telegator/openrouter-def",
+  mtprotoSecretArn:
+    "arn:aws:secretsmanager:eu-central-1:1:secret:telegator-dev-mtproto-session-ghi",
 };
 
 describe("parseDeployArgs", () => {
@@ -79,11 +81,12 @@ describe("cdkArgs", () => {
    * placeholder env var and a broad prefix grant, so the stack creates cleanly
    * and every model call fails on the first message instead.
    */
-  test("always passes both secret ARNs", () => {
+  test("always passes all three secret ARNs", () => {
     const flat = cdkArgs(parseDeployArgs([]), SECRETS).join(" ");
 
     expect(flat).toContain(`telegramSecretArn=${SECRETS.telegramSecretArn}`);
     expect(flat).toContain(`openRouterSecretArn=${SECRETS.openRouterSecretArn}`);
+    expect(flat).toContain(`mtprotoSecretArn=${SECRETS.mtprotoSecretArn}`);
   });
 
   /** Passed even when the default is correct, so the command records what ran. */

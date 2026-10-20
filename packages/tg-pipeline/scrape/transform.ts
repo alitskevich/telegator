@@ -1,9 +1,10 @@
 import type { DateKey } from "tg-domain/date";
 import { formatItemId } from "tg-domain/ids";
-import type { Link, ScrapedItem } from "tg-domain/item";
+import type { ScrapedItem } from "tg-domain/item";
 import { ScrapedItemSchema } from "tg-domain/item";
 import type { Source } from "tg-domain/source";
 import type { ItemKind } from "tg-enums/itemKind";
+import type { ChannelPost } from "tg-ports/telegram";
 
 /**
  * §3.1 L225 — the per-post transform: a parsed post plus its source become one
@@ -15,22 +16,10 @@ import type { ItemKind } from "tg-enums/itemKind";
  */
 
 /**
- * The parse output of §3.1 L213–221, declared structurally rather than imported
- * from `tg-telegram/parse.ts`: this module needs only the shape, and depending
- * on the parser's module would couple the transform to the scraper's HTML layer
- * for no gain. Field names match the parser's exactly.
+ * The parse output of §3.1 L213–221 — R63's `ChannelPost`, which both readers
+ * produce, so this transform cannot tell the web preview from MTProto.
  */
-export interface TransformInput {
-  /** The Telegram message id alone — digits (§3.1 L213), not the composite id. */
-  id: string;
-  /** Already tokenised: inline links are `[text](#N)` (§3.1 L215). */
-  body: string;
-  links: Link[];
-  image?: string;
-  forwardedFrom?: string;
-  /** The page's publish time for this post, ISO-8601 (§3.1 L219). */
-  postedAt?: string;
-}
+export type TransformInput = ChannelPost;
 
 /** §3.1 L227 — "older than **3 days**". */
 export const MAX_POST_AGE_DAYS = 3;

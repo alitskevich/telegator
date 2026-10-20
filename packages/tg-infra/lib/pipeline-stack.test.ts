@@ -64,6 +64,8 @@ const NAMES = [
   "telegator-dev-dlq-replay",
   /** R61 — the sixth, and the only one no queue or schedule ever calls. */
   "telegator-dev-consume",
+  /** R63 — the seventh: §3.1's stage again, over the MTProto reader. */
+  "telegator-dev-scrape-mtproto",
 ];
 
 describe("TelegatorPipelineStack functions", () => {
@@ -87,10 +89,10 @@ describe("TelegatorPipelineStack functions", () => {
 
   /**
    * §7.5 L689 — "Five functions, down from the source system's seven", plus
-   * R61's `consume`. Counted against the inventory rather than a literal, so
-   * adding a seventh is still a deliberate act rather than a silent one.
+   * R61's `consume` and R63's `scrape-mtproto`. Counted against the inventory
+   * rather than a literal, so adding an eighth is still a deliberate act.
    */
-  test("declares exactly the functions §7.5 L693-697 inventories, plus R61's", () => {
+  test("declares exactly the functions §7.5 L693-697 inventories, plus R61's and R63's", () => {
     expect(functions(stackFor().template)).toHaveLength(NAMES.length);
   });
 
@@ -119,6 +121,7 @@ describe("TelegatorPipelineStack functions", () => {
     ["telegator-dev-aggregate", 1024],
     ["telegator-dev-publish", 512],
     ["telegator-dev-dlq-replay", 512],
+    ["telegator-dev-scrape-mtproto", 512],
   ])("%s is given %i MB", (name, memory) => {
     expect(named(stackFor().template, name)?.MemorySize).toBe(memory);
   });
@@ -128,6 +131,8 @@ describe("TelegatorPipelineStack functions", () => {
       ["telegator-dev-scrape", 1],
       ["telegator-dev-analyze", 5],
       ["telegator-dev-dlq-replay", 1],
+      // R63 — one MTProto session opened twice at once is revoked by Telegram.
+      ["telegator-dev-scrape-mtproto", 1],
     ])("%s reserves %i", (name, reserved) => {
       expect(named(stackFor().template, name)?.ReservedConcurrentExecutions).toBe(reserved);
     });
@@ -146,16 +151,16 @@ describe("TelegatorPipelineStack functions", () => {
     );
 
     /**
-     * §3.1 L197's scrape, §3.5's replay, and R61's consume — the three that an
-     * operator or a schedule starts. The two driven by FIFO groups reserve
-     * nothing, which is the assertion above.
+     * §3.1 L197's scrape, §3.5's replay, R61's consume and R63's MTProto scrape
+     * — the four that an operator or a schedule starts — plus analyze. The two
+     * driven by FIFO groups reserve nothing, which is the assertion above.
      */
-    test("exactly four functions reserve concurrency", () => {
+    test("exactly five functions reserve concurrency", () => {
       const reserved = functions(stackFor().template).filter(
         (f) => f.ReservedConcurrentExecutions !== undefined,
       );
 
-      expect(reserved).toHaveLength(4);
+      expect(reserved).toHaveLength(5);
     });
 
     /**

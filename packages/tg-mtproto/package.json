@@ -1,0 +1,14 @@
+{
+  "name": "tg-mtproto",
+  "version": "1.0.0",
+  "description": "R63's MTProto reader: sources read through a logged-in Telegram account (GramJS).",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "tg-domain": "*",
+    "tg-ports": "*"
+  }
+}

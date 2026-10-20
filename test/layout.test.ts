@@ -22,6 +22,7 @@ const PACKAGES = [
   "tg-aws",
   "tg-ai",
   "tg-telegram",
+  "tg-mtproto",
   "tg-auth",
   "tg-pipeline",
   "tg-actions",
