@@ -1,0 +1,17 @@
+{
+  "name": "tg-firebase",
+  "version": "1.0.0",
+  "description": "Firestore collections, Cloud Tasks queues, metrics, dead letters and operators.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.4.0",
+    "tg-configs": "*",
+    "tg-domain": "*",
+    "tg-enums": "*",
+    "zod": "^4.5.2"
+  }
+}

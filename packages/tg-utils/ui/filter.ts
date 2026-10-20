@@ -1,9 +1,6 @@
 /**
- * §8.3 L812 — "Search on every table filters across visible columns, matching
- * the source's `filterByKeyword`."
- *
- * Shared by all three tables of §8.3 rather than reimplemented per page, so
- * "search" means one thing across the dashboard.
+ * The console's table search: a keyword across the visible columns. Shared by
+ * every table, so "search" means one thing across the console.
  */
 
 /**
@@ -16,9 +13,8 @@
  */
 function searchableText(value: unknown): string | undefined {
   if (typeof value === "string") return value;
-  // Numbers and booleans are on screen in §8.3's tables — `lastCount`,
-  // `memberCount`, `zeroYieldRuns`, `deleted` — so they are searchable. A filter
-  // that ignored them would make "120" find nothing while it sat in view.
+  // Numbers and booleans are on screen (`lastCount`, `deleted`), so they are
+  // searchable: "120" must find the row that shows it.
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return undefined;
 }
@@ -41,16 +37,9 @@ export function filterByKeyword<T extends Record<string, unknown>>(
 }
 
 /**
- * The per-column filter row beneath §8.3's headers: one box per visible column,
- * ANDed.
- *
- * *Reconciliation.* §8.3 L812 specifies only the cross-column search. This
- * narrows rather than replaces it — an operator who knows the category they want
- * should not have to find a keyword that appears in no other column — and both
- * run over the rows the page already holds, as L801's search always has.
- *
- * The cell rules are `filterByKeyword`'s, from the same `searchableText`, so a
- * word that matches in the search box matches in that column's own box too.
+ * The per-column filter row beneath the headers: one box per visible column,
+ * ANDed, over the rows the page already holds. It uses the same cell rules as
+ * `filterByKeyword`, so a word that matches in the search box matches here too.
  */
 export function filterByColumn<T extends Record<string, unknown>>(
   rows: readonly T[],

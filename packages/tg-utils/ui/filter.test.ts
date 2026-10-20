@@ -9,8 +9,7 @@ const rows = [
 
 const visible = ["title", "category"] as const;
 
-describe("filterByKeyword — §8.3 L812", () => {
-  /** "Search on every table filters across visible columns." */
+describe("filterByKeyword", () => {
   test("matches on any visible column", () => {
     expect(filterByKeyword(rows, "cup", visible).map((r) => r.id)).toEqual(["example/2"]);
     expect(filterByKeyword(rows, "politics", visible).map((r) => r.id)).toEqual([
@@ -29,12 +28,7 @@ describe("filterByKeyword — §8.3 L812", () => {
     expect(filterByKeyword(rows, "lect", visible)).toHaveLength(1);
   });
 
-  /**
-   * "Visible columns" is the load-bearing half of L801. An operator who filters
-   * a table to three columns and types a word expects the rows they can read to
-   * explain the match; matching a hidden `id` or `tgId` returns rows with
-   * no visible reason to be there.
-   */
+  /** A match on a hidden column would return rows with no visible reason to be there. */
   test("a column that is not visible does not match", () => {
     expect(filterByKeyword(rows, "example/1", visible)).toEqual([]);
   });
@@ -62,11 +56,7 @@ describe("filterByKeyword — §8.3 L812", () => {
     expect(filterByKeyword(rows, "weather", visible)).toEqual([]);
   });
 
-  /**
-   * §8.3's tables show numbers — `lastCount`, `memberCount`, `zeroYieldRuns`.
-   * They are on screen, so they are searchable; a filter that silently ignored
-   * them would make "120" find nothing while the operator was looking at it.
-   */
+  /** Numbers are on screen, so "120" must find the row that shows it. */
   test("numeric columns are searchable", () => {
     expect(filterByKeyword(rows, "120", ["title", "lastCount"]).map((r) => r.id)).toEqual([
       "example/3",

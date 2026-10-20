@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/node_modules", "!**/cdk.out", "!package-lock.json"]
+    "includes": ["**", "!**/node_modules", "!package-lock.json", "!**/dist", "!.emulator"]
   },
   "formatter": {
     "enabled": true,
@@ -41,32 +41,12 @@
   },
   "overrides": [
     {
-      "includes": ["packages/**/*.ts", "!packages/tg-web/**", "!packages/tg-infra/**"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noMagicNumbers": "error"
-          }
-        }
-      }
-    },
-    {
       "includes": ["test/fixtures/**/*.html"],
       "linter": {
         "enabled": false
       },
       "formatter": {
         "enabled": false
-      }
-    },
-    {
-      "includes": ["**/*.test.ts", "test/**/*.ts"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noMagicNumbers": "off"
-          }
-        }
       }
     },
     {

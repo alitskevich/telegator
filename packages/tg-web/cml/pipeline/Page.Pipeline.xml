@@ -1,5 +1,5 @@
 <Component id="Page.Pipeline">
-  <Signature purpose="§8.3 — the whole pipeline as one live diagram, with every manual trigger on the node it acts on"
+  <Signature purpose="The whole pipeline as one live diagram, with every manual trigger on the node it acts on"
     description="Select a stage or a queue; its panel below holds its figures and its actions. Depths refresh every 30 s." />
 
   <PipelineService Ref="pipeline" api="@api" />

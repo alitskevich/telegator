@@ -1,17 +1,10 @@
 /**
- * The classification system prompt, §5.2 L442–447.
+ * The classification system prompt, ported verbatim from the original system.
  *
- * §5.2 L439 calls it "ported verbatim; load-bearing" and singles out why: the
- * `[text](#N)` preservation rule keeps the link tokens §3.1 L216 produces
- * intact, so §3.4 L326 can resolve them back into anchors at render time. A
- * model that rewrites or strips them breaks every link in a published message.
- *
- * Two things here look like mistakes and are kept deliberately. "responseSchema"
- * is Gemini vocabulary — the Messages request at §5.2 L432 calls the field
- * `schema` — and the rules end with semicolons rather than full stops. Prompt
- * wording changes model behaviour, and no test in this repo can measure the
- * effect of an edit, so verbatim means verbatim. A test compares this constant
- * against the text lifted from the spec at test time.
+ * The `[text](#N)` rule is load-bearing: publish resolves those tokens back into
+ * links, so a model that rewrites them breaks every link in a message. The
+ * Gemini-era word "responseSchema" and the trailing semicolons are kept on
+ * purpose: wording changes model behaviour, and no test can measure the effect.
  */
 export const SYSTEM_PROMPT = `You are all about analyzing the ongoing news articles, keeping strong focus on matters of facts.
 Your responses MUST follow the rules:

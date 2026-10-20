@@ -1,22 +1,21 @@
 import bigInt, { type BigInteger } from "big-integer";
 import { Api, utils } from "telegram";
 import type { Link } from "tg-domain/item";
-import type { ChannelPost, ChannelReader } from "tg-ports/telegram";
+import type { ChannelPost, ChannelReader } from "tg-telegram/types";
 
 /**
- * R63 — the `via: "mtproto"` reader: `ChannelReader` over a logged-in GramJS
- * client, mapping each message to the shape §3.1 L214–220's parser produces, so
- * `transformPost` and every guard after it cannot tell the two transports apart.
+ * The `via: "mtproto"` reader: `ChannelReader` over a logged-in GramJS client.
+ * It maps each message to the shape the web parser produces, so `transformPost`
+ * cannot tell the two transports apart.
  */
 
 /**
- * R63 — one run reads at most a `t.me/s/` page's worth of posts, matching what
- * the web reader sees: §3.1 L206's hot tier and the cursor catch a busy chat up
- * over successive runs instead of one run carrying its whole backlog.
+ * One run reads at most a `t.me/s/` page's worth of posts, like the web reader:
+ * a busy chat catches up over successive runs, not in one.
  */
 export const MTPROTO_PAGE_SIZE = 20;
 
-/** §3.1 L216 — "N from 1". */
+/** Link tokens are numbered from 1. */
 const FIRST_LINK_ID = 1;
 
 const MS_PER_SECOND = 1000;
@@ -26,7 +25,7 @@ const NUMERIC_PEER_PATTERN = /^-?\d+$/;
 
 /**
  * Set when GramJS reports a forward with neither a name nor a peer. Only
- * non-emptiness matters: §3.1 L226 classifies on it and L229 drops the post.
+ * non-emptiness matters: it marks the post as a forward, which scrape drops.
  */
 export const UNKNOWN_FORWARD_ORIGIN = "unknown";
 
@@ -48,9 +47,8 @@ export interface MessageClient {
 
 /**
  * The page after the cursor, oldest first, or the newest page without one.
- *
- * Without a cursor `reverse` would start from the chat's first message — the
- * MTProto twin of R60's warning about the bare `?after=`, re-enqueueing history.
+ * Without a cursor, `reverse` would start from the chat's first message and
+ * re-enqueue its whole history.
  */
 export function pageAfter(afterId: string | undefined): MessagePage {
   return afterId === undefined || afterId === ""
@@ -59,12 +57,11 @@ export function pageAfter(afterId: string | undefined): MessagePage {
 }
 
 /**
- * §3.1 L216's `[text](#N)` tokens, from MTProto entities instead of `<a>` tags.
+ * The `[text](#N)` link tokens, from MTProto entities instead of `<a>` tags.
  *
- * A `MessageEntityUrl` is a bare link, its own text; a `MessageEntityTextUrl`
- * is a labelled one. Entity offsets count UTF-16 code units, which is what a
- * JavaScript string indexes, so the spans slice as given. An entity overlapping
- * an earlier one is skipped: Telegram does not nest links.
+ * A `MessageEntityUrl` is a bare link, a `MessageEntityTextUrl` a labelled one.
+ * Offsets count UTF-16 code units, as JavaScript strings do. An entity
+ * overlapping an earlier one is skipped: Telegram does not nest links.
  */
 export function tokeniseLinks(
   text: string,
@@ -104,12 +101,9 @@ function forwardOrigin(header: Api.TypeMessageFwdHeader | undefined): string | u
 /**
  * One message as a `ChannelPost`.
  *
- * No `image`: the web reader's is a public CDN URL that §3.4 hands to
- * `sendPhoto`, and an MTProto photo has none — it would have to be downloaded
- * and re-hosted. A photo post therefore publishes as text.
- *
- * A service message (a join, a pin) has no text, so it becomes `empty` and is
- * dropped by §3.1 L230 — yet still counts toward the cursor, as L115 requires.
+ * No `image`: an MTProto photo has no public URL for `sendPhoto`, so a photo
+ * post publishes as text. A service message (a join, a pin) has no text, so it
+ * is dropped as `empty` but still moves the cursor.
  */
 export function toChannelPost(message: Api.Message): ChannelPost {
   const { body, links } = tokeniseLinks(message.message ?? "", message.entities ?? []);
@@ -129,11 +123,9 @@ function toEntity(channel: string): string | BigInteger {
 }
 
 /**
- * R63's reader.
- *
- * A numeric id resolves only from GramJS's entity cache, which a `StringSession`
- * does not persist — so the first numeric source of a run loads the dialog
- * list once, and a run of usernames never pays for it.
+ * The MTProto reader. A numeric id resolves only from GramJS's entity cache,
+ * which a `StringSession` does not persist, so the first numeric source of a run
+ * loads the dialog list once.
  */
 export function createMtprotoReader(client: MessageClient): ChannelReader {
   let dialogs: Promise<unknown> | undefined;

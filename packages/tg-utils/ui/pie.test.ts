@@ -60,7 +60,7 @@ describe("conicGradient", () => {
 });
 
 describe("the palette", () => {
-  /** §8.5 — ten colours, cycled across §5.4's 29 categories. */
+  /** Ten colours, cycled across the 29 categories. */
   test("has ten colours", () => {
     expect(PIE_PALETTE).toHaveLength(10);
   });

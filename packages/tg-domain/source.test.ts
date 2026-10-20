@@ -21,13 +21,8 @@ describe("SourceSchema", () => {
     expect(SourceSchema.parse(seedRecord)).toMatchObject(seedRecord);
   });
 
-  /**
-   * §3.1 L203 selects on `now - lastUpdated >= (lastCount > 0 ? 30 : 240) * 60_000`.
-   * That arithmetic yields NaN on undefined, and NaN fails every comparison — so a
-   * never-polled source would never be selected and the channel would go dark with
-   * no error anywhere. Defaults make the formula total.
-   */
-  test("defaults the numeric cursor fields to zero so §3.1's selection is total", () => {
+  /** Scrape's due-time math yields NaN on undefined, so a never-polled source would never be due. */
+  test("defaults the numeric cursor fields to zero so scrape selection is total", () => {
     const parsed = SourceSchema.parse(seedRecord);
 
     expect(parsed.lastCount).toBe(0);
@@ -48,10 +43,8 @@ describe("SourceSchema", () => {
   });
 
   /**
-   * The legacy export types every value as a string ("12", "1772458034502").
-   * §2.1 L117/L117 type these as numbers, and the coercion belongs to the seed
-   * migration (item 6.3) — not silently to this schema, or a string would flow
-   * into §3.1's arithmetic and produce NaN.
+   * The legacy export types every value as a string. Coercion belongs to the
+   * seed script, not to this schema, or a string would reach scrape's math.
    */
   test("rejects a numeric field arriving as a string", () => {
     expect(SourceSchema.safeParse({ ...seedRecord, lastCount: "12" }).success).toBe(false);
@@ -64,35 +57,22 @@ describe("SourceSchema", () => {
     expect(parsed).not.toHaveProperty("adv_enabled");
   });
 
-  /**
-   * R16: §8.4 L823 requires a soft delete setting `deleted: true`, but §2.1's
-   * field table never declares the field.
-   */
-  test("accepts the soft-delete flag §8.4 L823 requires", () => {
+  test("accepts the soft-delete flag", () => {
     expect(SourceSchema.parse({ ...seedRecord, deleted: true }).deleted).toBe(true);
     expect(SourceSchema.parse(seedRecord).deleted).toBeUndefined();
   });
 
-  /**
-   * R15: §4.1 L383 fires SourceStale on a source with "a non-zero historical
-   * lastCount", but §3.1 L222 sets lastCount to 0 on the first zero-yield run,
-   * destroying the evidence before the third run can use it.
-   */
-  test("carries lastNonZeroCount, which §4.1 L383's staleness rule needs", () => {
+  /** lastCount is 0 after the first empty run, which erases the evidence staleness needs. */
+  test("carries lastNonZeroCount, which the staleness rule needs", () => {
     expect(SourceSchema.parse({ ...seedRecord, lastNonZeroCount: 25 }).lastNonZeroCount).toBe(25);
   });
 
-  /**
-   * 61 of the 135 legacy sources carry `status: ""`. An empty string is not a
-   * legal DynamoDB index key, so item 6.3 omits the attribute entirely — which
-   * leaves the record out of the sparse status-index, and §2.1 L111 says any
-   * value other than "ok" disables the source anyway.
-   */
-  test("allows an absent status, which is how a disabled source stays out of status-index", () => {
+  /** Any value other than "ok", or none, disables the source. */
+  test("allows an absent status", () => {
     expect(SourceSchema.safeParse({ ...seedRecord, status: undefined }).success).toBe(true);
   });
 
-  test("treats status as an open string, not an enum (§2.1 L111)", () => {
+  test("treats status as an open string, not an enum", () => {
     expect(SourceSchema.parse({ ...seedRecord, status: "paused" }).status).toBe("paused");
   });
 
@@ -106,18 +86,14 @@ describe("SourceSchema", () => {
 });
 
 describe("SourceConfigInput", () => {
-  test("accepts the operator-written fields of §2.1 L111-115", () => {
+  test("accepts the operator-written fields", () => {
     expect(SourceConfigInput.parse({ status: "ok", category: "war" })).toEqual({
       status: "ok",
       category: "war",
     });
   });
 
-  /**
-   * The allowlist item 5.9's upsertRecord enforces. Rejecting rather than
-   * stripping means an operator who tries to hand-edit a scrape-owned cursor
-   * gets an error instead of a silent no-op.
-   */
+  /** Rejecting rather than stripping makes hand-editing a cursor an error, not a no-op. */
   test("rejects a scrape-written field outright", () => {
     expect(SourceConfigInput.safeParse({ lastItemId: "90177" }).success).toBe(false);
     expect(SourceConfigInput.safeParse({ zeroYieldRuns: 0 }).success).toBe(false);
@@ -126,13 +102,10 @@ describe("SourceConfigInput", () => {
 
 describe("SourceCursorUpdate", () => {
   /**
-   * Exact equality, not toMatchObject, and that is the point. Building this from
-   * SourceSchema.pick() carries the read-side .default(0) through .partial(), so
-   * a patch omitting zeroYieldRuns would have 0 injected into it — resetting the
-   * staleness counter on every successful poll and making §4.1 L383's alarm
-   * unreachable. A patch must leave an absent field absent.
+   * Exact equality on purpose: an injected `zeroYieldRuns: 0` default would
+   * reset the staleness counter on every poll.
    */
-  test("accepts the scrape-written fields of §2.1 L116-120 and injects nothing else", () => {
+  test("accepts the scrape-written fields and injects nothing else", () => {
     const update = { lastItemId: "90177", lastCount: 3, lastUpdated: 1_772_458_034_502 };
 
     expect(SourceCursorUpdate.parse(update)).toEqual(update);
@@ -143,15 +116,15 @@ describe("SourceCursorUpdate", () => {
   });
 });
 
-describe("target — multi-target#2.2 (R54)", () => {
-  test("MT-3: a stored tgChannel is stripped and does not become target", () => {
+describe("target and via", () => {
+  test("a stored tgChannel is stripped and does not become target", () => {
     const parsed = SourceSchema.parse({ id: "yigal_levin", tgChannel: "x" });
 
     expect(parsed).not.toHaveProperty("tgChannel");
     expect(parsed.target).toBeUndefined();
   });
 
-  /** R63 — an operator chooses the reader; only the two known ones are accepted. */
+  /** An operator chooses the reader; only the two known ones are accepted. */
   test("SourceConfigInput accepts a known via and rejects an unknown one", () => {
     expect(SourceConfigInput.parse({ via: "mtproto" })).toEqual({ via: "mtproto" });
     expect(SourceConfigInput.safeParse({ via: "rss" }).success).toBe(false);
@@ -162,12 +135,12 @@ describe("target — multi-target#2.2 (R54)", () => {
     expect(sourceVia(SourceSchema.parse({ ...seedRecord, via: "mtproto" }))).toBe("mtproto");
   });
 
-  test("MT-3: SourceConfigInput accepts target and rejects tgChannel", () => {
+  test("SourceConfigInput accepts target and rejects tgChannel", () => {
     expect(SourceConfigInput.parse({ target: "a, @b" })).toEqual({ target: "a, @b" });
     expect(SourceConfigInput.safeParse({ tgChannel: "a" }).success).toBe(false);
   });
 
-  test("target is carried verbatim — a list is not parsed here (D1)", () => {
+  test("target is carried verbatim — a list is not parsed here", () => {
     expect(SourceSchema.parse({ ...seedRecord, target: "a, @b" }).target).toBe("a, @b");
   });
 });

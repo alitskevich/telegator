@@ -4,10 +4,9 @@ import { allSelected } from "tg-utils/ui/selection";
 import { type SortState, sortRows } from "tg-utils/ui/sort";
 
 /**
- * §8.3's tables as one pure function: the rows the API sent, plus what the
- * operator has typed, ticked and expanded, in → the exact rows and cells the
- * template draws, out. `GridService` holds the state; this decides what it
- * means, so every rule is tested without mounting anything.
+ * The tables as one pure function: the API's rows plus what the operator typed,
+ * ticked and expanded, in; the rows and cells the template draws, out. Pure, so
+ * every rule is tested without mounting anything.
  */
 
 export type Row = Readonly<Record<string, unknown>> & { readonly id: string };
@@ -79,11 +78,7 @@ export interface GridView {
 export const cellText = (value: unknown): string =>
   value === undefined || value === null ? "" : String(value);
 
-/**
- * Only what the operator actually changed. Sending unchanged fields would
- * overwrite a concurrent edit by another operator with a value this page read
- * before theirs landed.
- */
+/** Only what the operator changed, so a save never overwrites another operator's edit with stale values. */
 export function changedFields(row: Row, draft: Readonly<Record<string, string>> = {}) {
   return Object.fromEntries(
     Object.entries(draft).filter(([field, value]) => value !== cellText(row[field])),
@@ -95,8 +90,7 @@ const STATUS_FIELD = "status";
 export function gridView(rows: readonly Row[] | null, state: GridState, spec: GridSpec): GridView {
   const columns = spec.columns.map((column) => column.id);
 
-  // §8.3 — the keyword across the columns on screen, then the per-column boxes
-  // ANDed, then the sort over what survives.
+  // The keyword across the columns on screen, then the per-column filters ANDed, then the sort.
   const matched = filterByKeyword(rows ?? [], state.keyword, columns);
   const visible = sortRows(filterByColumn(matched, state.filters, columns), state.sort);
 

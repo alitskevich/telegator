@@ -2,14 +2,9 @@ import { describe, expect, test } from "vitest";
 import { CHUNK_MARKER, telegramFixture, telegramFixtureNames } from "./index";
 
 /**
- * These fixtures were built from markup observed on a live `t.me/s/` page, not
- * imagined. §4.1 L381 calls the scraper "the system's most fragile dependency"
- * because it depends on four literal CSS class names, so a fixture that merely
- * looks plausible would let the parser pass here and fail in production.
- *
- * They carry placeholder content rather than the captured page itself: the real
- * page is 148 KB of third-party news, and the structure is what the parser
- * needs.
+ * The fixtures copy the structure of a live `t.me/s/` page with placeholder
+ * content. The parser depends on literal CSS class names, so markup that only
+ * looks plausible would pass here and fail in production.
  */
 describe("the captured markup", () => {
   test("exposes every fixture the parser tests need", () => {
@@ -23,11 +18,11 @@ describe("the captured markup", () => {
     ]);
   });
 
-  test("uses the exact chunk marker §3.1 L210 splits on", () => {
+  test("uses the exact chunk marker the parser splits on", () => {
     expect(CHUNK_MARKER).toBe('<div class="tgme_widget_message_wrap js-widget_message_wrap">');
   });
 
-  test("puts page chrome before the first marker, which §3.1 L210 discards", () => {
+  test("puts page chrome before the first marker, which the parser discards", () => {
     const html = telegramFixture("multiPost");
 
     expect(html.indexOf(CHUNK_MARKER)).toBeGreaterThan(0);
@@ -45,7 +40,7 @@ describe("the captured markup", () => {
   });
 
   /** Observed live: the class is `tgme_widget_message_text js-message_text`. */
-  test("uses the real message-text class, not the spec's elided form", () => {
+  test("uses the real message-text class, not an elided form", () => {
     expect(telegramFixture("multiPost")).toContain(
       '<div class="tgme_widget_message_text js-message_text">',
     );
@@ -57,7 +52,7 @@ describe("the captured markup", () => {
     expect(telegramFixture("multiPost")).not.toContain("<br>");
   });
 
-  test("carries the six HTML entities §3.1 L217 decodes", () => {
+  test("carries the six HTML entities the parser decodes", () => {
     const html = telegramFixture("multiPost");
 
     for (const entity of ["&amp;", "&lt;", "&gt;", "&quot;", "&#39;", "&nbsp;"]) {
@@ -65,14 +60,14 @@ describe("the captured markup", () => {
     }
   });
 
-  test("twoLinks has exactly two anchors inside its message text (AC-1.3)", () => {
+  test("twoLinks has exactly two anchors inside its message text", () => {
     const text = telegramFixture("twoLinks").split('js-message_text">')[1] ?? "";
 
     expect(text.split("<a href=").length - 1).toBe(2);
   });
 
   /** Observed live: the channel segment sits in the anchor's href. */
-  test("forwarded carries the forwarded_from_name anchor (AC-1.6)", () => {
+  test("forwarded carries the forwarded_from_name anchor", () => {
     expect(telegramFixture("forwarded")).toContain(
       '<a class="tgme_widget_message_forwarded_from_name" href="https://t.me/',
     );
@@ -84,11 +79,9 @@ describe("the captured markup", () => {
   });
 
   /**
-   * The finding that made capturing real markup worth it. Exactly three classes
-   * carry a background-image on a live page — `emoji`,
-   * `tgme_widget_message_photo_wrap` and `tgme_widget_message_video_thumb` — and
-   * an emoji can precede the photo. §3.1 L219 says to take the *first*
-   * `background-image:url('X')`, which on such a post is an emoji sprite.
+   * Three classes carry a background-image on a live page (`emoji`, the photo
+   * wrap and the video thumb), and an emoji can precede the photo, so the first
+   * `background-image` is not always the photo.
    */
   test("emojiBeforePhoto puts an emoji sprite ahead of the real photo", () => {
     const html = telegramFixture("emojiBeforePhoto");
@@ -100,7 +93,7 @@ describe("the captured markup", () => {
     expect(html).toContain('class="tgme_widget_message_photo_wrap');
   });
 
-  test("no fixture carries a Telegram bot token or an AWS account id", () => {
+  test("no fixture carries a Telegram bot token or a 12-digit account id", () => {
     for (const name of telegramFixtureNames) {
       const html = telegramFixture(name);
 

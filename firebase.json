@@ -16,7 +16,7 @@
         "headers": [
           {
             "key": "Content-Security-Policy",
-            "value": "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com https://unpkg.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com https://unpkg.com; img-src 'self' data:; connect-src 'self' https://*.execute-api.eu-central-1.amazonaws.com https://*.auth.eu-central-1.amazoncognito.com; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'"
+            "value": "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' https://fonts.googleapis.com https://unpkg.com https://accounts.google.com/gsi/style; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com https://unpkg.com; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://us-central1-telegator-581db.cloudfunctions.net https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'"
           },
           {
             "key": "X-Content-Type-Options",
@@ -60,5 +60,36 @@
         ]
       }
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "packages/tg-functions",
+      "runtime": "nodejs22",
+      "ignore": ["node_modules", "*.ts", "*.local", ".gitignore"],
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+    }
+  ],
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8180
+    },
+    "tasks": {
+      "port": 9499
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    },
+    "singleProjectMode": true
   }
 }

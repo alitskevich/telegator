@@ -45,11 +45,6 @@ describe("parsePairsJsonl", () => {
 });
 
 describe("parseItems", () => {
-  /**
-   * R48 — the fields a match key is built from (§5.2's English fields), not
-   * the fields the old embedding text concatenated. There is no embedding
-   * step left to feed `summary`, `category` or `body` to.
-   */
   test("reads the fields a match key is built from", () => {
     const items = parseItems([
       { id: "x/1", title: "T", peoples: "A, B", properNames: "C", tags: "t1, t2" },
@@ -94,30 +89,18 @@ describe("toKeyPairs", () => {
     ]);
   });
 
-  /**
-   * Throws rather than dropping the pair. A silently dropped pair would shrink
-   * the labelled set below what §10.3 step 1 requires without telling anyone.
-   */
+  /** A silently dropped pair would shrink the labelled set without telling anyone. */
   test("throws naming a referenced item that is missing, on either side", () => {
     expect(() => toKeyPairs([{ a: "x/1", b: "x/9", label: "same" }], items)).toThrow(/x\/9/);
     expect(() => toKeyPairs([{ a: "x/9", b: "x/1", label: "same" }], items)).toThrow(/x\/9/);
   });
 
-  /**
-   * A self-pair scores 1.0 against itself under `matchScore` and would inflate
-   * the auto-merge region's apparent precision — exactly the metric the
-   * three-way objective exists to protect. Ported from the embedding-era
-   * `distinctPairs`'s "pair with itself is rejected" guard.
-   */
+  /** A self-pair scores 1.0 and would inflate the auto-merge precision. */
   test("a pair with itself is rejected", () => {
     expect(() => toKeyPairs([{ a: "x/1", b: "x/1", label: "same" }], items)).toThrow(/itself/);
   });
 
-  /**
-   * §6 compares without regard to order, so `(a,b)` and `(b,a)` are one
-   * observation. Counting both would double that pair's weight against every
-   * other pair in the set. Ported from `distinctPairs`.
-   */
+  /** Counting both orders would double that pair's weight. */
   test("a mirrored duplicate (a,b) / (b,a) is one observation, not two", () => {
     const pairs = toKeyPairs(
       [
@@ -130,12 +113,7 @@ describe("toKeyPairs", () => {
     expect(pairs).toHaveLength(1);
   });
 
-  /**
-   * Two labels for one pair is a labelling error, not a tie to resolve
-   * silently — resolving it either way would decide the calibration on
-   * whichever line happened to come first in the file. Ported from
-   * `distinctPairs`.
-   */
+  /** Two labels for one pair is a labelling error, not a tie to resolve silently. */
   test("contradictory labels for one pair are rejected", () => {
     expect(() =>
       toKeyPairs(
@@ -154,12 +132,7 @@ describe("hashLabelledSet", () => {
     expect(hashLabelledSet("pairs", "items")).toBe(hashLabelledSet("pairs", "items"));
   });
 
-  /**
-   * A threshold is a property of the exact set it was tuned on — the same
-   * argument that applied when the score was a similarity threshold over
-   * embedded text. If two different labelled sets hashed the same, that
-   * guarantee would be empty.
-   */
+  /** A threshold belongs to the exact set it was tuned on, so different sets must hash differently. */
   test("changes when either input changes", () => {
     const base = hashLabelledSet("pairs", "items");
 
@@ -185,7 +158,7 @@ describe("toCurveCsv", () => {
     bandFraction: 0.25,
   });
 
-  test("writes the header §10.3 step 6 records", () => {
+  test("writes the curve header", () => {
     expect(toCurveCsv([]).split("\n")[0]).toBe(CURVE_HEADER);
     expect(CURVE_HEADER).toBe(
       "distinctThreshold,mergeThreshold,autoMergePrecision,autoSplitRecall,bandFraction",
@@ -200,22 +173,14 @@ describe("toCurveCsv", () => {
     expect(toCurveCsv([row(0.35, 0.72, 0.9)]).split("\n")[1]).toBe("0.35,0.72,0.9,0.5,0.25");
   });
 
-  /**
-   * An empty cell, not 0 and not "null". Zero would read as "every merge was
-   * wrong", when in fact there were no merges at all — different findings, and
-   * only one of them is a reason to raise the merge threshold.
-   */
+  /** Zero would read as "every merge was wrong", when there were no merges at all. */
   test("an absent auto-merge precision is an empty cell", () => {
     expect(toCurveCsv([row(0.35, 0.95, null)]).split("\n")[1]).toBe("0.35,0.95,,0.5,0.25");
   });
 });
 
-describe("the harness end to end (R48)", () => {
-  /**
-   * Each part is unit-tested above; this is the only assertion that the parts
-   * fit together — files in, a curve and a row satisfying both error floors
-   * out, with zero model calls anywhere in the path.
-   */
+describe("the harness end to end", () => {
+  /** The parts fit together: files in, a curve and a viable row out, no model calls. */
   test("files in, a curve and a viable band out", () => {
     const items = parseItems([
       {
@@ -251,7 +216,7 @@ describe("the harness end to end (R48)", () => {
 
     // The pair actually judged the same scores well above 0.72 (shared
     // entities and half the title tokens); both different pairs share nothing
-    // and score 0. §6's provisional band separates them perfectly.
+    // and score 0. The provisional band separates them perfectly.
     expect(productionRow).toMatchObject({
       autoMergePrecision: 1,
       autoSplitRecall: 1,

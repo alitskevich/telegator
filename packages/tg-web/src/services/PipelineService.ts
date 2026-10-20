@@ -1,8 +1,8 @@
 import { WebClientService } from "arrmatura-web";
 import type { Overview } from "tg-actions/dashboard/overview";
-import type { ReplayableQueue } from "tg-enums/queueName";
-import type { DlqMessage } from "tg-ports/queues";
-import { MAX_CONSUME, MAX_PUBLISH_NOW } from "tg-ports/queues";
+import { MAX_PUBLISH_NOW } from "tg-configs/limits";
+import type { QueueName } from "tg-enums/queueName";
+import type { DeadLetter as StoredDeadLetter } from "tg-firebase/deadLetters";
 import { resources } from "tg-rc/web";
 import { type PipelineNode, pipelineNodes, queueOf } from "../pipeline/nodes";
 import { fill } from "../text/fill";
@@ -10,9 +10,9 @@ import type { ApiService } from "./ApiService";
 import { asRecord } from "./GridService";
 
 /**
- * §8.3 — the Pipeline page: §1.4's whole chain as one diagram, every queue's
- * depth and dead letters on it, and every manual trigger on the node it acts
- * on. Mounted as `<PipelineService Ref="pipeline" api="@api" />`.
+ * The Pipeline page: the whole chain as one diagram, with each queue's depth and
+ * dead letters, and each manual trigger on the node it acts on.
+ * Mounted as `<PipelineService Ref="pipeline" api="@api" />`.
  */
 
 /** Depths move by the minute while a backlog drains; this is the page an operator watches. */
@@ -30,10 +30,10 @@ export interface DeadLetter {
   readonly attempts: string;
 }
 
-const deadLetter = (message: DlqMessage): DeadLetter => ({
-  id: message.messageId,
-  body: message.body,
-  attempts: fill(resources.pipeline.attempts, { count: message.receiveCount }),
+const deadLetter = (letter: StoredDeadLetter): DeadLetter => ({
+  id: letter.id,
+  body: `${letter.error}\n${JSON.stringify(letter.data, null, 2)}`,
+  attempts: fill(resources.pipeline.attempts, { count: letter.attempts }),
 });
 
 interface ValueEvent {
@@ -49,10 +49,10 @@ export class PipelineService extends WebClientService {
   updatedAt: number | null = null;
   selectedId: string | null = null;
   /** The last peek per queue: `undefined` until inspected. */
-  dlq: Readonly<Partial<Record<ReplayableQueue, readonly DlqMessage[]>>> = {};
+  dlq: Readonly<Partial<Record<QueueName, readonly StoredDeadLetter[]>>> = {};
   replayMax = DEFAULT_REPLAY_MAX;
   publishMax = String(MAX_PUBLISH_NOW);
-  /** R57 — the DLQ depth a purge was armed at; see `purge`. */
+  /** The dead-letter count a purge was armed at; see `purge`. */
   purgeArmedAt: number | null = null;
 
   declare nodes: readonly PipelineNode[];
@@ -68,7 +68,7 @@ export class PipelineService extends WebClientService {
     });
   }
 
-  get queue(): ReplayableQueue | undefined {
+  get queue(): QueueName | undefined {
     return queueOf(this.selected ?? undefined);
   }
 
@@ -90,10 +90,6 @@ export class PipelineService extends WebClientService {
     return this.armedPurge
       ? fill(resources.pipeline.confirmCleanup, { count: this.selected?.dlq ?? 0 })
       : resources.pipeline.cleanup;
-  }
-
-  get consumeLabel(): string {
-    return `${resources.pipeline.consume} (${MAX_CONSUME})`;
   }
 
   override __init(): void {
@@ -137,7 +133,7 @@ export class PipelineService extends WebClientService {
     this.up({ publishMax: event.value ?? "" });
   }
 
-  /** §8.4 — reads DLQ bodies without consuming them; `viewer`. */
+  /** Reads dead letters without consuming them; `viewer`. */
   async inspect(): Promise<void> {
     const queue = this.queue;
     if (queue === undefined) return;
@@ -145,22 +141,7 @@ export class PipelineService extends WebClientService {
     if (Array.isArray(messages)) this.up({ dlq: { ...this.dlq, [queue]: messages } });
   }
 
-  /** R61 — one batch of this queue's stage, now, rather than when its mapping polls. */
-  async consume(): Promise<void> {
-    const queue = this.queue;
-    if (queue === undefined) return;
-    const done = await this.api.run(
-      "consumeQueue",
-      { queueName: queue, max: MAX_CONSUME },
-      {
-        key: "consume",
-        success: (result) => fill(resources.toasts.consumeQueue, { ...asRecord(result), queue }),
-      },
-    );
-    if (done !== undefined) await this.load();
-  }
-
-  /** §8.4 — invokes the replay handler over this queue's DLQ. */
+  /** Re-enqueues up to `replayMax` of this queue's dead letters. */
   async replay(): Promise<void> {
     const queue = this.queue;
     const max = Number(this.replayMax);
@@ -177,10 +158,9 @@ export class PipelineService extends WebClientService {
   }
 
   /**
-   * R57 — a purge cannot be undone: the DLQ is a dead-lettered post's last
-   * copy. So it is armed by one press and fired by a second, and the second
-   * label names the count. The armed *depth* is held, so a refresh that changes
-   * the number disarms it rather than confirming a count no longer true.
+   * A purge cannot be undone: a dead letter is a post's last copy. So it takes two
+   * presses, and the second label names the count. The armed count is held, so a
+   * refresh that changes it disarms the purge.
    */
   async purge(): Promise<void> {
     const queue = this.queue;
@@ -221,7 +201,7 @@ export class PipelineService extends WebClientService {
   }
 
   /** A peek taken before a replay or a purge lists messages that are gone. */
-  private async afterDlqChange(queue: ReplayableQueue): Promise<void> {
+  private async afterDlqChange(queue: QueueName): Promise<void> {
     const { [queue]: _stale, ...dlq } = this.dlq;
     this.up({ dlq });
     await this.load();

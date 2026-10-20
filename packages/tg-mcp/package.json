@@ -10,9 +10,7 @@
   "dependencies": {
     "tg-domain": "*",
     "tg-enums": "*",
-    "tg-ports": "*"
-  },
-  "devDependencies": {
-    "tg-actions": "*"
+    "tg-firebase": "*",
+    "tg-rc": "*"
   }
 }

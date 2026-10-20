@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { recordingSink } from "../../test/fakes/logging";
+import { recordingSink } from "../../test/support";
 import { createLogger } from "./logger";
 
 describe("createLogger", () => {
@@ -22,13 +22,8 @@ describe("createLogger", () => {
     expect(JSON.parse(sink.lines[0] ?? "")).toMatchObject({ level: "warn", msg: "source stale" });
   });
 
-  /**
-   * §7.7 L741 sources the dashboard's category chart from a Logs Insights query
-   * over analyze's logs rather than a metric. Insights discovers fields from the
-   * top level of each JSON line, so a nested `fields` envelope would make
-   * `stats count(*) by category` return nothing.
-   */
-  test("lifts caller fields to the top level, where Logs Insights can group them", () => {
+  /** Cloud Logging indexes top-level fields; a nested envelope would hide them. */
+  test("lifts caller fields to the top level, where log queries can group them", () => {
     const sink = recordingSink();
 
     createLogger(sink).info("classified", { category: "geopolitics", itemId: "yigal_levin/12345" });
@@ -59,9 +54,8 @@ describe("createLogger", () => {
   });
 
   /**
-   * A logger that throws inside a `catch` converts a handled failure into an
-   * unhandled one. §1.3 L69 makes that permanent data loss: a post that errors
-   * past its retries exists only in the logs and the DLQ.
+   * A logger that throws inside a `catch` turns a handled failure into an
+   * unhandled one, and a post in flight that is lost that way is gone for good.
    */
   test("never throws on a value JSON cannot serialise", () => {
     const sink = recordingSink();

@@ -1,10 +1,8 @@
 import type { SortState } from "tg-utils/ui/sort";
 
 /**
- * The helpers templates call by name — `{value | num}` — on top of `ultimus`.
- * Pure and tiny; anything with a rule worth testing lives in its own module.
- * Every class name returned here is a literal, so Tailwind finds it in this
- * file (`index.css` lists `src/**`).
+ * Helpers templates call by name, e.g. `{value | num}`, on top of `ultimus`.
+ * Class names here are literals, so Tailwind finds them (`index.css` lists `src/**`).
  */
 
 /** What a number that could not be read shows as. Never `0`: an empty queue and an unread one mean opposite things. */
@@ -39,8 +37,7 @@ export const statusTone = (status: unknown): string => TONES[String(status)] ?? 
 
 const sortOf = (sort: unknown, column: unknown): SortState["direction"] | undefined => {
   const state = sort as SortState | null | undefined;
-  // With no sort the phone control passes no column either, and two absences
-  // are not a match.
+  // With no sort the phone control passes no column, and two absences are not a match.
   return state !== null && state !== undefined && state.column === column
     ? state.direction
     : undefined;

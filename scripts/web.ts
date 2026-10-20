@@ -5,8 +5,8 @@ import * as esbuild from "esbuild";
 import { cmlIndexSource } from "tg-ops/web/cml";
 
 /**
- * §9.3 — builds the console into `packages/tg-web/www/`, the directory
- * Firebase Hosting serves.
+ * Builds the console into `packages/tg-web/www/`, the directory Firebase
+ * Hosting serves.
  *
  *   npm run build        # one production build
  *   npm run dev          # watch, and serve on http://localhost:8080
@@ -22,7 +22,7 @@ const WWW = join(WEB, "www");
 const DIST = join(WWW, "dist");
 const INDEX = join(WEB, "src/index.cml.ts");
 
-/** The dev origin `tg-infra/lib/web.ts` registers with Cognito and the API's CORS. */
+/** The dev origin; the api function allows any localhost origin in the emulator. */
 const DEV_PORT = 8080;
 
 const serve = process.argv.includes("--serve");

@@ -15,9 +15,8 @@ export interface Logger {
 }
 
 /**
- * The production sink. Lambda forwards stdout to CloudWatch Logs, and writing
- * the string directly guarantees one record per line — `console.log` is free to
- * add formatting, and a wrapped line is a record Logs Insights cannot parse.
+ * The production sink. Writing the string directly guarantees one record per
+ * line; `console.log` may add formatting that breaks structured parsing.
  */
 export const stdoutSink: LogSink = {
   write: (line) => {
@@ -32,8 +31,8 @@ function encode(level: LogLevel, msg: string, fields: LogFields | undefined): st
     return JSON.stringify({ ...fields, level, msg });
   } catch {
     // Something in `fields` is circular or otherwise unserialisable. Degrade
-    // that field rather than throw — this logger is called from `catch` blocks,
-    // where throwing turns a handled failure into lost data (§1.3 L69).
+    // that field rather than throw: this logger is called from `catch` blocks,
+    // where throwing turns a handled failure into lost data.
     const safe: LogFields = {};
     for (const [key, value] of Object.entries(fields ?? {})) {
       try {
@@ -48,12 +47,8 @@ function encode(level: LogLevel, msg: string, fields: LogFields | undefined): st
 }
 
 /**
- * A structured logger emitting one JSON object per line.
- *
- * The shape is load-bearing, not cosmetic: §7.7 L741 refuses a per-category
- * CloudWatch metric and sources the dashboard's category chart (§8.5 L846) from
- * a Logs Insights query over analyze's logs instead. Insights discovers fields
- * from the top level of each JSON line, so caller fields are lifted there.
+ * A structured logger emitting one JSON object per line, with caller fields at
+ * the top level so Cloud Logging indexes them.
  */
 export function createLogger(sink: LogSink): Logger {
   const at =
@@ -64,3 +59,6 @@ export function createLogger(sink: LogSink): Logger {
 
   return { debug: at("debug"), info: at("info"), warn: at("warn"), error: at("error") };
 }
+
+/** The process logger: one JSON object per line, which Cloud Logging reads as structured. */
+export const log = createLogger(stdoutSink);

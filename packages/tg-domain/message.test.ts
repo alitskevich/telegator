@@ -25,7 +25,7 @@ const message = {
   ts: 1_772_458_034_502,
 };
 
-describe("MemberBlockSchema (§2.3 L169-176)", () => {
+describe("MemberBlockSchema", () => {
   test("carries everything publish needs to render one item", () => {
     expect(MemberBlockSchema.parse(block)).toEqual(block);
   });
@@ -42,14 +42,14 @@ describe("MemberBlockSchema (§2.3 L169-176)", () => {
     expect(MemberBlockSchema.parse(rest).links).toEqual([]);
   });
 
-  test("requires ts, which §3.4 L324 sorts members by", () => {
+  test("requires ts, which publish sorts members by", () => {
     const { ts: _omitted, ...rest } = block;
 
     expect(MemberBlockSchema.safeParse(rest).success).toBe(false);
   });
 });
 
-describe("MessageSchema (§2.3 L151-164)", () => {
+describe("MessageSchema", () => {
   test("parses a freshly created message", () => {
     expect(MessageSchema.parse(message)).toMatchObject(message);
   });
@@ -58,21 +58,16 @@ describe("MessageSchema (§2.3 L151-164)", () => {
     expect(MessageSchema.safeParse({ ...message, status }).success).toBe(true);
   });
 
-  test("rejects a status outside §2.3 L154's enum", () => {
+  test("rejects a status outside the enum", () => {
     expect(MessageSchema.safeParse({ ...message, status: "fetched" }).success).toBe(false);
   });
 
-  /** §2.3 L161 — "Target channel; defaults to `telegator_news`". */
   test("defaults tgChannel to telegator_news", () => {
     expect(MessageSchema.parse(message).tgChannel).toBe(DEFAULT_TG_CHANNEL);
     expect(DEFAULT_TG_CHANNEL).toBe("telegator_news");
   });
 
-  /**
-   * §2.3 L156 caches memberCount "so the dashboard need not read the map", and
-   * §3.3 L284 recomputes it on every write. Drift means a stage bug, and nothing
-   * downstream repairs it — the dashboard would simply show a wrong number.
-   */
+  /** The dashboard reads the cached count alone, so drift would show a wrong number. */
   test("rejects a memberCount that disagrees with the map", () => {
     expect(MessageSchema.safeParse({ ...message, memberCount: 2 }).success).toBe(false);
   });
@@ -90,10 +85,7 @@ describe("MessageSchema (§2.3 L151-164)", () => {
     expect(MessageSchema.parse(two).memberCount).toBe(2);
   });
 
-  /**
-   * §2.4 L188: ids are used verbatim as DynamoDB map keys. The slash must
-   * survive the round trip or every member lookup breaks.
-   */
+  /** Ids are used verbatim as map keys, so the slash must survive the round trip. */
   test("round-trips a member key containing a slash", () => {
     const parsed = MessageSchema.parse(message);
 
@@ -107,20 +99,13 @@ describe("MessageSchema (§2.3 L151-164)", () => {
     );
   });
 
-  /**
-   * R8: §6 sets `ts` on neither branch, yet §2.3 L164 makes it the sort key on
-   * both GSIs (§7.2 L639). A record without it is absent from status-index and
-   * date-index — invisible to the dedup query that created it. Required here so
-   * the omission cannot ship.
-   */
-  test("requires ts, the sort key on both GSIs", () => {
+  test("requires ts, which the status query orders by", () => {
     const { ts: _omitted, ...rest } = message;
 
     expect(MessageSchema.safeParse(rest).success).toBe(false);
   });
 
-  /** R43 — the embedding field is gone; an `embedding` key on the input is stripped. */
-  test("strips an embedding attribute a legacy row might still carry", () => {
+  test("strips an embedding field a legacy message might still carry", () => {
     const legacy = { ...message, embedding: new Uint8Array(4096) };
 
     expect(MessageSchema.parse(legacy)).not.toHaveProperty("embedding");
@@ -133,17 +118,11 @@ describe("MessageSchema (§2.3 L151-164)", () => {
     expect(parsed.tgAt).toBeUndefined();
   });
 
-  test("accepts the soft-delete flag §8.4 L823 requires", () => {
+  test("accepts the soft-delete flag", () => {
     expect(MessageSchema.parse({ ...message, deleted: true }).deleted).toBe(true);
   });
 
-  /**
-   * R7: §6 L586/L584 spread `{...item}` into the record, which would write body,
-   * links, kind, importance, properNames and forwardedFrom — none of them in
-   * §2.3's field table. §2.3 is the schema; the spread is shorthand for "the
-   * item's descriptive fields overwrite" (§3.3 L288).
-   */
-  test("strips item-only fields the §6 spread would otherwise carry in", () => {
+  test("strips item-only fields an item spread would carry in", () => {
     const parsed = MessageSchema.parse({
       ...message,
       body: "the full post text",
@@ -159,8 +138,8 @@ describe("MessageSchema (§2.3 L151-164)", () => {
   });
 });
 
-describe("MessageListItemSchema (the status-index projection, R27)", () => {
-  test("omits the two attributes §7.2 L641 excludes", () => {
+describe("MessageListItemSchema (the message list query)", () => {
+  test("omits members and embedding", () => {
     const { members: _m, ...projected } = message;
     const parsed = MessageListItemSchema.parse({ ...projected, memberCount: 1 });
 
@@ -168,28 +147,20 @@ describe("MessageListItemSchema (the status-index projection, R27)", () => {
     expect(parsed).not.toHaveProperty("embedding");
   });
 
-  /** §2.3 L156: memberCount exists precisely so the dashboard need not read the map. */
   test("keeps memberCount, which the Messages page lists", () => {
     const { members: _m, ...projected } = message;
 
     expect(MessageListItemSchema.parse(projected).memberCount).toBe(1);
   });
 
-  test("parses without members, which the index does not project", () => {
+  test("parses without members, which the query does not select", () => {
     const { members: _m, ...projected } = message;
 
     expect(MessageListItemSchema.safeParse(projected).success).toBe(true);
   });
 
-  /**
-   * `status-index` projects `MESSAGE_LIST_ATTRIBUTES` (`tg-infra/lib/data-stack.ts`)
-   * and none of the four match-key attributes is in it. They default to `[]`,
-   * so a type that still carried them would read as four empty lists in
-   * production while this suite's whole-record fake handed back populated ones
-   * — a page that disagrees with its own tests. Parsing a record that HAS them
-   * is the case that matters: the schema must strip, not merely default.
-   */
-  test("drops the four match-key attributes the status-index does not project", () => {
+  /** The fields default to `[]`, so the schema must strip them, not merely default them. */
+  test("drops the four match-key fields the query does not select", () => {
     const { members: _m, ...projected } = message;
     const parsed = MessageListItemSchema.parse({
       ...projected,
@@ -206,18 +177,18 @@ describe("MessageListItemSchema (the status-index projection, R27)", () => {
   });
 });
 
-describe("posts — multi-target#2.4 (R55)", () => {
+describe("posts", () => {
   const post = { tgId: "4711", tgAt: 1_772_458_034_502 };
 
-  test("MT-15: a record without posts parses as posts: {}", () => {
+  test("a message without posts parses as posts: {}", () => {
     expect(MessageSchema.parse(message).posts).toEqual({});
   });
 
-  test("MT-15: a stored post map is kept, keyed by canonical target id", () => {
+  test("a stored post map is kept, keyed by canonical target id", () => {
     expect(MessageSchema.parse({ ...message, posts: { a: post } }).posts).toEqual({ a: post });
   });
 
-  test("MT-15: neither projection type carries posts", () => {
+  test("neither query type carries posts", () => {
     const stored = { ...message, posts: { a: post } };
 
     expect(MessageListItemSchema.parse(stored)).not.toHaveProperty("posts");

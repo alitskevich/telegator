@@ -1,10 +1,9 @@
 import type { Overview } from "tg-actions/dashboard/overview";
-import { REPLAYABLE_QUEUES, type ReplayableQueue } from "tg-enums/queueName";
+import { QUEUES, type QueueName } from "tg-enums/queueName";
 
 /**
- * The Pipeline page's diagram, as data: §1.4's chain of stages and queues with
- * this minute's numbers laid over it. Pure, so what the page claims about the
- * pipeline is tested without drawing it.
+ * The Pipeline page's diagram as data: the chain of stages and queues with the
+ * current numbers on it. Pure, so it is tested without drawing it.
  */
 
 export interface StageSpec {
@@ -26,9 +25,9 @@ export interface PipelineNode extends StageSpec {
   /** The headline number: a count for a stage, the depth for a queue; `null` if unread. */
   readonly value: number | null;
   readonly valueLabel: string;
-  /** Queues only: dead letters, or `null` if the DLQ could not be read. */
+  /** Queues only: dead letters, or `null` if they could not be read. */
   readonly dlq: number | null;
-  /** Someone has to act: a non-empty DLQ. An unreadable one is not evidence of that. */
+  /** Someone has to act: there are dead letters. An unreadable count does not alert. */
   readonly alert: boolean;
   readonly selected: boolean;
 }
@@ -71,5 +70,5 @@ export function pipelineNodes(
 }
 
 /** The queue a node stands for, when it stands for one. */
-export const queueOf = (node: PipelineNode | undefined): ReplayableQueue | undefined =>
-  REPLAYABLE_QUEUES.find((queue) => queue === node?.queue);
+export const queueOf = (node: PipelineNode | undefined): QueueName | undefined =>
+  QUEUES.find((queue) => queue === node?.queue);

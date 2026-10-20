@@ -1,5 +1,5 @@
+import type { AdjudicationFields, AdjudicationPair } from "tg-ai/types";
 import { ADJUDICATOR_MAX_TOKENS, ADJUDICATOR_MODEL_ID } from "tg-configs/ai";
-import type { AdjudicationFields, AdjudicationPair } from "tg-ports/ai";
 import { describe, expect, test } from "vitest";
 import {
   type AdjudicatorClient,
@@ -33,10 +33,8 @@ interface FakeAdjudicatorClient {
 }
 
 /**
- * The same hand-injected fake `openrouter.test.ts` uses, and the reason
- * `AdjudicatorClient` is a structural type: the request shape is assertable
- * without a test process constructing an `Anthropic` client, which under
- * OpenRouter demands an API key on construction. No network.
+ * A hand-injected fake, as in `openrouter.test.ts`: the request shape is
+ * checked without constructing a real client, which demands an API key.
  */
 function fakeAdjudicatorClient(respond: () => Promise<unknown>): FakeAdjudicatorClient {
   const requests: Record<string, unknown>[] = [];
@@ -51,7 +49,7 @@ function fakeAdjudicatorClient(respond: () => Promise<unknown>): FakeAdjudicator
   };
 }
 
-describe("parseVerdicts (R46)", () => {
+describe("parseVerdicts", () => {
   test("keys verdicts by pair id", () => {
     const parsed = parseVerdicts(
       response([
@@ -65,14 +63,8 @@ describe("parseVerdicts (R46)", () => {
     expect(parsed.get("b")).toBe(false);
   });
 
-  /**
-   * `parseEmbeddings` checks its returned count because §6 indexed
-   * `embeddings[idx]` against `batch[idx]`, and a short response would silently
-   * attach the wrong vector to every later item. A model that answers two of
-   * three pairs reintroduces exactly that, so an incomplete verdict set is an
-   * error rather than a partial result.
-   */
-  test("AC-3.12: rejects a verdict set that does not cover every requested pair", () => {
+  /** A model that answers two of three pairs must fail, not decide the third by omission. */
+  test("rejects a verdict set that does not cover every requested pair", () => {
     expect(() => parseVerdicts(response([{ id: "a", same: true }]), ["a", "b"])).toThrow(
       /verdict/i,
     );
@@ -103,16 +95,9 @@ describe("parseVerdicts (R46)", () => {
   });
 });
 
-/**
- * `createOpenRouterAdjudicator` had no coverage at all, while
- * `createOpenRouterClassifier` — the adapter it is modelled on — has eleven tests.
- * `AdjudicatorClient` exists precisely so these can be written; nothing used
- * it. As in `openrouter.test.ts`, nothing here asserts what a model returns (R3):
- * every test is about the request put on the wire and the handling of bytes
- * handed back.
- */
-describe("createOpenRouterAdjudicator (R46)", () => {
-  test("sends the model id R46's constant names, not the classifier's inline", async () => {
+/** As in `openrouter.test.ts`: only the request sent and the response handling are tested. */
+describe("createOpenRouterAdjudicator", () => {
+  test("sends ADJUDICATOR_MODEL_ID, not the classifier's model inline", async () => {
     const fake = fakeAdjudicatorClient(async () => response([{ id: "p1", same: true }]));
 
     await createOpenRouterAdjudicator({ client: fake.client }).adjudicate([pair("p1")]);
@@ -129,11 +114,7 @@ describe("createOpenRouterAdjudicator (R46)", () => {
     expect(fake.requests[0]?.max_tokens).toBe(ADJUDICATOR_MAX_TOKENS);
   });
 
-  /**
-   * §5.2 L432's structured output. Without the schema on the request the model
-   * is free to answer in prose, and `parseVerdicts` would reject every batch —
-   * a failure that reads as a model fault rather than a missing request field.
-   */
+  /** Without the schema the model may answer in prose, and `parseVerdicts` would reject it. */
   test("asks for structured output against the generated verdict schema", async () => {
     const fake = fakeAdjudicatorClient(async () => response([{ id: "p1", same: true }]));
 
@@ -165,11 +146,7 @@ describe("createOpenRouterAdjudicator (R46)", () => {
     expect(verdicts.get("p2")).toBe(false);
   });
 
-  /**
-   * An empty band is the common case — most batches resolve entirely on the
-   * score — and a model call for zero pairs is money spent on nothing, plus a
-   * response `parseVerdicts` would have to be taught to accept.
-   */
+  /** An empty band is the common case; a model call for zero pairs is wasted money. */
   test("an empty pair list short-circuits without calling the client", async () => {
     const fake = fakeAdjudicatorClient(async () => {
       throw new Error("the client must not be called for an empty band");
@@ -181,12 +158,11 @@ describe("createOpenRouterAdjudicator (R46)", () => {
     expect(verdicts.size).toBe(0);
   });
 
-  /** Constructing the adapter must not resolve a region or a credential chain. */
-  test("constructs without a client and without reaching for AWS", () => {
+  /** Constructing the adapter must not fetch a key. */
+  test("constructs without a client and without reaching for a key", () => {
     expect(() => createOpenRouterAdjudicator()).not.toThrow();
   });
 
-  /** R50 — the classifier's rule, applied to the second model caller. */
   test("names the missing key provider rather than failing inside the SDK", async () => {
     await expect(createOpenRouterAdjudicator().adjudicate([pair("p1")])).rejects.toThrow(
       /OpenRouter API key/,

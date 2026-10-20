@@ -2,16 +2,11 @@ import { describe, expect, test } from "vitest";
 import { formatItemId, ItemIdSchema, parseItemId, sourceIdOf } from "./ids";
 
 describe("formatItemId", () => {
-  test("joins the source and Telegram message id with a slash (§2.2 L132)", () => {
+  test("joins the source and Telegram message id with a slash", () => {
     expect(formatItemId("yigal_levin", "12345")).toBe("yigal_levin/12345");
   });
 
-  /**
-   * §2.4 L188: ids are used verbatim as SQS fields, DynamoDB map keys and
-   * partition keys. "Both encoders are deleted. No encode/decode layer exists."
-   * So the slash must survive intact — percent-encoding it here would silently
-   * break every id in the system.
-   */
+  /** Ids are used verbatim in payloads and map keys, so the slash must survive intact. */
   test("does not encode the separator", () => {
     expect(formatItemId("abc", "1")).not.toContain("%2F");
     expect(formatItemId("abc", "1")).toBe("abc/1");
@@ -31,9 +26,8 @@ describe("parseItemId", () => {
   });
 
   /**
-   * §6 L598 takes the channel as `item.id.split("/")[0]`. That is only correct
-   * while the source segment contains no slash — otherwise the channel is
-   * silently truncated and §3.4 L327 renders a broken @mention link.
+   * The channel is taken as `id.split("/")[0]`; a slash in the source segment
+   * would truncate it and render a broken @mention link.
    */
   test("rejects a source segment containing a slash", () => {
     expect(() => parseItemId("a/b/1")).toThrow();
@@ -49,27 +43,25 @@ describe("parseItemId", () => {
 });
 
 describe("sourceIdOf", () => {
-  test("returns the channel segment §6 L598 needs for the @mention", () => {
+  test("returns the channel segment the @mention needs", () => {
     expect(sourceIdOf("yigal_levin/12345")).toBe("yigal_levin");
   });
 
   test("throws rather than returning undefined for a malformed id", () => {
     // A silent undefined would reach MemberBlock.channel and render as
-    // "@undefined" in a published Telegram message (§3.4 L327).
+    // "@undefined" in a published Telegram message.
     expect(() => sourceIdOf("nonsense")).toThrow();
   });
 });
 
-describe("defect D2 is structurally dead (§2.3 L182)", () => {
+describe("member ids never match by substring", () => {
   test("abc/1 and abc/12 are distinct ids", () => {
     expect(formatItemId("abc", "1")).not.toBe(formatItemId("abc", "12"));
   });
 
   /**
-   * The source system comma-joined member ids into one string and
-   * substring-matched it, so `abc/1` matched inside `abc/12`. Keying a map by
-   * the id makes the lookup exact. AC-4.3 asserts the rendered
-   * consequence; this asserts the property it rests on.
+   * The original system substring-matched a comma-joined id string, so `abc/1`
+   * matched inside `abc/12`. Keying a map by the id makes the lookup exact.
    */
   test("a members map keyed by abc/12 does not answer for abc/1", () => {
     const members: Record<string, string> = { [formatItemId("abc", "12")]: "twelve" };

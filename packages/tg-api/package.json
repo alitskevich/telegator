@@ -1,19 +1,18 @@
 {
   "name": "tg-api",
   "version": "1.0.0",
-  "description": "The dashboard API (§8.4): one authenticated RPC endpoint over the actions, as a Lambda behind API Gateway.",
+  "description": "The console's HTTPS function: one authenticated RPC endpoint over the actions.",
   "private": true,
   "type": "module",
   "exports": {
     "./*": "./*.ts"
   },
   "dependencies": {
+    "firebase-functions": "^7.4.0",
     "tg-actions": "*",
-    "tg-auth": "*",
-    "tg-aws": "*",
     "tg-configs": "*",
     "tg-enums": "*",
-    "tg-ports": "*",
+    "tg-firebase": "*",
     "tg-utils": "*"
   }
 }

@@ -2,19 +2,14 @@ import { CLASSIFIER_EFFORT, CLASSIFIER_MAX_TOKENS, CLASSIFIER_MODEL_ID } from "t
 import { NEWS_ITEM_SCHEMA } from "tg-domain/newsItemSchema";
 import { SYSTEM_PROMPT } from "tg-rc/prompt";
 
-/**
- * The `output_config.format` of §5.2 L432.
- *
- * `schema` is typed from `NEWS_ITEM_SCHEMA` rather than restated, so the JSON
- * Schema the model is held to has exactly one definition (item 2.13).
- */
+/** `schema` is typed from `NEWS_ITEM_SCHEMA`, so the JSON Schema has one definition. */
 export interface ClassificationOutputFormat {
   readonly type: "json_schema";
   readonly schema: typeof NEWS_ITEM_SCHEMA;
 }
 
 export interface ClassificationOutputConfig {
-  /** Absent when R3's option disables it — never present-and-undefined. */
+  /** Absent when disabled, never present-and-undefined. */
   readonly effort?: string;
   readonly format: ClassificationOutputFormat;
 }
@@ -25,11 +20,8 @@ export interface ClassificationMessage {
 }
 
 /**
- * The §5.2 L427–436 request body.
- *
- * §5.2 L466: `temperature` and `top_p` are **not** carried over — they are
- * removed on current Claude models and return 400 — so there is no property for
- * them to occupy. Depth is `output_config.effort` instead.
+ * The classification request body. No `temperature` or `top_p`: current Claude
+ * models reject them with 400. Depth is `output_config.effort` instead.
  */
 export interface ClassificationRequest {
   readonly model: string;
@@ -40,26 +32,11 @@ export interface ClassificationRequest {
 }
 
 export interface ClassificationRequestOptions {
-  /**
-   * R3 — `false` omits `output_config.effort` entirely.
-   *
-   * §5.2 L430 sets `effort: "low"` and L465 makes it the replacement for the
-   * removed sampling parameters, so it is the default. But effort is not
-   * available on every Claude tier, and this build cannot reach a provider to
-   * establish whether R2's `CLASSIFIER_MODEL_ID` accepts it. Configurable and
-   * honest beats hard-coded and guessed: nothing in this repo asserts what
-   * either shape does to the model, because nothing here can observe it.
-   */
+  /** `false` omits `output_config.effort`, for a model tier that does not accept it. */
   readonly effort?: string | false;
 }
 
-/**
- * Builds the classification request of §5.2 L427–436.
- *
- * Pure, and deliberately not a provider call: the adapter that owns the SDK
- * client implements `Classifier` (item 2.14), which keeps the wire shape unit
- * testable on a machine with no model access at all.
- */
+/** Builds the classification request. Pure, so the wire shape is testable without a model. */
 export function buildClassificationRequest(
   itemBody: string,
   options: ClassificationRequestOptions = {},
@@ -70,9 +47,7 @@ export function buildClassificationRequest(
   return {
     model: CLASSIFIER_MODEL_ID,
     max_tokens: CLASSIFIER_MAX_TOKENS,
-    // The key is built by branch rather than by `{ effort: undefined }`: a tier
-    // that rejects `effort` rejects an explicit null just as hard, and
-    // `JSON.stringify` is not relied on to drop it.
+    // Built by branch, not `{ effort: undefined }`, so the key is truly absent.
     output_config: effort === false ? { format } : { effort, format },
     system: SYSTEM_PROMPT,
     messages: [{ role: "user", content: itemBody }],

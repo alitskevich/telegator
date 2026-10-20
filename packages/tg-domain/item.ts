@@ -4,17 +4,15 @@ import { DateKeySchema } from "./date";
 import { ItemIdSchema } from "./ids";
 
 /**
- * The in-flight item — an SQS payload, never a table row (§2.2 L126, §1.3 L62).
- *
- * It exists in two shapes: Stage A leaves `scrape` for the analyze queue
- * (§2.2 L131–141), and Stage B leaves `analyze` for the aggregate queue
- * (§2.2 L143), adding the AI fields of §5.2 L450–462.
+ * The post in flight: a Cloud Tasks payload, never a stored record
+ * (docs/telegator.md §2.2). Scrape sends the scraped shape to analyze, and
+ * analyze adds the AI fields before sending it to aggregate.
  */
 
-/** §11.2 L1033 and §5.2 L455 — the source prompt's 60-symbol cap, raised to 220. */
+/** The summary length cap. */
 export const SUMMARY_MAX_LENGTH = 220;
 
-/** §2.2 L134 — resolves a `[text](#N)` token produced by §3.1 L216. */
+/** Resolves a `[text](#N)` token in the body. */
 export const LinkSchema = z.object({
   id: z.number().int().positive(),
   href: z.string(),
@@ -24,16 +22,16 @@ export type Link = z.infer<typeof LinkSchema>;
 
 export const ScrapedItemSchema = z.object({
   id: ItemIdSchema,
-  /** Plain text with inline links replaced by `[text](#N)` tokens (§2.2 L133). */
+  /** Plain text with inline links replaced by `[text](#N)` tokens. */
   body: z.string(),
   links: z.array(LinkSchema).default([]),
   image: z.string().optional(),
   forwardedFrom: z.string().optional(),
-  /** The source's `target`, verbatim (multi-target#2.3); §3.3 falls back to `telegator_news` when absent. */
+  /** The source's `target`, verbatim; aggregate falls back to `telegator_news` when absent. */
   target: z.string().optional(),
   date: DateKeySchema,
-  /** The source default, overwritten by AI (§2.2 L139) — an open string, since an
-   * operator's default need not be one of §5.4's categories. */
+  /** The source default, overwritten by AI. An open string, since an operator's
+   * default need not be a known category. */
   category: z.string().optional(),
   tags: z.string().optional(),
   kind: ItemKindSchema,
@@ -42,18 +40,15 @@ export const ScrapedItemSchema = z.object({
 export type ScrapedItem = z.infer<typeof ScrapedItemSchema>;
 
 /**
- * The AI fields, declared once. §5.2 L450 fixes which are required.
- *
- * `category` is an open string here rather than §5.4's enum: item 2.13 narrows
- * it to `CategorySchema` for the model-response schema, where the constraint
- * belongs. Constraining it here as well would duplicate the enum.
+ * The AI fields, declared once. `category` is an open string here; the model
+ * response schema narrows it to `CategorySchema`, where the constraint belongs.
  */
 const aiField = {
-  /** Essential subject in three words, English (§5.2 L454). */
+  /** Essential subject in three words, English. */
   title: z.string(),
-  /** Brief factual matter, in Belarusian, with `[text](#N)` tokens intact (§5.2 L455). */
+  /** Brief factual matter, in Belarusian, with `[text](#N)` tokens intact. */
   summary: z.string().max(SUMMARY_MAX_LENGTH),
-  /** ISO-3166 alpha-2 (§5.2 L456). Case is normalised by §3.2 L261, not here. */
+  /** ISO-3166 alpha-2. Analyze uppercases it, not this schema. */
   country: z.string(),
   location: z.string(),
   category: z.string(),
@@ -63,26 +58,20 @@ const aiField = {
   tags: z.string().optional(),
 } as const;
 
-/** The model's response shape (§5.2 L450–462). */
+/** The model's response shape. */
 export const AiFieldsSchema = z.object(aiField);
 
 export type AiFields = z.infer<typeof AiFieldsSchema>;
 
 /**
- * Stage B — everything from Stage A plus the AI fields (§2.2 L143).
- *
- * Built with `.extend()` rather than merging `AiFieldsSchema` wholesale, so the
- * model's optional `tags` cannot weaken Stage A's own `tags`, and so `category`
- * keeps Stage A's meaning. §3.2 L261 merges tags rather than replacing them.
+ * The scraped item plus the AI fields. Built with `.extend()` rather than merging
+ * `AiFieldsSchema`, so the model's optional `tags` and open `category` cannot
+ * replace the scraped ones: analyze merges tags rather than replacing them.
  */
 export const AnalyzedItemSchema = ScrapedItemSchema.extend({
   title: aiField.title,
   summary: aiField.summary,
-  /**
-   * AC-2.4: "`country` is always uppercase or empty." Asserted rather
-   * than transformed — a Zod `.toUpperCase()` here would make the criterion
-   * unfalsifiable at the stage that is supposed to satisfy it (§3.2 L261).
-   */
+  /** Asserted rather than transformed, so a stage that forgets to uppercase fails. */
   country: aiField.country.refine((v) => v === v.toUpperCase(), "expected an uppercase country"),
   location: aiField.location,
   importance: aiField.importance,

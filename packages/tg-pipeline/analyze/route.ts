@@ -2,33 +2,16 @@ import type { AnalyzedItem, ScrapedItem } from "tg-domain/item";
 import type { NewsItem } from "tg-domain/newsItemSchema";
 import { mergeTags } from "tg-domain/tags";
 import { DROPPED_CATEGORY } from "tg-enums/categories";
-import type { MetricDimensions } from "tg-ports/metrics";
-import { SKIP_REASONS, type SkipReason } from "tg-ports/metrics";
+import type { SkipReason } from "tg-enums/metrics";
 
 /**
- * Stage 2's pre-filter, routing table and field normalisers (§3.2 L248–261) as
- * pure functions.
- *
- * Nothing here performs an effect. Each function returns a decision or a value;
- * the orchestrator (item 3.7) emits the `ItemsSkipped` metrics, does the
- * enqueueing, and throws on `retry`. That split is what makes the routing table
- * testable without an SQS or CloudWatch double, and it keeps the "why errors
- * throw rather than drop" reasoning of §3.2 L263 in one place instead of
- * scattered across branches.
+ * The analyze pre-filter, routing table and field normalisers, as pure
+ * functions. The caller counts metrics, enqueues, and throws on `retry`.
  */
 
-export type { SkipReason };
-/** Re-exported for this stage's callers; defined in `tg-ports/metrics.ts`. */
-export { SKIP_REASONS };
-
 /**
- * What the orchestrator should do with one item.
- *
- * `retry` covers the table's first row — "No category returned, or provider
- * error" (§3.2 L254). It is a decision rather than a thrown error here because
- * throwing is an effect: the orchestrator throws so SQS retries and the item
- * ultimately reaches the DLQ (§3.2 L263), while `route` stays a total function
- * that a test can call and inspect.
+ * What to do with one item. `retry` (no category, or a provider error) is a
+ * value here; the caller throws it so the queue retries.
  */
 export type RouteDecision =
   | { readonly kind: "drop"; readonly reason: SkipReason }
@@ -36,37 +19,14 @@ export type RouteDecision =
   | { readonly kind: "retry"; readonly cause: "no-category" };
 
 /**
- * The dimension set for an `ItemsSkipped` count.
- *
- * R31 — the name is `Reason`, capital R. §7.7 L733 spells it that way while
- * §3.2 L258 writes `reason`; CloudWatch dimension names are case-sensitive, so
- * emitting both spellings would split one metric into two half-populated ones.
- * Building the dimensions here rather than at each call site means the casing is
- * decided once.
- */
-export function skippedDimensions(reason: SkipReason): MetricDimensions {
-  return { Reason: reason };
-}
-
-/**
- * A body consisting of exactly one link token, per §3.2 L248.
- *
- * R31 — the intent, not the literal example: §3.1 L216 emits `[Y](#N)` with the
- * anchor's own text, so a rule matching the literal string would never fire.
- * `[^\]]*` keeps the token non-greedy over brackets, so prose containing a `]`
- * cannot be mistaken for one token.
+ * A body that is exactly one `[text](#N)` link token. `[^\]]*` stops at the
+ * first `]`, so prose that contains a `]` is not one token.
  */
 const LONE_LINK_TOKEN = /^\[[^\]]*\]\(#\d+\)$/;
 
 /**
- * §3.2 L248 — an empty body, or one that is a bare link with no prose, is
- * dropped before the AI call: no request, no downstream message.
- *
- * Returns `undefined` when the body passes and should be classified.
- *
- * The reason is `nobody`. §3.2 L248 names none, but §7.7 L733 declares
- * `Reason = low | category | nobody` and the other two are spoken for by the
- * routing table, leaving this the only rule `nobody` can belong to.
+ * Drops an empty body, or a bare link with no prose, before the model call.
+ * Returns `undefined` when the body should be classified.
  */
 export function prefilter(body: string): RouteDecision | undefined {
   const trimmed = body.trim();
@@ -79,12 +39,8 @@ export function prefilter(body: string): RouteDecision | undefined {
 }
 
 /**
- * The fields the routing table of §3.2 L254–259 reads.
- *
- * Deliberately wider than `NewsItem`, which still satisfies it: `NewsItem`
- * constrains `category` to §5.4's enum (§5.2 L432), so neither the "no category
- * returned" row nor the `crime&law` row would be expressible in that type.
- * Widening also lets a raw, not-yet-validated response be routed.
+ * The fields routing reads. Wider than `NewsItem`, so a missing or
+ * out-of-enum category can be routed too.
  */
 export interface RoutableClassification {
   readonly category?: string | undefined;
@@ -92,11 +48,8 @@ export interface RoutableClassification {
 }
 
 /**
- * §3.2 L254–259, evaluated in the table's own order.
- *
- * Order is load-bearing: an item with no category and `importance: "low"` is a
- * retry, not a drop, because the first row wins. Silently dropping it would
- * discard an item the provider never actually classified.
+ * The routing rules, in order. Order matters: no category with
+ * `importance: "low"` is a retry, not a drop.
  */
 export function route(classified: RoutableClassification): RouteDecision {
   if (!classified.category) {
@@ -107,13 +60,8 @@ export function route(classified: RoutableClassification): RouteDecision {
     return { kind: "drop", reason: "low" };
   }
 
-  /**
-   * R5 — this branch is currently dead. `DROPPED_CATEGORY` is `"crime&law"`,
-   * which is not one of §5.4's categories, and §5.2 L432 constrains the model to
-   * that enum, so the comparison can never be true for a validated response.
-   * §3.2 is the normative stage spec, so the rule ships exactly as written and
-   * the mismatch is pinned by test rather than quietly repointed at `crime`.
-   */
+  // Currently dead: `DROPPED_CATEGORY` is not in the category enum the model is
+  // held to. Kept as written and pinned by a test.
   if (classified.category === DROPPED_CATEGORY) {
     return { kind: "drop", reason: "category" };
   }
@@ -121,39 +69,22 @@ export function route(classified: RoutableClassification): RouteDecision {
   return { kind: "enqueue" };
 }
 
-/**
- * §3.2 L261 — "`country` uppercased".
- *
- * AC-2.4 reads "always uppercase or empty", and this is the only place
- * that is made true: `AnalyzedItemSchema` asserts the property rather than
- * transforming, so that the criterion stays falsifiable at the stage responsible
- * for it.
- */
+/** `country` is always uppercase or empty after analyze. */
 export function normalizeCountry(country: string): string {
   return country.trim().toUpperCase();
 }
 
 /**
- * §3.2 L261 — "AI `tags` merged with source tags (comma-split, deduplicated,
- * comma-joined)".
- *
- * AI tags lead, matching the sentence's order; `mergeTags` keeps first-seen
- * order, so the source tags follow and AC-2.3 holds — they survive, once
- * each. The split/dedupe/join itself lives in `tg-domain/tags.ts` because §6
- * L282 merges again at aggregate time and the two must agree.
+ * AI tags merged with source tags, AI tags first, each once. Aggregate merges
+ * with the same `mergeTags`, so the two agree.
  */
 export function normalizeTags(aiTags: string | undefined, sourceTags: string | undefined): string {
   return mergeTags(aiTags, sourceTags);
 }
 
 /**
- * Composes §3.2 L261's normalisers into the Stage B payload of §2.2 L143.
- *
- * The AI fields overwrite the scrape defaults — §2.2 L139 lets a source carry an
- * operator's arbitrary category until AI supplies a real one — while `tags` is
- * merged rather than replaced, and the scrape identity fields (`id`, `links`,
- * `image`, `target`, `date`, `kind`) pass through untouched. Returns a fresh
- * object; neither input is mutated.
+ * The payload for aggregate. AI fields overwrite the scrape defaults, `tags`
+ * is merged, and the scrape identity fields pass through. Inputs are not mutated.
  */
 export function normalizeAnalyzed(scraped: ScrapedItem, ai: NewsItem): AnalyzedItem {
   return {

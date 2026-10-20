@@ -1,7 +1,7 @@
 {
   "name": "tg-pipeline",
   "version": "1.0.0",
-  "description": "The four stages plus DLQ replay (§3), and the Lambda handlers that wrap them.",
+  "description": "The four stages: scrape, analyze, aggregate, publish.",
   "private": true,
   "type": "module",
   "exports": {
@@ -9,13 +9,12 @@
   },
   "dependencies": {
     "tg-ai": "*",
-    "tg-aws": "*",
     "tg-configs": "*",
     "tg-dedup": "*",
     "tg-domain": "*",
     "tg-enums": "*",
+    "tg-firebase": "*",
     "tg-mtproto": "*",
-    "tg-ports": "*",
     "tg-telegram": "*",
     "tg-utils": "*"
   }

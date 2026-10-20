@@ -3,23 +3,16 @@ import type { MemberBlock } from "tg-domain/message";
 import { escapeHtml } from "./escape";
 
 /**
- * Stage 4's member renderer (§3.4 L324–327).
- *
- * The rendered block is the only place a member's denormalized `summary` and
- * `links` (§2.3 L169–176) become visible, and it is produced fresh on every
- * publish — including the edit path of §3.4 L345 — so the output must depend on
- * the record alone, never on map iteration order or a locale.
+ * The member renderer. It runs on every publish, edits included, so the output
+ * depends on the record alone, never on map order or a locale.
  */
 
-/** `[text](#N)` — §2.2 L133's inline-link token, as it survives into `summary`. */
+/** The `[text](#N)` link token, as it survives into `summary`. */
 const LINK_TOKEN = /\[([^\]]*)\]\(#(\d+)\)/g;
 
 /**
- * §3.4 L324 — resolve each `[text](#N)` against *this* member's links.
- *
- * `text` arrives already HTML-escaped, and `href` is escaped here, since it
- * lands inside an attribute. An unresolved N degrades to the plain text
- * (AC-4.4, L361) rather than leaving the token visible.
+ * Resolves each `[text](#N)` against this member's links. `text` is already
+ * escaped; `href` is escaped here. An unresolved N degrades to plain text.
  */
 function substituteLinks(escapedSummary: string, links: MemberBlock["links"]): string {
   return escapedSummary.replaceAll(LINK_TOKEN, (_match, text: string, id: string) => {
@@ -29,11 +22,7 @@ function substituteLinks(escapedSummary: string, links: MemberBlock["links"]): s
   });
 }
 
-/**
- * One member block: `🔘 {summary} - <a href="https://t.me/{itemId}">@{channel}</a>`
- * (§3.4 L327). `{content}` in the spec is the summary after L319's substitution;
- * `MemberBlock` has no field of that name.
- */
+/** One member block: `🔘 {summary} - <a href="https://t.me/{itemId}">@{channel}</a>`. */
 export function renderMember(itemId: string, block: MemberBlock): string {
   const content = substituteLinks(escapeHtml(block.summary), block.links);
   const href = `https://t.me/${escapeHtml(itemId)}`;
@@ -42,17 +31,12 @@ export function renderMember(itemId: string, block: MemberBlock): string {
 }
 
 /**
- * §3.4 L324 — members sorted by `ts` ascending, first `MEMBER_RENDER_LIMIT`,
- * one block per line.
+ * Members sorted by `ts` ascending, the first `MEMBER_RENDER_LIMIT`, one block
+ * per line.
  *
- * The item-id tiebreak is a recorded decision beyond the spec: one aggregate
- * batch can stamp several members with the same clock reading (§3.3 L288), and
- * `ts` alone would then leave their order to `Object.entries`. A reordering
- * changes the rendered bytes, so AC-3.7's byte-identical replay — and the
- * "no visible change" contract of an idempotent edit (AC-4.6) — depends on the
- * order being total. The comparison is `<`/`>` on the raw id rather than
- * `localeCompare`, whose result varies with the runtime's ICU data and locale
- * and so would reintroduce exactly the instability it is meant to remove.
+ * Several members can share a `ts`, so the item id breaks ties: a replay must
+ * render the same bytes. The id is compared with `<`, not `localeCompare`,
+ * whose result depends on the runtime's locale.
  */
 export function renderMembers(members: Record<string, MemberBlock>): string {
   return Object.entries(members)

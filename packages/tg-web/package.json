@@ -1,15 +1,15 @@
 {
   "name": "tg-web",
   "version": "1.0.0",
-  "description": "The operator console (§8): an Arrmatura single-page app served from Firebase Hosting, calling tg-api.",
+  "description": "The operator console: an Arrmatura single-page app on Firebase Hosting, calling the api function.",
   "private": true,
   "type": "module",
   "dependencies": {
     "tg-actions": "*",
-    "tg-auth": "*",
+    "tg-configs": "*",
     "tg-domain": "*",
     "tg-enums": "*",
-    "tg-ports": "*",
+    "tg-firebase": "*",
     "tg-rc": "*",
     "tg-utils": "*"
   }

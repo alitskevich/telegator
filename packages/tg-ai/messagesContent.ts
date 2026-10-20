@@ -1,14 +1,6 @@
 /**
- * Reading a Messages response's text back out, shared by both model callers.
- *
- * `createOpenRouterClassifier` (`./openrouter`) and `createOpenRouterAdjudicator`
- * (`./adjudicator`) each carried a near-identical copy of this. Two copies of a
- * parser is two places for the concatenation rule below to be lost, and the
- * adjudicator's copy was the one no test exercised — so the copy that could
- * quietly regress was the one nobody would notice regressing.
- *
- * `source` names the caller in the error, because "returned no text content" is
- * the kind of message an operator reads out of a log with no other context.
+ * Reads a Messages response's text, shared by both model callers. `source`
+ * names the caller in the error, so a log line says who failed.
  */
 export function extractText(response: unknown, source: string): string {
   if (typeof response !== "object" || response === null || !("content" in response)) {
@@ -20,9 +12,7 @@ export function extractText(response: unknown, source: string): string {
     throw new Error(`${source} returned a non-array content field`);
   }
 
-  // Concatenated rather than "first block wins": a long structured output can be
-  // split across blocks, and taking only the first would truncate the JSON into
-  // a parse error that looks like a model fault.
+  // Concatenated: a long structured output can be split across blocks.
   const text = content
     .filter(
       (block): block is { type: string; text: string } =>

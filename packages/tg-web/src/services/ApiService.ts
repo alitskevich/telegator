@@ -1,17 +1,12 @@
 import { WebClientService } from "arrmatura-web";
-import { hasRole } from "tg-auth/roles";
+import { hasRole } from "tg-enums/roles";
 import { resources } from "tg-rc/web";
-import { callRpc, isForbidden, isUnauthenticated } from "../api/rpc";
-import type { WebConfig } from "../config";
-import type { AuthService } from "./AuthService";
 
 /**
- * §8.4 — the console's one way to the API, and the source of who the operator
- * is. Mounted once as `<ApiService Ref="api" auth="@auth" config="{R.config}" />`.
- *
- * `access` is what the shell switches on. It is the API's answer, not the
- * token's: §8.6 rejects a disabled user at every action, and only the API can
- * read that flag, so a valid token alone never opens the console.
+ * The console's one way to the API, and the source of who the operator is.
+ * Mounted once as `<ApiService Ref="api" auth="@auth" />`, where `@auth` is the
+ * platform's `FirebaseService`. `access` comes from the API, not the token:
+ * only the API can read whether the account is enabled.
  */
 
 export type Access = "pending" | "signedOut" | "granted" | "denied";
@@ -23,6 +18,20 @@ export interface Operator {
 
 const WHOAMI = "whoami";
 
+/** The part of the platform's `FirebaseService` this service uses. */
+type FirebaseAuth = {
+  readonly isAuthorized: boolean;
+  invokeApi(data: unknown): Promise<unknown>;
+  signOut(): Promise<void>;
+};
+
+/** The HTTP status the API answered with, when the call failed at the API. */
+const statusOf = (error: unknown): number | undefined =>
+  (error as { status?: unknown } | null)?.status as number | undefined;
+
+const isUnauthenticated = (error: unknown) => statusOf(error) === 401;
+const isForbidden = (error: unknown) => statusOf(error) === 403;
+
 export interface RunOptions {
   /** What `busy` is keyed by — one row's button, not the whole table's. Defaults to the action. */
   readonly key?: string;
@@ -31,8 +40,7 @@ export interface RunOptions {
 }
 
 export class ApiService extends WebClientService {
-  declare auth: AuthService;
-  declare config: WebConfig;
+  declare auth: FirebaseAuth;
 
   access: Access = "pending";
   user: Operator | null = null;
@@ -62,11 +70,10 @@ export class ApiService extends WebClientService {
 
   /** A read, or anything whose result the caller renders itself. Throws on failure. */
   async call(action: string, input?: unknown): Promise<unknown> {
-    const token = await this.auth.idToken();
     try {
-      return await callRpc(fetch, this.config.apiUrl, token, action, input);
+      return await this.auth.invokeApi({ action, input });
     } catch (error) {
-      if (isUnauthenticated(error)) this.auth.expire();
+      if (isUnauthenticated(error)) this.up({ access: "signedOut", user: null });
       throw error;
     }
   }
@@ -80,8 +87,7 @@ export class ApiService extends WebClientService {
     const key = options.key ?? action;
     if (this.busy[key] === true) return undefined;
 
-    // A failure outliving the press it answered would be read as the answer to
-    // the next one, so a retry takes it down first.
+    // Close the last failure first, so it is not read as the answer to this press.
     const failureId = `failed:${key}`;
     this.emit("toaster.close()", { id: failureId });
     this.up({ busy: { ...this.busy, [key]: true } });
@@ -107,10 +113,7 @@ export class ApiService extends WebClientService {
   }
 
   private sync(): void {
-    const { status } = this.auth;
-    if (status === "pending") return;
-
-    if (status === "signedOut") {
+    if (!this.auth.isAuthorized) {
       if (this.access !== "signedOut") this.up({ access: "signedOut", user: null, denial: null });
       return;
     }

@@ -11,11 +11,7 @@ import {
 const MINUTE = 60_000;
 const NOW = 1_700_000_000_000;
 
-/**
- * Built through `SourceSchema.parse` rather than an object literal cast: the
- * house rule bans type assertions, and parsing also proves the fixtures are
- * records the read path could actually produce.
- */
+/** Fixtures are parsed, not cast, so each is a record the read path could produce. */
 function source(fields: Record<string, unknown>): Source {
   return SourceSchema.parse({ id: "chan", status: SOURCE_STATUS_OK, ...fields });
 }
@@ -29,14 +25,14 @@ function ids(sources: readonly Source[]): string[] {
   return sources.map((s) => s.id);
 }
 
-describe("selectSources — acceptance criteria", () => {
-  test("AC-1.1 (§3.1 L236) a source polled 5 minutes ago with lastCount = 3 is not selected", () => {
+describe("selectSources — due or not", () => {
+  test("a source polled 5 minutes ago with lastCount = 3 is not selected", () => {
     const warm = source({ id: "warm", lastCount: 3, lastUpdated: polledMinutesAgo(5) });
 
     expect(selectSources([warm], NOW, "web")).toEqual([]);
   });
 
-  test("AC-1.2 (§3.1 L237) a source with lastCount = 25 is selected regardless of lastUpdated", () => {
+  test("a source with lastCount = 25 is selected regardless of lastUpdated", () => {
     const justPolled = source({ id: "hot", lastCount: 25, lastUpdated: NOW });
     const polledAMinuteAgo = source({
       id: "hot2",
@@ -49,7 +45,7 @@ describe("selectSources — acceptance criteria", () => {
   });
 });
 
-describe("selectSources — the three tiers of §3.1 L206", () => {
+describe("selectSources — the three tiers", () => {
   test("a cold source (lastCount = 0) is excluded at 239 minutes and included at 241", () => {
     const tooSoon = source({ id: "cold-239", lastCount: 0, lastUpdated: polledMinutesAgo(239) });
     const dueNow = source({ id: "cold-241", lastCount: 0, lastUpdated: polledMinutesAgo(241) });
@@ -57,7 +53,7 @@ describe("selectSources — the three tiers of §3.1 L206", () => {
     expect(ids(selectSources([tooSoon, dueNow], NOW, "web"))).toEqual(["cold-241"]);
   });
 
-  test("a cold source is included exactly at the 240-minute boundary, since L202 is >=", () => {
+  test("a cold source is included exactly at the 240-minute boundary", () => {
     const atBoundary = source({ id: "cold-240", lastCount: 0, lastUpdated: polledMinutesAgo(240) });
 
     expect(ids(selectSources([atBoundary], NOW, "web"))).toEqual(["cold-240"]);
@@ -70,16 +66,13 @@ describe("selectSources — the three tiers of §3.1 L206", () => {
     expect(ids(selectSources([tooSoon, dueNow], NOW, "web"))).toEqual(["warm-31"]);
   });
 
-  test("a warm source is included exactly at the 30-minute boundary, since L202 is >=", () => {
+  test("a warm source is included exactly at the 30-minute boundary", () => {
     const atBoundary = source({ id: "warm-30", lastCount: 5, lastUpdated: polledMinutesAgo(30) });
 
     expect(ids(selectSources([atBoundary], NOW, "web"))).toEqual(["warm-30"]);
   });
 
-  /**
-   * L205 reads "a hot source (>20 posts last run)" and "a warm source (1–20)",
-   * so 20 is the top of the warm band and 21 is the bottom of the hot band.
-   */
+  // Hot is more than 20 posts and warm is 1–20, so 20 is the top of the warm band.
   test("lastCount = 20 is warm, so it still waits out the 30 minutes", () => {
     const warmEdge = source({ id: "twenty", lastCount: 20, lastUpdated: polledMinutesAgo(5) });
 
@@ -104,18 +97,14 @@ describe("selectSources — the three tiers of §3.1 L206", () => {
 });
 
 describe("selectSources — filters", () => {
-  test("a source whose status is not `ok` is excluded, however overdue (§3.1 L200)", () => {
+  test("a source whose status is not `ok` is excluded, however overdue", () => {
     const disabled = source({ id: "off", status: "disabled", lastCount: 25, lastUpdated: 0 });
     const noStatus = source({ id: "blank", status: undefined, lastCount: 25, lastUpdated: 0 });
 
     expect(selectSources([disabled, noStatus], NOW, "web")).toEqual([]);
   });
 
-  /**
-   * R16: §8.4 L823's soft delete sets `deleted: true`, and §3.1 has no filter for
-   * it — a deleted source would keep being polled and keep publishing.
-   */
-  test("a soft-deleted source is excluded even while status stays `ok` (R16)", () => {
+  test("a soft-deleted source is excluded even while status stays `ok`", () => {
     const deleted = source({ id: "gone", deleted: true, lastCount: 25, lastUpdated: 0 });
     const live = source({ id: "live", deleted: false, lastCount: 25, lastUpdated: 0 });
 
@@ -124,7 +113,7 @@ describe("selectSources — filters", () => {
 });
 
 describe("selectSources — cap and ordering", () => {
-  test("takes at most 10 sources (§3.1 L206)", () => {
+  test("takes at most 10 sources", () => {
     const many = Array.from({ length: 25 }, (_, i) =>
       source({ id: `s${i}`, lastCount: 25, lastUpdated: NOW }),
     );
@@ -161,7 +150,7 @@ describe("selectSources — cap and ordering", () => {
     expect(ids(selectSources([...blockers, overdue], NOW, "web"))).toEqual(["overdue"]);
   });
 
-  /** R63 — each reader polls its own sources; an absent `via` is `web`. */
+  /** Each reader polls its own sources; an absent `via` is `web`. */
   test("selects only the calling reader's sources", () => {
     const legacy = source({ id: "legacy" });
     const web = source({ id: "web", via: "web" });
@@ -182,7 +171,7 @@ describe("selectSources — cap and ordering", () => {
     expect(ids(input)).toEqual(["b", "a"]);
   });
 
-  test("exports the spec thresholds as named constants", () => {
+  test("exports the thresholds as named constants", () => {
     expect(HOT_THRESHOLD_COUNT).toBe(20);
     expect(WARM_INTERVAL_MS).toBe(30 * MINUTE);
     expect(MAX_SOURCES_PER_RUN).toBe(10);

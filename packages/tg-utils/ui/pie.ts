@@ -1,22 +1,18 @@
-/** A pie slice, in the shape §8.5's charts consume. */
+/** A pie slice, in the shape the dashboard's charts consume. */
 export interface Slice {
   readonly label: string;
   readonly value: number;
 }
 
 /**
- * §8.5 — the two donut charts, drawn as one CSS `conic-gradient` rather than
- * as SVG paths. The browser does the arc geometry, so there is no path string
- * to get wrong and no full-circle special case: a single slice is simply a
- * gradient from 0% to 100%. No charting library is needed for two charts.
- *
- * Kept as pure functions so the arithmetic is testable without rendering.
+ * The dashboard's donut charts, drawn as one CSS `conic-gradient` rather than
+ * SVG paths: the browser does the arc geometry, and a single slice needs no
+ * special case. Pure functions, so the arithmetic is testable without rendering.
  */
 
 /**
- * Ten colours, cycled across the 29 categories of §5.4 (R4), tuned for the dark
- * theme. No red: the console keeps red for dead letters and failures alone, so
- * a category drawn in it would read as an alarm.
+ * Ten colours, cycled across the categories, tuned for the dark theme. No red:
+ * the console keeps red for failures, so a category in red would read as an alarm.
  */
 export const PIE_PALETTE = [
   "#4a9eff",

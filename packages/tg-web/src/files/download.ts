@@ -1,9 +1,6 @@
 /**
- * Hands the operator a file the API just produced. §8.4's export answers CSV
- * text; this is what turns it into a download.
- *
- * A `data:` URL rather than `URL.createObjectURL`: there is no object to revoke
- * afterwards, so a console left open all day cannot leak one per press.
+ * Turns text the API produced (the CSV export) into a download. A `data:` URL,
+ * not `URL.createObjectURL`, so there is no object to revoke and nothing leaks.
  */
 export function downloadText(filename: string, text: string, mediaType = "text/csv"): void {
   const anchor = document.createElement("a");

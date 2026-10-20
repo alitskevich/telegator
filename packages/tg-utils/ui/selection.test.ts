@@ -38,9 +38,8 @@ describe("toggleSelectAll", () => {
   });
 
   /**
-   * R56 — the result is the visible ids, not the union with what was already
-   * selected. The button sits beside "Delete selected", so carrying a row the
-   * filters have hidden into the new selection would delete it unseen.
+   * The result is the visible ids, not the union with what was selected: a row
+   * the filters hid would otherwise be deleted unseen.
    */
   test("drops ids the filters have taken off screen", () => {
     expect(toggleSelectAll(["a", "b"], set("hidden"))).toEqual(set("a", "b"));

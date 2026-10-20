@@ -3,12 +3,9 @@ import type { MatchKeyFields } from "../matchKey";
 import { type LabelledKeyPair, sweepBands } from "./sweep";
 
 /**
- * A labelled pair of match-key fields.
- *
- * `title` and `tags` are deliberately disjoint on every fixture pair below so
- * only `properNames` (the entity component, weighted 0.6) drives the score —
- * that makes the resulting `matchScore` an exact, hand-checkable fraction
- * instead of a three-term sum a test would have to trust blindly.
+ * A labelled pair of match-key fields. `title` and `tags` are disjoint on every
+ * pair, so only `properNames` (weight 0.6) drives the score and each score is
+ * easy to check by hand.
  */
 const pair = (properNamesA: string, properNamesB: string, same: boolean): LabelledKeyPair => ({
   fields: { title: "Alpha Beta", properNames: properNamesA, tags: "fire" },
@@ -16,7 +13,6 @@ const pair = (properNamesA: string, properNamesB: string, same: boolean): Labell
   same,
 });
 
-/** Reused by the two brief-mandated tests below; renamed from the embedding-era builder. */
 function labelledPairs(): LabelledKeyPair[] {
   return [
     pair("Minsk", "Minsk", true), // entities Jaccard 1 -> score 0.6
@@ -26,9 +22,8 @@ function labelledPairs(): LabelledKeyPair[] {
   ];
 }
 
-describe("sweepBands — §10.3 steps 2-4, rewritten (R48)", () => {
-  // Brief's Step 1 fixtures, verbatim.
-  test("sweeps both thresholds and never proposes distinct above merge (R48)", () => {
+describe("sweepBands", () => {
+  test("sweeps both thresholds and never proposes distinct above merge", () => {
     const rows = sweepBands(labelledPairs(), { step: 0.05 });
 
     expect(rows.length).toBeGreaterThan(0);
@@ -37,18 +32,14 @@ describe("sweepBands — §10.3 steps 2-4, rewritten (R48)", () => {
     }
   });
 
-  test("reports band fraction, which is the model-call cost (R48)", () => {
+  test("reports band fraction, which is the model-call cost", () => {
     const [row] = sweepBands(labelledPairs(), { step: 0.5 });
 
     expect(row?.bandFraction).toBeGreaterThanOrEqual(0);
     expect(row?.bandFraction).toBeLessThanOrEqual(1);
   });
 
-  /**
-   * Zero model calls. Nothing async, nothing awaited, nothing that could reach
-   * the network — the whole point of dropping the embedding step is that this
-   * sweep belongs in the offline test suite.
-   */
+  /** Zero model calls: the sweep belongs in the offline test suite. */
   test("runs synchronously against fields alone, never a promise", () => {
     const result = sweepBands(labelledPairs(), { step: 0.5 });
 
@@ -56,13 +47,9 @@ describe("sweepBands — §10.3 steps 2-4, rewritten (R48)", () => {
   });
 
   /**
-   * Hand-computed, the way the embedding-era `confusionAt` test was: with the
-   * fixture above, `entities` Jaccard values are 1, 0.5, 0, 0.5 -> scores
-   * 0.6, 0.3, 0, 0.3 (title and tags always disjoint, contributing 0). At
-   * distinct=0.3 / merge=0.6: pair 1 (score 0.6, same) merges; pair 2
-   * (score 0.3, same) auto-splits WRONGLY (it is same, so it does not count
-   * toward auto-split recall, only toward what an operator would call a false
-   * split); pairs 3 and 4 (score 0 and 0.3, different) both auto-split
+   * Hand-computed: scores are 0.6, 0.3, 0, 0.3. At distinct=0.3 / merge=0.6,
+   * pair 1 (same) merges; pair 2 (same) auto-splits wrongly, which does not
+   * count toward auto-split recall; pairs 3 and 4 (different) auto-split
    * correctly. No pair lands in the band.
    */
   test("buckets a hand-computed table correctly at one grid point", () => {
@@ -110,12 +97,7 @@ describe("sweepBands — §10.3 steps 2-4, rewritten (R48)", () => {
     expect(row?.autoMergePrecision).toBeNull();
   });
 
-  /**
-   * Loudly, for the same reason the embedding-era `recallOf` threw on a
-   * same-only set: without any different-story pairs, auto-split recall is
-   * undefined at every grid point and the sweep would report a confident
-   * number drawn from nothing.
-   */
+  /** Without different-story pairs, auto-split recall is undefined at every grid point. */
   test("throws when the labelled set contains no different-story pairs", () => {
     const onlySame: LabelledKeyPair[] = [pair("Minsk", "Minsk", true)];
 
@@ -127,21 +109,13 @@ describe("sweepBands — §10.3 steps 2-4, rewritten (R48)", () => {
     expect(() => sweepBands(labelledPairs(), { step: -0.1 })).toThrow(/step/);
   });
 
-  /**
-   * A sub-basis-point step used to `Math.round` its way to 0.01 and sweep a
-   * grid ten times coarser than the one asked for — every row then labelled
-   * with a threshold the caller never requested, on its way into
-   * `calibration/record.json` as a measured value.
-   */
+  /** Rounding would sweep a coarser grid than asked for, with rows the caller never requested. */
   test("rejects a step finer than one basis point rather than rounding it up", () => {
     expect(() => sweepBands(labelledPairs(), { step: 0.005 })).toThrow(/basis point/i);
     expect(() => sweepBands(labelledPairs(), { step: 0.001 })).toThrow(/basis point/i);
   });
 
-  /**
-   * 0.03 walks 0.00 … 0.99 and never evaluates 1.00, silently dropping the
-   * endpoint §10.3's original 1-D sweep always included.
-   */
+  /** 0.03 walks 0.00 … 0.99 and never evaluates 1.00. */
   test("rejects a step that does not divide the range, so 1.00 is never skipped", () => {
     expect(() => sweepBands(labelledPairs(), { step: 0.03 })).toThrow(/divide/i);
     expect(() => sweepBands(labelledPairs(), { step: 0.07 })).toThrow(/divide/i);
@@ -157,12 +131,7 @@ describe("sweepBands — §10.3 steps 2-4, rewritten (R48)", () => {
     }
   });
 
-  /**
-   * A coarse grid of hand-reasoned weight candidates (design §9), not a
-   * continuous sweep — but `sweepBands` still has to accept whichever
-   * candidate is being evaluated, or comparing candidates would require
-   * rebuilding the harness for each one.
-   */
+  /** Weights are compared one hand-picked candidate per call, not swept. */
   test("accepts a weight candidate other than the production default", () => {
     const fields: MatchKeyFields = { title: "Alpha Beta", tags: "fire" };
     const other: MatchKeyFields = { title: "Gamma Delta", tags: "flood" };

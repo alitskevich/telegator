@@ -1,7 +1,7 @@
 {
   "name": "tg-enums",
   "version": "1.0.0",
-  "description": "Closed vocabularies: every z.enum the tables, the pipeline and the dashboard share.",
+  "description": "Closed vocabularies: every z.enum the collections, the pipeline and the dashboard share.",
   "private": true,
   "type": "module",
   "exports": {

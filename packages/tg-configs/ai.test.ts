@@ -6,8 +6,8 @@ import {
   OPENROUTER_BASE_URL,
 } from "./ai";
 
-describe("the classification model (R2, re-slugged by R50)", () => {
-  test("is the haiku tier §11.1 decided, in OpenRouter's slug form", () => {
+describe("the classification model", () => {
+  test("is the haiku tier, in OpenRouter's slug form", () => {
     expect(CLASSIFIER_MODEL_ID).toBe("anthropic/claude-haiku-4.5");
   });
 
@@ -16,10 +16,8 @@ describe("the classification model (R2, re-slugged by R50)", () => {
   });
 
   /**
-   * R50 — Bedrock ids are `anthropic.claude-…`, OpenRouter's are
-   * `anthropic/claude-…`. The two are one character apart and neither provider
-   * accepts the other's, so the old form is pinned as forbidden rather than
-   * merely absent.
+   * Bedrock ids are `anthropic.claude-…`, OpenRouter's are `anthropic/claude-…`.
+   * They differ by one character and neither provider accepts the other's.
    */
   test("carries no Bedrock `anthropic.` prefix", () => {
     expect(CLASSIFIER_MODEL_ID.startsWith("anthropic.")).toBe(false);
@@ -29,27 +27,18 @@ describe("the classification model (R2, re-slugged by R50)", () => {
     expect(CLASSIFIER_MODEL_ID).not.toBe("anthropic/claude-opus-5");
   });
 
-  test("max_tokens is 2000 (§5.2 L429)", () => {
+  test("max_tokens is 2000", () => {
     expect(CLASSIFIER_MAX_TOKENS).toBe(2000);
   });
 
-  /**
-   * R3. §5.2 L430 sets effort "low" and L465 makes effort the replacement for
-   * the removed temperature/top_p. Effort is not available across every Claude
-   * tier, and this build cannot reach a provider to find out whether the haiku
-   * tier R2 selects accepts it — so the value is exported and the request
-   * builder treats it as omittable rather than assuming.
-   */
-  test("effort is the low value §5.2 L430 sets", () => {
+  test("effort is low", () => {
     expect(CLASSIFIER_EFFORT).toBe("low");
   });
 });
 
 /**
- * R50. The SDK appends `/v1/messages` itself, so a base URL that already ends
- * in `/v1` would post to `/v1/v1/messages` and 404 — a failure that looks like
- * an outage rather than a typo. Pinned here because nothing else can catch it
- * without a network call.
+ * The SDK appends `/v1/messages` itself, so a base URL ending in `/v1` would
+ * post to `/v1/v1/messages` and 404. Nothing else catches it without a network call.
  */
 describe("the OpenRouter base URL", () => {
   test("is the `/api` root the Anthropic SDK appends `/v1/messages` to", () => {

@@ -1,86 +1,45 @@
 # Working in this repository
 
-`docs/telegator.md` is the project's only document, and it is where the reasoning
-lives. This file is the short list of what to do and not do; each rule names the
-section that explains it.
-
-**Part I (§1–§11) is the normative spec — do not edit it to match the code.** Code
-cites it by section and line (`§3.4 L317`), and `test/specCitations.test.ts` fails
-when a citation stops resolving, so editing Part I means re-pointing every
-citation into it.
-
-A divergence from Part I is a **reconciliation**: the comment that makes it names
-the number and the reason in a sentence or two, and §25 carries the full account.
-Add a row there when you issue a new number.
+`docs/telegator.md` explains the system. Update it when you change what it describes; keep it short.
 
 ## The four gates
 
-All four pass before any commit. Not three (§32.1).
+All four pass before any commit.
 
 ```bash
-npx tsc --noEmit     # never skip: it has caught defects a green suite did not
-npx vitest run
+npx tsc --noEmit     # tsc and vitest disagree more often than you would expect
+npm test             # vitest inside `firebase emulators:exec` (Firestore + Auth)
 npx biome check .
-npx cdk synth        # credential-free, and must stay that way
+npm run build        # console bundle + functions bundle
 ```
 
-Never weaken a gate to pass: no `.skip`, no `any`, no `@ts-expect-error`, no lint
-suppression. `tsc` and `vitest` disagree more often than you would expect — run
-both.
+Never weaken a gate to pass: no `.skip`, no `any`, no `@ts-expect-error`, no lint suppression.
 
-**What they do not cover is §32.2.** In short: no gate makes a model call, so use
-`npm run smoke:openrouter`; and no gate runs the console in a browser, so run
-`npm run dev` and look at every page you touched — at phone width too — before
-believing `tg-web` works.
+While `npm run dev` holds the emulator ports, run tests against it with a throwaway project id: `FIRESTORE_EMULATOR_HOST=127.0.0.1:8180 GCLOUD_PROJECT=demo-test npx vitest run`. Never use `telegator-581db` there, because `clearFirestore` would wipe your dev data.
 
-## Rules with silent failure modes
+**What the gates do not cover**: no gate calls the model (use `npm run smoke:openrouter`), and no gate opens the console in a browser. Run `npm run dev` and look at every page you touched, at phone width too.
 
-Each is enforced by a test, and each was violated at least once (§32.3).
+## Rules
 
-- **Across packages, import by name; inside one, relatively.**
-  `"tg-domain/message"`, never `"../../tg-domain/message"`; no barrel files.
-- **Relative imports carry no extension.** `"./clock"`, never
-  `"./clock.js"`. The old Next.js dashboard's Turbopack did not substitute
-  `.js` → `.ts`, and every route 500'd while all four gates stayed green.
-- **The dashboard must not reach `tg-pipeline`** (§8.2), checked over the
-  *transitive* closure. No workspace may depend on it, and the package graph has
-  no cycle (`test/layout.test.ts`). A constant needed by two layers moves to a module neither
-  owns.
-- **Every `tg-api` action calls `requireRole`, at `viewer` or above**
-  (`tg-api/actions.test.ts` calls each one anonymously).
-- **Nothing the console bundles reaches the AWS SDK, `tg-aws`, `tg-api` or a
-  Node built-in** — the browser holds no credential (§8.1).
-- **No CDK context lookup** (`fromLookup`, `valueFromLookup`) — each turns synth
-  into an authenticated call and breaks the only infrastructure gate there is.
-- **Every AC-x.y in §3.1–3.4 is named by a test**, audited in both directions.
-- A source scan that names what it forbids will match itself: exclude the file, or
-  scan only shipped source.
+- **Code is plain and short.** Firestore, Cloud Tasks and the metrics live in `tg-firebase`; stages and actions call them directly. Inject only what a test must replace and cannot reach locally: the model, Telegram, the clock.
+- **Tests never touch the network.** Firestore code runs against the emulator, and each file calls `clearFirestore` from `test/support.ts`. Mock `tg-firebase/tasks` and `tg-firebase/metrics` with `vi.mock`.
+- **Across packages, import by name; inside one, relatively, with no extension.** `"tg-domain/message"`, never `"../../tg-domain/message"` or `"./clock.js"`.
+- **The console bundle must stay server-free.** `tg-web` may import only types from `tg-actions`, `tg-firebase` or `tg-api`; a value import pulls `firebase-admin` into the browser. Shared constants go to `tg-configs` or `tg-rc`.
+- **Every API action has a least role** in `tg-api/actions.ts`. The dispatcher checks it before the action runs; `tg-api/function.test.ts` calls each one anonymously and as a disabled admin.
+- **Local runs must not post to live channels.** `.secret.local` holds a placeholder `TELEGRAM_BOT_TOKEN`; only swap in a test bot's token.
+- Zod schemas in `tg-domain` are the source of truth for every document shape.
+- `console` belongs in `scripts/` only.
 
 ## Conventions
 
-§28 has the layout and the full list. The ones worth repeating here: the code is
-npm workspaces under `packages/tg-*` (R62), each holding one concern, and
-`scripts/` and `test/` wrap them; Zod schemas are the source of truth;
-every boundary is a port with an in-memory fake and **no test touches the
-network**; `console` belongs in `scripts/` only; magic numbers are banned in
-every package but `tg-web` and `tg-infra`, and the values live in §31.
+npm workspaces under `packages/tg-*`, one concern each. `tg-functions/index.ts` binds the stages to their triggers and is bundled by esbuild into `dist/index.js`, which the Functions emulator reloads on change.
 
-The console is `packages/tg-web`, an Arrmatura app (§8); its server side is the
-`tg-api` Lambda. Load the `arrmatura:arrmatura` skill before touching a `.xml`
-template or a service — CML mistakes compile and render nothing. Three things
-to know:
+The console is `packages/tg-web`, an Arrmatura app. Load the `arrmatura:arrmatura` skill before touching a `.xml` template or a service: CML mistakes compile and render nothing.
 
-- `npm run dev` serves it on `localhost:8080` and needs `www/config.json`;
-  `npm run deploy:web -- --config-only` writes it from the deployed stacks.
-- The Arrmatura packages are private sibling checkouts, linked into
-  `node_modules` by `postinstall`. `tsc` reads `tg-web/src/types/arrmatura-web.d.ts`
-  instead of their source: declare a member there before using it.
-- `src/index.cml.ts` is generated by `scripts/web.ts`; `test/webCml.test.ts`
-  fails when it drifts from the templates on disk.
+- The Arrmatura packages are private sibling checkouts, linked into `node_modules` by `postinstall`. `tsc` reads `tg-web/src/types/arrmatura-web.d.ts` instead of their source: declare a member there before using it.
+- `src/index.cml.ts` is generated by `scripts/web.ts`; `test/webCml.test.ts` fails when it drifts from the templates.
+- Sign-in and API calls go through the platform's `FirebaseService` (`Ref="auth"`).
 
 ## Deploying
 
-`npm run deploy`, never a bare `cdk deploy`: §33 says what a bare one omits and
-why the stack then creates cleanly and fails on its first message. The console
-follows with `npm run deploy:web -- --execute` (Firebase Hosting, §9.3). §10.3's
-calibration gate refuses a prod synth until `calibration/record.json` exists.
+`npm run deploy`. First-time setup is in the doc's §8. The scheduled scrape stays off until `SCRAPE_ENABLED=true` in `packages/tg-functions/.env`.

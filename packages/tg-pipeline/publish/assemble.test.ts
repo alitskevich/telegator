@@ -3,16 +3,12 @@ import { SUMMARY_MAX_LENGTH } from "tg-domain/item";
 import type { MemberBlock, Message } from "tg-domain/message";
 import { DEFAULT_TG_CHANNEL, MemberBlockSchema, MessageSchema } from "tg-domain/message";
 import { resolveTargets } from "tg-domain/target";
-import { TELEGRAM_MESSAGE_LIMIT } from "tg-ports/telegram";
+import { TELEGRAM_MESSAGE_LIMIT } from "tg-telegram/types";
 import { describe, expect, test } from "vitest";
 import { assembleMessage, buildHeader, PHOTO_SUPPRESSION_LIMIT } from "./assemble";
 import { buildHashtagLine } from "./hashtags";
 
-/**
- * Fixtures go through the schemas rather than object literals: the house rule
- * bans type assertions, and parsing proves each fixture is a record the
- * aggregate stage (§3.3) could actually have written.
- */
+/** Fixtures are parsed, not cast, so each is a record aggregate could have written. */
 function member(fields: Record<string, unknown>): MemberBlock {
   return MemberBlockSchema.parse({ summary: "s", channel: "chan", ts: 0, ...fields });
 }
@@ -49,7 +45,7 @@ function message(overrides: MessageOverrides = {}): Message {
   });
 }
 
-/** The single-target call the pre-map tests were written against. */
+/** Assembles for the message's first target. */
 const assemble = (m: Message, tgId?: string) =>
   assembleMessage(m, resolveTargets(m.tgChannel)[0] ?? DEFAULT_TG_CHANNEL, tgId);
 
@@ -66,10 +62,8 @@ function paddedMembers(fillers: number, pad: number): Record<string, MemberBlock
 }
 
 /**
- * Builds a message whose *assembled* text is exactly `target` characters, so the
- * AC-4.2 boundary can be probed on both sides. The length is measured by
- * actually assembling, never predicted, so header and hashtag overheads cannot
- * drift out of sync with the implementation.
+ * Builds a message whose assembled text is exactly `target` characters, so the
+ * photo boundary can be probed on both sides. The length is measured, not predicted.
  */
 function messageOfTextLength(target: number, overrides: MessageOverrides = {}): Message {
   for (let fillers = 0; fillers < MEMBER_RENDER_LIMIT; fillers += 1) {
@@ -90,7 +84,7 @@ function memberBlockCount(text: string): number {
 }
 
 describe("buildHeader", () => {
-  test("§3.4 L332 — <b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location, category}</b>", () => {
+  test("<b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location, category}</b>", () => {
     const header = buildHeader({
       date: DEFAULT_DATE,
       country: "Belarus",
@@ -101,7 +95,7 @@ describe("buildHeader", () => {
     expect(header).toBe("<b>⚡️</b> <i>2026-08-29</i> <b>BELARUS, Minsk, politics</b>");
   });
 
-  test("§3.4 L341 — country is uppercased, location and category are not", () => {
+  test("country is uppercased, location and category are not", () => {
     const header = buildHeader({
       date: DEFAULT_DATE,
       country: "belarus",
@@ -112,7 +106,7 @@ describe("buildHeader", () => {
     expect(header).toContain("<b>BELARUS, Minsk, politics</b>");
   });
 
-  test("§3.4 L341 — an absent part is omitted, and no separator is left behind", () => {
+  test("an absent part is omitted, and no separator is left behind", () => {
     expect(buildHeader({ date: DEFAULT_DATE, country: "Belarus", category: "politics" })).toBe(
       "<b>⚡️</b> <i>2026-08-29</i> <b>BELARUS, politics</b>",
     );
@@ -121,7 +115,7 @@ describe("buildHeader", () => {
     );
   });
 
-  test("an empty or whitespace-only part counts as absent (§3.4 L341, 'non-empty')", () => {
+  test("an empty or whitespace-only part counts as absent", () => {
     expect(buildHeader({ date: DEFAULT_DATE, country: "", location: "   ", category: "war" })).toBe(
       "<b>⚡️</b> <i>2026-08-29</i> <b>war</b>",
     );
@@ -139,7 +133,7 @@ describe("buildHeader", () => {
 });
 
 describe("assembleMessage — layout", () => {
-  test("§3.4 L332–339 — header, one blank line, then the member blocks", () => {
+  test("header, one blank line, then the member blocks", () => {
     const assembled = assemble(
       message({
         country: "Belarus",
@@ -159,7 +153,7 @@ describe("assembleMessage — layout", () => {
     expect(lines[3]).toBe('🔘 second - <a href="https://t.me/chan/2">@chan</a>');
   });
 
-  test("R12 — the hashtag line is appended after the members, behind a blank line", () => {
+  test("the hashtag line is appended after the members, behind a blank line", () => {
     const record = message({ category: "politics", tags: "minsk" });
     const line = buildHashtagLine({
       category: "politics",
@@ -174,7 +168,7 @@ describe("assembleMessage — layout", () => {
 });
 
 describe("assembleMessage — send mode", () => {
-  test("AC-4.2 — a message whose text exceeds 1012 characters is sent without a photo", () => {
+  test("a message whose text exceeds 1012 characters is sent without a photo", () => {
     const image = "https://e.by/p.jpg";
     const overLimit = messageOfTextLength(1013, { image });
 
@@ -185,7 +179,7 @@ describe("assembleMessage — send mode", () => {
     expect(assembled.photo).toBeUndefined();
   });
 
-  test("AC-4.2 — at exactly 1012 characters the photo survives (the other side)", () => {
+  test("at exactly 1012 characters the photo survives (the other side)", () => {
     const image = "https://e.by/p.jpg";
     const atLimit = messageOfTextLength(1012, { image });
 
@@ -196,25 +190,25 @@ describe("assembleMessage — send mode", () => {
     expect(assembled.photo).toBe(image);
   });
 
-  test("R13 — the suppression threshold is 1012, not the 1024 caption limit", () => {
+  test("the suppression threshold is 1012, not the 1024 caption limit", () => {
     expect(PHOTO_SUPPRESSION_LIMIT).toBe(1012);
   });
 
-  test("§3.4 L349 — no tgId and no image is a plain sendMessage", () => {
+  test("no tgId and no image is a plain sendMessage", () => {
     const assembled = assemble(message());
 
     expect(assembled.method).toBe("sendMessage");
     expect(assembled.photo).toBeUndefined();
   });
 
-  test("AC-4.1 / §3.4 L350 — a tgId edits, and never re-sends the photo", () => {
+  test("a tgId edits, and never re-sends the photo", () => {
     const assembled = assemble(message({ image: "https://e.by/p.jpg" }), "4711");
 
     expect(assembled.method).toBe("editMessageText");
     expect(assembled.photo).toBeUndefined();
   });
 
-  test("MT-14: the chat id is the target argument, and a tgId argument makes it an edit", () => {
+  test("the chat id is the target argument, and a tgId argument makes it an edit", () => {
     expect(assembleMessage(message(), "b", undefined)).toMatchObject({
       chatId: "@b",
       method: "sendMessage",
@@ -230,20 +224,20 @@ describe("assembleMessage — send mode", () => {
     );
   });
 
-  test("§3.4 L352 — link preview is disabled when the message has a title", () => {
+  test("link preview is disabled when the message has a title", () => {
     expect(assemble(message({ title: "Blast in Minsk" })).disableWebPagePreview).toBe(true);
   });
 
-  test("§3.4 L352 — link preview is disabled when the message has an image", () => {
+  test("link preview is disabled when the message has an image", () => {
     expect(assemble(message({ image: "https://e.by/p.jpg" })).disableWebPagePreview).toBe(true);
   });
 
-  test("§3.4 L352 — link preview stays enabled with neither title nor image", () => {
+  test("link preview stays enabled with neither title nor image", () => {
     expect(assemble(message()).disableWebPagePreview).toBe(false);
   });
 });
 
-describe("assembleMessage — overflow (recorded rule, §3.4 L345 gives no truncation)", () => {
+describe("assembleMessage — overflow", () => {
   /** 80 distinct tokens, enough hashtag line to push a full message over 4096. */
   const MANY_TAGS = Array.from({ length: 80 }, (_, i) => `overflowtag${i}`).join(",");
 
@@ -260,7 +254,7 @@ describe("assembleMessage — overflow (recorded rule, §3.4 L345 gives no trunc
     const line = buildHashtagLine({ tags: MANY_TAGS, date: DEFAULT_DATE, ts: DEFAULT_TS });
     const assembled = assemble(record);
 
-    // Precondition: the message only overflows *because* R12 appends the line.
+    // Precondition: the message only overflows because of the hashtag line.
     expect(assembled.text.length + line.length).toBeGreaterThan(TELEGRAM_MESSAGE_LIMIT);
 
     expect(assembled.text.length).toBeLessThanOrEqual(TELEGRAM_MESSAGE_LIMIT);
@@ -295,7 +289,7 @@ describe("assembleMessage — overflow (recorded rule, §3.4 L345 gives no trunc
   });
 });
 
-describe("assembleMessage with a template — target-table#5.1 (R59)", () => {
+describe("assembleMessage with a template", () => {
   const TEMPLATE = "<b>LIVE</b>\n{header}\n\n{body}\n\n{hashtags}";
 
   /** Enough tokens that the hashtag line alone overflows a full body. */
@@ -309,7 +303,7 @@ describe("assembleMessage with a template — target-table#5.1 (R59)", () => {
     return members;
   }
 
-  test("TT-7: no template is byte-identical to the pre-template result", () => {
+  test("no template is byte-identical to the pre-template result", () => {
     const stored = message();
 
     expect(assembleMessage(stored, "b", undefined, undefined).text).toBe(
@@ -317,8 +311,7 @@ describe("assembleMessage with a template — target-table#5.1 (R59)", () => {
     );
   });
 
-  /** D6 — an empty or whitespace-only template is no template at all. */
-  test.each(["", "   ", "\n"])("TT-7: %o is treated as no template", (template) => {
+  test.each(["", "   ", "\n"])("%o is treated as no template", (template) => {
     const stored = message();
 
     expect(assembleMessage(stored, "b", undefined, template).text).toBe(
@@ -326,7 +319,7 @@ describe("assembleMessage with a template — target-table#5.1 (R59)", () => {
     );
   });
 
-  test("TT-8: a template decides the text and nothing else", () => {
+  test("a template decides the text and nothing else", () => {
     const stored = message({ image: "https://example.test/p.jpg" });
 
     const plain = assembleMessage(stored, "b", undefined);
@@ -340,14 +333,14 @@ describe("assembleMessage with a template — target-table#5.1 (R59)", () => {
     expect(templated.disableWebPagePreview).toBe(plain.disableWebPagePreview);
   });
 
-  test("TT-8: a tgId still makes it an edit, template or not", () => {
+  test("a tgId still makes it an edit, template or not", () => {
     const templated = assembleMessage(message(), "b", "4711", TEMPLATE);
 
     expect(templated.method).toBe("editMessageText");
     expect(templated.photo).toBeUndefined();
   });
 
-  test("TT-9: overflow drops {hashtags} first, and every member block survives", () => {
+  test("overflow drops {hashtags} first, and every member block survives", () => {
     const stored = message({ tags: MANY_TAGS, members: fullMembers() });
     const template = "{body}\n\n{hashtags}";
 
@@ -363,9 +356,9 @@ describe("assembleMessage with a template — target-table#5.1 (R59)", () => {
     expect(memberBlockCount(assembled.text)).toBe(MEMBER_RENDER_LIMIT);
   });
 
-  test("TT-9: then reduces member blocks, never below one", () => {
+  test("then reduces member blocks, never below one", () => {
     // A long literal in the template inflates the text past what dropping the
-    // hashtag line alone could recover, so the ladder reaches its third rung.
+    // hashtag line alone could recover, so member blocks go too.
     const stored = message({ tags: MANY_TAGS, members: fullMembers() });
     const assembled = assembleMessage(
       stored,
@@ -380,12 +373,9 @@ describe("assembleMessage with a template — target-table#5.1 (R59)", () => {
     expect(memberBlockCount(assembled.text)).toBeLessThan(MEMBER_RENDER_LIMIT);
   });
 
-  /**
-   * A template naming neither `{body}` nor `{hashtags}` cannot be shortened.
-   * The ladder returns the same over-limit string on every rung and the Bot API
-   * rejects it — the designed outcome, not a truncation to hide.
-   */
-  test("TT-9: an unshortenable template is emitted over the limit rather than cut", () => {
+  // A template with neither `{body}` nor `{hashtags}` cannot be shortened; the
+  // Bot API rejects it rather than the operator's text being cut.
+  test("an unshortenable template is emitted over the limit rather than cut", () => {
     const literal = "z".repeat(TELEGRAM_MESSAGE_LIMIT + 1);
 
     expect(assembleMessage(message(), "b", undefined, literal).text).toBe(literal);

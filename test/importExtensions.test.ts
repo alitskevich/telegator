@@ -5,14 +5,8 @@ import { describe, expect, test } from "vitest";
 const repoRoot = resolve(import.meta.dirname, "..");
 
 /**
- * Every source directory that ends up in a bundle or a type-check, minus the
- * tests.
- *
- * Non-test only, for the reason `test/boundaries.test.ts` gives about its own
- * scan: this reads file *text* looking for a banned substring, and a test that
- * names what it forbids matches itself. It is also the honest scope — the rule
- * below exists because of what a bundler does to shipped code, and no bundler
- * ever sees a `.test.ts`.
+ * Every shipped source file. Tests are left out: a scan that names what it
+ * forbids would match itself, and no bundler sees a `.test.ts`.
  */
 function shippedSources(): string[] {
   const walk = (dir: string): string[] => {
@@ -23,8 +17,7 @@ function shippedSources(): string[] {
       return [];
     }
     return entries.flatMap((entry) => {
-      // Build output, installed packages and Next's generated `next-env.d.ts`
-      // (which references `.next/types/*.d.ts` by design) are not source anyone wrote.
+      // Installed packages and generated files are not source anyone wrote.
       if (["node_modules", ".next", "next-env.d.ts"].includes(entry)) return [];
       const path = join(dir, entry);
       if (statSync(path).isDirectory()) return walk(path);
@@ -36,9 +29,8 @@ function shippedSources(): string[] {
 }
 
 /**
- * `import`/`export ... from "x"`, side-effect `import "x"`, and `import("x")` —
- * the same forms `test/support/moduleGraph.ts` reads, including `import type`,
- * which is erased at build time but still has to resolve for `tsc`.
+ * `import`/`export ... from "x"`, side-effect `import "x"`, and `import("x")`,
+ * including `import type`, which must still resolve for `tsc`.
  */
 const SPECIFIER_PATTERNS = [
   /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
@@ -62,13 +54,9 @@ function relativeSpecifiersIn(source: string): string[] {
 
 describe("relative import specifiers carry no extension", () => {
   /**
-   * R62 found this the hard way: the Next.js dashboard was bundled by
-   * Turbopack, which does not perform TypeScript's extension substitution, so
-   * `"../lib/clock.js"` was looked up as that literal path and every route
-   * 500'd while all four gates stayed green. The console is esbuild-bundled now,
-   * which does substitute, but extensionless is what `moduleResolution:
-   * "bundler"` means and the one form every resolver here accepts — so the
-   * rule stays, and a future bundler cannot reopen the hole.
+   * A bundler that does not map `.js` to `.ts` looks the path up literally and
+   * fails at runtime while every gate stays green. Extensionless is the one form
+   * every resolver here accepts.
    */
   test("no shipped source imports a relative path with a .js extension", () => {
     const offenders = shippedSources().flatMap((path) =>
@@ -80,12 +68,7 @@ describe("relative import specifiers carry no extension", () => {
     expect(offenders).toEqual([]);
   });
 
-  /**
-   * The other half of the same rule. `moduleResolution: "bundler"` also permits
-   * `"../lib/clock.ts"`, which `tsc` rejects without `allowImportingTsExtensions`
-   * and which no bundler here would keep in an emitted specifier — a second way
-   * to write a path that resolves in one tool and not the next.
-   */
+  /** `"./clock.ts"` resolves in the bundler but `tsc` rejects it without `allowImportingTsExtensions`. */
   test("nor one with a .ts or .tsx extension", () => {
     const offenders = shippedSources().flatMap((path) =>
       relativeSpecifiersIn(readFileSync(path, "utf8"))

@@ -1,0 +1,20 @@
+{
+  "name": "tg-functions",
+  "version": "1.0.0",
+  "description": "The Cloud Functions entry: bundles the pipeline and the API into dist/index.js.",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild ./index.ts --bundle --platform=node --target=node22 --format=cjs --external:firebase-admin --external:firebase-functions --external:@anthropic-ai/sdk --external:telegram --outfile=dist/index.js",
+    "watch": "npm run build -- --watch=forever"
+  },
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
+    "firebase-admin": "^14.4.0",
+    "firebase-functions": "^7.4.0",
+    "telegram": "^2.26.22"
+  }
+}

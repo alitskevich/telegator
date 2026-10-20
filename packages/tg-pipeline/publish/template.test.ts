@@ -24,69 +24,64 @@ const values = (over: Partial<TemplateValues> = {}): TemplateValues => ({
   ...over,
 });
 
-/**
- * The built-in layout of the pre-template composer, spelled out: the header, a
- * blank line, the member blocks, a blank line, the hashtag line. TT-7 pins that
- * the built-in path itself is unchanged; this pins that a template can
- * reproduce it.
- */
+/** The built-in layout spelled out: header, blank line, members, blank line, hashtags. */
 const builtIn = (hashtags: string) =>
   hashtags === "" ? `${HEADER}\n\n${BODY}` : `${HEADER}\n\n${BODY}\n\n${hashtags}`;
 
-describe("renderTemplate — target-table#5.2", () => {
-  test("TT-3: {header}/{body}/{hashtags} reproduces the built-in layout", () => {
+describe("renderTemplate", () => {
+  test("{header}/{body}/{hashtags} reproduces the built-in layout", () => {
     expect(renderTemplate("{header}\n\n{body}\n\n{hashtags}", values())).toBe(builtIn(HASHTAGS));
   });
 
-  test("TT-4: an empty value collapses its blank line and leaves no trailing space", () => {
+  test("an empty value collapses its blank line and leaves no trailing space", () => {
     const out = renderTemplate("{header}\n\n{body}\n\n{hashtags}", values({ hashtags: "" }));
 
     expect(out).toBe(builtIn(""));
     expect(out).toBe(out.trimEnd());
   });
 
-  test("TT-4: the collapse is over the whole string, so order does not matter", () => {
+  test("the collapse is over the whole string, so order does not matter", () => {
     const empty = { title: "", category: "", country: "", location: "", date: "2026-09-08" };
 
     expect(renderTemplate("{title}\n{location}\nx", values({ message: empty }))).toBe("x");
     expect(renderTemplate("{location}\n{title}\nx", values({ message: empty }))).toBe("x");
   });
 
-  test("TT-4: never more than the maximum consecutive newlines", () => {
+  test("never more than the maximum consecutive newlines", () => {
     const out = renderTemplate("a\n\n\n\n\nb", values());
 
     expect(out).toBe(`a${"\n".repeat(MAX_CONSECUTIVE_NEWLINES)}b`);
     expect(MAX_CONSECUTIVE_NEWLINES).toBe(2);
   });
 
-  test("TT-5: an unknown placeholder renders empty and leaves no token behind", () => {
+  test("an unknown placeholder renders empty and leaves no token behind", () => {
     const out = renderTemplate("[{oops}]{body}", values());
 
     expect(out).toBe(`[]${BODY}`);
     expect(out).not.toContain("{");
   });
 
-  test("TT-6: the message fields are escaped", () => {
+  test("the message fields are escaped", () => {
     expect(renderTemplate("{title}", values())).toBe("Explosions &amp; fire");
     expect(renderTemplate("{category}", values())).toBe("politics");
     expect(renderTemplate("{location}", values())).toBe("Minsk");
   });
 
-  test("TT-6: {country} is uppercased", () => {
+  test("{country} is uppercased", () => {
     expect(renderTemplate("{country}", values())).toBe("BY");
   });
 
-  test("TT-6: the rendered HTML is not re-escaped", () => {
+  test("the rendered HTML is not re-escaped", () => {
     expect(renderTemplate("{header}", values())).toBe(HEADER);
     expect(renderTemplate("{body}", values())).toBe(BODY);
     expect(renderTemplate("{hashtags}", values())).toBe(HASHTAGS);
   });
 
-  test("TT-6: {date} passes through, digits and hyphens only", () => {
+  test("{date} passes through, digits and hyphens only", () => {
     expect(renderTemplate("{date}", values())).toBe("2026-09-08");
   });
 
-  /** D10 — a template exists to add markup, so its own literal text is trusted. */
+  /** A template exists to add markup, so its own literal text is trusted. */
   test("the template's own markup survives verbatim", () => {
     expect(renderTemplate("<b>Live</b> {category}", values())).toBe("<b>Live</b> politics");
   });
@@ -98,7 +93,7 @@ describe("renderTemplate — target-table#5.2", () => {
     expect(renderTemplate("[{title}]", values({ message: bare }))).toBe("[]");
   });
 
-  test("the placeholder pattern is letters only (D9)", () => {
+  test("the placeholder pattern is letters only", () => {
     expect("{a}{Ab}{a1}{a-b}{}".match(TEMPLATE_PLACEHOLDER)).toEqual(["{a}", "{Ab}"]);
   });
 });

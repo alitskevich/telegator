@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { advancingClock, fixedClock } from "../../test/fakes/clock";
+import { advancingClock, fixedClock } from "../../test/support";
 import { type Clock, systemClock } from "./clock";
 
 describe("systemClock", () => {
@@ -26,8 +26,8 @@ describe("fixedClock", () => {
 });
 
 describe("advancingClock", () => {
-  // R11: replay idempotency must be proven under a clock that moves. A frozen
-  // clock makes `ts: now()` (spec §6 L598) look idempotent when it is not.
+  // Replay idempotency must be proven under a clock that moves: a frozen clock
+  // makes `ts: now()` look idempotent when it is not.
   test("returns a later instant on each call", () => {
     const clock = advancingClock(1_000, 5);
 

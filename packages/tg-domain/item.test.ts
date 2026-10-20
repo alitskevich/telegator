@@ -29,7 +29,7 @@ const aiFields = {
 };
 
 describe("LinkSchema", () => {
-  test("resolves a #N token to an href (§2.2 L134)", () => {
+  test("resolves a #N token to an href", () => {
     expect(LinkSchema.parse({ id: 1, href: "https://example.test/a" })).toEqual({
       id: 1,
       href: "https://example.test/a",
@@ -41,7 +41,7 @@ describe("LinkSchema", () => {
   });
 });
 
-describe("ScrapedItemSchema (Stage A, §2.2 L131-141)", () => {
+describe("ScrapedItemSchema", () => {
   test("parses a scraped post", () => {
     expect(ScrapedItemSchema.parse(scraped)).toMatchObject(scraped);
   });
@@ -56,7 +56,7 @@ describe("ScrapedItemSchema (Stage A, §2.2 L131-141)", () => {
     expect(ScrapedItemSchema.safeParse({ ...scraped, id: "a/b/1" }).success).toBe(false);
   });
 
-  test("delegates date validation, since date is the FIFO group and dedup partition", () => {
+  test("delegates date validation, since date is the dedup partition", () => {
     expect(ScrapedItemSchema.safeParse({ ...scraped, date: "2026-02-30" }).success).toBe(false);
   });
 
@@ -64,7 +64,7 @@ describe("ScrapedItemSchema (Stage A, §2.2 L131-141)", () => {
     expect(ScrapedItemSchema.safeParse({ ...scraped, kind }).success).toBe(true);
   });
 
-  test("rejects a kind outside §2.2 L141's enum", () => {
+  test("rejects a kind outside the enum", () => {
     expect(ScrapedItemSchema.safeParse({ ...scraped, kind: "fetched" }).success).toBe(false);
   });
 
@@ -72,7 +72,7 @@ describe("ScrapedItemSchema (Stage A, §2.2 L131-141)", () => {
     expect(ScrapedItemSchema.parse({ ...scraped, status: "legacy" })).not.toHaveProperty("status");
   });
 
-  /** multi-target#3.3 reads `item.target ?? "telegator_news"`, so absence is expected. */
+  /** Aggregate reads `item.target ?? "telegator_news"`, so absence is expected. */
   test("allows an absent target", () => {
     const { target: _omitted, ...rest } = scraped;
 
@@ -80,8 +80,8 @@ describe("ScrapedItemSchema (Stage A, §2.2 L131-141)", () => {
   });
 });
 
-describe("AiFieldsSchema (§5.2 L450-462)", () => {
-  test("requires the six fields L445 lists as required", () => {
+describe("AiFieldsSchema", () => {
+  test("accepts the six required fields", () => {
     expect(AiFieldsSchema.parse(aiFields)).toMatchObject(aiFields);
   });
 
@@ -95,7 +95,7 @@ describe("AiFieldsSchema (§5.2 L450-462)", () => {
     },
   );
 
-  test("treats peoples, properNames and tags as optional per L445", () => {
+  test("treats peoples, properNames and tags as optional", () => {
     expect(AiFieldsSchema.parse(aiFields).peoples).toBeUndefined();
     expect(AiFieldsSchema.safeParse({ ...aiFields, peoples: "Ivan Ivanov" }).success).toBe(true);
   });
@@ -104,37 +104,30 @@ describe("AiFieldsSchema (§5.2 L450-462)", () => {
     expect(AiFieldsSchema.safeParse({ ...aiFields, importance }).success).toBe(true);
   });
 
-  test("rejects an importance outside §5.2 L459's enum", () => {
+  test("rejects an importance outside the enum", () => {
     expect(AiFieldsSchema.safeParse({ ...aiFields, importance: "medium" }).success).toBe(false);
   });
 
-  /** §11.2 L1033 and §5.2 L455: the source prompt's 60-symbol cap is raised to 220. */
   test("caps summary at 220 characters", () => {
     expect(SUMMARY_MAX_LENGTH).toBe(220);
     expect(AiFieldsSchema.safeParse({ ...aiFields, summary: "x".repeat(220) }).success).toBe(true);
     expect(AiFieldsSchema.safeParse({ ...aiFields, summary: "x".repeat(221) }).success).toBe(false);
   });
 
-  /** The model returns whatever case it likes; §3.2 L261 is what uppercases it. */
+  /** The model returns whatever case it likes; analyze uppercases it. */
   test("does not require the model's country to be uppercase", () => {
     expect(AiFieldsSchema.safeParse({ ...aiFields, country: "ua" }).success).toBe(true);
   });
 });
 
-describe("AnalyzedItemSchema (Stage B, §2.2 L143)", () => {
+describe("AnalyzedItemSchema", () => {
   const analyzed = { ...scraped, ...aiFields };
 
-  test("carries Stage A plus the AI fields", () => {
+  test("carries the scraped fields plus the AI fields", () => {
     expect(AnalyzedItemSchema.parse(analyzed)).toMatchObject(analyzed);
   });
 
-  /**
-   * §6 L519 builds the embedding text as
-   * [title, summary, category, tags, body].filter(Boolean).join(" ").
-   * Dropping `body` between stages would silently degrade every similarity
-   * score, and no test of the dedup algorithm itself would notice.
-   */
-  test("keeps body, which §6 L519 embeds", () => {
+  test("keeps body between stages", () => {
     expect(AnalyzedItemSchema.parse(analyzed).body).toBe(scraped.body);
   });
 
@@ -142,16 +135,16 @@ describe("AnalyzedItemSchema (Stage B, §2.2 L143)", () => {
     expect(AnalyzedItemSchema.safeParse(scraped).success).toBe(false);
   });
 
-  /** AC-2.4: country is always uppercase or empty, by the time it is enqueued. */
+  /** Country is always uppercase or empty by the time it is enqueued. */
   test("rejects a lowercase country on the aggregate queue", () => {
     expect(AnalyzedItemSchema.safeParse({ ...analyzed, country: "ua" }).success).toBe(false);
   });
 
-  test("accepts an empty country, which AC-2.4 allows", () => {
+  test("accepts an empty country", () => {
     expect(AnalyzedItemSchema.safeParse({ ...analyzed, country: "" }).success).toBe(true);
   });
 
-  test("keeps tags required-shaped from Stage A rather than weakening it to the AI optional", () => {
+  test("keeps the scraped tags rather than the AI's optional ones", () => {
     expect(AnalyzedItemSchema.parse(analyzed).tags).toBe("war,politics");
   });
 });

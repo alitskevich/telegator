@@ -3,7 +3,7 @@ import { isCurrent, postFor } from "./posts";
 
 const legacy = { tgChannel: "a, @b", tgId: "4711", tgAt: 900 };
 
-describe("postFor — multi-target#5.2", () => {
+describe("postFor", () => {
   test("a recorded post wins over the legacy pair", () => {
     expect(postFor(legacy, { a: { tgId: "1", tgAt: 5 } }, "a")).toEqual({ tgId: "1", tgAt: 5 });
   });
@@ -33,7 +33,7 @@ describe("postFor — multi-target#5.2", () => {
   });
 });
 
-describe("isCurrent — multi-target D4", () => {
+describe("isCurrent", () => {
   test("a post at or after the message's ts is current; before it is not", () => {
     expect(isCurrent({ tgId: "1", tgAt: 10 }, { ts: 10 })).toBe(true);
     expect(isCurrent({ tgId: "1", tgAt: 9 }, { ts: 10 })).toBe(false);

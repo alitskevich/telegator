@@ -1,15 +1,9 @@
 /**
- * §8.3 L812 and L802's table columns.
- *
- * One definition per table, shared by the page and by §8.4 L825's export — L801
- * ties them together ("filters across visible columns"), and an export whose
- * columns differed from the table it was taken from would be quietly wrong.
+ * The console's table columns. One definition per table, shared by the page and
+ * the CSV export, so an export always matches the table it was taken from.
  */
 
-/**
- * §8.3 L804 — the Sources table; `target` replaces `tgChannel` (multi-target#3.6,
- * R54), and `via` shows R63's reader.
- */
+/** The Sources table; `via` shows the reader. */
 export const SOURCE_COLUMNS = [
   "id",
   "status",
@@ -22,7 +16,7 @@ export const SOURCE_COLUMNS = [
   "zeroYieldRuns",
 ] as const;
 
-/** §8.3 L809 — the Messages table, minus the expandable member list. */
+/** The Messages table, minus the expandable member list. */
 export const MESSAGE_COLUMNS = [
   "id",
   "title",
@@ -33,13 +27,7 @@ export const MESSAGE_COLUMNS = [
   "memberCount",
 ] as const;
 
-/**
- * target-table#7 — the Targets table.
- *
- * `messageTemplate` is last because it is by far the widest, and the two
- * `lastPosted*` columns sit beside `type` where an operator scanning the table
- * reads them together.
- */
+/** The Targets table. `messageTemplate` is last because it is by far the widest. */
 export const TARGET_COLUMNS = [
   "id",
   "type",
@@ -47,3 +35,19 @@ export const TARGET_COLUMNS = [
   "lastPostedMessageId",
   "messageTemplate",
 ] as const;
+
+/** The collections the console edits. */
+export const TABLES = ["sources", "messages", "targets"] as const;
+export type TableName = (typeof TABLES)[number];
+
+/** The fields an operator may edit, per collection. Everything else is the pipeline's. */
+export const SOURCE_WRITABLE_FIELDS = [
+  "status",
+  "target",
+  "category",
+  "tags",
+  "teaser",
+  "via",
+] as const;
+export const MESSAGE_WRITABLE_FIELDS = ["title", "category", "tgChannel"] as const;
+export const TARGET_WRITABLE_FIELDS = ["type", "messageTemplate"] as const;

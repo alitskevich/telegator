@@ -1,70 +1,54 @@
 /**
- * The §4.2 Telegram Bot API client — the pipeline's only outbound sink.
- *
- * Everything the module touches is injected: the HTTP call, the bot token, and
- * the pause between sends. That is what lets the publish stage be tested end to
- * end without a network, a secret, or a real three-second wait.
+ * The Telegram Bot API client, the pipeline's only outbound sink. The HTTP call,
+ * the token and the pause are injected, so publish is tested end to end without
+ * a network, a secret or a real three-second wait.
  */
 
-import type { MetricSink } from "tg-ports/metrics";
+import type { Metrics } from "tg-enums/metrics";
 import type {
   EditMessageTextArgs,
   SendMessageArgs,
   SendPhotoArgs,
   TelegramBot,
   TelegramResponse,
-} from "tg-ports/telegram";
-import { chatIdFor } from "tg-ports/telegram";
+} from "tg-telegram/types";
+import { chatIdFor } from "tg-telegram/types";
 import type { Logger } from "tg-utils/logger";
 
-/** §4.2 L387 — "Base: `https://api.telegram.org/bot{token}`". */
+/** Requests go to `{base}/bot{token}/{method}`. */
 export const TELEGRAM_API_BASE = "https://api.telegram.org";
 
-/**
- * §3.4 L351 — "`parse_mode: html`". The spec writes it lowercase; the Bot API
- * constant is `HTML`, and an unrecognised value is rejected outright.
- */
+/** The Bot API constant is `HTML`; an unrecognised value is rejected outright. */
 export const DEFAULT_PARSE_MODE = "HTML";
 
-/**
- * §3.4 L353 — "≥3 s pause after each send".
- *
- * The rule lives in §3.4, not §3.5: §4.2 L394 says "Pacing and retry are
- * specified in §3.5", which is wrong — §3.5 is the DLQ replay handler.
- */
+/** The minimum pause after each send. */
 export const SEND_PAUSE_MS = 3_000;
 
-/** §3.4 L353 — "one retry on `429` honouring `parameters.retry_after`". */
+/** One retry on `429`, honouring `parameters.retry_after`. */
 export const TOO_MANY_REQUESTS_STATUS = 429;
 
 const MS_PER_SECOND = 1_000;
 
 /**
- * §3.4 L353 names no delay for a 429 that omits `parameters.retry_after`, so
- * this module picks one: a full minute, because §4.2 L392 puts the ceiling at
- * "~20 messages/minute per channel" — the window is a minute, and any shorter
- * wait retries inside the window that produced the 429. §7.5 gives publish a
- * 300 s timeout with a batch size of 1 (§3.4 L324), so a minute fits.
+ * The wait for a 429 without `retry_after`: a full minute, because Telegram's
+ * limit (~20 messages a minute per channel) is per minute, and a shorter wait
+ * retries inside the same window. It fits publish's 300 s timeout.
  */
 export const FALLBACK_RETRY_AFTER_MS = 60_000;
 
-/** §3.4 L353 — one retry, so at most two attempts. */
+/** One retry, so at most two attempts. */
 const MAX_ATTEMPTS = 2;
 
 export interface HttpPostResponse {
-  /**
-   * Kept only for the 429 retry decision (§3.4 L353). It is deliberately *not*
-   * the error signal — see `isOk` below and §4.2 L391.
-   */
+  /** Kept only for the 429 retry decision. It is *not* the error signal: `ok` is. */
   readonly status: number;
   /** Parsed JSON, or whatever the body decoded to. Validated, never trusted. */
   readonly body: unknown;
 }
 
 /**
- * The minimal HTTP port this module needs. `HttpFetcher` in `./ports.js` is the
- * §4.1 scrape boundary — GET, returning text, swallowing non-2xx — so it cannot
- * express a JSON POST whose status still matters for the 429 rule.
+ * The minimal HTTP port this module needs. `HttpFetcher` swallows non-2xx, so it
+ * cannot express a JSON POST whose status matters for the 429 rule.
  */
 export interface HttpPost {
   post(url: string, body: Readonly<Record<string, unknown>>): Promise<HttpPostResponse>;
@@ -73,15 +57,14 @@ export interface HttpPost {
 export interface TelegramBotOptions {
   readonly http: HttpPost;
   /**
-   * §7.6 L706 keeps `telegator/telegram-bot-token` in Secrets Manager. The
-   * indirection is a provider rather than a string so a Lambda can cache the
-   * secret across warm invocations without this module holding a stale copy.
+   * The bot token, from the `TELEGRAM_BOT_TOKEN` function secret. A provider
+   * rather than a string, so this module never holds a stale copy.
    */
   readonly tokenProvider: () => Promise<string>;
   /** Injected so tests assert the requested duration instead of waiting it. */
   readonly sleep: (ms: number) => Promise<void>;
   readonly logger?: Logger;
-  readonly metrics?: MetricSink;
+  readonly metrics?: Metrics;
   readonly parseMode?: string;
 }
 
@@ -98,9 +81,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 /**
- * Narrows an unknown body to the §4.2 L391 envelope, or `undefined` when it is
- * not one. A gateway HTML error page must not be able to masquerade as a
- * success just because it arrived with a 200.
+ * Narrows an unknown body to the Bot API envelope, or `undefined` when it is not
+ * one, so an HTML error page with a 200 cannot pass as a success.
  */
 function parseEnvelope(body: unknown): Envelope | undefined {
   if (!isRecord(body) || typeof body.ok !== "boolean") {
@@ -127,10 +109,9 @@ function parseEnvelope(body: unknown): Envelope | undefined {
 }
 
 /**
- * Defence in depth for §7.6: the token is embedded in every request URL, and a
- * transport error typically quotes that URL back in its message (undici does).
- * Everything this module logs or returns as a description goes through here, so
- * a token cannot reach CloudWatch by riding on someone else's error text.
+ * The token is in every request URL, and transport errors quote that URL
+ * (undici does). Everything this module logs or returns goes through here, so
+ * the token never reaches the logs.
  */
 const redactToken = (text: string, token: string): string =>
   token === "" ? text : text.split(token).join("[redacted]");
@@ -142,9 +123,8 @@ export function createTelegramBot(options: TelegramBotOptions): TelegramBot {
   const parseMode = options.parseMode ?? DEFAULT_PARSE_MODE;
 
   /**
-   * A rate limit, for retry purposes only. Telegram normally answers a flood
-   * with HTTP 429, but §4.2 L391 warns that failures can arrive as 200s, so an
-   * envelope carrying `retry_after` counts as one however it was framed.
+   * A rate limit, for retry purposes only. Failures can arrive as 200s, so an
+   * envelope carrying `retry_after` counts as one whatever the status.
    */
   const retryDelayMs = (status: number, envelope: Envelope | undefined): number | undefined => {
     const retryAfter = envelope?.parameters?.retry_after;
@@ -155,11 +135,9 @@ export function createTelegramBot(options: TelegramBotOptions): TelegramBot {
   };
 
   const fail = (method: Method, description: string): Envelope => {
-    // §7.7 L738 — `TelegramApiErrors`, dimensioned by `Method`. Counted here on
-    // every failed exchange including a 429 the retry then rescues: that one is
-    // invisible to the caller, and it is exactly the signal that says the
-    // ~20 msg/min ceiling (§4.2 L392) is being hit.
-    options.metrics?.count("TelegramApiErrors", 1, { Method: method });
+    // Counted on every failed exchange, including a 429 the retry rescues: that
+    // one is invisible to the caller, and it shows the rate limit being hit.
+    options.metrics?.count("TelegramApiErrors", 1, method);
     options.logger?.warn("telegram api error", { method, description });
     return { ok: false, description };
   };
@@ -190,9 +168,8 @@ export function createTelegramBot(options: TelegramBotOptions): TelegramBot {
 
       const delayMs = transportError === undefined ? retryDelayMs(status, envelope) : undefined;
 
-      // §3.4 L353 — "≥3 s pause after each send". The pause is unconditional,
-      // and a longer `retry_after` wait subsumes it rather than adding to it:
-      // the spec's floor is a minimum, not an exact interval.
+      // The pause is unconditional; a longer `retry_after` wait replaces it
+      // rather than adding to it.
       await options.sleep(delayMs === undefined ? SEND_PAUSE_MS : Math.max(delayMs, SEND_PAUSE_MS));
 
       if (transportError !== undefined) {
@@ -203,9 +180,8 @@ export function createTelegramBot(options: TelegramBotOptions): TelegramBot {
         return fail(method, `unrecognised Telegram response (HTTP ${status})`);
       }
 
-      // §4.2 L391 — `ok` is the error signal, not the status code. Reading the
-      // status here would mark the message published, write a `tgId` that does
-      // not exist, and drop the post with no trace.
+      // `ok` is the error signal, not the status code: trusting a 200 would mark
+      // a failed send as published.
       if (envelope.ok) {
         return envelope;
       }
@@ -223,16 +199,12 @@ export function createTelegramBot(options: TelegramBotOptions): TelegramBot {
       }
     }
 
-    // Both attempts were rate limited: §3.4 L353 allows exactly one retry, so
-    // the second 429 is the caller's failure to handle (publish throws, SQS
-    // retries, and the message ultimately DLQs — §3.4 L355, AC-4.7).
+    // Both attempts were rate limited. The caller handles it: publish throws,
+    // the task retries, and finally lands in dead letters.
     return last;
   };
 
-  /**
-   * §4.2 L389 goes through `chatIdFor`, which is idempotent, so a caller may
-   * hand over either `news` or `@news`.
-   */
+  /** `chatIdFor` is idempotent, so a caller may pass `news` or `@news`. */
   const target = (chatId: string): string => chatIdFor(chatId);
 
   /**

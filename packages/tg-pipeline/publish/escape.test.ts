@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { escapeHtml } from "./escape";
 
-describe("escapeHtml — §3.4's HTML parse mode", () => {
+describe("escapeHtml", () => {
   test("escapes the four characters Telegram would otherwise parse", () => {
     expect(escapeHtml("&")).toBe("&amp;");
     expect(escapeHtml("<")).toBe("&lt;");
@@ -9,12 +9,7 @@ describe("escapeHtml — §3.4's HTML parse mode", () => {
     expect(escapeHtml('"')).toBe("&quot;");
   });
 
-  /**
-   * The ordering is load-bearing and was never tested directly. `&` must be
-   * replaced first: escape `<` to `&lt;` before escaping ampersands and the next
-   * pass turns it into `&amp;lt;`, so every angle bracket in a summary reaches
-   * subscribers as visible mojibake rather than as a bracket.
-   */
+  // `&` must be replaced first, or `&lt;` would become `&amp;lt;`.
   test("does not double-escape the ampersands it introduces", () => {
     expect(escapeHtml("<b>")).toBe("&lt;b&gt;");
     expect(escapeHtml("a < b & c")).toBe("a &lt; b &amp; c");

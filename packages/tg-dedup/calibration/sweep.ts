@@ -2,48 +2,28 @@ import { buildMatchKey, type MatchKeyFields } from "../matchKey";
 import { classify, matchScore, type ScoreWeights } from "../score";
 
 /**
- * §10.3's threshold sweep (R48).
+ * The dedup threshold sweep (see docs/telegator.md §5). Each labelled pair is
+ * scored once, then bucketed at every `(distinct, merge)` grid point. Nothing
+ * is async and nothing calls a model, so it runs in the offline suite.
  *
- * Each labelled pair is scored exactly once with `matchScore`, then bucketed at
- * every `(distinct, merge)` grid point. Nothing here is `async` and nothing
- * reaches a model, which is what makes the harness cheap enough for the ordinary
- * offline suite.
+ * The objective is three-way:
  *
- * The objective is three-way (§10.3 step 3):
- *
- *   - maximise auto-merge precision — the costlier error, because a false merge
- *     fuses two unrelated stories into one post that keeps editing itself;
+ *   - maximise auto-merge precision — a false merge fuses two stories into one
+ *     post, so it is the costlier error;
  *   - maximise auto-split recall;
- *   - minimise band volume — literally the adjudicator's model-call cost.
+ *   - minimise band volume — the adjudicator's model-call cost.
  *
- * `sweepBands` reports all three at every grid point. Picking the grid point
- * that best trades them off against §10.3's error floors is the remaining
- * human judgement call, exercised when `calibration/record.json` is written —
- * the same way step 1's >=100 hand-judged pairs are human work this module
- * does not perform.
- *
- * Weights are **not** swept here, continuously or otherwise. Five continuous
- * parameters (two thresholds plus three weights) fitted to ~100 labelled
- * pairs would overfit and produce a curve that means nothing; design §9 asks
- * for a coarse grid of two or three hand-reasoned weight candidates instead.
- * `SweepGrid.weights` lets a caller evaluate one candidate at a time — the
- * grid over *weights* lives outside this function, one `sweepBands` call per
- * candidate, never inside it.
+ * A human picks the grid point when writing `calibration/record.json`.
+ * Weights are **not** swept: fitting them to ~100 pairs would overfit. To try a
+ * weight candidate, call `sweepBands` once per candidate via `SweepGrid.weights`.
  */
 
-/** Basis points keep the grid's endpoints exact, the way §10.3's original 1-D sweep did. */
+/** Basis points keep the grid's endpoints exact. */
 const BASIS_POINTS = 100;
 const SWEEP_MIN_BP = 0;
 const SWEEP_MAX_BP = 100;
 
-/**
- * One hand-judged pair, expressed as the two items' match-key fields.
- *
- * Structural, like `MatchKeyFields` itself (§10.3's calibration harness is the
- * reason that type is structural in the first place) — a labelled-set record
- * read from `pairs.jsonl`/`items.json` satisfies this without any pipeline
- * plumbing.
- */
+/** One hand-judged pair, as the two items' match-key fields. */
 export interface LabelledKeyPair {
   readonly fields: MatchKeyFields;
   readonly other: MatchKeyFields;
@@ -67,31 +47,16 @@ export interface BandRow {
   readonly bandFraction: number;
 }
 
-/**
- * The tolerance for recognising a step as a whole number of basis points.
- *
- * `0.05 * 100` is `5.000000000000001` in binary floating point, so an exact
- * integer test would reject the most ordinary step there is.
- */
+/** `0.05 * 100` is `5.000000000000001`, so an exact integer test would reject it. */
 const BP_EPSILON = 1e-9;
 
 /**
- * The `(distinct, merge)` candidates to sweep, generated from integers.
+ * The threshold candidates, walked in whole basis points so no float error
+ * builds up (`min + i * step` would drift). Two steps are refused, since each
+ * would sweep a grid other than the one asked for:
  *
- * Not `min + i * step`: that accumulates float error the way §10.3's original
- * `0.70 + 15 * 0.01` did, landing off the exact value an operator is looking
- * for. A basis-point integer walk keeps every candidate exact.
- *
- * Two steps are refused rather than silently mangled, because both produce a
- * grid that is not the one the caller asked for, and a threshold read off the
- * wrong grid is recorded in `calibration/record.json` as if it were measured:
- *
- *  - a step finer than one basis point (0.005, say) used to `Math.round` to
- *    0.01 and sweep a grid ten times coarser than requested, reporting rows
- *    labelled with thresholds the caller never asked about;
- *  - a step that does not divide the [0, 1] range (0.03, say) walks
- *    0.00 … 0.99 and never evaluates 1.00, so the endpoint §10.3's original
- *    1-D sweep always included is quietly missing.
+ *  - finer than one basis point (0.005) — rounding would sweep a coarser grid;
+ *  - not dividing [0, 1] (0.03) — the walk would never reach 1.00.
  */
 function candidateThresholds(step: number): number[] {
   const scaled = step * BASIS_POINTS;
@@ -129,16 +94,10 @@ interface ScoredLabel {
 }
 
 /**
- * **Known limitation — this measures item-key versus item-key.**
- *
- * `dedupBatch` scores an item against a MESSAGE's key, which is the union of up
- * to `MAX_MEMBERS` member keys. Jaccard's denominator grows with every merge,
- * so a real duplicate scores lower against an already-merged story than against
- * any single member of it, and the thresholds swept here are therefore fitted
- * to the easier of the two distributions. This harness structurally cannot see
- * the effect: a `LabelledKeyPair` is two items and there is no union key
- * anywhere in it. Design §9 records what the labelled set needs in order to
- * measure it — item-versus-merged-key pairs, not only item-versus-item.
+ * **Known limitation: this scores item against item.** `dedupBatch` scores an
+ * item against a message's union key, whose Jaccard denominator grows with each
+ * merge, so true matches score lower at runtime. Measuring that needs
+ * item-versus-merged-key pairs in the labelled set.
  */
 function scoreOnce(pairs: readonly LabelledKeyPair[], weights: ScoreWeights | undefined) {
   return pairs.map(
@@ -149,23 +108,12 @@ function scoreOnce(pairs: readonly LabelledKeyPair[], weights: ScoreWeights | un
   );
 }
 
-/**
- * The 2-D sweep, one row per `(distinct, merge)` grid point with
- * `distinct <= merge` enforced by construction (never merely assumed by a
- * caller).
- *
- * Each labelled pair is scored exactly once via `scoreOnce`, before the grid
- * loop begins; every grid point re-buckets that same score rather than
- * recomputing `matchScore`.
- */
+/** One row per `(distinct, merge)` grid point, with `distinct <= merge` by construction. */
 export function sweepBands(pairs: readonly LabelledKeyPair[], grid: SweepGrid): BandRow[] {
   const scored = scoreOnce(pairs, grid.weights);
   const differentCount = scored.filter((entry) => !entry.same).length;
 
-  // Without a different-story pair, auto-split recall is undefined at every
-  // grid point, and the sweep would otherwise report a confident number
-  // computed from nothing — the same trap the embedding-era `recallOf` guarded
-  // against for `same` pairs.
+  // Without a different-story pair, auto-split recall is undefined.
   if (differentCount === 0) {
     throw new Error(
       "sweepBands: the labelled set contains no different-story pairs, so auto-split recall is undefined",

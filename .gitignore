@@ -4,34 +4,28 @@ node_modules/
 # build output
 out/
 dist/
-cdk.out/
 *.tsbuildinfo
 .firebase/
-firebase-debug.log
-
-# §9.3 — written by `npm run deploy:web` from the stacks' outputs, per environment.
-packages/tg-web/www/config.json
+*-debug.log
+# emulator data, kept between `npm run dev` runs
+.emulator/
+# function secrets for the emulator
+*.secret.local
 
 # environment
 .env*
-# — except the documented template, which holds names and ARNs, never a value.
-!.env.local.example
-# Local API keys. Unlike everything in .env.local.example these ARE secrets, and
-# `.env*` does not cover a name that does not start with `.env`.
+# Local API keys: `.env*` does not cover a name that does not start with `.env`.
 .orkey
 *.key
 .secrets/
 
-# ralph loop working files (the user's, and the ledger)
-.claude/*.local.md
 
 # os
 .DS_Store
 
-# the operator's export, staged here to be read by scripts/seed.ts.
-# R21: it lives outside this repository — it is operational data, not source,
-# and biome (vcs.useIgnoreFile) must not format someone else's export.
+# operational exports for scripts/seed.ts; data, not source
 data/
 
 # Browser-check scratch (Playwright MCP screenshots and harnesses).
 .playwright-mcp/
+!packages/tg-functions/.env

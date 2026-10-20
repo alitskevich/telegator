@@ -1,8 +1,4 @@
-/**
- * Tags are a comma-separated string everywhere in this system, never an array:
- * §2.1 L114 on `sources`, §2.2 L140 on the item payload, §2.3 L160 on `messages`.
- * §3.2 L261 defines the merge as "comma-split, deduplicated, comma-joined".
- */
+/** Tags are a comma-separated string everywhere in this system, never an array. */
 
 /** Comma-split, trimmed, with empty tokens dropped. */
 export function splitTags(tags: string | undefined | null): string[] {
@@ -16,16 +12,9 @@ export function splitTags(tags: string | undefined | null): string[] {
 /**
  * Merges tag strings, keeping the first occurrence of each tag.
  *
- * First-seen order is the load-bearing part. §3.3 L287 merges as
- * `mergeTags(item.tags, match.tags)`, so on a replay the second argument is
- * already the merged result — and first-seen order makes that a fixed point,
- * which is what AC-3.7 means by `tags` unchanged on a byte-identical
- * replay. Sorting instead would also be deterministic, but it would reorder
- * every existing record the first time it ran.
- *
- * Deduplication is exact-match. The spec never asks for case folding, and
- * folding would discard the stored form of a tag; §3.4 L343 lowercases when it
- * builds the hashtag line, so display case does not leak downstream.
+ * First-seen order makes a replay a fixed point: merging an item into a message
+ * that already holds its tags leaves `tags` unchanged. Matching is exact, so the
+ * stored case is kept; publish lowercases when it builds hashtags.
  */
 export function mergeTags(...sources: Array<string | undefined | null>): string {
   const seen = new Set<string>();

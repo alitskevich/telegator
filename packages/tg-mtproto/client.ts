@@ -4,23 +4,17 @@ import { StringSession } from "telegram/sessions";
 import type { MtprotoCredentials } from "./credentials";
 
 /**
- * R63 — building and opening the GramJS client.
- *
- * The one module here that touches the network, so it holds no rule: the
- * reader's mapping and paging are in `reader.ts`, behind an interface a test
- * can fake.
+ * Building and opening the GramJS client. The one module here that touches the
+ * network, so it holds no logic: mapping and paging live in `reader.ts`.
  */
 
 /** GramJS's own default; stated so a library default cannot change it silently. */
 const CONNECTION_RETRIES = 5;
 
 /**
- * One factory for the Lambda and for `scripts/mtproto-login.ts`, so the session
- * the script saves is opened with exactly the settings that will read it.
- *
- * GramJS logs every connection step at `info` to stdout; in Lambda that would
- * interleave plain text with `tg-utils/logger.ts`'s one-JSON-object-per-line
- * output, which §8.5's Logs Insights query parses. Errors still print.
+ * One factory for the function and for `scripts/mtproto-login.ts`, so the saved
+ * session is opened with the settings that will read it. GramJS logs at `error`
+ * only, so its plain text does not interleave with our JSON log lines.
  */
 export function createMtprotoClient(credentials: MtprotoCredentials): TelegramClient {
   return new TelegramClient(
@@ -32,12 +26,9 @@ export function createMtprotoClient(credentials: MtprotoCredentials): TelegramCl
 }
 
 /**
- * Connects with a saved session and refuses one Telegram no longer honours.
- *
- * `connect()` succeeds on a revoked session — it opens the socket and nothing
- * more — so without the check every source would read as an error per run and
- * the cause would be one log line deep. The client is destroyed on refusal:
- * GramJS keeps an update loop alive after a bare `disconnect()`.
+ * Connects with a saved session and refuses one Telegram no longer honours:
+ * `connect()` succeeds on a revoked session. The client is destroyed on refusal,
+ * because GramJS keeps an update loop alive after a bare `disconnect()`.
  */
 export async function connectMtproto(credentials: MtprotoCredentials): Promise<TelegramClient> {
   const client = createMtprotoClient(credentials);

@@ -34,8 +34,7 @@
   ],
   "exclude": [
     "node_modules",
-    "cdk.out",
-    "coverage",
+        "coverage",
     "**/www/dist"
   ]
 }

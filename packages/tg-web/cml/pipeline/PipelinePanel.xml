@@ -1,6 +1,6 @@
 <Component id="PipelinePanel">
   <Signature purpose="What the selected node holds and what an operator may do to it"
-    description="Reads `@pipeline`. Admin actions render only for an admin; the API re-checks the role regardless (§8.4)." />
+    description="Reads `@pipeline`. Admin actions render only for an admin; the API re-checks the role regardless." />
 
   <!-- Bare `section` with an id: `PipelineService.select` scrolls to it on a phone. -->
   <section id="pipeline-panel" class="bg-base-100 rounded-box p-4 sm:p-6 flex flex-col gap-4 scroll-mt-20">
@@ -49,7 +49,7 @@
   </Subcomponent>
 
   <Subcomponent id="Queue">
-    <Signature purpose="A queue: depth, dead letters, the four queue actions and the last DLQ peek" />
+    <Signature purpose="A queue: depth, dead letters, its actions and the last dead-letter peek" />
     <This-Heading />
     <div class="grid grid-cols-2 gap-4 max-w-md">
       <StatCard label="{R.pipeline.inQueue}" value="{@pipeline.selected.value}" surface="zone" />
@@ -59,8 +59,6 @@
     <div class="flex flex-wrap items-center gap-2">
       <Btn class="sm:btn-sm" mode="soft" icon="eye" text="{R.pipeline.inspect}"
         busy="{@api.busy.inspect}" click="-> @pipeline.inspect()" />
-      <Btn If="{@api.canAdmin AND @pipeline.selected.value GT 0}" class="sm:btn-sm" mode="soft" icon="zap"
-        text="{@pipeline.consumeLabel}" busy="{@api.busy.consume}" click="-> @pipeline.consume()" />
       <Fragment If="{@api.canAdmin AND @pipeline.selected.dlq GT 0}">
         <This-Recovery />
       </Fragment>
@@ -69,7 +67,7 @@
   </Subcomponent>
 
   <Subcomponent id="Recovery">
-    <Signature purpose="Replay or discard a non-empty DLQ; the discard is armed by its first press" />
+    <Signature purpose="Replay or discard the dead letters; the discard is armed by its first press" />
     <label class="input sm:input-sm w-40">
       <span class="text-base-content/60">{R.pipeline.replayMax}</span>
       <input type="number" min="1" class="grow" value="{@pipeline.replayMax}"
@@ -82,7 +80,7 @@
   </Subcomponent>
 
   <Subcomponent id="Peek">
-    <Signature purpose="The bodies read from the DLQ, as text: a payload is third-party content" />
+    <Signature purpose="The dead letters read, as text: a payload is third-party content" />
     <Fragment If="@pipeline.peek">
       <p If="{!@pipeline.peek.length}" class="text-sm text-base-content/60">{R.pipeline.emptyDlq}</p>
       <ul If="@pipeline.peek.length" class="flex flex-col gap-2">

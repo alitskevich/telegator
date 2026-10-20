@@ -3,25 +3,16 @@ import { DISTINCT_THRESHOLD, MERGE_THRESHOLD, SCORE_WEIGHTS } from "tg-configs/d
 import { z } from "zod";
 
 /**
- * §10.3 step 5's record (R48), and §10.3's closing rule: until it exists, the
- * pipeline must not publish to production channels.
+ * The calibration record. Until it exists, naming the band and weights that
+ * dedup actually uses, the pipeline must not publish to production channels.
  *
- * The rule becomes a file: recalibration is complete exactly when a record
- * exists naming the band and the weights it was measured against, and both are
- * the ones §6 actually uses.
+ * Why each field is required:
  *
- * Why each field is required (R46, R48):
- *
- *  - `mergeThreshold`/`distinctThreshold` — one number cannot describe the band
- *    `classify` applies.
- *  - `weights` — the score is weighted, so a threshold pair recorded against one
- *    weighting carries no guarantee against another.
- *  - `autoMergePrecision`, `autoSplitRecall`, `bandFraction` — §10.3's three-way
- *    objective.
- *  - `adjudicatorAccuracy` — measured separately on band pairs, and the one part
- *    of the harness that spends a model call.
- *  - `labelledSetHash` — a threshold is a property of the exact set it was tuned
- *    on.
+ *  - `mergeThreshold`/`distinctThreshold` — one number cannot describe the band.
+ *  - `weights` — thresholds measured against one weighting say nothing about another.
+ *  - `autoMergePrecision`, `autoSplitRecall`, `bandFraction` — the three-way objective.
+ *  - `adjudicatorAccuracy` — measured separately on band pairs, with a model call.
+ *  - `labelledSetHash` — a threshold belongs to the exact set it was tuned on.
  */
 
 /** Where the record lives, relative to the repository root. */
@@ -35,15 +26,11 @@ const ScoreWeightsSchema = z.strictObject({
 });
 
 /**
- * **Strict.** A calibration record is written once, by hand, and read by the
- * production gate; an unrecognised key means a record edited from an older shape
- * rather than rewritten, or one from a harness this schema does not know. Either
- * way the honest answer is to refuse it — a non-strict schema would accept a file
- * carrying both shapes and clear the gate on fields sitting beside stale ones.
+ * **Strict.** An unknown key means a half-edited record from an older shape;
+ * a loose schema would clear the gate with stale fields beside new ones.
  */
 export const CalibrationRecordSchema = z
   .strictObject({
-    /** The values §10.3 step 4 (rewritten) chose. */
     mergeThreshold: z.number().min(0).max(1),
     distinctThreshold: z.number().min(0).max(1),
     weights: ScoreWeightsSchema,
@@ -52,21 +39,18 @@ export const CalibrationRecordSchema = z
     bandFraction: z.number().min(0).max(1),
     adjudicatorAccuracy: z.number().min(0).max(1),
     labelledSetHash: z.string().min(1),
-    /** §10.3 step 1 — "at least 100 hand-judged item pairs". */
+    /** At least `MIN_LABELLED_PAIRS` hand-judged item pairs. */
     pairs: z.number().int().nonnegative(),
     recordedAt: z.string().min(1),
   })
-  // Enforced by the schema itself, not merely assumed by a caller: a record
-  // with the band inverted describes a configuration `classify` cannot
-  // produce, and would make every downstream reader guess which bound is
-  // which.
+  // An inverted band describes a configuration `classify` cannot produce.
   .refine((record) => record.distinctThreshold <= record.mergeThreshold, {
     message: "distinctThreshold must not exceed mergeThreshold",
   });
 
 export type CalibrationRecord = z.infer<typeof CalibrationRecordSchema>;
 
-/** §10.3 step 1's floor, below which the curve is not evidence of anything. */
+/** Below this many labelled pairs the curve is not evidence of anything. */
 export const MIN_LABELLED_PAIRS = 100;
 
 export type ReadFile = (path: string) => string;
@@ -74,12 +58,8 @@ export type ReadFile = (path: string) => string;
 const readFromDisk: ReadFile = (path) => readFileSync(path, "utf8");
 
 /**
- * The recorded calibration, or `null` when there is none.
- *
- * Absent is the expected state today and is not an error — the recalibration
- * needs a labelled set this repo does not have yet. A malformed record IS an
- * error: it means someone recorded something and it cannot be read, which
- * must not be mistaken for having recorded nothing.
+ * The recorded calibration, or `null` when there is none (the expected state
+ * today). A malformed record throws: it must not read as "nothing recorded".
  */
 export function readCalibrationRecord(
   path: string = CALIBRATION_RECORD_PATH,
@@ -97,31 +77,25 @@ export function readCalibrationRecord(
 
 /**
  * Why the pipeline may not publish to production channels yet, or `null` when
- * it may.
- *
- * A reason string rather than a boolean, because every one of these is
- * something an operator has to act on and "false" tells them nothing about
- * which.
+ * it may. A reason, not a boolean, so the operator knows what to fix.
  */
 export function productionBlocker(record: CalibrationRecord | null): string | null {
   if (record === null) {
-    return `no ${CALIBRATION_RECORD_PATH}: §10.3's recalibration has not been done`;
+    return `no ${CALIBRATION_RECORD_PATH}: the dedup recalibration has not been done`;
   }
 
   if (record.pairs < MIN_LABELLED_PAIRS) {
-    return `calibrated on ${record.pairs} pairs, fewer than §10.3's ${MIN_LABELLED_PAIRS}`;
+    return `calibrated on ${record.pairs} pairs, fewer than the required ${MIN_LABELLED_PAIRS}`;
   }
 
   if (
     record.distinctThreshold !== DISTINCT_THRESHOLD ||
     record.mergeThreshold !== MERGE_THRESHOLD
   ) {
-    // The sweep was run and its answer was never applied, which is worse than
-    // not having done it: the record says one thing and §6's constants say
-    // another.
+    // The sweep was run but its answer was never applied.
     return (
       `recorded thresholds (distinct ${record.distinctThreshold}, merge ${record.mergeThreshold}) ` +
-      `are not the (distinct ${DISTINCT_THRESHOLD}, merge ${MERGE_THRESHOLD}) §6 uses`
+      `are not the (distinct ${DISTINCT_THRESHOLD}, merge ${MERGE_THRESHOLD}) dedup uses`
     );
   }
 
@@ -130,9 +104,8 @@ export function productionBlocker(record: CalibrationRecord | null): string | nu
     record.weights.titleTokens !== SCORE_WEIGHTS.titleTokens ||
     record.weights.tags !== SCORE_WEIGHTS.tags
   ) {
-    // The same failure mode as a mismatched threshold: a weight candidate was
-    // measured and a different one shipped.
-    return `recorded weights (${JSON.stringify(record.weights)}) are not the (${JSON.stringify(SCORE_WEIGHTS)}) §6 uses`;
+    // One weighting was measured and a different one shipped.
+    return `recorded weights (${JSON.stringify(record.weights)}) are not the (${JSON.stringify(SCORE_WEIGHTS)}) dedup uses`;
   }
 
   return null;

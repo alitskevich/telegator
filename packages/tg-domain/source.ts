@@ -2,18 +2,13 @@ import { DEFAULT_SOURCE_VIA, SOURCE_VIAS, type SourceVia } from "tg-enums/source
 import { z } from "zod";
 
 /**
- * `sources` — the Telegram channels to poll, per §2.1 L108–120.
+ * `sources`: the Telegram channels to poll (docs/telegator.md §2.1).
  *
- * Two fields are additions the spec does not list, each recorded as a
- * reconciliation rather than invented here:
- *  - `lastNonZeroCount` (R15). §4.1 L383 fires `SourceStale` on a source with "a
- *    non-zero historical `lastCount`", but §3.1 L222 writes `lastCount: 0` on the
- *    first zero-yield run — destroying the evidence two runs before it is needed.
- *  - `deleted` (R16). §8.4 L823 mandates a soft delete setting `deleted: true`;
- *    §2.1's table never declares the field.
+ * `lastNonZeroCount` exists because `lastCount` is overwritten with 0 on the
+ * first empty run, which would erase the evidence that the source once yielded.
  */
 
-/** §2.1 L111 — the one status value that enables polling. */
+/** The one status value that enables polling. */
 export const SOURCE_STATUS_OK = "ok";
 
 const count = z.number().int().nonnegative();
@@ -24,38 +19,30 @@ const epochMs = z.number().int().nonnegative();
  * top of these; the write-side schemas reuse them without defaults.
  */
 const field = {
-  /** Telegram channel username, and the `t.me/s/{id}` URL segment (§3.1 L208). */
+  /** Telegram channel username, and the `t.me/s/{id}` URL segment. */
   id: z.string().min(1),
 
-  /**
-   * §2.1 L111: "`ok` enables polling. Any other value disables the source." An
-   * open string, not an enum. Optional because DynamoDB rejects an empty string
-   * as an index key, so item 6.3 omits the attribute for the 61 legacy records
-   * carrying `status: ""` — leaving them out of the sparse `status-index`, which
-   * is the same outcome L110 already describes.
-   */
+  /** `ok` enables polling; any other value, or none, disables the source. An open string. */
   status: z.string().optional(),
 
-  // Operator-curated (§2.1 L112–115).
+  // Operator-curated.
   /**
-   * multi-target#2.2 (R54) — the target list this source publishes to: target
-   * ids joined by `TARGET_SEPARATOR`, carried verbatim (D1). Replaces
-   * `tgChannel` (§2.1 L112); a stored `tgChannel` is an orphan the strip
-   * removes, like the orphan `embedding` of R43.
+   * The targets this source publishes to: ids joined by `TARGET_SEPARATOR`,
+   * carried verbatim. A stored legacy `tgChannel` is stripped on parse.
    */
   target: z.string().optional(),
   category: z.string().optional(),
   tags: z.string().optional(),
   teaser: z.string().optional(),
-  /** R63 — which reader polls this source; absent means `web` (`sourceVia`). */
+  /** Which reader polls this source; absent means `web` (`sourceVia`). */
   via: z.enum(SOURCE_VIAS).optional(),
 
-  // Written by scrape (§2.1 L116–120).
-  /** The `?after=` cursor, and the sole duplicate-suppression mechanism (§3.1 L224). */
+  // Written by scrape.
+  /** The `?after=` cursor, and the only duplicate guard on the way in. */
   lastItemId: z.string().optional(),
   lastCount: count,
   lastUpdated: epochMs,
-  /** ISO timestamp of the last successful poll (§2.1 L119). */
+  /** ISO timestamp of the last successful poll. */
   lastResult: z.string().optional(),
   zeroYieldRuns: count,
   lastNonZeroCount: count,
@@ -64,12 +51,10 @@ const field = {
 } as const;
 
 /**
- * A stored record, as read back from DynamoDB.
+ * A stored source, as read back from Firestore.
  *
- * The counters default to 0 rather than being optional: §3.1 L203 selects on
- * `now - lastUpdated >= (lastCount > 0 ? 30 : 240) * 60_000`, which yields NaN
- * on undefined, and NaN fails every comparison — so a never-polled source would
- * never be selected and its channel would go dark with no error anywhere.
+ * The counters default to 0 rather than being optional: scrape's due-time math
+ * would yield NaN on undefined, and a never-polled source would never be due.
  */
 export const SourceSchema = z.object({
   ...field,
@@ -82,11 +67,8 @@ export const SourceSchema = z.object({
 export type Source = z.infer<typeof SourceSchema>;
 
 /**
- * The operator-writable fields (§2.1 L111–115) — the allowlist item 5.9's
- * `upsertRecord` enforces.
- *
- * `.strict()` rather than the default strip: an operator who tries to hand-edit
- * a scrape-owned cursor should get an error, not a silent no-op.
+ * The operator-writable fields. `.strict()` so an attempt to hand-edit a
+ * scrape-owned cursor is an error, not a silent no-op.
  */
 export const SourceConfigInput = z
   .object({
@@ -103,16 +85,11 @@ export const SourceConfigInput = z
 export type SourceConfig = z.infer<typeof SourceConfigInput>;
 
 /**
- * The scrape-written fields (§2.1 L116–120), as a patch.
+ * The scrape-written fields, as a patch.
  *
- * Deliberately built from `field` rather than `SourceSchema.pick()`: a pick
- * carries the read-side `.default(0)` through `.partial()`, so parsing a patch
- * that omits `zeroYieldRuns` would *inject* 0 — resetting the staleness counter
- * on every successful poll and making §4.1 L383's alarm unreachable. A patch
- * must leave an absent field absent.
- *
- * Strict for the mirror reason to `SourceConfigInput`: scrape must not overwrite
- * operator curation.
+ * Built from `field`, not `SourceSchema.pick()`: a pick keeps `.default(0)`, so
+ * a patch omitting `zeroYieldRuns` would reset the staleness counter. Strict so
+ * scrape cannot overwrite operator settings.
  */
 export const SourceCursorUpdate = z
   .object({
@@ -128,7 +105,7 @@ export const SourceCursorUpdate = z
 
 export type SourceCursor = z.infer<typeof SourceCursorUpdate>;
 
-/** R63 — the reader a source belongs to, with the legacy default applied. */
+/** The reader a source belongs to, with the default applied. */
 export function sourceVia(source: Pick<Source, "via">): SourceVia {
   return source.via ?? DEFAULT_SOURCE_VIA;
 }

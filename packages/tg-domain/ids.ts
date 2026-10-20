@@ -1,20 +1,14 @@
 import { z } from "zod";
 
 /**
- * Composite item ids, per §2.4 L186–188.
- *
- * An id is `{sourceId}/{telegramMessageId}` and is used **verbatim** everywhere:
- * as an SQS payload field, as a DynamoDB map key (via `ExpressionAttributeNames`
- * placeholders, which accept any characters), and as a partition key. The source
- * system's two encoders are deleted and no encode/decode layer replaces them —
- * so this module composes and splits ids, and never escapes them.
+ * Composite item ids, `{sourceId}/{telegramMessageId}`. Code uses them verbatim;
+ * only the Firestore layer swaps `/` for `~` in a document id (docs/telegator.md §2).
  */
 
 /**
- * The source segment must not itself contain a slash: §6 L598 takes the channel
- * as `id.split("/")[0]`, which would silently truncate otherwise, and §3.4 L327
- * renders that channel into a public Telegram link. The message segment is
- * digits because §3.1 L214 captures it from `href="https://t.me/{any}/{digits}"`.
+ * The source segment must not contain a slash: the channel is taken as
+ * `id.split("/")[0]` and rendered into a public Telegram link. The message
+ * segment is the digits of the post's `t.me/{channel}/{digits}` link.
  */
 const ITEM_ID_PATTERN = /^[^/]+\/\d+$/;
 
@@ -29,7 +23,6 @@ export interface ItemIdParts {
   readonly tgMessageId: string;
 }
 
-/** §3.1 L226 — `id = "{sourceId}/{messageId}"`. */
 export function formatItemId(sourceId: string, tgMessageId: string): ItemId {
   return ItemIdSchema.parse(`${sourceId}/${tgMessageId}`);
 }
@@ -46,8 +39,8 @@ export function parseItemId(id: string): ItemIdParts {
   return { sourceId, tgMessageId };
 }
 
-/** §6 L598's `item.id.split("/")[0]`, but strict: a malformed id throws rather
- * than yielding `undefined` into a rendered `@mention`. */
+/** The channel of an item id. Strict: a malformed id throws rather than
+ * yielding `undefined` into a rendered `@mention`. */
 export function sourceIdOf(id: string): string {
   return parseItemId(id).sourceId;
 }

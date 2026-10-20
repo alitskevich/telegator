@@ -1,6 +1,6 @@
 <Component id="RecordsTable">
-  <Signature purpose="§8.3's table: search, per-column filters, sort, selection, inline edit and export"
-    description="Mobile first: on a phone each record is a card — the id as its title, every field labelled — and from `md` the same markup is a table with a header and a filter row. Reads the page's `@grid`. The empty state renders inside the table, so the filters that emptied it stay reachable.">
+  <Signature purpose="The records table: search, per-column filters, sort, selection, inline edit and export"
+    description="On a phone each record is a card with the id as its title; from `md` the same markup is a table with a header and a filter row. Reads the page's `@grid`. The empty state renders inside the table, so the filters stay reachable.">
     <Prop id="table" type="enum" enum="sources,targets,messages" required="true" />
   </Signature>
 

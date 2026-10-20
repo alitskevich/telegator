@@ -44,7 +44,7 @@ describe("gridView", () => {
     expect(view.ids).toEqual(["c"]);
   });
 
-  /** §8.3 — numeric-aware: 10 sorts after 7, not before it. */
+  /** 10 sorts after 7, not before it. */
   test("sorts numbers as numbers", () => {
     const view = gridView(rows, state({ sort: { column: "lastCount", direction: "asc" } }), spec);
     expect(view.ids).toEqual(["b", "c", "a"]);
@@ -88,7 +88,7 @@ describe("gridView", () => {
     expect(id?.badge).toBe(false);
   });
 
-  /** R56 — "all" is the rows on screen; a hidden selected row does not count. */
+  /** "All" is the rows on screen; a hidden selected row does not count. */
   test("all-selected is over the visible rows only", () => {
     const view = gridView(rows, state({ keyword: "polit", selected: ["a", "c"] }), spec);
 

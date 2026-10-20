@@ -2,24 +2,16 @@ import { describe, expect, test } from "vitest";
 import { CATEGORIES, CategorySchema, DROPPED_CATEGORY } from "./categories";
 
 describe("CATEGORIES", () => {
-  /**
-   * R4. §5.4's heading reads "Categories (35)", §5.2 L458 says "One of the 35
-   * values in §5.4", and §7.7 L741 reasons from "Thirty-five category
-   * dimensions". The fenced block at L498–505 contains 29 tokens. Two entries
-   * (`human-rights`, `nature`) sit off the block's four-column grid, which is
-   * the signature of removed text — but the six missing names cannot be
-   * recovered from this document, so the list the spec actually contains ships.
-   */
-  test("contains the 29 values §5.4 actually lists, not the 35 it claims", () => {
+  /** The old spec claimed 35 categories, but only these 29 were ever listed. */
+  test("contains 29 values", () => {
     expect(CATEGORIES).toHaveLength(29);
   });
 
   /**
-   * Asserted as the whole list, in document order. This enum constrains model
-   * output (§5.2 L432/L453) and other stages route on it, so an edit here
-   * changes what the classifier is able to say — it must be deliberate.
+   * Asserted as the whole list: the model's output is constrained to this enum,
+   * so an edit changes what the classifier can say and must be deliberate.
    */
-  test("is §5.4 L499-506 verbatim, in document order", () => {
+  test("is the exact list, in order", () => {
     expect([...CATEGORIES]).toEqual([
       "art&fashion",
       "crime",
@@ -71,25 +63,18 @@ describe("CategorySchema", () => {
     expect(CategorySchema.safeParse("weather").success).toBe(false);
   });
 
-  test("is case-sensitive, matching the spec's lowercase forms", () => {
+  test("is case-sensitive", () => {
     expect(CategorySchema.safeParse("War").success).toBe(false);
   });
 });
 
-describe("DROPPED_CATEGORY (R5)", () => {
+describe("DROPPED_CATEGORY", () => {
   /**
-   * §3.2 L258 drops items whose `category === "crime&law"`. §5.4 contains
-   * `crime`, and no `crime&law`. §5.2 L432 constrains the model's output to the
-   * §5.4 enum via output_config.format, so the model cannot emit "crime&law" —
-   * the drop rule is unreachable, its ItemsSkipped{Reason=category} metric
-   * (§7.7 L733) is always zero, and crime content is published.
-   *
-   * §3.2 is the normative stage spec, so the rule is implemented literally and
-   * this test makes the mismatch visible rather than silently dead. Changing the
-   * string would change what reaches production channels, which is the spec
-   * owner's call and not this build's.
+   * Analyze drops `crime&law`, but the model can only return CATEGORIES, which
+   * has `crime` and no `crime&law`, so the rule never fires. The test keeps that
+   * mismatch visible: changing the string changes what gets published.
    */
-  test("is the literal §3.2 L258 routes on", () => {
+  test("is crime&law", () => {
     expect(DROPPED_CATEGORY).toBe("crime&law");
   });
 

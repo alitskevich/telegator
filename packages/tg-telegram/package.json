@@ -1,14 +1,13 @@
 {
   "name": "tg-telegram",
   "version": "1.0.0",
-  "description": "Telegram HTML parser, Bot API client and HTTP adapters (§4).",
+  "description": "Telegram HTML parser, Bot API client and HTTP adapters.",
   "private": true,
   "type": "module",
   "exports": {
     "./*": "./*.ts"
   },
   "dependencies": {
-    "tg-ports": "*",
     "tg-utils": "*"
   }
 }

@@ -1,14 +1,14 @@
 import { MESSAGE_COLUMNS, SOURCE_COLUMNS, TARGET_COLUMNS } from "./columns";
 
 /**
- * Everything the console's templates read as `R.…` (§8.3): its words, its nav
+ * Everything the console's templates read as `R.…`: its words, its nav
  * and its column headings. Templates hold no text of their own, so a wording
  * change is one edit here.
  */
 
 const app = { name: "Telegator", tagline: "Telegram news pipeline" };
 
-/** §8.2 — the hash routes, in nav order. `page` is `@nav.page`. */
+/** The hash routes, in nav order. `page` is `@nav.page`. */
 const nav = [
   { id: "dashboard", name: "Dashboard", icon: "layout-dashboard" },
   { id: "pipeline", name: "Pipeline", icon: "workflow" },
@@ -38,7 +38,7 @@ const labels: Record<string, string> = {
   messageTemplate: "Template",
 };
 
-/** Right-aligned, tabular, and sorted as numbers — §8.3's "numeric-aware" sort. */
+/** Right-aligned, tabular, and sorted as numbers. */
 const NUMERIC = new Set(["lastCount", "zeroYieldRuns", "memberCount"]);
 
 const columnsOf = (ids: readonly string[]) =>
@@ -68,7 +68,7 @@ const tables = {
   },
 };
 
-/** §8.3 — the Messages tabs, in the order an operator works through them. */
+/** The Messages tabs, in the order an operator works through them. */
 const messageTabs = [
   { id: "topublish", name: "To publish" },
   { id: "published", name: "Published" },
@@ -98,15 +98,14 @@ const common = {
 };
 
 const auth = {
-  signIn: "Sign in with Cognito",
+  signIn: "Sign in with Google",
   signOut: "Sign out",
   signInTitle: "Operator console",
   signInBody:
     "Sign in to watch the pipeline, edit sources and targets, and run its stages by hand.",
-  refused: "Sign-in did not complete. Try again.",
   deniedTitle: "No access yet",
   disabled: "This account is disabled. An administrator has to enable it before you can sign in.",
-  forbidden: "This account has no role. An administrator has to add it to a group first.",
+  forbidden: "This account has no role. An administrator has to grant it a role first.",
   checking: "Checking your access…",
   retry: "Try again",
 };
@@ -120,7 +119,7 @@ const dashboard = {
   errors: "Dead letters",
   last24h: "last 24 h",
   allTime: "all time",
-  allDlqs: "across all DLQs",
+  allDlqs: "across all queues",
   status: "Status",
   categories: "Categories, 7 days",
   recent: "Recent messages",
@@ -136,12 +135,11 @@ const pipeline = {
   dlq: "DLQ",
   deadLetters: "dead letters",
   inspect: "Inspect dead letters",
-  consume: "Consume one batch",
   replay: "Replay",
   replayMax: "Replay at most",
   cleanup: "Discard all",
   confirmCleanup: "Confirm: discard {count}",
-  emptyDlq: "Nothing in this DLQ",
+  emptyDlq: "No dead letters",
   attempts: "{count} attempts",
   scrapeNow: "Scrape now",
   publishNow: "Publish now",
@@ -151,9 +149,9 @@ const pipeline = {
 };
 
 /**
- * §1.4's picture, as the Pipeline page draws it: the clock, four stages and the
- * three queues between them, then Telegram. `metric` names an `Overview` field;
- * `queue` names the SQS queue a node stands for.
+ * The pipeline as the Pipeline page draws it (docs/telegator.md §1): the clock,
+ * four stages and the three queues between them, then Telegram. `metric` names
+ * an `Overview` field; `queue` names the Cloud Tasks queue a node stands for.
  */
 const stages = [
   {
@@ -161,7 +159,7 @@ const stages = [
     kind: "trigger",
     icon: "timer",
     title: "Schedule",
-    caption: "EventBridge, every 30 min",
+    caption: "Cloud Scheduler, every 30 min",
     detail: "Starts a scrape on a clock. Deployed disabled; a deploy opts in.",
   },
   {
@@ -180,7 +178,7 @@ const stages = [
     queue: "analyze",
     icon: "inbox",
     title: "Analyze queue",
-    caption: "SQS Standard",
+    caption: "Cloud Tasks, 5 at a time",
   },
   {
     id: "analyze",
@@ -198,7 +196,7 @@ const stages = [
     queue: "aggregate",
     icon: "inbox",
     title: "Aggregate queue",
-    caption: "SQS FIFO, by date",
+    caption: "Cloud Tasks, one at a time",
   },
   {
     id: "aggregate",
@@ -214,7 +212,7 @@ const stages = [
     queue: "publish",
     icon: "inbox",
     title: "Publish queue",
-    caption: "SQS FIFO, 5 min delay",
+    caption: "Cloud Tasks, 5 min delay",
   },
   {
     id: "publish",
@@ -251,11 +249,10 @@ const toasts = {
   runScraper: "Scraped {processed} items",
   resetSourceCursors:
     "Reset {reset} sources; the next scrape starts from each channel's latest post",
-  consumeQueue: "Consumed {consumed} from {queue}, {failed} failed",
   replayDlq: "Replayed {replayed} from {queue}",
   purgeDlq: "Discarded {discarded} from {queue}",
   republishMessage: "Queued {id} for re-publishing",
-  publishPending: "Published {published}, {failed} failed",
+  publishPending: "Queued {published} for publishing",
   failed: "Request failed",
 };
 

@@ -1,6 +1,5 @@
 <Component id="Page.SignIn">
-  <Signature purpose="The signed-out screen: what this is, and the one way in"
-    description="A refused sign-in shows a fixed sentence: the hosted UI's error text is attacker-supplied and is never echoed (§8.6)." />
+  <Signature purpose="The signed-out screen: what this is, and the one way in" />
 
   <div class="min-h-screen grid place-items-center px-4">
     <section class="w-full max-w-md bg-base-100 rounded-box p-8 flex flex-col gap-6">
@@ -12,8 +11,7 @@
         <h1 class="text-3xl font-semibold tracking-tight">{R.auth.signInTitle}</h1>
         <p class="text-base-content/70 text-pretty">{R.auth.signInBody}</p>
       </div>
-      <ErrorBanner If="@auth.refused" text="{R.auth.refused}" />
-      <Btn type="primary" icon="log-in" text="{R.auth.signIn}" click="-> @auth.signIn()" />
+      <Btn type="primary" icon="log-in" text="{R.auth.signIn}" busy="{@auth.busy}" click="-> @auth.signIn()" />
     </section>
   </div>
 </Component>

@@ -27,9 +27,8 @@ const missing = () => {
   throw new Error("ENOENT");
 };
 
-describe("CalibrationRecordSchema (R48)", () => {
-  // Brief's Step 1 fixture, verbatim.
-  test("a record without both thresholds does not satisfy the production gate (R48)", () => {
+describe("CalibrationRecordSchema", () => {
+  test("a record without both thresholds does not satisfy the production gate", () => {
     expect(productionBlocker(null)).not.toBeNull();
     expect(() =>
       CalibrationRecordSchema.parse({ threshold: 0.85, precision: 1, recall: 0.9, pairs: 120 }),
@@ -53,13 +52,8 @@ describe("CalibrationRecordSchema (R48)", () => {
     expect(productionBlocker(parsed)).toBeNull();
   });
 
-  /**
-   * The record carries no `model`/`dims`/`inputType` any more (R43 — there is
-   * no embedding model to name), and no single `threshold` (R46 — there are
-   * two). A schema that still accepted those old fields as if nothing changed
-   * would silently pass a record shaped for a pipeline that no longer exists.
-   */
-  test("rejects the pre-R48 embedding-era shape even when otherwise complete", () => {
+  /** The record has no `model`/`dims`/`inputType` (no embedding model) and no single `threshold`. */
+  test("rejects the old embedding-era shape even when otherwise complete", () => {
     expect(() =>
       CalibrationRecordSchema.parse({
         model: "cohere.embed-multilingual-v3",
@@ -75,12 +69,8 @@ describe("CalibrationRecordSchema (R48)", () => {
   });
 
   /**
-   * The case the test above does NOT establish on its own: it throws because
-   * the new required fields are missing, so a non-strict schema would have
-   * passed it just the same. This one supplies every new field and keeps the
-   * old ones beside them — the shape a half-edited record actually has. Only a
-   * strict schema rejects it, and rejecting it is the point: a record carrying
-   * a stale `threshold` next to a band has not been reconciled by anyone.
+   * The test above throws on missing fields, so it does not prove strictness.
+   * This one has every new field plus the old ones: only a strict schema rejects it.
    */
   test("rejects a record that carries the old fields alongside the new ones", () => {
     expect(() =>
@@ -97,11 +87,7 @@ describe("CalibrationRecordSchema (R48)", () => {
     ).toThrow();
   });
 
-  /**
-   * `distinctThreshold <= mergeThreshold` is enforced by the schema itself, not
-   * merely assumed by callers — a record with the band inverted describes a
-   * pipeline configuration `classify` cannot produce.
-   */
+  /** An inverted band describes a configuration `classify` cannot produce. */
   test("rejects distinctThreshold above mergeThreshold", () => {
     expect(() =>
       CalibrationRecordSchema.parse(record({ distinctThreshold: 0.8, mergeThreshold: 0.5 })),
@@ -127,22 +113,18 @@ describe("readCalibrationRecord", () => {
     expect(readCalibrationRecord("x", missing)).toBeNull();
   });
 
-  /**
-   * A malformed record IS an error. Someone recorded something and it cannot be
-   * read, which must not be mistaken for having recorded nothing — that would
-   * silently downgrade a broken calibration to an absent one.
-   */
+  /** A broken calibration must not read as an absent one. */
   test("a malformed record throws rather than reading as absent", () => {
     expect(() => readCalibrationRecord("x", reads("{"))).toThrow();
     expect(() => readCalibrationRecord("x", reads('{"mergeThreshold":0.72}'))).toThrow();
   });
 
-  test("the path is the one §10.3 step 6 records into", () => {
+  test("the path is calibration/record.json", () => {
     expect(CALIBRATION_RECORD_PATH).toBe("calibration/record.json");
   });
 });
 
-describe("productionBlocker — §10.3's closing rule (R48)", () => {
+describe("productionBlocker", () => {
   test("a complete, applied calibration blocks nothing", () => {
     expect(productionBlocker(record() as never)).toBeNull();
   });
@@ -160,12 +142,7 @@ describe("productionBlocker — §10.3's closing rule (R48)", () => {
     expect(productionBlocker(record({ pairs: MIN_LABELLED_PAIRS }) as never)).toBeNull();
   });
 
-  /**
-   * The case that would otherwise pass every check and still be wrong: the
-   * sweep was run, and its answer was never applied. The record says one thing
-   * and §6's constants say another, which is worse than not having measured at
-   * all.
-   */
+  /** The sweep was run but its answer was never applied to the constants. */
   test("a recorded threshold pair the pipeline does not use blocks, and names both", () => {
     const blocker = productionBlocker(
       record({ mergeThreshold: 0.9, distinctThreshold: 0.2 }) as never,
@@ -204,12 +181,7 @@ describe("productionBlocker — §10.3's closing rule (R48)", () => {
 });
 
 describe("the repository's current state", () => {
-  /**
-   * Asserted, not assumed. §10.3 is mandatory before production, and this is the
-   * test that will fail — correctly — on the day someone records a calibration,
-   * telling them to update the ledger's blocked item rather than leaving it
-   * blocked forever.
-   */
+  /** Fails, correctly, on the day someone records a calibration: update this test then. */
   test("no calibration has been recorded yet, so production is blocked", () => {
     expect(productionBlocker(readCalibrationRecord())).not.toBeNull();
   });

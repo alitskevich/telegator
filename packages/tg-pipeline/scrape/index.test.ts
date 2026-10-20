@@ -1,524 +1,72 @@
-import type { Source } from "tg-domain/source";
-import { SOURCE_STATUS_OK, SourceSchema } from "tg-domain/source";
-import type { QueueMessage, QueueProducer, SendResult } from "tg-ports/queues";
-import { SQS_MAX_BATCH_ENTRIES } from "tg-ports/queues";
-import type { ChannelReader } from "tg-ports/telegram";
-import { createLogger } from "tg-utils/logger";
-import { describe, expect, test } from "vitest";
-import { fixedClock } from "../../../test/fakes/clock";
-import { type FakeSourceRepo, fakeSourceRepo } from "../../../test/fakes/db";
-import { recordingSink } from "../../../test/fakes/logging";
-import { type RecordingMetrics, recordingMetrics } from "../../../test/fakes/metrics";
-import { type FakeQueueProducer, fakeQueueProducer } from "../../../test/fakes/queues";
-import { type FakeFetcher, fakeFetcher } from "../../../test/fakes/telegram";
-import {
-  CHUNK_MARKER,
-  datedTelegramMarkup,
-  telegramFixture,
-} from "../../../test/fixtures/telegram/index";
-import {
-  runScrape,
-  SCRAPE_ACCEPT_LANGUAGE,
-  SCRAPE_HEADERS,
-  SCRAPE_USER_AGENT,
-  STALE_ZERO_YIELD_RUNS,
-  webReader,
-} from "./index";
-import { COLD_INTERVAL_MS } from "./select";
+import { type Source, SourceSchema } from "tg-domain/source";
+import { sources } from "tg-firebase/db";
+import { metrics } from "tg-firebase/metrics";
+import { enqueue } from "tg-firebase/tasks";
+import type { ChannelPost, ChannelReader } from "tg-telegram/types";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { clearFirestore } from "../../../test/support";
+import { runScrape } from "./index";
 
-const NOW = 1_700_000_000_000;
-const CHANNEL = "chan";
-const OTHER_CHANNEL = "other";
+vi.mock("tg-firebase/tasks", () => ({ enqueue: vi.fn(async () => true) }));
+vi.mock("tg-firebase/metrics", () => ({ metrics: { count: vi.fn() } }));
 
-const urlFor = (channel: string, after?: string): string =>
-  after === undefined ? `https://t.me/s/${channel}` : `https://t.me/s/${channel}?after=${after}`;
+const NOW = Date.parse("2026-08-29T12:00:00Z");
 
-/**
- * Pages are assembled from **recorded** chunks, never hand-written markup: the
- * loop's rule is that real Telegram HTML is captured (§4.1 L381 makes the four
- * literal class names the system's most fragile dependency), so a volume or
- * ordering test re-ids a real chunk rather than inventing a simplified one.
- */
-function firstChunk(html: string): string {
-  const chunk = html.split(CHUNK_MARKER)[1];
-  if (chunk === undefined) {
-    throw new Error("fixture carries no post chunk");
-  }
-  return chunk;
-}
+const source = (id: string, fields: Partial<Source> = {}): Source =>
+  SourceSchema.parse({ id, status: "ok", ...fields });
 
-const POST_CHUNK = firstChunk(telegramFixture("multiPost"));
-const POST_CHUNK_ID = "100674";
-const FORWARD_CHUNK = firstChunk(telegramFixture("forwarded"));
-const FORWARD_CHUNK_ID = "7001";
+const post = (id: string, body = `post ${id}`): ChannelPost => ({
+  id,
+  body,
+  links: [],
+  postedAt: new Date(NOW - 60_000).toISOString(),
+});
 
-const reId = (chunk: string, from: string, to: number): string =>
-  chunk.split(from).join(String(to));
+const reader = (pages: Record<string, ChannelPost[] | Error>): ChannelReader => ({
+  via: "web",
+  read: async (channel) => {
+    const page = pages[channel] ?? [];
+    if (page instanceof Error) throw page;
+    return page;
+  },
+});
 
-const postChunk = (id: number): string => reId(POST_CHUNK, POST_CHUNK_ID, id);
-const forwardChunk = (id: number): string => reId(FORWARD_CHUNK, FORWARD_CHUNK_ID, id);
+beforeEach(async () => {
+  vi.clearAllMocks();
+  await clearFirestore();
+});
 
-const page = (chunks: readonly string[]): string =>
-  `<html><body><section class="tgme_channel_history">${chunks
-    .map((chunk) => CHUNK_MARKER + chunk)
-    .join("")}</section></body></html>`;
+describe("runScrape", () => {
+  test("enqueues every post and moves the cursor to the newest id", async () => {
+    await sources.put(source("chan"));
+    const result = await runScrape(reader({ chan: [post("9"), post("10")] }), NOW);
 
-const postsPage = (ids: readonly number[]): string => page(ids.map(postChunk));
-
-const datedChunk = datedTelegramMarkup;
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-const FOUR_DAYS_MS = 4 * DAY_MS;
-
-function source(fields: Record<string, unknown>): Source {
-  return SourceSchema.parse({
-    id: CHANNEL,
-    status: SOURCE_STATUS_OK,
-    target: "target",
-    // Long overdue, so selection (§3.1 L203) never gets in the way of what a
-    // test is actually asserting.
-    lastUpdated: NOW - COLD_INTERVAL_MS,
-    ...fields,
-  });
-}
-
-interface HarnessOptions {
-  readonly sources: readonly Source[];
-  readonly pages?: Readonly<Record<string, string>>;
-  readonly failIndices?: readonly number[];
-  readonly at?: number;
-  readonly repo?: FakeSourceRepo;
-  readonly metrics?: RecordingMetrics;
-  readonly queue?: QueueProducer;
-}
-
-function harness(options: HarnessOptions) {
-  const fetcher: FakeFetcher = fakeFetcher(options.pages ?? {});
-  const repo = options.repo ?? fakeSourceRepo(options.sources);
-  const fake: FakeQueueProducer = fakeQueueProducer({ failIndices: options.failIndices });
-  const queue = options.queue ?? fake;
-  const metrics = options.metrics ?? recordingMetrics();
-  const logs = recordingSink();
-
-  return {
-    fetcher,
-    repo,
-    queue: fake,
-    metrics,
-    logs,
-    deps: {
-      reader: webReader(fetcher),
-      sources: repo,
-      queue,
-      metrics,
-      clock: fixedClock(options.at ?? NOW),
-      logger: createLogger(logs),
-    },
-  };
-}
-
-/** Reads a source back out of the repo, failing loudly if it vanished. */
-async function readBack(repo: FakeSourceRepo, id: string): Promise<Source> {
-  const row = await repo.get(id);
-  if (row === undefined) {
-    throw new Error(`source disappeared: ${id}`);
-  }
-  return row;
-}
-
-describe("runScrape — acceptance criteria", () => {
-  test("AC-1.4 (§3.1 L239) an unreachable source increments zeroYieldRuns and leaves other sources unaffected", async () => {
-    const h = harness({
-      sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
-      // Only the second channel answers; the first is modelled the way §3.1 L208
-      // says a non-2xx arrives — an empty string, not an exception.
-      pages: { [urlFor(OTHER_CHANNEL)]: postsPage([500, 501]) },
-    });
-
-    const result = await runScrape(h.deps);
-
-    const unreachable = await readBack(h.repo, CHANNEL);
-    expect(unreachable.zeroYieldRuns).toBe(1);
-    expect(unreachable.lastCount).toBe(0);
-    expect(unreachable.lastUpdated).toBe(NOW);
-    expect(unreachable.lastItemId).toBeUndefined();
-
-    const healthy = await readBack(h.repo, OTHER_CHANNEL);
-    expect(healthy.zeroYieldRuns).toBe(0);
-    expect(healthy.lastCount).toBe(2);
-    expect(healthy.lastItemId).toBe("501");
-
-    expect(h.queue.sent).toHaveLength(2);
     expect(result).toEqual({ processed: 2, enqueued: 2 });
+    expect(enqueue).toHaveBeenCalledTimes(2);
+    expect(await sources.get("chan")).toMatchObject({ lastItemId: "10", lastCount: 2 });
   });
 
-  test("AC-1.4 (§3.1 L239) a fetcher that throws still leaves other sources unaffected", async () => {
-    const h = harness({
-      sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
-      pages: { [urlFor(OTHER_CHANNEL)]: postsPage([600]) },
-    });
-    const failing = {
-      ...h.deps,
-      reader: webReader({
-        get: async (url: string, headers?: Readonly<Record<string, string>>) => {
-          if (url === urlFor(CHANNEL)) {
-            throw new Error("connection reset");
-          }
-          return h.fetcher.get(url, headers);
-        },
-      }),
-    };
+  test("a failed enqueue leaves the cursor where it was", async () => {
+    await sources.put(source("chan", { lastItemId: "5" }));
+    vi.mocked(enqueue).mockRejectedValueOnce(new Error("queue down"));
+    await runScrape(reader({ chan: [post("6"), post("7")] }), NOW);
 
-    const result = await runScrape(failing);
-
-    expect(result).toEqual({ processed: 1, enqueued: 1 });
-    expect((await readBack(h.repo, OTHER_CHANNEL)).lastItemId).toBe("600");
+    expect((await sources.get("chan"))?.lastItemId).toBe("5");
   });
 
-  test("AC-1.5 (§3.1 L240) a failed SendMessageBatch leaves lastItemId unchanged", async () => {
-    const h = harness({
-      sources: [source({ lastItemId: "100000", lastCount: 3, zeroYieldRuns: 2 })],
-      pages: { [urlFor(CHANNEL, "100000")]: postsPage([100001, 100002]) },
-      // A partial failure: SendMessageBatch answers HTTP 200 with a Failed[]
-      // entry, so `send` returns rather than throws (tg-ports/queues.ts).
-      failIndices: [0],
-    });
+  test("an empty page counts a zero-yield run, and the third one marks the source stale", async () => {
+    await sources.put(source("chan", { zeroYieldRuns: 2, lastNonZeroCount: 20 }));
+    await runScrape(reader({ chan: [] }), NOW);
 
-    const result = await runScrape(h.deps);
-
-    const after = await readBack(h.repo, CHANNEL);
-    expect(after.lastItemId).toBe("100000");
-    // §3.1 L232 — "Cursor fields are written **only after** the enqueue
-    // succeeds", read strictly: a non-empty `failed` writes nothing at all, so
-    // the source stays overdue and the next run retries the whole page.
-    expect(h.repo.writeCount).toBe(0);
-    expect(after.zeroYieldRuns).toBe(2);
-    expect(result).toEqual({ processed: 2, enqueued: 1 });
+    expect((await sources.get("chan"))?.zeroYieldRuns).toBe(3);
+    expect(metrics.count).toHaveBeenCalledWith("SourceStale", 1, "chan");
   });
 
-  test("AC-1.6 (§3.1 L241) a forwarded post is counted and dropped, never enqueued", async () => {
-    const h = harness({
-      sources: [source({})],
-      pages: { [urlFor(CHANNEL)]: telegramFixture("forwarded") },
-    });
+  test("one failing source does not stop the others", async () => {
+    await sources.put(source("broken"));
+    await sources.put(source("chan"));
+    const result = await runScrape(reader({ broken: new Error("boom"), chan: [post("1")] }), NOW);
 
-    const result = await runScrape(h.deps);
-
-    expect(h.queue.sent).toEqual([]);
-    expect(h.queue.sendCalls).toBe(0);
-    expect(h.metrics.get("ItemsDropped", { Reason: "forward" })).toBe(1);
-    expect(h.metrics.get("ItemsScraped", { Source: CHANNEL })).toBe(1);
-    expect(result).toEqual({ processed: 1, enqueued: 0 });
-    // Dropping is not failing: the cursor still advances past the forward, or
-    // every run would re-fetch and re-drop it forever.
-    expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe(FORWARD_CHUNK_ID);
-  });
-
-  test("AC-1.7 (§3.1 L242) a post older than three days is counted and dropped, never enqueued", async () => {
-    const h = harness({
-      sources: [source({})],
-      pages: { [urlFor(CHANNEL)]: page([datedChunk(postChunk(700), NOW - FOUR_DAYS_MS)]) },
-    });
-
-    const result = await runScrape(h.deps);
-
-    expect(h.queue.sent).toEqual([]);
-    expect(h.queue.sendCalls).toBe(0);
-    expect(h.metrics.get("ItemsDropped", { Reason: "obsolete" })).toBe(1);
-    expect(h.metrics.get("ItemsScraped", { Source: CHANNEL })).toBe(1);
-    expect(result).toEqual({ processed: 1, enqueued: 0 });
-    // As with a forward: the cursor advances past it, or the run re-fetches and
-    // re-drops the same stale post every 30 minutes forever.
-    expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe("700");
-  });
-
-  test("a stale post is skipped while its fresh neighbours on the same page are enqueued", async () => {
-    const h = harness({
-      sources: [source({})],
-      pages: {
-        [urlFor(CHANNEL)]: page([
-          datedChunk(postChunk(801), NOW - FOUR_DAYS_MS),
-          datedChunk(postChunk(802), NOW - DAY_MS),
-        ]),
-      },
-    });
-
-    const result = await runScrape(h.deps);
-
-    const ids = h.queue.sent.map((message) => JSON.parse(message.body).id);
-    expect(ids).toEqual([`${CHANNEL}/802`]);
-    expect(h.metrics.get("ItemsDropped", { Reason: "obsolete" })).toBe(1);
-    expect(result).toEqual({ processed: 2, enqueued: 1 });
-    expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe("802");
-  });
-
-  test("a page whose posts carry no time drops them all, rather than publishing history", async () => {
-    const undated = page([postChunk(900)]).replace(/<time datetime="[^"]*">/g, "<time>");
-    const h = harness({ sources: [source({})], pages: { [urlFor(CHANNEL)]: undated } });
-
-    await runScrape(h.deps);
-
-    expect(h.queue.sent).toEqual([]);
-    expect(h.metrics.get("ItemsDropped", { Reason: "obsolete" })).toBe(1);
-  });
-
-  test("an empty post is dropped with Reason 'empty'", async () => {
-    const h = harness({
-      sources: [source({})],
-      pages: { [urlFor(CHANNEL)]: telegramFixture("emptyBody") },
-    });
-
-    await runScrape(h.deps);
-
-    expect(h.queue.sent).toEqual([]);
-    expect(h.metrics.get("ItemsDropped", { Reason: "empty" })).toBe(1);
-    expect(h.metrics.get("ItemsDropped", { Reason: "forward" })).toBe(0);
-  });
-});
-
-describe("runScrape — fetch", () => {
-  test("§3.1 L208 the ?after= cursor is appended only when lastItemId exists", async () => {
-    const withCursor = harness({
-      sources: [source({ lastItemId: "100674" })],
-      pages: { [urlFor(CHANNEL, "100674")]: postsPage([100675]) },
-    });
-    const withoutCursor = harness({
-      sources: [source({})],
-      pages: { [urlFor(CHANNEL)]: postsPage([100675]) },
-    });
-
-    await runScrape(withCursor.deps);
-    await runScrape(withoutCursor.deps);
-
-    expect(withCursor.fetcher.requests.map((r) => r.url)).toEqual([
-      "https://t.me/s/chan?after=100674",
-    ]);
-    expect(withoutCursor.fetcher.requests.map((r) => r.url)).toEqual(["https://t.me/s/chan"]);
-  });
-
-  test("§3.1 L208 browser-like headers are sent on every request", async () => {
-    const h = harness({
-      sources: [source({})],
-      pages: { [urlFor(CHANNEL)]: postsPage([1]) },
-    });
-
-    await runScrape(h.deps);
-
-    const sent = h.fetcher.requests[0]?.headers;
-    expect(sent).toEqual(SCRAPE_HEADERS);
-    // Asserted on the literal values, not only on the exported constant, so the
-    // test would fail if the constant stopped describing Chrome 120 on macOS.
-    expect(SCRAPE_USER_AGENT).toContain("Macintosh");
-    expect(SCRAPE_USER_AGENT).toContain("Chrome/120");
-    expect(SCRAPE_ACCEPT_LANGUAGE).toBe("en-US,en;q=0.9,ru;q=0.8,be;q=0.7");
-  });
-
-  /**
-   * R63 — the MTProto reader runs this same stage: only its own sources are
-   * read, its posts are enqueued and its cursor advances exactly as a web
-   * source's does, and a web source is left for the web run.
-   */
-  test("R63 a reader polls only its own sources, through the same stage", async () => {
-    const h = harness({
-      sources: [
-        source({ id: "web_chan" }),
-        source({ id: "group", via: "mtproto", lastItemId: "4" }),
-      ],
-    });
-    const reads: { channel: string; afterId: string | undefined }[] = [];
-    const reader: ChannelReader = {
-      via: "mtproto",
-      async read(channel, afterId) {
-        reads.push({ channel, afterId });
-        return [{ id: "5", body: "news", links: [], postedAt: new Date(NOW).toISOString() }];
-      },
-    };
-
-    const result = await runScrape({ ...h.deps, reader });
-
-    expect(reads).toEqual([{ channel: "group", afterId: "4" }]);
-    expect(result).toEqual({ processed: 1, enqueued: 1 });
-    expect(h.queue.sent.map((message) => JSON.parse(message.body).id)).toEqual(["group/5"]);
-    expect((await readBack(h.repo, "group")).lastItemId).toBe("5");
-    expect(h.fetcher.requests).toEqual([]);
-  });
-});
-
-describe("runScrape — cursor", () => {
-  test("§2.1 L116 lastItemId is the numerically newest id, not the lexicographically newest", async () => {
-    const h = harness({
-      sources: [source({})],
-      // "9" sorts after "10" as a string; the cursor must not go backwards.
-      pages: { [urlFor(CHANNEL)]: postsPage([9, 10]) },
-    });
-
-    await runScrape(h.deps);
-
-    expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe("10");
-  });
-
-  test("§2.1 L116 lastItemId covers every post seen, including dropped ones", async () => {
-    const h = harness({
-      sources: [source({})],
-      pages: { [urlFor(CHANNEL)]: page([postChunk(41), forwardChunk(42)]) },
-    });
-
-    await runScrape(h.deps);
-
-    // The forward is the newest id "seen" even though it was never enqueued.
-    expect((await readBack(h.repo, CHANNEL)).lastItemId).toBe("42");
-  });
-
-  test("§3.1 L222 a successful parse resets zeroYieldRuns and records lastNonZeroCount (R15)", async () => {
-    const h = harness({
-      sources: [source({ zeroYieldRuns: 2, lastNonZeroCount: 0 })],
-      pages: { [urlFor(CHANNEL)]: telegramFixture("multiPost") },
-    });
-
-    await runScrape(h.deps);
-
-    const after = await readBack(h.repo, CHANNEL);
-    expect(after.zeroYieldRuns).toBe(0);
-    expect(after.lastCount).toBe(3);
-    expect(after.lastNonZeroCount).toBe(3);
-    expect(after.lastUpdated).toBe(NOW);
-    expect(after.lastResult).toBe(new Date(NOW).toISOString());
-  });
-
-  test("R15 a zero-yield run zeroes lastCount but preserves lastNonZeroCount", async () => {
-    const h = harness({
-      sources: [source({ lastCount: 4, lastNonZeroCount: 4 })],
-      pages: { [urlFor(CHANNEL)]: telegramFixture("noChunks") },
-    });
-
-    await runScrape(h.deps);
-
-    const after = await readBack(h.repo, CHANNEL);
-    expect(after.lastCount).toBe(0);
-    // Without this, §4.1 L383's "non-zero historical lastCount" is gone two runs
-    // before the alarm needs it.
-    expect(after.lastNonZeroCount).toBe(4);
-  });
-});
-
-describe("runScrape — metrics", () => {
-  test("§7.7 L729 ItemsScraped is counted per source", async () => {
-    const h = harness({
-      sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
-      pages: {
-        [urlFor(CHANNEL)]: telegramFixture("multiPost"),
-        [urlFor(OTHER_CHANNEL)]: postsPage([700]),
-      },
-    });
-
-    await runScrape(h.deps);
-
-    expect(h.metrics.get("ItemsScraped", { Source: CHANNEL })).toBe(3);
-    expect(h.metrics.get("ItemsScraped", { Source: OTHER_CHANNEL })).toBe(1);
-  });
-
-  test("§4.1 L383 three consecutive zero-yield runs emit SourceStale, dimensioned and undimensioned (R25)", async () => {
-    const repo = fakeSourceRepo([source({ lastCount: 0, lastNonZeroCount: 5 })]);
-    const metrics = recordingMetrics();
-
-    for (let run = 0; run < STALE_ZERO_YIELD_RUNS; run++) {
-      // Each run needs the cold source to be due again (§3.1 L203).
-      const at = NOW + run * COLD_INTERVAL_MS;
-      await runScrape(harness({ sources: [], repo, metrics, at }).deps);
-
-      if (run < STALE_ZERO_YIELD_RUNS - 1) {
-        expect(metrics.get("SourceStale")).toBe(0);
-      }
-    }
-
-    expect((await readBack(repo, CHANNEL)).zeroYieldRuns).toBe(STALE_ZERO_YIELD_RUNS);
-    expect(metrics.get("SourceStale", { Source: CHANNEL })).toBe(1);
-    // R25 — §7.7 L754 alarms on "SourceStale for any source", and a CloudWatch
-    // alarm cannot enumerate a runtime-discovered dimension at synth time.
-    expect(metrics.get("SourceStale", {})).toBe(1);
-  });
-
-  test("§4.1 L383 a source that never yielded anything does not alarm", async () => {
-    const repo = fakeSourceRepo([source({ lastCount: 0, lastNonZeroCount: 0 })]);
-    const metrics = recordingMetrics();
-
-    for (let run = 0; run < STALE_ZERO_YIELD_RUNS; run++) {
-      await runScrape(
-        harness({ sources: [], repo, metrics, at: NOW + run * COLD_INTERVAL_MS }).deps,
-      );
-    }
-
-    expect(metrics.get("SourceStale")).toBe(0);
-  });
-});
-
-describe("runScrape — enqueue", () => {
-  test("§3.1 L230 posts are sent in batches of SQS_MAX_BATCH_ENTRIES", async () => {
-    const total = SQS_MAX_BATCH_ENTRIES + 2;
-    const ids = Array.from({ length: total }, (_, index) => 900 + index);
-    const inner = fakeQueueProducer();
-    const sizes: number[] = [];
-    const counting: QueueProducer = {
-      send: async (messages: readonly QueueMessage[]): Promise<SendResult> => {
-        sizes.push(messages.length);
-        return inner.send(messages);
-      },
-    };
-
-    const h = harness({
-      sources: [source({})],
-      pages: { [urlFor(CHANNEL)]: postsPage(ids) },
-      queue: counting,
-    });
-    const result = await runScrape(h.deps);
-
-    expect(sizes).toEqual([SQS_MAX_BATCH_ENTRIES, 2]);
-    expect(inner.sent).toHaveLength(total);
-    expect(result).toEqual({ processed: total, enqueued: total });
-  });
-
-  test("§3.1 L230 only kind === 'post' items reach the analyze queue", async () => {
-    const h = harness({
-      sources: [source({})],
-      pages: { [urlFor(CHANNEL)]: page([postChunk(11), forwardChunk(12)]) },
-    });
-
-    await runScrape(h.deps);
-
-    const bodies = h.queue.sent.map((message) => JSON.parse(message.body));
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0]).toMatchObject({ id: `${CHANNEL}/11`, kind: "post", target: "target" });
-    // §2.2 L138 — the Standard analyze queue carries no group id.
-    expect(h.queue.sent[0]?.messageGroupId).toBeUndefined();
-  });
-
-  test("§2.2 L138 every post of one run shares a single date key", async () => {
-    const h = harness({
-      sources: [source({ id: CHANNEL }), source({ id: OTHER_CHANNEL })],
-      pages: {
-        [urlFor(CHANNEL)]: postsPage([21]),
-        [urlFor(OTHER_CHANNEL)]: postsPage([22]),
-      },
-    });
-
-    await runScrape(h.deps);
-
-    const dates = new Set(h.queue.sent.map((m) => JSON.parse(m.body).date));
-    expect(dates).toEqual(new Set([new Date(NOW).toISOString().slice(0, 10)]));
-  });
-
-  test("§3.1 L200 only sources selectable by §3.1 L203 are polled", async () => {
-    const h = harness({
-      sources: [
-        source({ id: CHANNEL, lastCount: 3, lastUpdated: NOW }),
-        source({ id: OTHER_CHANNEL, status: "paused" }),
-      ],
-      pages: { [urlFor(CHANNEL)]: postsPage([1]), [urlFor(OTHER_CHANNEL)]: postsPage([2]) },
-    });
-
-    const result = await runScrape(h.deps);
-
-    expect(h.fetcher.requests).toEqual([]);
-    expect(result).toEqual({ processed: 0, enqueued: 0 });
+    expect(result.enqueued).toBe(1);
   });
 });

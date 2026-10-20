@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// The browser holds no Firestore access: every read and write goes through the
+// `api` function, which runs with the Admin SDK and checks the caller's role.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

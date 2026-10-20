@@ -3,26 +3,22 @@ import { SOURCE_STATUS_OK, SourceConfigInput, SourceSchema } from "tg-domain/sou
 import { splitTags } from "tg-domain/tags";
 import { TargetSchema } from "tg-domain/target";
 import { TARGET_TYPES } from "tg-enums/targetType";
-import type { MessageRepo, SourceRepo, TargetRepo } from "tg-ports/db";
+import type { Messages, Sources, Targets } from "tg-firebase/db";
 import { z } from "zod";
 import { canonicalId } from "./ids";
 
-/**
- * mcp-server#5 — constants declared once, reused nowhere else in this
- * subsystem's algorithms.
- */
 export const SEARCHED_STATUSES = ["published", "topublish"] as const;
 export const MESSAGE_SCAN_LIMIT = 200;
 export const MESSAGE_RESULT_LIMIT = 10;
 
-/** mcp-server#2.2 — the ports a tool may reach, and nothing else. */
+/** The repositories a tool may reach, and nothing else. */
 export interface McpDeps {
-  readonly sources: SourceRepo;
-  readonly targets: TargetRepo;
-  readonly messages: MessageRepo;
+  readonly sources: Sources;
+  readonly targets: Targets;
+  readonly messages: Messages;
 }
 
-/** mcp-server#2.1 — one entry of the registry, transport-agnostic. */
+/** One entry of the registry, transport-agnostic. */
 export interface ToolDefinition {
   readonly name: string;
   readonly description: string;
@@ -30,10 +26,7 @@ export interface ToolDefinition {
   readonly run: (input: unknown, deps: McpDeps) => Promise<unknown>;
 }
 
-/**
- * mcp-server#2, #3.2, D16 — the optional fields are exactly `SourceConfigInput`'s
- * (`tg-domain/source.ts`), which mcp-server#15.3 pins with a test.
- */
+/** The optional fields are exactly `SourceConfigInput`'s; a test pins this. */
 export const AddSourceInput = z
   .object({
     id: z.string().min(1),
@@ -41,7 +34,6 @@ export const AddSourceInput = z
   })
   .strict();
 
-/** mcp-server#5.1 */
 export async function addSource(raw: unknown, deps: McpDeps) {
   const { id: rawId, ...config } = AddSourceInput.parse(raw);
   const id = canonicalId(rawId);
@@ -61,10 +53,7 @@ export async function addSource(raw: unknown, deps: McpDeps) {
   return { created: row };
 }
 
-/**
- * mcp-server#2, #3.3, D16 — the optional fields are exactly `TARGET_WRITABLE_FIELDS`
- * (`tg-actions/dashboard/records.ts`), which mcp-server#15.3 pins with a test.
- */
+/** The optional fields are exactly `TARGET_WRITABLE_FIELDS`; a test pins this. */
 export const AddTargetInput = z
   .object({
     id: z.string().min(1),
@@ -73,7 +62,6 @@ export const AddTargetInput = z
   })
   .strict();
 
-/** mcp-server#5.2 */
 export async function addTarget(raw: unknown, deps: McpDeps) {
   const { id: rawId, ...config } = AddTargetInput.parse(raw);
   const id = canonicalId(rawId);
@@ -88,12 +76,12 @@ export async function addTarget(raw: unknown, deps: McpDeps) {
   return { created: row };
 }
 
-/** mcp-server#2.3 — one member, flattened with its map key. */
+/** One member, flattened with its map key. */
 export interface MemberEntry extends MemberBlock {
   readonly itemId: string;
 }
 
-/** mcp-server#2.3 — what `find_messages_by_tags` returns per message. */
+/** What `find_messages_by_tags` returns per message. */
 export interface MessageContent {
   readonly id: string;
   readonly status: string;
@@ -118,7 +106,6 @@ export const FindMessagesInput = z
   })
   .strict();
 
-/** mcp-server#5.3 */
 function toMessageContent(message: Message): MessageContent {
   const members = Object.entries(message.members)
     .map(([itemId, block]) => ({ itemId, ...block }))
@@ -142,7 +129,7 @@ function toMessageContent(message: Message): MessageContent {
   };
 }
 
-/** mcp-server#5.3 */
+/** Scans recent messages by status and matches any tag as a whole, case-insensitive token. */
 export async function findMessagesByTags(raw: unknown, deps: McpDeps) {
   const { tags, limit } = FindMessagesInput.parse(raw);
 
@@ -174,7 +161,7 @@ export async function findMessagesByTags(raw: unknown, deps: McpDeps) {
   return { matched: matches.length, returned: messages.length, messages };
 }
 
-/** mcp-server#2.1, #6.1 — the registry: exactly these three tools, and no others. */
+/** The registry: exactly these three tools. */
 export const TOOLS: readonly ToolDefinition[] = [
   {
     name: "add_source",

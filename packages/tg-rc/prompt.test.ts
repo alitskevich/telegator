@@ -1,46 +1,27 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 import { SYSTEM_PROMPT } from "./prompt";
 
-/** Lifts the fenced block that follows the "**System prompt**" paragraph in §5.2. */
-function systemPromptFromSpec(): string {
-  const spec = readFileSync(resolve(import.meta.dirname, "../../docs/telegator.md"), "utf8").split(
-    "\n",
-  );
-  const heading = spec.findIndex((l) => l.startsWith("**System prompt**"));
-  const open = spec.indexOf("```", heading);
-  const close = spec.indexOf("```", open + 1);
-
-  return spec.slice(open + 1, close).join("\n");
-}
+/** The prompt as ported, pinned here so that "tidying" it in code fails. */
+const PORTED_PROMPT = [
+  "You are all about analyzing the ongoing news articles, keeping strong focus on matters of facts.",
+  "Your responses MUST follow the rules:",
+  "- respond in JSON format! according responseSchema provided.",
+  "- preserve '[text](#[1-9]+)' tokens intact;",
+  "- no extra punctuation; no any emoji;",
+  "- keep neutral tone, avoid hate speech;",
+].join("\n");
 
 describe("SYSTEM_PROMPT", () => {
-  /**
-   * §5.2 L439 calls the prompt "ported verbatim; load-bearing". It is compared
-   * against the text lifted from the spec at test time rather than against a
-   * copy pasted into the test, so a drift in either direction fails — including
-   * the one that matters most, someone "tidying" the prompt in code.
-   */
-  test("is byte-identical to the fenced block in §5.2", () => {
-    expect(SYSTEM_PROMPT).toBe(systemPromptFromSpec());
+  test("is byte-identical to the ported prompt", () => {
+    expect(SYSTEM_PROMPT).toBe(PORTED_PROMPT);
   });
 
-  /**
-   * The rule L434 singles out as load-bearing: §3.1 L216 tokenises links into
-   * `[text](#N)`, §3.4 L326 resolves them back into anchors at render time, and
-   * a model that rewrites or strips them breaks every link in a published
-   * message.
-   */
-  test("instructs the model to preserve the [text](#N) tokens §3.4 L326 resolves", () => {
+  /** Publish resolves these tokens back into links; a model that rewrites them breaks every link. */
+  test("instructs the model to preserve the [text](#N) tokens", () => {
     expect(SYSTEM_PROMPT).toContain("preserve '[text](#[1-9]+)' tokens intact;");
   });
 
-  /**
-   * "responseSchema" is Gemini vocabulary; the Messages request at §5.2 L432
-   * calls the field `schema`. Kept because L434 says verbatim — changing prompt
-   * wording changes model behaviour, and this build cannot measure the effect.
-   */
+  /** Kept verbatim: wording changes model behaviour, and no test can measure the effect. */
   test("keeps the Gemini-era word responseSchema rather than modernising it", () => {
     expect(SYSTEM_PROMPT).toContain("according responseSchema provided.");
   });

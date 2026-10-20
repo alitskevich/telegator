@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { ariaSort, num, share, sortIcon, statusTone, UNKNOWN } from "./functions";
 
 describe("template helpers", () => {
-  /** §8.5 — an unread number is never shown as a reassuring 0. */
+  /** An unread number is never shown as a reassuring 0. */
   test("num shows unknown for anything that is not a number", () => {
     expect(num(null)).toBe(UNKNOWN);
     expect(num(undefined)).toBe(UNKNOWN);

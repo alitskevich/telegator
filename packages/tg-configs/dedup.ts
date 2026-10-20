@@ -1,65 +1,31 @@
-/**
- * The constants of the normative deduplication algorithm (§6 L531–554), plus
- * the few values §6 uses without declaring.
- *
- * Each lives here exactly once. The Engineering Bar is explicit that a spec
- * constant must have a single definition, and these in particular are the ones
- * a stage is most tempted to inline at a comparison site.
- */
+/** The deduplication constants (see docs/telegator.md §5), each defined once. */
 
-/** §3.3 L284, §2.3 L184 — a message stops absorbing members at 20. */
+/** A message stops absorbing members at 20. */
 export const MAX_MEMBERS = 20;
 
-/** §3.4 L324 — publish renders the first 12 members, though 20 are stored. */
+/** Publish renders the first 12 members, though 20 are stored. */
 export const MEMBER_RENDER_LIMIT = 12;
 
-/** §6 L561, §7.3 L652 — the aggregate consumer's batch size. */
-export const MAX_BATCH_SIZE = 10;
-
-/**
- * §3.3 L297 and §7.3 L653 — the settle delay, so a story still accumulating
- * members is published once rather than edited repeatedly. §11.4 L1035 records
- * 300 s as "a starting value", which makes configurability binding (R19).
- */
+/** The settle delay, so a story still gaining members is published once, not edited repeatedly. */
 export const SETTLE_DELAY_SECONDS = 300;
 
-/** SQS's own ceiling on a queue's `DelaySeconds`. Item 4.1 validates against it. */
-export const SQS_MAX_DELAY_SECONDS = 900;
-
 /**
- * R45 — a storage bound, not a signal filter.
- *
- * Chosen so it is not normally reached: §2.3 L184 caps a message at 20 members,
- * and ~10 terms each is ~200. Capping in lexical order is deterministic, which
- * AC-3.7 requires; capping by term frequency would discriminate better but is
- * not implementable from a union list, because nothing stores per-term counts.
- * Deferred until the cap is observed to bind.
- *
- * 256, not 64. The design's R45 table row said "capped at 64" — a leftover from
- * an earlier draft that its §5 supersedes at length, giving the ~200-term
- * arithmetic above and rejecting 64 explicitly (64 would bind on an ordinary
- * multi-member story, which turns a storage bound into a signal filter that
- * silently discards discriminating terms). §5 is the reasoned text and it is
- * what this constant follows; the table row is corrected to match.
+ * A storage bound, not a signal filter: 20 members of ~10 terms each is ~200,
+ * so the cap is not normally reached. Capping in lexical order keeps the key
+ * deterministic; nothing stores per-term counts to cap by frequency.
  */
 export const MATCH_KEY_CAP = 256;
 
 /**
- * R46. **Provisional**, exactly as the embedding-era similarity threshold was
- * before R43 removed it: §10.3 (as rewritten by R48) forbids publishing to
- * production channels until these are swept against the labelled set, and
- * `cdk synth -c env=prod` refuses until the result is recorded in
- * `calibration/record.json`.
- *
- * Injected rather than read at the comparison site, so recalibration stays a
- * configuration change rather than a code edit.
+ * **Provisional** until the calibration sweep is recorded in
+ * `calibration/record.json`. Injected, not read at the comparison site, so
+ * recalibration is a configuration change rather than a code edit.
  */
 export const MERGE_THRESHOLD = 0.72;
 export const DISTINCT_THRESHOLD = 0.35;
 
 /**
- * R46. Fixed rather than swept: five continuous parameters fitted to §10.3's
- * ~100 labelled pairs would overfit and produce a curve that means nothing.
- * §10.3 sweeps the two thresholds and takes weights from a coarse grid.
+ * Fixed rather than swept: fitting more parameters to ~100 labelled pairs would
+ * overfit. The sweep tunes the two thresholds only.
  */
 export const SCORE_WEIGHTS = { entities: 0.6, titleTokens: 0.25, tags: 0.15 } as const;

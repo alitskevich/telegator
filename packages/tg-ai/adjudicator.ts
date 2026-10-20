@@ -1,25 +1,21 @@
+import type { Adjudicator } from "tg-ai/types";
 import { ADJUDICATOR_MAX_TOKENS, ADJUDICATOR_MODEL_ID } from "tg-configs/ai";
-import type { Adjudicator } from "tg-ports/ai";
 import { z } from "zod";
 import { extractText } from "./messagesContent";
 import { type ApiKeyProvider, createMessagesClient, missingApiKey } from "./openrouterClient";
 
 /**
- * R46 — the band adjudicator (the model that resolves the "adjudicate" verdict
- * from `tg-dedup/score.ts`'s classification).
- *
- * Same shape as `createOpenRouterClassifier`: a structural client interface, a
- * lazily-built client so constructing the adapter never fetches a secret, and
- * the shared `extractText`. Its own module rather than folded into
- * `openrouter.ts` because its contract — verdicts keyed by pair id, never
- * positional (§5.3) — is the thing this adapter exists to get right.
+ * The band adjudicator: the model call that resolves the "adjudicate" verdict
+ * of `tg-dedup/score.ts`. Built like `createOpenRouterClassifier`, with a lazy
+ * client so construction never fetches a secret. Verdicts are keyed by pair id,
+ * never by position.
  */
 
 const VerdictsSchema = z.object({
   verdicts: z.array(z.object({ id: z.string().min(1), same: z.boolean() })),
 });
 
-/** Sent as `output_config.format.schema`, generated rather than hand-written (§5.2 L432). */
+/** Sent as `output_config.format.schema`, generated rather than hand-written. */
 export const VERDICTS_SCHEMA = z.toJSONSchema(VerdictsSchema);
 
 /**
@@ -56,7 +52,7 @@ export interface AdjudicatorClient {
 
 export interface OpenRouterAdjudicatorOptions {
   readonly client?: AdjudicatorClient;
-  /** §7.6 — reads the key from Secrets Manager; supplied by `tg-pipeline/handlers/aggregate.ts`. */
+  /** Reads the key from the function secret; supplied by `tg-functions/index.ts`. */
   readonly apiKey?: ApiKeyProvider;
 }
 

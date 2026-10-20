@@ -1,129 +1,90 @@
 import type { MessageListItem } from "tg-domain/message";
-import type { CategoryLogReader, MetricReader, QueueDepth, QueueDepthReader } from "tg-ports/aws";
-import type { MessageRepo } from "tg-ports/db";
-import type { Clock } from "tg-utils/clock";
+import { MESSAGE_STATUSES } from "tg-enums/messageStatus";
+import { SKIP_REASONS, type SkipReason } from "tg-enums/metrics";
+import { QUEUES } from "tg-enums/queueName";
+import { messages } from "tg-firebase/db";
+import { countDeadLetters } from "tg-firebase/deadLetters";
+import { sumMetric, sumMetricBy } from "tg-firebase/metrics";
+import { readPending } from "tg-firebase/tasks";
 import type { Slice } from "tg-utils/ui/pie";
-import {
-  categoryChart,
-  errorCount,
-  itemsAnalyzed,
-  itemsScraped,
-  itemsSkipped,
-  last7Days,
-  last24Hours,
-  messagesPublished,
-  type PipelineQueueUrls,
-  readDepth,
-  recentMessages,
-  type SkippedItems,
-  statusChart,
-} from "./computations";
 
-/**
- * Everything `tg-web/app/page.tsx` renders (§8.3 L804), gathered in one place so the
- * page itself stays a thin composition of a data load and a component.
- */
+/** The dashboard: 24 h counters, 7-day categories, the queue strip and the newest stories. */
+
+export const DAY_MS = 86_400_000;
+export const WEEK_MS = 7 * DAY_MS;
+export const RECENT_MESSAGE_LIMIT = 10;
 
 export interface QueueStripEntry {
   readonly label: string;
-  /**
-   * Available plus in-flight — both halves are work the pipeline still holds.
-   * `null` where the queue could not be read, which is not the same fact as a
-   * depth of zero and must not render as one.
-   */
-  readonly depth: number | null;
-  readonly dlqDepth: number | null;
+  readonly depth: number;
+  readonly dlqDepth: number;
 }
 
 export interface Overview {
   readonly scraped: number;
   readonly analyzed: number;
-  readonly skipped: SkippedItems;
+  readonly skipped: { readonly total: number; readonly byReason: Record<SkipReason, number> };
   readonly published: number;
-  /** §8.5 L844. `null` when any DLQ went unread — see `errorCount`. */
-  readonly errors: number | null;
+  readonly errors: number;
   readonly statusSlices: Slice[];
   readonly categorySlices: Slice[];
   readonly strip: QueueStripEntry[];
   readonly recent: MessageListItem[];
 }
 
-export interface OverviewDeps {
-  readonly metrics: MetricReader;
-  readonly queues: QueueDepthReader;
-  readonly logs: CategoryLogReader;
-  readonly messages: MessageRepo;
-  readonly clock: Clock;
-  readonly queueUrls: PipelineQueueUrls;
-  readonly dlqUrls: PipelineQueueUrls;
-}
-
-/**
- * One read per queue for the whole page.
- *
- * The strip and the status chart both want every depth, and §8.5 L849's cache
- * covers CloudWatch only — so without this, a page load makes twelve SQS calls
- * for six numbers that cannot have changed between them.
- */
-function readOnce(inner: QueueDepthReader): QueueDepthReader {
-  const seen = new Map<string, Promise<QueueDepth>>();
-
-  return {
-    depth(queueUrl) {
-      const existing = seen.get(queueUrl);
-      if (existing !== undefined) return existing;
-
-      // The promise is cached, not the value, so two concurrent callers share
-      // one call rather than racing to start a second.
-      const pending = inner.depth(queueUrl);
-      seen.set(queueUrl, pending);
-      return pending;
-    },
-  };
-}
-
-const STAGES = ["analyze", "aggregate", "publish"] as const;
-
-/** Both halves of a depth, or `null` for a queue that did not answer. */
-const total = (depth: QueueDepth | null): number | null =>
-  depth === null ? null : depth.available + depth.inFlight;
-
-export async function loadOverview(deps: OverviewDeps): Promise<Overview> {
-  const queues = readOnce(deps.queues);
-  const day = last24Hours(deps.clock);
-  const week = last7Days(deps.clock);
-
-  const [scraped, analyzed, skipped, published, errors, statusSlices, categorySlices, recent] =
-    await Promise.all([
-      itemsScraped(deps.metrics, day),
-      itemsAnalyzed(deps.metrics, day),
-      itemsSkipped(deps.metrics, day),
-      messagesPublished(deps.messages),
-      errorCount(queues, Object.values(deps.dlqUrls)),
-      statusChart(queues, deps.messages, deps.queueUrls),
-      categoryChart(deps.logs, week),
-      recentMessages(deps.messages),
-    ]);
-
-  const strip = await Promise.all(
-    STAGES.map(async (stage) => {
-      const [depth, dlq] = await Promise.all([
-        readDepth(queues, deps.queueUrls[stage]),
-        readDepth(queues, deps.dlqUrls[stage]),
-      ]);
-
-      return { label: stage, depth: total(depth), dlqDepth: total(dlq) };
-    }),
+/** Each queue's pending tasks and dead letters. */
+export async function queueStrip(): Promise<QueueStripEntry[]> {
+  const pending = await readPending();
+  return Promise.all(
+    QUEUES.map(async (queue) => ({
+      label: queue,
+      depth: Math.max(0, pending[queue] ?? 0),
+      dlqDepth: await countDeadLetters(queue),
+    })),
   );
+}
+
+async function recentMessages(): Promise<MessageListItem[]> {
+  const perStatus = await Promise.all(
+    MESSAGE_STATUSES.map((status) => messages.queryByStatus(status, RECENT_MESSAGE_LIMIT)),
+  );
+  return perStatus
+    .flat()
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, RECENT_MESSAGE_LIMIT);
+}
+
+export async function loadOverview(now = Date.now()): Promise<Overview> {
+  const day = now - DAY_MS;
+  const [scraped, analyzed, skippedBy, categories, strip, statusCounts, recent] = await Promise.all(
+    [
+      sumMetric("ItemsScraped", day, now),
+      sumMetric("ItemsAnalyzed", day, now),
+      sumMetricBy("ItemsSkipped", day, now),
+      sumMetricBy("ItemsClassified", now - WEEK_MS, now),
+      queueStrip(),
+      Promise.all(MESSAGE_STATUSES.map((status) => messages.countByStatus(status))),
+      recentMessages(),
+    ],
+  );
+
+  const byReason = Object.fromEntries(
+    SKIP_REASONS.map((reason) => [reason, skippedBy[reason] ?? 0]),
+  ) as Record<SkipReason, number>;
+  const statusOf = (status: (typeof MESSAGE_STATUSES)[number]) =>
+    statusCounts[MESSAGE_STATUSES.indexOf(status)] ?? 0;
 
   return {
     scraped,
     analyzed,
-    skipped,
-    published,
-    errors,
-    statusSlices,
-    categorySlices,
+    skipped: { total: Object.values(byReason).reduce((a, b) => a + b, 0), byReason },
+    published: statusOf("published"),
+    errors: strip.reduce((total, queue) => total + queue.dlqDepth, 0),
+    statusSlices: [
+      ...strip.map(({ label, depth }) => ({ label, value: depth })),
+      ...MESSAGE_STATUSES.map((status) => ({ label: status, value: statusOf(status) })),
+    ],
+    categorySlices: Object.entries(categories).map(([label, value]) => ({ label, value })),
     strip,
     recent,
   };

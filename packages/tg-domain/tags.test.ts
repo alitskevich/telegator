@@ -17,25 +17,17 @@ describe("splitTags", () => {
 });
 
 describe("mergeTags", () => {
-  /** AC-2.3: source tags survive alongside AI tags, with no duplicates. */
+  /** Source tags survive alongside AI tags, with no duplicates. */
   test("keeps both sides of the merge and drops duplicates", () => {
     expect(mergeTags("war, politics", "politics, drones")).toBe("war,politics,drones");
   });
 
-  /**
-   * §3.3 L287 calls `mergeTags(item.tags, match.tags)` — item first. First-seen
-   * order is what makes the result deterministic, and determinism is what
-   * AC-3.7 requires when it says `tags` are unchanged on replay.
-   */
+  /** Aggregate calls `mergeTags(item.tags, match.tags)`; first-seen order keeps a replay unchanged. */
   test("preserves first-seen order, item side first", () => {
     expect(mergeTags("b, a", "c, a")).toBe("b,a,c");
   });
 
-  /**
-   * The replay case, stated directly. After a first merge the message holds M;
-   * replaying the same item computes mergeTags(item.tags, M), which must be M
-   * again or the record is not byte-identical.
-   */
+  /** After a first merge the message holds M; a replay computes mergeTags(item.tags, M), which must be M. */
   test("re-merging an already-merged result changes nothing", () => {
     const item = "war, politics";
     const merged = mergeTags(item, "politics, drones");
@@ -59,12 +51,7 @@ describe("mergeTags", () => {
     expect(mergeTags(" , war , ", "  ")).toBe("war");
   });
 
-  /**
-   * Decision, not an accident: deduplication is exact-match. The spec never asks
-   * for case folding (§3.2 L261 says only "comma-split, deduplicated,
-   * comma-joined"), and folding would discard a tag's stored form. §3.4 L343
-   * lowercases when it builds hashtags, so display case does not leak onward.
-   */
+  /** On purpose: folding would discard the stored form, and publish lowercases hashtags anyway. */
   test("deduplicates by exact match, so War and war both survive", () => {
     expect(mergeTags("War", "war")).toBe("War,war");
   });

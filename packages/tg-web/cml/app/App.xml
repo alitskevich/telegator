@@ -1,9 +1,9 @@
 <Component id="App">
   <Signature purpose="Signs the operator in, then switches between sign-in, access check, refusal and the console"
-    description="`@api.access` is the API's answer to `whoami`, not the token's: only the API can read whether the account is still enabled (§8.6)." />
+    description="`@api.access` is the API's answer to `whoami`, not the token's: only the API can read whether the account is still enabled." />
 
-  <AuthService Ref="auth" config="{R.config}" />
-  <ApiService Ref="api" auth="@auth" config="{R.config}" />
+  <FirebaseService Ref="auth" config="{R.firebaseConfig}" emulatorsPorts="{R.firebaseEmulatorsPorts}" />
+  <ApiService Ref="api" auth="@auth" />
 
   <Selector On="{@api.access}">
     <Case When="granted"><AppShell /></Case>

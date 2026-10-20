@@ -17,23 +17,19 @@ describe("NewsItemSchema", () => {
     expect(NewsItemSchema.parse(valid)).toMatchObject(valid);
   });
 
-  /**
-   * Narrower than the payload schema of item 2.5: §5.2 L458 constrains the
-   * model's category to §5.4's enum, while §2.2 L139 lets the item carry an
-   * operator's arbitrary source default until AI overwrites it.
-   */
-  test("constrains category to §5.4's enum, unlike the item payload", () => {
+  /** The item may carry an operator's arbitrary default; the model may not. */
+  test("constrains category to the enum, unlike the item payload", () => {
     expect(NewsItemSchema.safeParse({ ...valid, category: "weather" }).success).toBe(false);
     expect(NewsItemSchema.safeParse({ ...valid, category: "war" }).success).toBe(true);
   });
 
-  test("still enforces the 220-character summary cap inherited from §11.2", () => {
+  test("still enforces the summary cap", () => {
     expect(
       NewsItemSchema.safeParse({ ...valid, summary: "x".repeat(SUMMARY_MAX_LENGTH + 1) }).success,
     ).toBe(false);
   });
 
-  test("keeps §5.2 L450's required/optional split", () => {
+  test("keeps the required/optional split", () => {
     expect(NewsItemSchema.safeParse({ ...valid, peoples: undefined }).success).toBe(true);
     const { location: _omitted, ...missingRequired } = valid;
     expect(NewsItemSchema.safeParse(missingRequired).success).toBe(false);
@@ -57,8 +53,8 @@ function propertyOf(name: string) {
   return property;
 }
 
-describe("NEWS_ITEM_SCHEMA (the JSON Schema §5.2 L432 sends)", () => {
-  test("declares exactly the six required fields of §5.2 L450", () => {
+describe("NEWS_ITEM_SCHEMA (the JSON Schema sent to the model)", () => {
+  test("declares exactly the six required fields", () => {
     expect(NEWS_ITEM_SCHEMA.required).toEqual([
       "title",
       "summary",
@@ -77,16 +73,11 @@ describe("NEWS_ITEM_SCHEMA (the JSON Schema §5.2 L432 sends)", () => {
     expect(propertyOf("category").enum).toEqual([...CATEGORIES]);
   });
 
-  test("enumerates importance as high or low (§5.2 L459)", () => {
+  test("enumerates importance as high or low", () => {
     expect(propertyOf("importance").enum).toEqual(["high", "low"]);
   });
 
-  /**
-   * §5.2 L452-462's Description column is the only place the "three words",
-   * "In Belarusian" and importance guidance appear. Structured output drops
-   * them unless they reach the emitted schema, and then the model never sees
-   * the instruction at all.
-   */
+  /** The model sees this guidance only if it reaches the emitted schema. */
   test("carries the field descriptions, the only place that guidance lives", () => {
     expect(propertyOf("title").description).toContain("three words");
     expect(propertyOf("summary").description).toContain("Belarusian");
@@ -101,15 +92,10 @@ describe("NEWS_ITEM_SCHEMA (the JSON Schema §5.2 L432 sends)", () => {
 });
 
 /**
- * R51 — the cap must reach the model as an *instruction*, not only as a
- * constraint the provider does not enforce.
- *
- * Structured output enforces shape, types and enums; string length it leaves to
- * the model. Emitting `maxLength` and saying nothing held the model to a limit
- * it had never been told, and Zod then failed the item permanently down §3.2
- * L251's transient path into the DLQ.
+ * Structured output does not enforce string length, so the cap must reach the
+ * model as an instruction, or over-long summaries fail validation on every retry.
  */
-describe("the summary cap reaches the model (R51)", () => {
+describe("the summary cap reaches the model", () => {
   interface JsonField {
     readonly description?: string;
     readonly maxLength?: number;

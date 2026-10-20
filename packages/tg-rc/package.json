@@ -1,7 +1,7 @@
 {
   "name": "tg-rc",
   "version": "1.0.0",
-  "description": "Resources: the classification prompt (§5.2) and the dashboard's column definitions.",
+  "description": "Resources: the classification prompt and the dashboard's column definitions.",
   "private": true,
   "type": "module",
   "exports": {

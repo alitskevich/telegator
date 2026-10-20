@@ -9,8 +9,8 @@ import {
   TargetSchema,
 } from "./target";
 
-describe("parseTargets — multi-target#5.3", () => {
-  test("MT-1: trims, strips one leading @, drops empties and duplicates, keeps order", () => {
+describe("parseTargets", () => {
+  test("trims, strips one leading @, drops empties and duplicates, keeps order", () => {
     expect(parseTargets("a, @b,,b , @a")).toEqual(["a", "b"]);
   });
 
@@ -26,13 +26,13 @@ describe("parseTargets — multi-target#5.3", () => {
     expect(parseTargets("@@odd")).toEqual(["@odd"]);
   });
 
-  test("the separator is a comma (multi-target#2.1)", () => {
+  test("the separator is a comma", () => {
     expect(TARGET_SEPARATOR).toBe(",");
   });
 });
 
-describe("resolveTargets — multi-target#5.3", () => {
-  test("MT-2: undefined and a blank list fall back to the default channel", () => {
+describe("resolveTargets", () => {
+  test("undefined and a blank list fall back to the default channel", () => {
     expect(resolveTargets(undefined)).toEqual([DEFAULT_TG_CHANNEL]);
     expect(resolveTargets(" , ")).toEqual([DEFAULT_TG_CHANNEL]);
   });
@@ -46,24 +46,24 @@ describe("resolveTargets — multi-target#5.3", () => {
   });
 });
 
-describe("TargetSchema — target-table#2.2", () => {
-  test("TT-1: a bare id parses with the default type and no template", () => {
+describe("TargetSchema", () => {
+  test("a bare id parses with the default type and no template", () => {
     const row = TargetSchema.parse({ id: "a" });
 
     expect(row).toEqual({ id: "a", type: DEFAULT_TARGET_TYPE });
     expect(row.messageTemplate).toBeUndefined();
   });
 
-  test("TT-1: an unknown type fails to parse", () => {
+  test("an unknown type fails to parse", () => {
     expect(() => TargetSchema.parse({ id: "a", type: "sms" })).toThrow();
   });
 
-  test("the enum has exactly the one member the draft names (D2)", () => {
+  test("the enum has exactly one member", () => {
     expect(TARGET_TYPES).toEqual(["telegram_channel"]);
     expect(TARGET_TYPES).toContain(DEFAULT_TARGET_TYPE);
   });
 
-  test("carries the two mirror fields, the template and the soft-delete flag", () => {
+  test("carries the two last-post fields, the template and the soft-delete flag", () => {
     const row = TargetSchema.parse({
       id: "a",
       type: "telegram_channel",
@@ -79,13 +79,13 @@ describe("TargetSchema — target-table#2.2", () => {
     expect(row.deleted).toBe(true);
   });
 
-  test("an empty id is not a row anything can address", () => {
+  test("an empty id is not a target anything can address", () => {
     expect(() => TargetSchema.parse({ id: "" })).toThrow();
   });
 });
 
-describe("TargetConfigInput — target-table#2.2", () => {
-  test("TT-2: accepts either operator-writable field, and both", () => {
+describe("TargetConfigInput", () => {
+  test("accepts either operator-writable field, and both", () => {
     expect(TargetConfigInput.parse({ type: "telegram_channel" })).toEqual({
       type: "telegram_channel",
     });
@@ -102,11 +102,11 @@ describe("TargetConfigInput — target-table#2.2", () => {
     { lastPostedMessageId: "chan_a/1" },
     { id: "b" },
     {},
-  ])("TT-2: rejects %o", (delta) => {
+  ])("rejects %o", (delta) => {
     expect(() => TargetConfigInput.parse(delta)).toThrow();
   });
 
-  test("TT-2: rejects a type outside the enum", () => {
+  test("rejects a type outside the enum", () => {
     expect(() => TargetConfigInput.parse({ type: "sms" })).toThrow();
   });
 });

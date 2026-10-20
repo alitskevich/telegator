@@ -4,16 +4,12 @@ import { buildClassificationRequest } from "./classificationRequest";
 import { type ClassifierClient, createOpenRouterClassifier } from "./openrouter";
 
 /**
- * Tests for the OpenRouter classifier adapter (§5.1, as revised by R50).
- *
- * R3 — this build cannot reach a model provider, so nothing here asserts
- * anything about what a model returns. Every test is about the *request shape*
- * the adapter puts on the wire and the *response handling* it applies to bytes
- * handed back to it. The Messages client is a hand-injected fake. No network
- * involved.
+ * Tests for the OpenRouter classifier adapter. Nothing here asserts what a
+ * model returns: only the *request shape* and the *response handling*. The
+ * Messages client is a hand-injected fake.
  */
 
-/** A response that satisfies `NewsItemSchema`; `category` is from §5.4's enum. */
+/** A response that satisfies `NewsItemSchema`; `category` is from the category enum. */
 const VALID_ITEM = {
   title: "Minsk metro delay",
   summary: "Кароткае паведамленне пра здарэнне.",
@@ -60,7 +56,7 @@ describe("createOpenRouterClassifier", () => {
     expect(fake.requests).toEqual([buildClassificationRequest(ITEM_BODY)]);
   });
 
-  it("passes the effort option through to the request builder (R3)", async () => {
+  it("passes the effort option through to the request builder", async () => {
     const fake = fakeClassifierClient(async () => textResponse(VALID_ITEM));
     const classifier = createOpenRouterClassifier({ client: fake.client, effort: false });
 
@@ -103,7 +99,7 @@ describe("createOpenRouterClassifier", () => {
     await expect(classifier.classify(ITEM_BODY)).resolves.toEqual(VALID_ITEM);
   });
 
-  it("throws when the response violates NewsItemSchema (§3.2 L256)", async () => {
+  it("throws when the response violates NewsItemSchema", async () => {
     const fake = fakeClassifierClient(async () =>
       textResponse({ ...VALID_ITEM, category: "not-a-real-category" }),
     );
@@ -136,7 +132,7 @@ describe("createOpenRouterClassifier", () => {
     await expect(classifier.classify(ITEM_BODY)).rejects.toThrow();
   });
 
-  it("propagates a provider error unchanged (§3.2 L263)", async () => {
+  it("propagates a provider error unchanged", async () => {
     const providerError = new Error("ThrottlingException");
     const fake = fakeClassifierClient(async () => {
       throw providerError;
@@ -150,13 +146,7 @@ describe("createOpenRouterClassifier", () => {
     expect(() => createOpenRouterClassifier()).not.toThrow();
   });
 
-  /**
-   * R50 — under Bedrock a missing credential surfaced from deep inside the AWS
-   * credential chain; under OpenRouter it is a wiring fault this adapter can
-   * name itself. §3.2 L263 sends a throw to SQS retry, so an unnamed one would
-   * spend six hours of retries filling the DLQ before an operator saw the
-   * cause.
-   */
+  /** A missing key is a wiring fault; naming it saves retries that hide the cause. */
   it("names the missing key provider rather than failing inside the SDK", async () => {
     await expect(createOpenRouterClassifier().classify(ITEM_BODY)).rejects.toThrow(
       /OpenRouter API key/,

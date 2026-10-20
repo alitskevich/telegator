@@ -4,13 +4,11 @@ import { conicGradient, type PieSlice, type Slice, toPieSlices } from "tg-utils/
 import type { ApiService } from "./ApiService";
 
 /**
- * §8.3 — the Dashboard page's data, and the Pipeline page's numbers: one
- * `overview` read, refreshed on a timer while the page is open.
- *
- * Mounted per page as `<OverviewService Ref="overview" api="@api" />`.
+ * The Dashboard page's data: one `overview` read, refreshed on a timer while the
+ * page is open. Mounted as `<OverviewService Ref="overview" api="@api" />`.
  */
 
-/** §8.5 caches CloudWatch for 60 s, so polling faster would only re-read the cache. */
+/** How often the dashboard re-reads its counters. */
 export const OVERVIEW_REFRESH_MS = 60_000;
 
 export interface Donut {
@@ -24,7 +22,7 @@ const donut = (values: readonly Slice[] | undefined): Donut => {
   return { slices, background: conicGradient(slices) };
 };
 
-/** §8.5 — the skip split is the informative part: "category 10 · low 14". */
+/** The skip split by reason, e.g. "category 10 · low 14". */
 export const skipNote = (overview: Overview | null): string =>
   Object.entries(overview?.skipped.byReason ?? {})
     .filter(([, count]) => count > 0)

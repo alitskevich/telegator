@@ -1,14 +1,14 @@
 import { WebClientService } from "arrmatura-web";
+import type { MemberRow } from "tg-actions/dashboard/records";
+import { MAX_PUBLISH_NOW } from "tg-configs/limits";
+import { MessageStatusSchema } from "tg-enums/messageStatus";
+import { DEFAULT_TARGET_TYPE } from "tg-enums/targetType";
 import {
   MESSAGE_WRITABLE_FIELDS,
-  type MemberRow,
   SOURCE_WRITABLE_FIELDS,
   TARGET_WRITABLE_FIELDS,
   type TableName,
-} from "tg-actions/dashboard/records";
-import { MessageStatusSchema } from "tg-enums/messageStatus";
-import { DEFAULT_TARGET_TYPE } from "tg-enums/targetType";
-import { MAX_PUBLISH_NOW } from "tg-ports/queues";
+} from "tg-rc/columns";
 import { resources } from "tg-rc/web";
 import { toggleSelectAll } from "tg-utils/ui/selection";
 import { cycleSort, type SortState } from "tg-utils/ui/sort";
@@ -26,12 +26,10 @@ import { fill } from "../text/fill";
 import type { ApiService } from "./ApiService";
 
 /**
- * §8.3 — one table page's state: Sources, Targets or Messages, chosen by
- * `table`. Mounted per page as
- * `<GridService Ref="grid" table="sources" api="@api" canEdit="{@api.canEdit}" />`.
- *
- * What the state *means* is `src/grid/view.ts`; this holds it, talks to the
- * API, and reloads after every write so the table shows what was stored.
+ * One table page's state: Sources, Targets or Messages, chosen by `table`.
+ * Mounted as `<GridService Ref="grid" table="sources" api="@api" canEdit="{@api.canEdit}" />`.
+ * `src/grid/view.ts` derives the view; this holds the state, calls the API,
+ * and reloads after every write so the table shows what was stored.
  */
 
 const SPECS: Readonly<Record<TableName, GridSpec>> = {
@@ -53,7 +51,7 @@ const SPECS: Readonly<Record<TableName, GridSpec>> = {
   },
 };
 
-/** What "add" writes besides the id: §2.1's `ok` enables polling; a target needs a type. */
+/** What "add" writes besides the id: `ok` enables polling; a target needs a type. */
 const NEW_ROW: Readonly<Partial<Record<TableName, Record<string, string>>>> = {
   sources: { status: "ok" },
   targets: { type: DEFAULT_TARGET_TYPE },
@@ -91,7 +89,7 @@ export class GridService extends WebClientService {
   expanded: Expanded = {};
   newId = "";
   publishMax = String(MAX_PUBLISH_NOW);
-  /** R60 — "Reset all" is armed by one press and fired by a second; see `resetAll`. */
+  /** "Reset all" is armed by one press and fired by a second; see `resetAll`. */
   resetArmedAt: number | null = null;
 
   declare view: GridView;
@@ -129,7 +127,7 @@ export class GridService extends WebClientService {
     });
   }
 
-  /** §8.2 — the Messages tab is `?status=`, so a reload or a shared link shows the same one. */
+  /** The Messages tab is `?status=`, so a reload or a shared link shows the same one. */
   get status(): string {
     return this.#status;
   }
@@ -205,7 +203,7 @@ export class GridService extends WebClientService {
     this.up({ selected });
   }
 
-  /** R56 — over the rows on screen, so a filter narrows what "all" means. */
+  /** Over the rows on screen, so a filter narrows what "all" means. */
   toggleAll(): void {
     this.up({ selected: [...toggleSelectAll(this.view.ids, new Set(this.selected))] });
   }
@@ -226,7 +224,7 @@ export class GridService extends WebClientService {
     this.up({ publishMax: event.value ?? "" });
   }
 
-  /** §8.4 — `upsertRecord` with only the fields that changed. */
+  /** `upsertRecord` with only the fields that changed. */
   async save(id: string): Promise<void> {
     const row = this.rows?.find((candidate) => candidate.id === id);
     if (row === undefined) return;
@@ -245,7 +243,7 @@ export class GridService extends WebClientService {
     await this.load();
   }
 
-  /** §8.3's "add" — `upsertRecord` creates what it cannot find. */
+  /** `upsertRecord` creates what it cannot find. */
   async add(): Promise<void> {
     const id = this.newId.trim();
     // An empty id would create a row nothing can address.
@@ -262,7 +260,7 @@ export class GridService extends WebClientService {
     await this.load();
   }
 
-  /** §8.4 — soft, and only the selected rows still on screen. */
+  /** Soft, and only the selected rows still on screen. */
   async removeSelected(): Promise<void> {
     const visible = new Set(this.view.ids);
     const ids = this.selected.filter((id) => visible.has(id));
@@ -281,7 +279,7 @@ export class GridService extends WebClientService {
     await this.load();
   }
 
-  /** §8.4 — the CSV is a file, so the answer to this press is a download. */
+  /** The CSV comes back as a download. */
   async exportCsv(): Promise<void> {
     const file = exportFilename(this.table, new Date());
     const csv = await this.api.run(
@@ -292,10 +290,7 @@ export class GridService extends WebClientService {
     if (typeof csv === "string") downloadText(file, csv);
   }
 
-  /**
-   * R26 — `members` is projected on no index, so a panel is read from the base
-   * table when it opens, and only then.
-   */
+  /** A story's members are loaded when its panel opens, and only then. */
   async expand(id: string): Promise<void> {
     if (this.expanded[id] !== undefined) {
       const { [id]: _closed, ...rest } = this.expanded;
@@ -314,7 +309,7 @@ export class GridService extends WebClientService {
     }
   }
 
-  /** §8.4 — sets `topublish` and enqueues; the send itself is the queue's. */
+  /** Sets `topublish` and enqueues; the queue does the send. */
   async republish(id: string): Promise<void> {
     const done = await this.api.run(
       "republishMessage",
@@ -324,7 +319,7 @@ export class GridService extends WebClientService {
     if (done !== undefined) await this.load();
   }
 
-  /** R53 — runs the deployed publish stage over the `topublish` backlog, capped. */
+  /** Runs the publish stage over the `topublish` backlog, capped. */
   async publishNow(): Promise<void> {
     const max = Number(this.publishMax);
     // Bounded here as well as server-side, so an out-of-range value costs no round trip.
@@ -338,7 +333,7 @@ export class GridService extends WebClientService {
     if (done !== undefined) await this.load();
   }
 
-  /** §8.4 — invokes the deployed scrape function and waits for its summary. */
+  /** Runs a scrape and waits for its summary. */
   async scrapeNow(): Promise<void> {
     const done = await this.api.run("runScraper", undefined, {
       success: (result) => fill(resources.toasts.runScraper, asRecord(result)),
@@ -347,10 +342,8 @@ export class GridService extends WebClientService {
   }
 
   /**
-   * R60 — a reset drops every cursor, and a dropped cursor cannot be put back,
-   * so the press that does it is not the press that reaches for it. The armed
-   * *count* is held rather than a flag, so a table that reloads to a different
-   * number of sources disarms itself.
+   * A reset drops every cursor and cannot be undone, so it takes two presses.
+   * The armed row count is held, not a flag, so a reload to a different count disarms it.
    */
   async resetAll(): Promise<void> {
     if (!this.armedReset) {

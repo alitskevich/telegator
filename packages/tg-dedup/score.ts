@@ -15,12 +15,9 @@ export interface Band {
 export type Verdict = "merge" | "adjudicate" | "distinct";
 
 /**
- * Jaccard, with the empty-empty case defined as 0 rather than left as 0/0.
- *
- * Two items that both lack entities have produced no evidence, not agreement.
- * Returning 1 there would auto-merge every sparse pair on the
- * heaviest-weighted component — a false merge, which §10.3 L999 ranks as the
- * costlier error.
+ * Jaccard, with empty-versus-empty defined as 0, not 0/0. Two items that both
+ * lack entities show no evidence, not agreement; returning 1 would auto-merge
+ * every sparse pair, and a false merge is the costlier error.
  */
 function jaccard(a: readonly string[], b: readonly string[]): number {
   if (a.length === 0 && b.length === 0) return 0;
@@ -36,13 +33,9 @@ function jaccard(a: readonly string[], b: readonly string[]): number {
 }
 
 /**
- * R46 — the replacement for §6 L538's cosine similarity.
- *
- * Weighted because the three components are not equally discriminating: two
- * reports of one event nearly always share a proper name or a person, often
- * share a title token once §5.2 L452 has reduced the title to three English
- * words, and share tags only loosely because L455 asks for "3-5 related tags"
- * rather than a controlled vocabulary.
+ * Weighted Jaccard of the three key sets. Weighted because they differ in
+ * strength: two reports of one event nearly always share a name, often share a
+ * word of the three-word English title, and share free-form tags only loosely.
  */
 export function matchScore(
   a: MatchKey,
@@ -56,7 +49,7 @@ export function matchScore(
   );
 }
 
-/** The two-threshold band of R46. Both bounds are inclusive on the auto side. */
+/** The two-threshold band. Both bounds are inclusive on the auto side. */
 export function classify(
   score: number,
   band: Band = {

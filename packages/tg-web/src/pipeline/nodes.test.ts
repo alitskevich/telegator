@@ -13,7 +13,7 @@ const overview: Overview = {
   categorySlices: [],
   strip: [
     { label: "analyze", depth: 5, dlqDepth: 0 },
-    { label: "aggregate", depth: null, dlqDepth: null },
+    { label: "aggregate", depth: 0, dlqDepth: 0 },
     { label: "publish", depth: 2, dlqDepth: 3 },
   ],
   recent: [],
@@ -23,7 +23,7 @@ const byId = (nodes: ReturnType<typeof pipelineNodes>) =>
   Object.fromEntries(nodes.map((node) => [node.id, node]));
 
 describe("pipelineNodes", () => {
-  test("draws §1.4's chain in order, schedule to Telegram", () => {
+  test("draws the chain in order, schedule to Telegram", () => {
     expect(pipelineNodes(resources.stages, null, null).map((node) => node.id)).toEqual([
       "schedule",
       "scrape",
@@ -46,13 +46,13 @@ describe("pipelineNodes", () => {
   });
 
   /** An unreadable queue is not an empty one, and must not render as `0`. */
-  test("an unread queue is null, not zero, and raises no alarm", () => {
+  test("an empty queue is zero and raises no alarm", () => {
     const node = byId(pipelineNodes(resources.stages, overview, null))["aggregate-queue"];
 
-    expect(node).toMatchObject({ value: null, dlq: null, alert: false });
+    expect(node).toMatchObject({ value: 0, dlq: 0, alert: false });
   });
 
-  test("a non-empty DLQ is the alert", () => {
+  test("dead letters raise the alert", () => {
     const nodes = byId(pipelineNodes(resources.stages, overview, null));
 
     expect(nodes["publish-queue"]?.alert).toBe(true);

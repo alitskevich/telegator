@@ -19,7 +19,7 @@ A night-shift operations console for one pipeline. Work screen only: tables,
 figures and one diagram, read many times a day. It should feel like an
 instrument panel: calm until something needs a person.
 
-**The idea.** The pipeline *is* the interface: §1.4's chain of stages and
+**The idea.** The pipeline *is* the interface: the chain of stages (docs/telegator.md §1) and
 queues is drawn once, on the Pipeline page, and every manual trigger sits on
 the node it acts on. **The memorable thing** is the dead-letter count: the one
 red figure in the console, hanging under the queue it came from.

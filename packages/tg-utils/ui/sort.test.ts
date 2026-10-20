@@ -20,13 +20,7 @@ describe("cycleSort", () => {
     expect(cycleSort(by("title", "asc"), "title")).toEqual(by("title", "desc"));
   });
 
-  /**
-   * The third click clears rather than returning to ascending. The order the
-   * server sent is a meaningful state — §8.5 L847 queries `status-index` with
-   * `ts` descending, so "no sort" is "newest first" — and a cycle that never
-   * reached it would put that order out of an operator's reach for the rest of
-   * the session.
-   */
+  /** The server's order means something: an unsorted Messages table is newest first. */
   test("a third click clears the sort", () => {
     expect(cycleSort(by("title", "desc"), "title")).toBeUndefined();
   });
@@ -54,11 +48,7 @@ describe("sortRows", () => {
     ]);
   });
 
-  /**
-   * §8.3's tables show numbers — `lastCount`, `memberCount`, `zeroYieldRuns`.
-   * Compared as text, 120 sorts before 3, and the column an operator sorts to
-   * find the busiest source answers with the emptiest one.
-   */
+  /** Compared as text, 120 sorts before 3. */
   test("numeric columns compare numerically, not as text", () => {
     expect(ids(sortRows(rows, by("lastCount", "asc")))).toEqual([
       "example/2",

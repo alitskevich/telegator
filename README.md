@@ -1,73 +1,37 @@
 # Telegator
 
-Reads Telegram news channels, deduplicates and categorises the posts with Claude
-via OpenRouter, and publishes merged digests back to Telegram. An operator
-dashboard curates sources, reviews messages and replays failures.
+Reads Telegram news channels, classifies and deduplicates the posts with Claude through OpenRouter, and publishes merged stories back to Telegram. An operator console curates sources, reviews messages and replays failures.
 
-**Everything is in one document: [`docs/telegator.md`](docs/telegator.md)** — the
-normative specification (Part I), a plain-English guide to every AWS service it
-uses (Part II), the register of decisions, reconciliations and traps behind both
-(Part III), and what the system is built from (Part IV). Start at §1.4 for the
-whole pipeline in one picture. This file gets you running and does not summarise
-the document.
+It runs on Firebase: Firestore, Cloud Functions, Cloud Tasks and Hosting. **How it works is in [`docs/telegator.md`](docs/telegator.md).**
 
-The code is npm workspaces under `packages/tg-*` — one concern each, mapped in
-§28. `scripts/` holds the operator entry points and `test/` the cross-cutting
-invariants.
-
-## Running it
+## Run it locally
 
 ```bash
-npm install
-npm run typecheck   # tsc --noEmit
-npm test            # vitest run
-npm run lint        # biome check .
-npm run synth       # cdk synth — no credentials needed
-npm run dev         # the console (packages/tg-web), at localhost:8080
+npm install     # also links the private Arrmatura checkouts (~/Projects/arrmatura, arrmatura-web, ultimus)
+npm run dev     # emulators + functions watch + console at http://localhost:8080
 ```
 
-The first four need nothing else: no AWS account, no credentials, no network.
+Everything runs in the Firebase emulators, with live reload for both the functions and the console. Sign in with the emulator's dev account. See the doc's §7 for secrets, seeding and how to trigger a scrape.
 
-`npm install` also links the private Arrmatura framework from sibling checkouts
-(`~/Projects/arrmatura`, `arrmatura-web`, `ultimus`); the console cannot build
-without them.
-
-`npm run dev` needs the deployed stacks. The console is static: it signs in with
-Cognito in the browser and calls the dashboard API (§8, §9.3). It learns where
-both are from `packages/tg-web/www/config.json`, which
-`npm run deploy:web -- --config-only` writes from the stacks' outputs.
-
-No gate above runs the console in a browser, so a template change can render
-nothing and still pass all four (§32.2). Look at the page.
-
-## Deploying
+## Check it
 
 ```bash
-npm run deploy                    # the stacks — a diff only; add -- --execute
-npm run deploy:web -- --execute   # the console, to Firebase Hosting (telegator-581db)
+npx tsc --noEmit
+npm test          # vitest inside the Firestore + Auth emulators
+npx biome check .
+npm run build
 ```
 
-**This repository carries no AWS credentials.** Dev is deployed — the console on
-Firebase Hosting, its API on API Gateway (§9.3); prod is not. Use `npm run deploy`, never a bare `cdk deploy` (§33). Two gates
-precede production:
+No check runs the console in a browser: after a template change, look at the page.
 
-- §10.3's threshold calibration. Until `calibration/record.json` exists,
-  `cdk synth -c env=prod -c scheduleEnabled=true` refuses to synthesise.
-- §10.4's latency, throughput and cost targets, which are measured against a
-  running system and are unverified here.
+## Deploy it
 
-Secrets live in Secrets Manager; none is in this repository.
+```bash
+npm run deploy    # hosting, functions, Firestore rules and indexes → telegator-581db
+```
+
+First-time setup (Blaze plan, secrets, Google sign-in, the first admin, turning on the schedule) is §8 of the doc.
 
 ## MCP server
 
-`docs/telegator.md`'s companion spec — `mcp-server#n` in code citations — specs a
-local stdio MCP server exposing three tools — `add_source`, `add_target`,
-`find_messages_by_tags` — over this repository's own DynamoDB tables. It
-deploys nothing and needs the same AWS credentials as `npm run deploy`. The spec
-left the tree with `.spectomat/`; read it from history with
-`git show 0575678:.spectomat/done/002-mcp-server.spec.md`.
-
-```bash
-npm run mcp                 # dev tables
-npm run mcp -- --env=prod   # prod tables
-```
+`npm run mcp` starts a local stdio MCP server with three tools, `add_source`, `add_target` and `find_messages_by_tags`, over the Firestore collections. It uses the emulator when `FIRESTORE_EMULATOR_HOST` is set, and production otherwise.

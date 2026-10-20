@@ -1,5 +1,5 @@
 <Component id="Page.Dashboard">
-  <Signature purpose="§8.3 — pipeline health at a glance: the 24 h figures, the two charts and the latest messages" />
+  <Signature purpose="Pipeline health at a glance: the 24 h figures, the two charts and the latest messages" />
 
   <OverviewService Ref="overview" api="@api" />
 

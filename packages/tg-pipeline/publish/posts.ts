@@ -7,11 +7,9 @@ const LEGACY_TG_AT = 0;
 export type PostMap = Readonly<Record<string, Post>>;
 
 /**
- * multi-target#5.2 — the post a target already has: from the map, or — for the
- * first target only — from the frozen `tgId`/`tgAt` pair a message published
- * before the map carries (R55). A legacy message has one post, on its single
- * channel, and that channel is the first (only) entry of its list, so the next
- * publish is an edit rather than a duplicate (base E2E-4).
+ * The post a target already has: from the map, or, for the first target only,
+ * from the legacy `tgId`/`tgAt` pair of a message published before the map
+ * existed. The next publish is then an edit, not a duplicate.
  */
 export function postFor(
   message: Pick<Message, "tgChannel" | "tgId" | "tgAt">,
@@ -30,9 +28,9 @@ export function postFor(
 }
 
 /**
- * multi-target D4 — a post at or after the message's last write needs no send.
- * Telegram rejects an edit that changes nothing, which would loop a partial
- * retry into the DLQ; republish bumps `ts` so every post goes stale at once.
+ * A post at or after the message's last write needs no send. Telegram rejects
+ * an edit that changes nothing, which would loop a retry into dead letters;
+ * republish bumps `ts` so every post goes stale at once.
  */
 export function isCurrent(post: Post, message: Pick<Message, "ts">): boolean {
   return post.tgAt >= message.ts;

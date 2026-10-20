@@ -4,7 +4,7 @@ import { classify, matchScore } from "./score";
 
 const key = (fields: Parameters<typeof buildMatchKey>[0]) => buildMatchKey(fields);
 
-describe("matchScore (R46)", () => {
+describe("matchScore", () => {
   test("scores an identical key at 1", () => {
     const a = key({ title: "Minsk Factory Fire", properNames: "Minsk", tags: "fire" });
 
@@ -31,11 +31,8 @@ describe("matchScore (R46)", () => {
   });
 
   /**
-   * Three comparisons, not two: each partner shares exactly one component in
-   * full and neither of the others, so each score is that component's weight
-   * alone. Asserting only entities > tags left the middle term unpinned — the
-   * name claimed an ordering the test did not establish, and a weighting that
-   * put titleTokens above entities would have passed it.
+   * Each partner shares exactly one component in full and none of the others,
+   * so each score is that component's weight alone and all three are ordered.
    */
   test("weights entities above title above tags", () => {
     const base = key({ title: "Alpha Beta", properNames: "Minsk", tags: "fire" });

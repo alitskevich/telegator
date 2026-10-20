@@ -1,11 +1,6 @@
 /**
- * The §3.1 L210–222 `t.me/s/{channel}` HTML parser.
- *
- * Telegram's preview page is scraped, not fetched through an API, so this module
- * is deliberately string-level: no DOM, no HTML library. Three details below come
- * from markup read off a live page (item 3.1) rather than from the spec's
- * abbreviated examples — the text element's real class, the self-closing `<br/>`,
- * and the forwarded channel living in the anchor's `href`.
+ * The `t.me/s/{channel}` HTML parser. String-level on purpose: no DOM, no HTML
+ * library. The patterns follow markup read off a live page.
  */
 
 export interface ParsedLink {
@@ -23,43 +18,36 @@ export interface ParsedPost {
   postedAt?: string;
 }
 
-/** §3.1 L210 — the literal the page is split on. */
+/** The literal the page is split on. */
 const CHUNK_MARKER = '<div class="tgme_widget_message_wrap js-widget_message_wrap">';
 
-/**
- * §3.1 L210 — "discarding the first fragment (page chrome)". `split` puts
- * everything before the first marker in element 0, which is the channel header,
- * never a post.
- */
+/** The first fragment of the split is the channel header, never a post. */
 const CHROME_FRAGMENTS = 1;
 
-/** §3.1 L216 — "N from 1". */
+/** Link tokens are numbered from 1. */
 const FIRST_LINK_ID = 1;
 
 /** One `<div>` deep — the text element itself — when its inner HTML starts. */
 const INITIAL_NESTING_DEPTH = 1;
 
-/** §3.1 L214 — first `href="https://t.me/{any}/{digits}"`, digits captured. */
+/** The first `href="https://t.me/{any}/{digits}"`, digits captured. */
 const MESSAGE_ID_PATTERN = /href="https:\/\/t\.me\/[^"/]+\/(?<messageId>\d+)"/;
 
-/**
- * §3.1 L215 — the spec writes `tgme_widget_message_text …`; live markup is
- * `tgme_widget_message_text js-message_text`, so the class is matched by prefix.
- */
+/** Live markup is `tgme_widget_message_text js-message_text`, so the class is matched by prefix. */
 const TEXT_ELEMENT_PREFIX = '<div class="tgme_widget_message_text';
 const DIV_OPEN = "<div";
 const DIV_CLOSE = "</div";
 const TAG_CLOSE = ">";
 
-/** §3.1 L216 — real anchors carry `target`/`rel` after the href, so `[^>]*` both sides. */
+/** Real anchors carry `target`/`rel` after the href, so `[^>]*` on both sides. */
 const ANCHOR_PATTERN = /<a\b[^>]*\shref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
 
-/** §3.1 L217 — live pages emit `<br/>`; the spec's bare `<br>` is matched too. */
+/** Live pages emit `<br/>`; a bare `<br>` is matched too. */
 const LINE_BREAK_PATTERN = /<br\s*\/?>/gi;
 const ANY_TAG_PATTERN = /<[^>]*>/g;
 
 /**
- * §3.1 L217 — the six named entities, in the order they must be applied.
+ * The six named entities, in the order they must be applied.
  * `&amp;` is decoded **last**: decoding it first rewrites `&amp;lt;` to `&lt;`
  * and then to `<`, inventing markup the channel never wrote.
  */
@@ -68,41 +56,33 @@ const HTML_ENTITIES: ReadonlyArray<readonly [string, string]> = [
   ["&gt;", ">"],
   ["&quot;", '"'],
   ["&#39;", "'"],
-  // A plain space rather than U+00A0: §3.1 L226 strips a source's `teaser` from
-  // this body by literal comparison, which an invisible non-breaking space breaks.
+  // A plain space rather than U+00A0: scrape strips a source's `teaser` from this
+  // body by literal comparison, which an invisible non-breaking space breaks.
   ["&nbsp;", " "],
   ["&amp;", "&"],
 ];
 
-/** §3.1 L217 — "collapse 3+ whitespace to `\n\n`". */
+/** Runs of 3+ whitespace collapse to `\n\n`. */
 const RUN_OF_WHITESPACE_PATTERN = /\s{3,}/g;
 
-/** §3.1 L218 — `background-image:url('X')`. */
+/** `background-image:url('X')`. */
 const BACKGROUND_IMAGE_PATTERN = /background-image:\s*url\('([^']*)'\)/g;
 
 /**
- * R32 · §3.1 L218 read literally ("first `background-image:url('X')`") captures an
- * emoji sprite: on a live page exactly three classes carry a background image —
- * `emoji`, `tgme_widget_message_photo_wrap` and `tgme_widget_message_video_thumb` —
- * and emoji routinely precede, or wholly replace, the photo. §2.2 L135 calls the
- * field "URL extracted from **the post's** `background-image` style", so the
- * corrected reading is: the first background image that is not an emoji sprite.
+ * The image is the first background image that is not an emoji sprite: emoji
+ * also carry one, and they often precede, or replace, the photo.
  */
 const EMOJI_SPRITE_URL_PATTERN = /telegram\.org\/img\/emoji\//;
 const EMOJI_CLASS_PATTERN = /class="[^"]*\bemoji\b[^"]*"/;
 
 /**
- * §3.1 L220 — the publish time, read off the date anchor's
- * `<time datetime="2026-08-29T09:15:00+00:00">`.
- *
- * The first `<time>` carrying a `datetime` is the post's own: the date anchor is
- * the only element of a chunk that has one. The value is passed through as the
- * page wrote it, so the parser stays clock-free and string-level — §3.1 L228
- * does the arithmetic.
+ * The publish time, from the date anchor's `<time datetime="…">`, the only
+ * `datetime` in a chunk. Passed through as written, so the parser stays
+ * clock-free; scrape does the arithmetic.
  */
 const POSTED_AT_PATTERN = /<time\b[^>]*\sdatetime="(?<postedAt>[^"]*)"/;
 
-/** §3.1 L219 — the forwarded-from anchor. */
+/** The forwarded-from anchor. */
 const FORWARDED_FROM_CLASS = "tgme_widget_message_forwarded_from_name";
 const CHANNEL_HREF_PATTERN = /href="https:\/\/t\.me\/(?<channel>[^"/]+)/;
 
@@ -147,7 +127,7 @@ function extractRawBody(chunk: string): string {
   return chunk.slice(bodyStart);
 }
 
-/** §3.1 L216 — `<a href="X">Y</a>` → `[Y](#N)`, collecting `{id, href}`. */
+/** `<a href="X">Y</a>` → `[Y](#N)`, collecting `{id, href}`. */
 function tokeniseLinks(rawBody: string): { tokenised: string; links: ParsedLink[] } {
   const links: ParsedLink[] = [];
   let nextId = FIRST_LINK_ID;
@@ -162,7 +142,7 @@ function tokeniseLinks(rawBody: string): { tokenised: string; links: ParsedLink[
   return { tokenised: rawBody.replace(ANCHOR_PATTERN, replaceAnchor), links };
 }
 
-/** §3.1 L217 — strip tags, break lines, decode entities, collapse, trim. */
+/** Strip tags, break lines, decode entities, collapse, trim. */
 function toPlainText(tokenised: string): string {
   const withBreaks = tokenised.replace(LINE_BREAK_PATTERN, "\n");
   const stripped = withBreaks.replace(ANY_TAG_PATTERN, "");
@@ -177,7 +157,7 @@ function toPlainText(tokenised: string): string {
   return decoded.replace(RUN_OF_WHITESPACE_PATTERN, "\n\n").trim();
 }
 
-/** R32 — see `EMOJI_SPRITE_URL_PATTERN`. */
+/** See `EMOJI_SPRITE_URL_PATTERN`. */
 function isEmojiBackground(chunk: string, matchIndex: number, url: string): boolean {
   if (EMOJI_SPRITE_URL_PATTERN.test(url)) {
     return true;
@@ -205,7 +185,7 @@ function extractImage(chunk: string): string | undefined {
 }
 
 /**
- * §3.1 L219 — the origin channel. It is read from the anchor's `href`
+ * The origin channel. It is read from the anchor's `href`
  * (`https://t.me/origin_channel/7001`) and not from its text, which is the
  * channel's display name and may be any language, emoji or punctuation.
  */
@@ -226,8 +206,7 @@ function extractForwardedFrom(chunk: string): string | undefined {
 function parseChunk(chunk: string): ParsedPost | undefined {
   const id = MESSAGE_ID_PATTERN.exec(chunk)?.groups?.messageId;
   if (id === undefined) {
-    // §3.1 L222 — an id-less chunk is a zero-yield signal for the orchestrator;
-    // here it only means: never emit a post without an id.
+    // Never emit a post without an id.
     return undefined;
   }
 
@@ -250,7 +229,7 @@ function parseChunk(chunk: string): ParsedPost | undefined {
   return post;
 }
 
-/** §3.1 L210–222 — one page of `t.me/s/{channel}` markup into posts. */
+/** One page of `t.me/s/{channel}` markup into posts. */
 export function parseTelegramPage(html: string): ParsedPost[] {
   const posts: ParsedPost[] = [];
 

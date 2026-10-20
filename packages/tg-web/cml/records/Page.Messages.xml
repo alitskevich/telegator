@@ -1,5 +1,5 @@
 <Component id="Page.Messages">
-  <Signature purpose="§8.3 — the Messages table by status tab, with Publish now on the backlog for an admin"
+  <Signature purpose="The Messages table by status tab, with Publish now on the backlog for an admin"
     description="The tab is `?status=` on the hash route, so a reload or a shared link shows the same one." />
 
   <GridService Ref="grid" table="messages" status="{@nav.params.status}" api="@api"

@@ -3,33 +3,22 @@ import { createOpenRouterClassifier } from "tg-ai/openrouter";
 import { CLASSIFIER_MAX_TOKENS, CLASSIFIER_MODEL_ID, OPENROUTER_BASE_URL } from "tg-configs/ai";
 
 /**
- * R50 — the smoke test for the OpenRouter swap.
- *
- * **Why this is a script and not a test.** None of the four gates can watch a
- * model call happen: `vitest` forbids the network outright, and `tsc`, `biome`
- * and `cdk synth` never execute a request. So the swap's real failure modes —
- * a base URL that composes to the wrong path, an auth header the provider does
- * not recognise, an `output_config` the tier rejects — all pass every gate
- * against an adapter that cannot classify a single item. This file is the thing
- * that would have caught them.
- *
- * Unlike `seed.ts`, the logic is *not* pushed down into `packages/`: what is being
- * checked here is the behaviour of the real SDK against a real socket, which is
- * precisely the part `packages/` is built to keep out of the test process.
+ * The smoke test for the OpenRouter adapter. It is a script, not a test, because
+ * no gate makes a model call: a wrong base URL, auth header or `output_config`
+ * passes every gate. It checks the real SDK, so its logic stays out of `packages/`.
  *
  * ```
  * npm run smoke:openrouter           # offline — canned far end, no network, no key
  * npm run smoke:openrouter -- --live # one real call; needs OPENROUTER_API_KEY
  * ```
  *
- * Offline mode replaces `globalThis.fetch` before any client is constructed, so
- * the adapter, the SDK, the base URL, the key handling and the request body are
- * all the real ones — only the far end is canned.
+ * Offline mode replaces `globalThis.fetch` before any client is built, so all
+ * but the far end is real.
  */
 
 const API_KEY_VAR = "OPENROUTER_API_KEY";
 
-/** A response that satisfies `NewsItemSchema`; `category` is from §5.4's enum. */
+/** A response that satisfies `NewsItemSchema`. */
 const CANNED_ITEM = {
   title: "Explosion reported at a Minsk substation",
   summary: "Паведамляецца пра выбух на падстанцыі ў Мінску.",
@@ -56,11 +45,8 @@ function check(name: string, ok: boolean, detail = ""): void {
 }
 
 /**
- * Normalises whatever shape `fetch` was handed.
- *
- * The SDK passes a `Headers` instance, never a plain object — `Object.entries`
- * on one yields nothing, and the first run of this script "proved" the adapter
- * sent no auth header at all when in fact it sent `x-api-key`.
+ * Normalises whatever shape `fetch` was handed. The SDK passes a `Headers`
+ * instance, on which `Object.entries` yields nothing.
  */
 function readHeaders(raw: unknown): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -196,8 +182,7 @@ async function runOffline(): Promise<void> {
 async function runLive(apiKey: string): Promise<void> {
   console.log(`live — one real call to ${OPENROUTER_BASE_URL} as ${CLASSIFIER_MODEL_ID}\n`);
 
-  // With effort, which is what the pipeline actually sends. R3 could not
-  // establish whether the tier accepts it; this is the call that finds out.
+  // With effort, as the pipeline sends it: this call finds out whether the tier accepts it.
   try {
     const item = await createOpenRouterClassifier({ apiKey: async () => apiKey }).classify(
       ITEM_BODY,
@@ -207,17 +192,17 @@ async function runLive(apiKey: string): Promise<void> {
       true,
       `category=${item.category}`,
     );
-    check("output_config.effort is accepted by this tier (R3)", true);
+    check("output_config.effort is accepted by this tier", true);
     console.log(`\n  model returned: ${JSON.stringify(item, null, 2).replace(/\n/g, "\n  ")}\n`);
   } catch (error) {
     const message = String(error);
     check("a real classification returns a schema-valid NewsItem", false, message);
 
-    // A 400 naming the field is R3's escape hatch becoming necessary, not an outage.
+    // A 400 naming the field means effort must be turned off, not an outage.
     if (/effort/i.test(message)) {
       console.log("\n  → the tier rejects `output_config.effort`. Pass `effort: false` in");
       console.log(
-        "    `tg-pipeline/handlers/analyze.ts`, which `buildClassificationRequest` already supports.\n",
+        "    `tg-ai/openrouter.ts`, which `buildClassificationRequest` already supports.\n",
       );
     }
   }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { fixedClock } from "../../test/fakes/clock";
+import { fixedClock } from "../../test/support";
 import { DateKeySchema, toDateKey, todayKey, toIsoTimestamp } from "./date";
 
 const utc = (y: number, m: number, d: number, h = 0, min = 0, s = 0): number =>
@@ -11,14 +11,9 @@ describe("toDateKey", () => {
   });
 
   /**
-   * §2.2 L138 calls this "the scrape date"; the spec never names a timezone.
-   * UTC is the recorded choice (Phase 0 conventions) and it has to be honoured
-   * exactly, because §6 L546 makes the date a correctness rule for dedup and
-   * §7.3 L652 makes it the FIFO MessageGroupId. Two same-day scrapes that
-   * disagree about the date silently split one story into two messages.
-   *
-   * These two instants straddle UTC midnight, so a local-time implementation
-   * fails at least one of them in any timezone that is not UTC.
+   * The date partitions dedup, so two scrapes that disagree about the day split
+   * one story in two. These instants straddle UTC midnight, so a local-time
+   * implementation fails one of them in any non-UTC timezone.
    */
   test("uses UTC, not the host timezone, just before midnight", () => {
     expect(toDateKey(utc(2026, 1, 5, 23, 30))).toBe("2026-01-05");
@@ -55,11 +50,7 @@ describe("DateKeySchema", () => {
     expect(DateKeySchema.safeParse("2024-02-29").success).toBe(true);
   });
 
-  /**
-   * A calendar-invalid value must not reach the table: `date` is the partition
-   * key of `date-index` (§7.2 L639) and the FIFO group (§7.3 L652), so garbage
-   * creates a partition nothing will ever query again.
-   */
+  /** A calendar-invalid date would create a dedup partition nothing ever queries. */
   test.each(["2026-02-30", "2023-02-29", "2026-13-01", "2026-00-10", "2026-01-32"])(
     "rejects the calendar-invalid %s",
     (bad) => {
@@ -75,13 +66,13 @@ describe("DateKeySchema", () => {
   );
 });
 
-describe("toIsoTimestamp — target-table#5.3", () => {
-  test("TT-15: the epoch is 1970-01-01T00:00:00.000Z", () => {
+describe("toIsoTimestamp", () => {
+  test("the epoch is 1970-01-01T00:00:00.000Z", () => {
     expect(toIsoTimestamp(0)).toBe("1970-01-01T00:00:00.000Z");
   });
 
-  /** D3 — the same shape `sources.lastResult` already carries. */
-  test("TT-15: formats in UTC with milliseconds, whatever the host timezone", () => {
+  /** The same shape `sources.lastResult` already carries. */
+  test("formats in UTC with milliseconds, whatever the host timezone", () => {
     expect(toIsoTimestamp(utc(2026, 9, 8, 10, 30, 15))).toBe("2026-09-08T10:30:15.000Z");
   });
 

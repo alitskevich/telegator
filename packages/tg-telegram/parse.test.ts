@@ -4,15 +4,10 @@ import type { ParsedPost } from "./parse";
 import { parseTelegramPage } from "./parse";
 
 /**
- * Every case runs over the recorded `t.me/s/` markup captured in item 3.1, never
- * over hand-written HTML: §3.1 L210–222 parses a real page, and the two rules
- * that bit hardest (`<br/>` self-closing, `tgme_widget_message_text
- * js-message_text`) are only visible in the recording.
- *
- * Two cases need markup no recording happens to contain — a chunk with no id
- * (§3.1 L222) and the `&amp;lt;` double-decode hazard (§3.1 L217). Those are
- * derived by a single substitution into a recorded fixture rather than authored,
- * so the surrounding structure stays live-accurate.
+ * Every case runs over recorded `t.me/s/` markup, never hand-written HTML: the
+ * rules that bit hardest (`<br/>`, `tgme_widget_message_text js-message_text`)
+ * are only visible in a recording. Cases no recording contains are made by one
+ * substitution into a recorded fixture, so the structure stays live-accurate.
  */
 function parseFixture(name: TelegramFixtureName): ParsedPost[] {
   return parseTelegramPage(telegramFixture(name));
@@ -27,7 +22,7 @@ function onlyPost(name: TelegramFixtureName): ParsedPost {
   return post;
 }
 
-describe("chunking (§3.1 L210)", () => {
+describe("chunking", () => {
   test("yields one post per message wrapper, in page order", () => {
     expect(parseFixture("multiPost").map((post) => post.id)).toEqual([
       "100674",
@@ -49,10 +44,7 @@ describe("chunking (§3.1 L210)", () => {
     expect(parseFixture("noChunks")).toEqual([]);
   });
 
-  /**
-   * §3.1 L222 treats a chunk with no id as a zero-yield signal handled by the
-   * orchestrator; the parser's own duty is only never to emit an id-less post.
-   */
+  /** The parser's duty is only never to emit an id-less post. */
   test("skips a chunk whose anchors carry no t.me message href", () => {
     const withoutId = telegramFixture("twoLinks").replaceAll(
       'href="https://t.me/demo_channel/100675"',
@@ -62,9 +54,8 @@ describe("chunking (§3.1 L210)", () => {
   });
 });
 
-describe("links and tokenised body (§3.1 L216)", () => {
-  // AC-1.3 (§3.1 L238): two links produce `[…](#1)`, `[…](#2)` and two entries.
-  test("AC-1.3 a post with two links yields (#1), (#2) and links.length === 2", () => {
+describe("links and tokenised body", () => {
+  test("a post with two links yields (#1), (#2) and links.length === 2", () => {
     const post = onlyPost("twoLinks");
     expect(post.body).toContain("[first source](#1)");
     expect(post.body).toContain("[second source](#2)");
@@ -77,7 +68,7 @@ describe("links and tokenised body (§3.1 L216)", () => {
 
   test("tokenises anchors carrying target and rel attributes", () => {
     // Live anchors are `<a href="X" target="_blank" rel="noopener">Y</a>`, not
-    // the bare `<a href="X">Y</a>` §3.1 L216 writes.
+    // a bare `<a href="X">Y</a>`.
     expect(onlyPost("twoLinks").body).toBe(
       "Report cites [first source](#1) and [second source](#2).",
     );
@@ -101,7 +92,7 @@ describe("links and tokenised body (§3.1 L216)", () => {
   });
 });
 
-describe("plain body (§3.1 L217)", () => {
+describe("plain body", () => {
   test("decodes the six named entities", () => {
     const [first] = parseFixture("multiPost");
     if (first === undefined) {
@@ -120,10 +111,7 @@ describe("plain body (§3.1 L217)", () => {
     );
   });
 
-  /**
-   * §3.1 L217 lists `&amp;` first, but decoding it first turns `&amp;lt;` into
-   * `&lt;` and then into `<` — inventing markup the channel never wrote.
-   */
+  /** Decoding `&amp;` first would turn `&amp;lt;` into `<`, markup the channel never wrote. */
   test("does not double-decode &amp;lt;", () => {
     const escaped = telegramFixture("multiPost").replace("&amp; &lt; &gt;", "&amp;lt; &gt;");
     const [first] = parseTelegramPage(escaped);
@@ -142,7 +130,7 @@ describe("plain body (§3.1 L217)", () => {
   });
 });
 
-describe("image (§3.1 L218, R32)", () => {
+describe("image", () => {
   test("takes the photo wrapper's background-image", () => {
     const posts = parseFixture("multiPost");
     const [, , third] = posts;
@@ -166,12 +154,8 @@ describe("image (§3.1 L218, R32)", () => {
     );
   });
 
-  /**
-   * R32 regression: read literally, §3.1 L218's "first `background-image:url('X')`"
-   * stores the emoji sprite that precedes the photo, which §3.4 L349 would then
-   * `sendPhoto` as the story's picture.
-   */
-  test("R32 never returns the emoji sprite that precedes the photo", () => {
+  /** The first background image is often an emoji sprite, which publish would send as the photo. */
+  test("never returns the emoji sprite that precedes the photo", () => {
     const post = onlyPost("emojiBeforePhoto");
     expect(post.image).toBe("https://cdn4.telesco.pe/file/placeholderPhotoRefEeFf");
     expect(post.image).not.toContain("telegram.org/img/emoji");
@@ -185,7 +169,7 @@ describe("image (§3.1 L218, R32)", () => {
   });
 });
 
-describe("forwardedFrom (§3.1 L219)", () => {
+describe("forwardedFrom", () => {
   test("takes the channel segment from the forwarded-from anchor's href", () => {
     const post = onlyPost("forwarded");
     expect(post.id).toBe("7001");
@@ -200,7 +184,7 @@ describe("forwardedFrom (§3.1 L219)", () => {
   });
 });
 
-describe("postedAt (§3.1 L220)", () => {
+describe("postedAt", () => {
   test("reads the date anchor's `<time datetime>`, verbatim", () => {
     for (const post of parseFixture("multiPost")) {
       expect(post.postedAt).toBe("2026-08-29T09:15:00+00:00");

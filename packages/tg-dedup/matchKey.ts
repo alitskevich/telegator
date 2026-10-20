@@ -1,18 +1,12 @@
 import { MATCH_KEY_CAP } from "tg-configs/dedup";
 
 /**
- * The deduplication match key (R46), replacing §6 L519-519's embedding.
- *
- * Built only from the fields §5.2 L452-462 makes the classifier emit in English
- * — `title`, `peoples`, `properNames`, `tags`. §6's multilingual embedder
- * existed to serve `summary` (Belarusian) and `body` (Russian/Ukrainian), which
- * `buildEmbeddingText` concatenated into the vector and which a match key does
- * not need: the classification has already normalised the discriminating
- * signal into one language.
+ * The deduplication match key, built only from the fields the classifier emits
+ * in English: `title`, `peoples`, `properNames`, `tags`.
  *
  * Every array is lowercased, punctuation-stripped, deduplicated and sorted, so
- * an identical item serialises to identical bytes. AC-3.7's byte-identical
- * replay depends on that and on nothing else.
+ * an identical item serialises to identical bytes. Byte-identical replay
+ * depends on that.
  */
 export interface MatchKey {
   readonly entities: readonly string[];
@@ -21,9 +15,8 @@ export interface MatchKey {
 }
 
 /**
- * A structural shape rather than `AnalyzedItem`, so the §10.3 calibration
- * harness can pass records read from its labelled-set file without building a
- * full queue payload — the reason `EmbeddingTextFields` was structural too.
+ * A structural shape rather than `AnalyzedItem`, so the calibration harness can
+ * pass labelled-set records without building a full queue payload.
  */
 export interface MatchKeyFields {
   readonly title?: string | undefined;
@@ -44,12 +37,12 @@ function sortedSet(values: readonly string[]): string[] {
   return [...new Set(values.filter((value) => value !== ""))].sort().slice(0, MATCH_KEY_CAP);
 }
 
-/** `peoples` and `properNames` are comma-separated by §5.2 L460-461. */
+/** `peoples` and `properNames` are comma-separated. */
 function splitCommas(value: string | undefined): string[] {
   return value === undefined ? [] : value.split(",").map(canonical);
 }
 
-/** `title` is "three words, English" (§5.2 L452), so whitespace is the separator. */
+/** `title` is "three words, English", so whitespace is the separator. */
 function splitWords(value: string | undefined): string[] {
   return value === undefined ? [] : canonical(value).split(WHITESPACE);
 }
@@ -63,19 +56,12 @@ export function buildMatchKey(fields: MatchKeyFields): MatchKey {
 }
 
 /**
- * R45 — the union, where the rule this replaced took an elementwise mean. It
- * keeps every discriminating term either input contributed, and is commutative
- * and idempotent, which is what lets a replayed merge produce the same bytes as
- * the original (AC-3.7).
+ * The sorted union. It keeps every term either side contributed and is
+ * commutative and idempotent, so a replayed merge stores the same bytes.
  *
- * It is **not associative once `MATCH_KEY_CAP` binds**: capping a union in
- * lexical order discards the tail, so `union(union(a, b), c)` and
- * `union(a, union(b, c))` can retain different terms and store different bytes
- * when the intermediate result already exceeds the cap. Idempotence and
- * commutativity are unaffected, and so is AC-3.7 — replay re-runs the SAME
- * sequence of merges, not a re-associated one. The cap is sized (see
- * `MATCH_KEY_CAP`) so it is not normally reached at all; if it is observed to
- * bind, merge order becomes a thing to reason about.
+ * It is **not associative once `MATCH_KEY_CAP` binds**, because the cap drops
+ * the lexical tail. Replay is unaffected (it re-runs the same merges in the
+ * same order), and the cap is sized so it is not normally reached.
  */
 export function unionMatchKeys(a: MatchKey, b: MatchKey): MatchKey {
   return {
@@ -86,9 +72,8 @@ export function unionMatchKeys(a: MatchKey, b: MatchKey): MatchKey {
 }
 
 /**
- * R44 — §7.2 L641–641 stores a dedup match as three projections for the
- * `date-index` (L636). This function reads them back as a `MatchKey` for the
- * scorer, structurally: the read path never builds a full payload.
+ * A message stores its match key as three fields (`keyEntities`, `keyTitle`,
+ * `keyTags`). This reads them back as a `MatchKey` for the scorer.
  */
 export function matchKeyOf(record: {
   readonly keyEntities: readonly string[];

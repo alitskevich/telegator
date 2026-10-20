@@ -1,24 +1,23 @@
+import { messages, sources, targets } from "tg-firebase/db";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
-import { fakeMessageRepo, fakeSourceRepo, fakeTargetRepo } from "../../test/fakes/db";
 import { callTool } from "./server";
-import type { ToolDefinition } from "./tools";
+import type { McpDeps, ToolDefinition } from "./tools";
 
-function deps() {
-  return { sources: fakeSourceRepo(), targets: fakeTargetRepo(), messages: fakeMessageRepo() };
-}
+/** The stub tools below never reach Firestore. */
+const deps: McpDeps = { sources, targets, messages };
 
 function tool(run: ToolDefinition["run"]): ToolDefinition {
   return { name: "t", description: "d", inputSchema: z.object({}).strict(), run };
 }
 
-describe("callTool (MCP-17, MCP-18)", () => {
+describe("callTool", () => {
   test("a successful call answers one text block of pretty JSON that parses back", async () => {
     const result = { created: { id: "chan" } };
     const reply = await callTool(
       tool(async () => result),
       {},
-      deps(),
+      deps,
     );
 
     expect(reply.isError).toBeUndefined();
@@ -33,7 +32,7 @@ describe("callTool (MCP-17, MCP-18)", () => {
         throw new Error("source already exists: chan");
       }),
       {},
-      deps(),
+      deps,
     );
 
     expect(reply.isError).toBe(true);
@@ -46,7 +45,7 @@ describe("callTool (MCP-17, MCP-18)", () => {
         throw "boom";
       }),
       {},
-      deps(),
+      deps,
     );
 
     expect(reply.isError).toBe(true);

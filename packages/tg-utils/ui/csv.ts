@@ -1,9 +1,6 @@
 /**
- * §8.4 L825's export format.
- *
- * RFC 4180 quoting, which is not optional here: a headline containing a comma is
- * ordinary news copy, and unquoted it shifts every later column by one — so the
- * export reports the wrong category for that row, in a file that opens cleanly.
+ * The console's CSV export. RFC 4180 quoting matters: a headline with a comma is
+ * ordinary, and unquoted it shifts every later column by one.
  */
 
 const NEEDS_QUOTING = /[",\n\r]/;

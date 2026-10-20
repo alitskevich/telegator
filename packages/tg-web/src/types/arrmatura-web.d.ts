@@ -1,12 +1,7 @@
 /**
- * The slice of `arrmatura-web` the console calls, typed.
- *
- * The package ships TypeScript source written to looser compiler settings than
- * this repository's (`noImplicitAny`, `noImplicitOverride`, `.xml` imports), so
- * letting `tsc` follow it would fail the gate on code nobody here wrote. The
- * root `tsconfig.json` maps the package name to this file instead; esbuild
- * ignores that mapping and bundles the real source. Every member below is
- * checked against `node_modules/arrmatura-web` — add one here before using it.
+ * The slice of `arrmatura-web` the console calls, typed. The package's source
+ * fails this repo's stricter `tsc`, so `tsconfig.json` maps it here; esbuild
+ * still bundles the real source. Declare a member here before using it.
  */
 declare module "arrmatura-web" {
   export type Delta = Record<string, unknown>;

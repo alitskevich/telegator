@@ -4,17 +4,12 @@ import type { MatchKeyFields } from "../matchKey";
 import type { BandRow, LabelledKeyPair } from "./sweep";
 
 /**
- * §10.3 step 1/6's file formats, rewritten (R48 — see `sweep.ts` for what the
- * harness itself became).
- *
- * `pairs.jsonl` — one hand-judged pair per line — is the labelled set, which is
- * model-agnostic and survives any change to the rule. `items.json` carries the
- * fields a match key is built from (§5.2's English
- * `title`/`peoples`/`properNames`/`tags`), because `sweepBands` scores those
- * directly.
+ * The calibration file formats. `pairs.jsonl` is the labelled set, one
+ * hand-judged pair per line. `items.json` carries the English fields a match key
+ * is built from (`title`/`peoples`/`properNames`/`tags`), which `sweepBands` scores.
  */
 
-/** `pairs.jsonl` — one hand-judged pair per line (§10.3 step 1). */
+/** `pairs.jsonl` — one hand-judged pair per line. */
 const LabelledPairSchema = z.object({
   a: z.string().min(1),
   b: z.string().min(1),
@@ -36,8 +31,7 @@ export function parsePairsJsonl(text: string): LabelledPair[] {
       try {
         return LabelledPairSchema.parse(JSON.parse(line));
       } catch (error) {
-        // Named by line, because a labelled set is hand-written and the only
-        // way to fix one bad row is to be told which row it is.
+        // Named by line: the set is hand-written, so the author needs the row.
         throw new Error(
           `pairs.jsonl line ${number}: ${error instanceof Error ? error.message : ""}`,
         );
@@ -46,13 +40,8 @@ export function parsePairsJsonl(text: string): LabelledPair[] {
 }
 
 /**
- * `items.json` — the fields a match key is built from (§5.2 L452-462), and
- * nothing else.
- *
- * Deliberately narrower than `AnalyzedItem`, for the same reason
- * `MatchKeyFields` is structural: a labelled set is assembled by hand from
- * existing data, and requiring every pipeline field would make it harder to
- * produce without making the calibration any more faithful.
+ * `items.json` — the fields a match key is built from, and nothing else.
+ * Narrower than `AnalyzedItem`, so a hand-built labelled set stays easy to make.
  */
 const CalibrationItemSchema = z.object({
   id: z.string().min(1),
@@ -78,26 +67,13 @@ export function parseItems(raw: unknown): Record<string, CalibrationItem> {
   return byId;
 }
 
-/**
- * §6 compares an item against a candidate without regard to order, so `(a,b)`
- * and `(b,a)` are one observation.
- */
+/** Scoring ignores order, so `(a,b)` and `(b,a)` are one observation. */
 const keyOf = (pair: LabelledPair) => [pair.a, pair.b].sort().join(" ");
 
 /**
- * Collapse mirrored duplicates and reject what cannot be one pair, before the
- * ids are erased into `fields`/`other`.
- *
- * The labelled set is what `autoMergePrecision`, `autoSplitRecall` and
- * `bandFraction` are computed from, and those are the numbers
- * `calibration/record.json` asks production to trust. A self-pair scores 1.0
- * against itself and inflates the auto-merge region's apparent precision —
- * exactly the metric the three-way objective protects; a pair counted twice
- * doubles its weight against every other pair.
- *
- * This runs over `LabelledPair`, before `toKeyPairs` resolves ids to fields,
- * because `a`/`b` are the only handle a duplicate or self-pair is recognisable
- * by.
+ * Collapses mirrored duplicates and rejects self-pairs, while the ids are still
+ * there to compare. A self-pair scores 1.0 and inflates auto-merge precision; a
+ * pair counted twice doubles its weight.
  */
 function distinctLabelledPairs(pairs: readonly LabelledPair[]): LabelledPair[] {
   const seen = new Map<string, LabelledPair>();
@@ -113,8 +89,7 @@ function distinctLabelledPairs(pairs: readonly LabelledPair[]): LabelledPair[] {
       continue;
     }
 
-    // A pair labelled both ways is a labelling error. Picking one would decide
-    // the calibration on whichever line happened to come first in the file.
+    // A pair labelled both ways is a labelling error, not a tie to resolve.
     if (existing.label !== pair.label) {
       throw new Error(`pairs.jsonl: conflicting labels for pair ${pair.a} / ${pair.b}`);
     }
@@ -123,12 +98,7 @@ function distinctLabelledPairs(pairs: readonly LabelledPair[]): LabelledPair[] {
   return [...seen.values()];
 }
 
-/**
- * Join labelled pairs to the match-key fields `sweepBands` needs.
- *
- * `CalibrationItem` is a superset of `MatchKeyFields` — it carries `id` too —
- * so each side is passed through as-is rather than rebuilt field by field.
- */
+/** Joins labelled pairs to the match-key fields `sweepBands` needs. */
 export function toKeyPairs(
   pairs: readonly LabelledPair[],
   items: Readonly<Record<string, CalibrationItem>>,
@@ -137,9 +107,7 @@ export function toKeyPairs(
     const fields: MatchKeyFields | undefined = items[pair.a];
     const other: MatchKeyFields | undefined = items[pair.b];
 
-    // Throws rather than dropping the pair: a silently dropped pair would
-    // shrink the labelled set below §10.3 step 1's floor without telling
-    // anyone.
+    // Throws rather than dropping the pair, which would shrink the set silently.
     if (fields === undefined) throw new Error(`pairs.jsonl references unknown item ${pair.a}`);
     if (other === undefined) throw new Error(`pairs.jsonl references unknown item ${pair.b}`);
 
@@ -148,13 +116,9 @@ export function toKeyPairs(
 }
 
 /**
- * The labelled set's hash, recorded as `labelledSetHash` (R48).
- *
- * A threshold is a property of the exact set it was tuned on — the same
- * argument that applied when the score was a similarity threshold over
- * embedded text, carried over unchanged to the fields a match key is built
- * from. Hashing both files rather than one: a `pairs.jsonl` unchanged against
- * an edited `items.json` (or vice versa) is still a different labelled set.
+ * The labelled set's hash, recorded as `labelledSetHash`: a threshold belongs to
+ * the exact set it was tuned on. Both files are hashed, since editing either
+ * makes a different set.
  */
 export function hashLabelledSet(pairsJsonl: string, itemsJson: string): string {
   const digest = createHash("sha256")
@@ -164,7 +128,7 @@ export function hashLabelledSet(pairsJsonl: string, itemsJson: string): string {
   return `sha256:${digest}`;
 }
 
-/** `curve.csv` — §10.3 step 6's record of the sweep. */
+/** `curve.csv` — the record of the sweep. */
 export const CURVE_HEADER =
   "distinctThreshold,mergeThreshold,autoMergePrecision,autoSplitRecall,bandFraction";
 
@@ -175,9 +139,7 @@ export function toCurveCsv(rows: readonly BandRow[]): string {
       [
         row.distinctThreshold,
         row.mergeThreshold,
-        // Empty, not 0 and not "null". Zero reads as "every merge was wrong",
-        // when in fact there were no merges at all — different findings, and
-        // only one is a reason to raise the merge threshold.
+        // Empty, not 0: zero would read as "every merge was wrong", not "no merges".
         row.autoMergePrecision ?? "",
         row.autoSplitRecall,
         row.bandFraction,

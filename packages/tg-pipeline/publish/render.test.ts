@@ -4,22 +4,18 @@ import { MemberBlockSchema } from "tg-domain/message";
 import { describe, expect, test } from "vitest";
 import { renderMember, renderMembers } from "./render";
 
-/**
- * Built through `MemberBlockSchema.parse` rather than an object literal: the
- * house rule bans type assertions, and parsing also proves each fixture is a
- * block the aggregate stage could actually have written (§2.3 L169–176).
- */
+/** Fixtures are parsed, not cast, so each is a block aggregate could have written. */
 function member(fields: Record<string, unknown>): MemberBlock {
   return MemberBlockSchema.parse({ summary: "s", channel: "chan", ts: 0, ...fields });
 }
 
-/** The `🔘 ` prefix and ` - @mention` suffix §3.4 L327 fixes around every block. */
+/** The `🔘 ` prefix and ` - @mention` suffix around every block. */
 function line(itemId: string, content: string, channel: string): string {
   return `🔘 ${content} - <a href="https://t.me/${itemId}">@${channel}</a>`;
 }
 
 describe("renderMember", () => {
-  test("emits the §3.4 L327 shape: 🔘 prefix, content, and the @channel link", () => {
+  test("emits the block shape: 🔘 prefix, content, and the @channel link", () => {
     const rendered = renderMember("chan/7", member({ summary: "Выбух", channel: "chan" }));
 
     expect(rendered).toBe(line("chan/7", "Выбух", "chan"));
@@ -27,7 +23,7 @@ describe("renderMember", () => {
     expect(rendered.endsWith(' - <a href="https://t.me/chan/7">@chan</a>')).toBe(true);
   });
 
-  test("§3.4 L324 — replaces a resolved [text](#N) token with an anchor", () => {
+  test("replaces a resolved [text](#N) token with an anchor", () => {
     const rendered = renderMember(
       "chan/7",
       member({ summary: "see [the report](#1) now", links: [{ id: 1, href: "https://e.by/r" }] }),
@@ -52,8 +48,7 @@ describe("renderMember", () => {
     expect(rendered).toContain('<a href="https://e.by/two">two</a>');
   });
 
-  /** AC-4.4 (§3.4 L362). */
-  test("AC-4.4 — a [x](#3) token with no matching link degrades to plain `x`", () => {
+  test("a [x](#3) token with no matching link degrades to plain `x`", () => {
     const rendered = renderMember(
       "chan/7",
       member({ summary: "a [x](#3) b", links: [{ id: 1, href: "https://e.by/r" }] }),
@@ -74,10 +69,7 @@ describe("renderMember", () => {
     expect(rendered).not.toContain("(#2)");
   });
 
-  /**
-   * §3.4 L352 sends with `parse_mode: html`, so raw `<` and `&` in a summary
-   * would be parsed as markup by Telegram and reject or corrupt the send.
-   */
+  // Messages are sent with `parse_mode: html`, so raw `<` and `&` would break the send.
   test('HTML-escapes &, <, > and " in the summary text', () => {
     const rendered = renderMember("chan/7", member({ summary: 'M&S <b>x</b> "q" > y', links: [] }));
 
@@ -102,7 +94,7 @@ describe("renderMember", () => {
 });
 
 describe("renderMembers", () => {
-  test("§3.4 L324 — orders members by ts ascending", () => {
+  test("orders members by ts ascending", () => {
     const rendered = renderMembers({
       "chan/3": member({ summary: "third", ts: 300 }),
       "chan/1": member({ summary: "first", ts: 100 }),
@@ -116,7 +108,7 @@ describe("renderMembers", () => {
     ]);
   });
 
-  test("§3.4 L324 — renders only the first 12 when 20 members are present", () => {
+  test("renders only the first 12 when 20 members are present", () => {
     const members: Record<string, MemberBlock> = {};
     for (let i = 1; i <= 20; i++) {
       members[`chan/${i}`] = member({ summary: `s${i}`, ts: i });
@@ -131,12 +123,7 @@ describe("renderMembers", () => {
     expect(renderMembers(members)).not.toContain("s13");
   });
 
-  /**
-   * The tiebreak is a recorded decision, not spec text: `ts` alone is unstable
-   * when one aggregate batch stamps several members from a single clock
-   * reading, and an unstable order changes the rendered bytes on a replay,
-   * breaking AC-3.7's byte-identical guarantee.
-   */
+  // Members can share a `ts`; without a tiebreak a replay could render other bytes.
   test("orders members sharing a ts deterministically by item id", () => {
     const forward = renderMembers({
       "chan/10": member({ summary: "ten", ts: 5 }),
@@ -157,8 +144,7 @@ describe("renderMembers", () => {
     ]);
   });
 
-  /** AC-4.3 (§3.4 L361). */
-  test("AC-4.3 — a member keyed abc/1 never renders content belonging to abc/12", () => {
+  test("a member keyed abc/1 never renders content belonging to abc/12", () => {
     const rendered = renderMembers({
       "abc/1": member({ summary: "content of one", channel: "abc", ts: 1 }),
       "abc/12": member({ summary: "content of twelve", channel: "abc", ts: 2 }),

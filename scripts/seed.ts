@@ -1,64 +1,73 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { createSourceRepo } from "tg-aws/db/sources";
-import { ENV_VARS } from "tg-configs/env";
-import { parseSeedArgs } from "tg-ops/seed/args";
-import { seedSourcesFrom } from "tg-ops/seed/sources";
+import { SourceSchema } from "tg-domain/source";
+import { TargetSchema } from "tg-domain/target";
+import { sources, targets } from "tg-firebase/db";
 
 /**
- * §9.4 — the seed, run by hand during §9.5's cutover.
+ * `npm run seed -- <dir>` — loads `sources` and `targets` from the DynamoDB
+ * scan exports in `<dir>` (`sources.dynamodb.json`, `targets.dynamodb.json`).
+ * Messages are not carried over. Dry run unless `--write`.
  *
- * R20: `sources` only. R21: `--data-dir` is required, because the export lives
- * outside this repository and a default that silently found nothing would look
- * like a successful migration of an empty file.
- *
- * Everything worth testing is in `tg-ops/seed/`; this file reads a file, prints,
- * and writes.
+ * Firestore is the emulator when FIRESTORE_EMULATOR_HOST is set, else production.
  */
 
+type AttributeValue = Record<string, unknown>;
+
+/** DynamoDB's typed JSON (`{"S": "x"}`, `{"N": "1"}`, …) to a plain value. */
+function unmarshal(value: AttributeValue): unknown {
+  const [type, inner] = Object.entries(value)[0] ?? [];
+  switch (type) {
+    case "S":
+    case "BOOL":
+      return inner;
+    case "N":
+      return Number(inner);
+    case "NULL":
+      return null;
+    case "L":
+      return (inner as AttributeValue[]).map(unmarshal);
+    case "M":
+      return unmarshalItem(inner as Record<string, AttributeValue>);
+    case "SS":
+      return inner;
+    case "NS":
+      return (inner as string[]).map(Number);
+    default:
+      throw new Error(`unsupported DynamoDB type: ${type}`);
+  }
+}
+
+function unmarshalItem(item: Record<string, AttributeValue>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(item).map(([key, value]) => [key, unmarshal(value)]));
+}
+
+function readScan(dir: string, table: string): Record<string, unknown>[] {
+  const scan = JSON.parse(readFileSync(join(dir, `${table}.dynamodb.json`), "utf8"));
+  return (scan.Items as Record<string, AttributeValue>[]).map(unmarshalItem);
+}
+
 async function main(): Promise<void> {
-  const { dataDir, write } = parseSeedArgs(process.argv.slice(2));
+  const args = process.argv.slice(2);
+  const dir = args.find((arg) => !arg.startsWith("--"));
+  if (dir === undefined) throw new Error("usage: npm run seed -- <export dir> [--write]");
+  const write = args.includes("--write");
 
-  const path = join(dataDir, "data-sources.json");
-  const sources = seedSourcesFrom(JSON.parse(readFileSync(path, "utf8")));
-
-  console.log(`${path}: ${sources.length} sources`);
+  const sourceRows = readScan(dir, "sources").map((row) => SourceSchema.parse(row));
+  const targetRows = readScan(dir, "targets").map((row) => TargetSchema.parse(row));
+  console.log(`firestore=${process.env.FIRESTORE_EMULATOR_HOST ?? "production"}`);
+  console.log(`${sourceRows.length} sources, ${targetRows.length} targets`);
 
   if (!write) {
-    // Dry run by default. A migration is hard to undo, so the destructive mode
-    // is the one you opt into after reading this list.
-    for (const source of sources) {
-      console.log(
-        `  ${source.id}  status=${source.status ?? "(none)"}  lastCount=${source.lastCount}`,
-      );
-    }
-    console.log("dry run — pass --write to seed the table");
+    console.log("dry run — pass --write to apply");
     return;
   }
-
-  const repo = createSourceRepo({
-    client: DynamoDBDocumentClient.from(new DynamoDBClient({})),
-    tableName: requireEnv(ENV_VARS.sourcesTable),
-  });
-
-  for (const source of sources) {
-    await repo.put(source);
-    console.log(`  seeded ${source.id}`);
-  }
-
-  console.log(`seeded ${sources.length} sources`);
+  for (const row of sourceRows) await sources.put(row);
+  for (const row of targetRows) await targets.put(row);
+  console.log("written");
 }
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (value === undefined || value === "")
-    throw new Error(`missing required environment variable ${name}`);
-  return value;
-}
-
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
+await main().catch((error: unknown) => {
+  console.error(String(error));
+  process.exit(1);
 });

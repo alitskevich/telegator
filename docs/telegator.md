@@ -1,1911 +1,208 @@
 ---
-title: "Telegator — Specification, AWS Guide and Record"
-description: "The single Telegator document: the normative functional specification of the Telegram news pipeline, a plain-English guide to every AWS concept it uses, and the register of decisions, reconciliations and traps behind both."
-keywords: [telegator, aws, nextjs, specification, pipeline, sqs, dynamodb, openrouter, lambda, cognito, fargate]
+title: "Telegator"
+description: "How the Telegram news pipeline works on Firebase: data, stages, AI, deduplication, console, development and deployment."
+keywords: [telegator, firebase, firestore, cloud-functions, cloud-tasks, openrouter, telegram]
 ---
 
 # Telegator
 
-An automated news pipeline on AWS, with an operator console on Firebase Hosting.
+Telegator collects posts from public Telegram channels and asks an AI model to classify each one. It groups the posts that report the same story into one message and publishes that message to target channels. When more sources report the story, the message is **edited in place**. Operators use a web console to watch the pipeline and step in.
 
-This is the project's only document. It has three parts, and they answer three
-different questions:
-
-| Part | Question it answers | Read it when |
-| --- | --- | --- |
-| **I — Specification** (§1–§11) | What must the system do? | Implementing, reviewing, or testing behaviour |
-| **II — AWS explained** (§12–§24) | What are these services, and what do they cost you? | New to AWS, or new to this repository |
-| **III — Record** (§25–§27) | Why is the code not exactly Part I? | A comment cites `R#`, or something surprises you |
-
-**Part I is normative.** Code cites it by section and line (`§3.4 L317`), and
-`test/specCitations.test.ts` fails if a citation stops resolving. Where the code
-diverges from Part I, the divergence is a **reconciliation** with a number, and
-§25 is the register of all of them.
-
-Three status labels appear throughout:
-
-| Label | Meaning |
-| --- | --- |
-| **built** | It exists in the code today. You can open the file. |
-| **planned** | It is designed here but not built. |
-| **context** | AWS offers it; Telegator does not use it. The word is here so it is not a stranger. |
-
----
-
-# Part I — Specification
-
-## 1. System Overview
-
-### 1.1 Purpose
-
-Telegator is an automated news pipeline. It collects unstructured posts from public Telegram channels, enriches each post with AI-generated structured metadata, groups posts that report the same story into a single message, and republishes those messages to target Telegram channels. An operator dashboard exposes pipeline state and allows manual intervention.
-
-The product value is **deduplicated, categorised, translated news digests** — several channels reporting the same event become one published message that updates in place as more sources report it.
-
-The system is Telegram-only. RSS ingestion is out of scope: it stays on the legacy system, or returns as new work.
-
-### 1.2 Actors
-
-| Actor | Role |
-| --- | --- |
-| **Operator** | Signs in to the dashboard. Curates sources, reviews and edits messages, replays failed work, watches pipeline health. |
-| **Scheduler** | One EventBridge rule invoking the scraper every 30 minutes. The only scheduled component. |
-| **Queues** | Carry work between the remaining stages. Provide retry, back-pressure and failure isolation. |
-| **Telegram (source)** | Public channel web-preview pages, scraped anonymously without the Telegram API. |
-| **AI provider** | Classifies content, and adjudicates ambiguous duplicate pairs. |
-| **Telegram Bot API (sink)** | Receives published and edited messages on target channels. |
-
-### 1.3 The central design idea: the queue is the pipeline
-
-Its two jobs are now split:
-
-- **Work-in-flight** is an SQS message. A scraped post travels as a queue payload and is never written to a table while in transit.
-- **Durable record** is the `messages` table. A post becomes durable only at the moment it is absorbed into a message — and it is stored *inside* that message, not beside it.
-
-Consequences that shape everything downstream:
-
-1. Pipeline volume and health come from CloudWatch, not from a table scan (§8.5).
-2. `publish` cannot look items up at send time, so `aggregate` must **denormalize** each item's renderable content into the message (§2.3).
-3. A post that is scraped but never merged into a message — classified `skip`, or errored past its retries — leaves no row anywhere. It exists only in logs and the dead-letter queue.
-
-### 1.4 The system in one picture
+## 1. The system in one picture
 
 ```mermaid
-flowchart TD
-  Clock["EventBridge rule<br/>every 30 minutes"] --> Scrape["Lambda: scrape<br/>read t.me pages"]
-  Scrape -->|"SendMessage"| Q1["SQS: analyze<br/>Standard queue"]
-  Q1 --> Analyze["Lambda: analyze<br/>ask the AI model"]
-  Analyze -->|"classified"| Q2["SQS: aggregate<br/>FIFO, group = date"]
-  Analyze -.->|"skip: only a metric"| Drop["dropped"]
-  Q2 --> Agg["Lambda: aggregate<br/>same story or new story"]
-  Agg --> DDB[("DynamoDB: messages<br/>the only durable record")]
-  Agg --> Q3["SQS: publish<br/>FIFO, group = message id"]
-  Q3 --> Pub["Lambda: publish<br/>send or edit in Telegram"]
-  Pub --> TG["Telegram Bot API"]
-  Scrape --> SRC[("DynamoDB: sources<br/>channels to poll")]
-  Analyze --> AI["OpenRouter: Claude"]
-  Agg --> AI
-  Pub --> SM["Secrets Manager<br/>bot token"]
-  Scrape & Analyze & Agg & Pub --> CW["CloudWatch<br/>metrics, logs, alarms"]
-  Dash["Console<br/>Firebase Hosting"] --> Cog["Cognito<br/>who is signed in"]
-  Dash --> Api["Dashboard API<br/>API Gateway + Lambda"]
-  Api --> DDB
-  Api --> CW
+flowchart LR
+  Clock["Cloud Scheduler<br/>every 30 min"] --> Scrape["scrape"]
+  Scrape -->|task| Analyze["analyze<br/>5 at a time"]
+  Analyze -->|task| Aggregate["aggregate<br/>1 at a time"]
+  Aggregate -->|task, 5 min delay| Publish["publish<br/>1 at a time"]
+  Publish --> TG["Telegram Bot API"]
+  Analyze & Aggregate --> AI["OpenRouter: Claude"]
+  Scrape & Aggregate & Publish --> FS[("Firestore")]
+  Console["Console<br/>Firebase Hosting"] -->|POST| Api["api function"]
+  Api --> FS
 ```
 
-**scrape → analyse → aggregate → publish.** Posts are classified, deduplicated into stories, and published — each story as a single Telegram message that is edited in place as more sources report it.
+**The queue is the pipeline.** A post in flight is a Cloud Tasks payload and is never stored. It becomes durable only when `aggregate` absorbs it into a message, and it is stored *inside* that message. A post that is dropped or dies leaves only a counter, a log line, or a dead letter.
 
-The dashboard never calls pipeline code directly. Its API reads the same tables and may invoke the deployed functions by name; `test/boundaries.test.ts` enforces that wall (§8.2).
+| Concern | Firebase piece | Code |
+| --- | --- | --- |
+| Clock | `onSchedule`, every 30 min | `tg-functions/index.ts` |
+| Work in flight | Cloud Tasks queues, `onTaskDispatched` | `tg-firebase/tasks.ts` |
+| Durable records | Firestore: `sources`, `targets`, `messages` | `tg-firebase/db.ts` |
+| Failed work | Firestore `deadLetters` | `tg-firebase/deadLetters.ts` |
+| Counters | Firestore `metrics`, one doc per hour | `tg-firebase/metrics.ts` |
+| Operators | Firebase Auth + Firestore `users` | `tg-firebase/operators.ts` |
+| Console API | one `onRequest` function, `api` | `tg-api/` |
+| Console | Arrmatura app on Firebase Hosting | `tg-web/` |
+| Secrets | `defineSecret` (Secret Manager) | `tg-functions/index.ts` |
 
----
+## 2. Data
 
-## 2. Domain Model
+All ids that contain `/` (`channel/12345`) are stored with `~` in the document id. The real id is always in the `id` field. A delete is **soft**: it sets `deleted: true`, and lists hide that row.
 
-**Two tables.** `sources` (what to poll) and `messages` (what to publish). Everything in between is a queue payload.
+### 2.1 `sources` — channels to poll
 
-### 2.1 `sources` — Telegram channels to poll *(table)*
+| Field | Meaning |
+| --- | --- |
+| `id` | Channel username; also the scrape URL segment. |
+| `status` | `ok` enables polling. Any other value disables it. |
+| `target`, `category`, `tags`, `teaser` | Operator settings stamped onto every post. `teaser` is boilerplate stripped from the body. |
+| `via` | `web` (public preview page, default) or `mtproto` (a logged-in account). |
+| `lastItemId` | Newest post id seen. The `?after=` cursor and **the only duplicate guard** on the way in. |
+| `lastCount`, `lastUpdated`, `lastResult` | Last poll: post count, epoch ms, ISO time of success. |
+| `zeroYieldRuns`, `lastNonZeroCount` | Empty polls in a row, and the last non-empty count. Together they detect a stale source. |
 
-| Field | Type | Written by | Meaning |
+### 2.2 The post in flight
+
+`scrape` → `analyze`: `id` (`{source}/{tgId}`), `body` (links replaced by `[text](#N)` tokens), `links`, `image`, `forwardedFrom`, `target`, `category`, `tags`, `date` (**the scrape day**, which is the dedup partition) and `kind`. `analyze` → `aggregate` adds the AI fields of §4.
+
+### 2.3 `messages` — stories
+
+| Field | Meaning |
+| --- | --- |
+| `id` | The first item's id. |
+| `status` | `topublish` → `published`. A merge sets it back to `topublish`. |
+| `members` | Map `itemId → {summary, links, channel, ts}`: all that publish renders. At most **20**. |
+| `memberCount`, `memberIds` | Size of the map, and its keys (for the replay check). |
+| `keyEntities`, `keyTitle`, `keyTags` | The dedup match key (§5). |
+| `date`, `title`, `category`, `country`, `location`, `peoples`, `tags`, `image` | Copied or merged from members. |
+| `tgChannel` | Comma-separated targets; `telegator_news` by default. |
+| `posts` | Map `target → {tgId, tgAt}`. A post present makes the next publish an **edit**. |
+| `ts`, `deleted` | Last write; soft delete. `deleted` is always written, so queries can filter on it. |
+
+The map makes replay free: writing `members.{itemId}` again writes the same value.
+
+### 2.4 `targets`
+
+`id` (channel), `type`, optional `messageTemplate`, and `lastPostedDate` / `lastPostedMessageId`, which publish writes.
+
+## 3. Stages
+
+Each task stage runs one item per invocation. A thrown error retries the task with backoff. On the last attempt the wrapper writes the payload to `deadLetters` instead, because Cloud Tasks would drop it.
+
+| Function | Trigger | Attempts | Concurrency |
 | --- | --- | --- | --- |
-| `id` | string | operator/seed | Telegram channel username, e.g. `yigal_levin`. Also the scrape URL segment. |
-| `status` | string | operator | `ok` enables polling. Any other value disables the source. |
-| `tgChannel` | string | operator | **Target** channel this source's content publishes to. |
-| `category` | string | operator | Default category stamped onto scraped posts. |
-| `tags` | string | operator | Comma-separated tags stamped onto scraped posts. |
-| `teaser` | string | operator | Boilerplate substring stripped from every scraped body. |
-| `lastItemId` | string | scrape | Newest Telegram message id seen. The `?after=` cursor — **the sole duplicate-suppression mechanism** (§3.1). |
-| `lastCount` | number | scrape | Post count from the last poll. Drives the refresh-rate heuristic. |
-| `lastUpdated` | number | scrape | Epoch ms of last poll attempt. |
-| `lastResult` | string | scrape | ISO timestamp of last successful poll. |
-| `zeroYieldRuns` | number | scrape | Consecutive polls returning nothing. Drives the staleness alarm (§4.1). |
-| `lastNonZeroCount` | number | scrape | The last poll that returned anything, kept when `lastCount` falls to 0 — §4.1's alarm needs "had a non-zero history" after the count itself has gone. |
-| `deleted` | boolean | operator | Soft delete. A deleted source is neither polled nor listed. |
+| `scrape`, `scrapeMtproto` | every 30 min, if `SCRAPE_ENABLED` | — | — |
+| `analyze` | queue `analyze` | 3 | 5 |
+| `aggregate` | queue `aggregate` | 3 | **1** |
+| `publish` | queue `publish` | 5 | **1** |
+| `api` | HTTPS | — | — |
 
-### 2.2 Item payload — the in-flight post *(SQS, not a table)*
+### 3.1 scrape
 
-An item is a queue message. Its shape changes as it moves down the pipeline.
+- **Selection.** Sources with `status = ok` and this transport's `via`. A **hot** source (more than 20 posts last run) is always due. A **warm** one (1–20) is due after 30 min, a **cold** one (0) after 240 min. Most overdue first, at most **10** per run.
+- **Fetch.** `GET https://t.me/s/{id}?after={lastItemId}` with browser-like headers. Without them Telegram serves a page that parses to nothing. An empty cursor means no `?after=`.
+- **Kinds.** `forward`, `empty`, and `obsolete` (posted more than 3 days ago, or with no date) are dropped with a counter. Only `post` is enqueued.
+- **Cursor.** Written only when every enqueue succeeded, so a failure retries the window next run.
+- **Stale source.** 3 empty runs on a source that once yielded counts `SourceStale`.
 
-**Stage A — `scrape` → analyze queue:**
+### 3.2 analyze
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `id` | string | Composite `{sourceId}/{telegramMessageId}`. Stored verbatim; no encoding (§2.4). |
-| `body` | string | Plain text with inline links replaced by `[text](#N)` tokens. |
-| `links` | array | `[{id: number, href: string}]` resolving the `#N` tokens. |
-| `image` | string | URL extracted from the post's `background-image` style. |
-| `forwardedFrom` | string | Origin channel when the post is a forward. |
-| `tgChannel` | string | Target publish channel, copied from the source. |
-| `date` | string | `YYYY-MM-DD` — **the scrape date, not the post date.** Partitions deduplication *and* becomes the FIFO message group. |
-| `category` | string | Source default; overwritten by AI. |
-| `tags` | string | Source tags; merged with AI tags. |
-| `kind` | enum | `post` \| `forward` \| `empty` — replaces the old initial `status` value. |
+An empty body or a bare link is dropped before the model call. Otherwise one classification (§4). Routing: no category → throw (retry); `importance = low` → drop; otherwise enqueue to `aggregate`. `country` is uppercased, and AI tags are merged with source tags.
 
-**Stage B — `analyze` → aggregate queue:** everything above, plus `title`, `summary`, `country` (uppercased), `location`, `importance`, `peoples`, `properNames`, and AI-merged `tags`.
+### 3.3 aggregate
 
-Payloads are well under the **256 KB** SQS limit — Telegram caps a post at 4096 characters. If a payload ever exceeds it, fall back to the claim-check pattern (body to S3, key in the message); not expected, not built by default.
+Dedup (§5) decides **merge** or **create**. A merge writes `members.{itemId}` and the scalars attribute by attribute, keeps `posts`, and sets `topublish`. A create uses a create-if-absent write. Then it asks for a publish. Requests for one message within one 5-minute window share a task id, so a burst of merges publishes once, after the story settles.
 
-### 2.3 `messages` — aggregated, publishable stories *(table)*
+The queue runs **one task at a time**. Two items of the same day therefore can never both miss each other's write. SQS FIFO serialised per day; this serialises everything, which is ample at this volume.
 
-The only durable record of a Telegram post.
+### 3.4 publish
 
-| Field | Type | Written by | Meaning |
-| --- | --- | --- | --- |
-| `id` | string | aggregate | Id of the **first** item that created the message. |
-| `status` | enum | aggregate/publish | `topublish` \| `published` \| `error` |
-| `members` | **Map** | aggregate | `{itemId → MemberBlock}`. Replaces the source's comma-separated `items` string. |
-| `memberCount` | number | aggregate | Cached `size(members)`, so the dashboard need not read the map. |
-| `memberIds` | list | aggregate | The ids already in `members`, projected on `date-index` so replay is detected without a base-table read (§6.3). |
-| `keyEntities`, `keyTitle`, `keyTags` | list | aggregate | The match key this message deduplicates on (§6.1). |
-| `date` | string | aggregate | Copied from the item. Partitions the candidate search and the FIFO group. |
-| `title`, `category`, `country`, `location`, `peoples`, `tags`, `image` | string | aggregate | Copied/merged from member items. |
-| `tgChannel` | string | aggregate | Target channel; defaults to `telegator_news`. |
-| `tgId` | string | publish | Telegram `message_id`. **Its presence turns the next publish into an edit.** |
-| `tgAt` | number | publish | Epoch ms of last publish/edit. |
-| `ts` | number | aggregate/publish | Last-write epoch ms. Sort key on the GSIs. |
-| `deleted` | boolean | dashboard | Soft delete. A deleted message is neither a merge target nor a dashboard row, and publish acknowledges it without sending. |
+1. Skip the message if it is gone, deleted, or no longer `topublish`.
+2. For each target that has no current post: assemble the text and send it, or edit it when `posts[target]` exists.
+   - Assembly: a header, up to 12 member blocks, then hashtags. The limit is 4096 characters: hashtags are dropped first, then member blocks.
+   - A photo is used only for a first send and only when the text fits in 1012 characters.
+3. Record `posts` after **every** send, so a retry never posts twice.
+4. Write `published` only when every target succeeded. A rejected send throws.
 
-**`MemberBlock`** — everything `publish` needs to render one item, captured at aggregation time:
+The bot pauses at least 3 s after each send and retries once on `429`. Telegram answers errors with HTTP 200 and `ok: false`.
 
-```ts
-type MemberBlock = {
-  summary: string;   // Belarusian summary, with [text](#N) tokens intact
-  links: Array<{ id: number; href: string }>;
-  channel: string;   // source channel segment, for the @mention
-  ts: number;        // when this member joined, for stable ordering
-};
-```
+## 4. AI
 
-**Why a Map, and what it buys.** Three problems collapse into one solution:
+Both calls go to Claude through OpenRouter's Anthropic-compatible Messages API (`https://openrouter.ai/api`, no `/v1`; the SDK adds it). The model is `anthropic/claude-haiku-4.5`, defined once in `tg-configs/ai.ts`.
 
-1. **Publish has no item table to read.** The block travels with the message.
-2. **Idempotency is free.** Re-processing a replayed item writes `members.{itemId}` with the same value — a no-op. No conditional expression, no seen-ids table.
-3. **Substring collisions disappear structurally.** With keyed map entries there is no comma-joined string to substring-match, so item `abc/1` can never resolve as a member of a message containing `abc/12`.
+- **Classify** (`tg-ai/openrouter.ts`): JSON-schema output with `title`, `summary` (Belarusian, at most 220 characters, stated in the field description), `country`, `location`, `category` (enum in `tg-enums/categories.ts`), `importance`, `peoples`, `properNames`, `tags`. The system prompt keeps `[text](#N)` tokens intact.
+- **Adjudicate** (`tg-ai/adjudicator.ts`): ambiguous dedup pairs, using English fields only. Verdicts are keyed by pair id, and a set that does not cover every pair is an error.
+- `npm run smoke:openrouter` is the only check that calls the real model.
 
-**Size.** Capped at **20** members (publish renders 12). 20 × ~600 bytes ≈ 12 KB — far below the 400 KB item limit.
+## 5. Deduplication
 
-### 2.4 Identifier encoding
+Code: `tg-dedup/`. Constants: `tg-configs/dedup.ts`.
 
-Ids are composite and contain `/`. Ids are used **verbatim** (`channel/12345`) everywhere — as SQS payload fields, as DynamoDB map keys (via `ExpressionAttributeNames` placeholders, which accept any characters), and as partition keys. No encode/decode layer exists.
+- **Match key**: three sorted, lowercased sets: entities (`peoples` + `properNames`), title words, and tags. A merge takes the sorted union, capped at 256 per set.
+- **Score** = weighted Jaccard of the three sets. `J(∅, ∅) = 0`: no evidence is not agreement.
+- **Gate**: same `date` only. Category and country are not gated.
+- **Band**: score at or above `MERGE_THRESHOLD` → merge. At or below `DISTINCT_THRESHOLD` → separate. In between → adjudicate. A failed adjudication **splits**, because a false merge is worse than a duplicate post.
+- **Replay**: an item already in a candidate's `memberIds` merges there before any scoring. A replay is therefore exactly idempotent.
+- ⚠️ **Thresholds are provisional.** Run the calibration sweep (`tg-dedup/calibration/`) and record `calibration/record.json` before trusting dedup quality.
+- ⚠️ **Known limit**: the sweep scores item against item, but runtime scores item against a message's union key. A message with many members makes true matches score lower.
 
----
+## 6. Console
 
-## 3. Pipeline Stages
+`packages/tg-web`: Arrmatura app with these pages: Dashboard, Pipeline, Sources, Targets, Messages.
 
-**Five Lambdas:** one scheduled scraper, three queue consumers, one manual replay handler. Every consumer reports **partial batch failures** so one bad message never forces a whole batch to retry.
+- **Sign-in**: the platform's `FirebaseService`, with Google in production and the Auth emulator locally. The browser holds no Firestore access; `firestore.rules` denies everything.
+- **API**: `POST {data: {action, input}}` to `api`. The answer is `{data: {ok, result}}`, or an error with 400 / 401 / 403 / 500.
+- **Roles**: `viewer` < `editor` < `admin`, kept in `users/{uid}.roles`. A first sign-in creates the user **disabled with no roles**, and an admin enables it in Firestore. `users` is read on every call, so disabling takes effect at once.
+- **Actions** (`tg-api/actions.ts` maps each to its least role):
 
-### 3.1 Stage 1 — `scrape` · *EventBridge, every 30 min*
-
-**Timeout:** 300 s. **Memory:** 512 MB. **Reserved concurrency:** 1.
-
-**Selection.** Query `sources` by `status-index` for `status = "ok"`. Keep those where:
-
-```
-now - lastUpdated >= (lastCount > 0 ? 30 : 240) * 60_000
-```
-
-Take the first **10**. Three tiers: a **hot** source (>20 posts last run) is always eligible; a **warm** source (1–20) after 30 minutes; a **cold** source (0) backs off to 240 minutes.
-
-**Fetch.** `GET https://t.me/s/{sourceId}`, appending `?after={lastItemId}` when a cursor exists. Browser-like headers (`User-Agent` Chrome/120 on macOS, `Accept-Language: en-US,en;q=0.9,ru;q=0.8,be;q=0.7`). Non-2xx yields an empty string, not an exception.
-
-**Parse.** Split the HTML on the literal marker `<div class="tgme_widget_message_wrap js-widget_message_wrap">`, discarding the first fragment (page chrome). Each remaining chunk is one post:
-
-| Field | Extraction rule |
+| Role | Actions |
 | --- | --- |
-| `id` | First `href="https://t.me/{any}/{digits}"` → capture the digits. |
-| body (raw) | Inner HTML of `<div class="tgme_widget_message_text …">`. |
-| `links` + tokenised body | Replace each `<a href="X">Y</a>` with `[Y](#N)`, N from 1; collect `{id: N, href: X}`. |
-| `body` | Strip remaining tags; `<br>` → `\n`; decode `&amp; &lt; &gt; &quot; &#39; &nbsp;`; collapse 3+ whitespace to `\n\n`; trim. |
-| `image` | First `background-image:url('X')` → X. |
-| `forwardedFrom` | `tgme_widget_message_forwarded_from_name` anchor's channel segment. |
-| `postedAt` | The date anchor's `<time datetime="…">`, passed through as written. |
+| viewer | whoami, overview, list sources/targets/messages, members, queues, inspect dead letters, export CSV |
+| editor | upsert and soft-delete records |
+| admin | scrape now, reset cursors, republish, publish now, replay or purge dead letters |
 
-**Guards.** An empty fetch, no chunks, or a first chunk with no id increments `zeroYieldRuns` and sets `lastCount: 0`, `lastUpdated: now`. A successful parse resets `zeroYieldRuns` to 0.
+- **Dashboard numbers** come from the hourly `metrics` docs (24 h counters, 7-day categories). Queue depth is the `counters/pending` doc: +1 on enqueue, −1 when a task finishes or dies.
 
-**Duplicate suppression — cursor only.** There is no existence check; there is no table to check against. `lastItemId` is the sole mechanism, and the `members` map absorbs anything that slips past (§2.3) — but only within the same `date`, because candidates are drawn from `date-index` for that date alone.
-
-**Transform.** Per post: `id = "{sourceId}/{messageId}"`; strip the source's `teaser` from the body; stamp `tgChannel`, `category`, `tags`, `date` = today; set `kind` to `obsolete` (published more than `MAX_POST_AGE_DAYS` before the run), `forward` (if forwarded), `empty` (blank body) or `post`.
-
-**Freshness.** A post whose `postedAt` is older than **3 days** at the moment the run starts is `obsolete`: it is news nobody is waiting for, and classifying it costs an AI call. Age is measured against the run's single clock reading, so every source of a run shares one cutoff; a post exactly at the cutoff is kept. A post carrying **no** parseable `postedAt` is obsolete as well — the page dates every post, so a missing time means the markup changed, and the opposite default would republish a channel's whole visible history the first time it did.
-
-**Enqueue.** Posts with `kind === "post"` go to the **analyze** queue via `SendMessageBatch` (10 per call). `forward`, `empty` and `obsolete` posts are **dropped** with a counter metric. Dropping is not failing: the cursor still advances past a dropped post, or every run re-fetches and re-drops it.
-
-**Cursor update.** Cursor fields are written **only after** the enqueue succeeds. A failed enqueue leaves `lastItemId` unadvanced so the next run retries those posts.
-
-**Acceptance criteria**
-
-- AC-1.1 A source polled 5 minutes ago with `lastCount = 3` is not selected.
-- AC-1.2 A source with `lastCount = 25` is selected regardless of `lastUpdated`.
-- AC-1.3 A post containing two links produces `[…](#1)`, `[…](#2)` and a `links` array of length 2.
-- AC-1.4 An unreachable source increments `zeroYieldRuns` and leaves other sources unaffected.
-- AC-1.5 A failed `SendMessageBatch` leaves `lastItemId` unchanged.
-- AC-1.6 A forwarded post is counted and dropped, never enqueued.
-- AC-1.7 A post published four days before the run is counted and dropped, never enqueued, and the cursor still advances past it.
-
-### 3.2 Stage 2 — `analyze` · *SQS Standard consumer*
-
-**Batch size:** 10. **Batching window:** 60 s. **Timeout:** 300 s. **Visibility timeout:** 1800 s. **Reserved concurrency:** 5.
-
-**Pre-filter.** A body that is empty, or is a bare link with no prose, is **dropped** with an `ItemsSkipped` metric — no AI call, no downstream message.
-
-**AI call.** One request per item (§5.2).
-
-**Routing.**
-
-| Condition | Action |
-| --- | --- |
-| No category returned, or provider error | Throw → SQS retry → DLQ after 3 attempts |
-| `importance === "low"` | **Drop**, metric `ItemsSkipped{reason=low}` |
-| `category === "crime&law"` | **Drop**, metric `ItemsSkipped{reason=category}` |
-| otherwise | Enqueue to **aggregate** (FIFO, `MessageGroupId = date`, `MessageDeduplicationId = itemId`) |
-
-Also: `country` uppercased; AI `tags` merged with source tags (comma-split, deduplicated, comma-joined).
-
-**Why errors throw rather than drop.** A provider error is transient; a `skip` decision is final. Throwing routes the item back through SQS retry and ultimately to the DLQ, where an operator can replay it.
-
-**Acceptance criteria**
-
-- AC-2.1 An item classified `importance: low` never reaches the aggregate queue.
-- AC-2.2 A provider error on one message leaves the other nine in the batch successfully processed (partial batch failure reporting).
-- AC-2.3 Source tags survive the merge alongside AI tags, with no duplicates.
-- AC-2.4 `country` is always uppercase or empty.
-- AC-2.5 An item failing three times lands in the analyze DLQ with its full payload intact.
-
-### 3.3 Stage 3 — `aggregate` · *SQS FIFO consumer, `MessageGroupId = date`*
-
-**Batch size:** 10. **Timeout:** 300 s. **Memory:** 1024 MB. **Visibility timeout:** 1800 s.
-
-**Concurrency is controlled by the message group, not by a reserved-concurrency setting.** All items sharing a `date` form one FIFO group and are therefore processed strictly one batch at a time — exactly the serialisation deduplication needs. Different dates process in parallel, which makes a multi-day backfill fast without weakening same-day correctness.
-
-**Matching** is specified normatively in §6.
-
-**Merge (match found).** Update the matched message:
-
-- `members.{itemId}` ← the item's `MemberBlock`. **Idempotent by construction**; an existing member keeps its original `ts`.
-- `memberCount` ← recomputed; **stop adding members at 20**.
-- match key ← **sorted union** of the message's key and the item's (§6.1).
-- `image` ← keep existing if present, else take the item's.
-- `tags` ← merged and deduplicated.
-- `title`, `date`, `category`, `country`, `location`, `peoples` ← **overwritten** by the newest item's values.
-- `status` ← `topublish`, unless the merge changes nothing a reader would see. `tgId` ← **preserved**.
-
-**Create (no match).** New message: `id` = item id, `members` = `{itemId: block}`, match key = the item's, `status` = `topublish`, `tgChannel` = item's channel or `telegator_news`, plus the item's descriptive fields.
-
-**Enqueue publish.** Send the message id to the **publish** queue with:
-
-- `MessageGroupId = messageId` — serialises edits to the same Telegram message.
-- `MessageDeduplicationId = messageId` — collapses repeat publish requests within the 5-minute dedup window.
-- **Settle delay** — a story still accumulating members is published once after it settles rather than edited repeatedly. SQS FIFO supports only a queue-level delay, so it is configured on the queue (§7.3), not per message.
-
-**The update-in-place contract.** Merging into an already-`published` message resets it to `topublish` while keeping `tgId`; Stage 4 then calls `editMessageText`. **A published story updates on Telegram as more sources report it.** Intentional; must be preserved.
-
-**Acceptance criteria**
-
-- AC-3.1 Two same-date items scoring at or above `MERGE_THRESHOLD` produce one message with two `members` entries.
-- AC-3.2 Two matching items with *different* dates produce two messages.
-- AC-3.3 Two items scoring at or below `DISTINCT_THRESHOLD` produce two messages.
-- AC-3.4 Merging into a `published` message sets `topublish` and leaves `tgId` intact.
-- AC-3.5 Items matched against each other within one batch merge without an intervening write.
-- AC-3.6 A message's match key after merging equals the sorted union of the two inputs.
-- AC-3.7 **Replaying the identical item message produces a byte-identical message record** — `members`, `memberCount` and `tags` are unchanged.
-- AC-3.8 A 21st member is rejected; `memberCount` stays at 20.
-- AC-3.9 Two items with the same `date` are never processed by two concurrent invocations.
-- AC-3.10 A pair scoring inside the band is adjudicated, and the verdict decides.
-- AC-3.11 A failing adjudication splits, and increments `DedupAdjudicationFailed`.
-- AC-3.12 A verdict set that does not cover the requested pair ids exactly is an error.
-
-### 3.4 Stage 4 — `publish` · *SQS FIFO consumer, `MessageGroupId = messageId`*
-
-**Batch size:** 1. **Timeout:** 300 s. **Visibility timeout:** 1800 s.
-
-Batch size is 1 deliberately: each send is rate-limited against Telegram, and the message group already serialises work per message.
-
-**Load.** Read the message by id. If it is soft-deleted, or `status !== "topublish"`, acknowledge and exit — the work was superseded.
-
-**Member rendering.** Take `members` entries sorted by `ts` ascending, first **12**. Per member:
-
-1. In `summary`, replace each `[text](#N)` with `<a href="{href}">{text}</a>`, resolving N against that member's `links`. An unresolved token degrades to plain text.
-2. Emit: `🔘 {content} - <a href="https://t.me/{itemId}">@{channel}</a>`
-
-**Message assembly.**
-
-```
-<b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location, category}</b>
-                        ← blank line
-{member block 1}
-{member block 2}
-…
-                        ← blank line
-{hashtag line}
-```
-
-Header location parts are the non-empty values of `country` (uppercased), `location`, `category`, joined with `", "`.
-
-**Hashtag line.** Built from `category`, `location`, `peoples`, `tags`, every `title` word longer than 4 characters, `date_{YYYY-MM-DD}` and `ts_{epochMs}` — comma-split, trimmed, `none`/`null`/empty dropped, deduplicated, each mapped to `#hashtag` form (spaces and hyphens → `_`, `.,@!'"()` removed, lowercased), space-joined. It **is appended**, after the member blocks (§11.3).
-
-**Overflow.** A message is capped at 4096 characters. Drop the hashtag line first, then reduce the number of rendered member blocks: hashtags are derived metadata and reconstructible from the record, whereas a member block is the only surviving rendering of a scraped post (§1.3).
-
-**Send.**
-
-- `tgId` empty → `sendMessage`, or `sendPhoto` when an image is present and the text fits.
-- `tgId` present → `editMessageText`. Photos are never re-sent on an edit.
-- Photo suppressed entirely when text exceeds 1012 characters.
-- `parse_mode: html`. Link preview disabled when the message has a title or image.
-- **≥3 s pause after each send**; one retry on `429` honouring `parameters.retry_after`.
-
-**Result.** Success → `status: published`, `tgId`, `tgAt`, acknowledge. Failure → throw, so SQS retries and ultimately DLQs. `status: error` is written only after retries are exhausted, by the DLQ handler.
-
-**Acceptance criteria**
-
-- AC-4.1 A message with `tgId` triggers an edit, not a new post.
-- AC-4.2 A message whose text exceeds 1012 characters is sent without a photo.
-- AC-4.3 A member keyed `abc/1` never renders content belonging to `abc/12`.
-- AC-4.4 A `[x](#3)` token with no matching link renders as `x`.
-- AC-4.5 A message whose status is no longer `topublish` is acknowledged without a Telegram call.
-- AC-4.6 Two publish requests for the same message id within 5 minutes result in **one** Telegram call.
-- AC-4.7 A Telegram failure retries and eventually DLQs; it never silently drops.
-
-### 3.5 DLQ replay handler
-
-One Lambda, invoked manually from the dashboard, drains a named DLQ back onto its source queue with a replay counter. This is the operator's recovery path.
-
-Because `aggregate` is idempotent (§2.3, §6.3) and `publish` checks status before sending, replay is safe at any time.
-
----
-
-## 4. External Integrations
-
-### 4.1 Telegram scraping (inbound)
-
-Anonymous HTML scraping of `t.me/s/{channel}` — the public web preview. No API credentials, no published rate limits, no terms-of-service guarantee.
-
-**This is the system's most fragile dependency.** The parser depends on four literal CSS class names. A Telegram markup change breaks ingestion silently: chunk splitting yields zero results, which the code reads as "no new posts."
-
-**Required mitigation.** `zeroYieldRuns` on the source record (§2.1). When a source with `status: "ok"` and a non-zero historical `lastCount` reaches **3** consecutive zero-yield runs, emit a `SourceStale` metric and alarm. Silent zero-yield must be observable.
-
-### 4.2 Telegram Bot API (outbound)
-
-Base: `https://api.telegram.org/bot{token}`. Methods: `sendMessage`, `editMessageText`, `sendPhoto`.
-
-- Chat id is the target channel with a leading `@`.
-- Bot must be an administrator of every target channel.
-- **Failures return HTTP 200 with `{ok: false, description}`** — status codes are not the error signal; check the `ok` field.
-- Limits: 4096 chars per message, 1024 chars per photo caption, ~20 messages/minute per channel.
-
-Pacing and retry are specified in §3.4.
-
----
-
-## 5. AI Contract
-
-### 5.1 Provider
-
-**Decision: OpenRouter.** Both model calls go to Claude through OpenRouter's Anthropic-compatible Messages API. A bearer key in Secrets Manager replaces IAM.
-
-```ts
-import Anthropic from "@anthropic-ai/sdk";
-const client = new Anthropic({ baseURL: "https://openrouter.ai/api", apiKey });
-```
-
-The base URL carries **no version segment**: the SDK appends `/v1/messages` itself, so `https://openrouter.ai/api/v1` produces a 404 that reads like an outage.
-
-OpenRouter model ids carry a vendor slug prefix. The tier is **`anthropic/claude-haiku-4.5`**, held in one constant so the id the request carries is written once. Model choice is the operator's call: a different tier is a one-line change with no other specification impact.
-
-Two stages call a model, and only two:
-
-| Caller | Purpose |
-| --- | --- |
-| `analyze` | Classify each post: title, summary, category, country, importance (§5.2) |
-| `aggregate` | Adjudicate ambiguous "same story?" pairs (§5.3) |
-
-No embedding model is called anywhere. Deduplication is deterministic on the common path (§6).
-
-### 5.2 Classification request
-
-Structured outputs and adaptive effort both reach the Messages endpoint through `output_config`.
-
-```ts
-const response = await client.messages.create({
-  model: CLASSIFIER_MODEL_ID,
-  max_tokens: 2000,
-  output_config: {
-    effort: "low",                  // classification, not reasoning
-    format: { type: "json_schema", schema: NEWS_ITEM_SCHEMA },
-  },
-  system: SYSTEM_PROMPT,
-  messages: [{ role: "user", content: itemBody }],
-});
-```
-
-**System prompt** (load-bearing — the `[text](#N)` preservation rule keeps link tokens intact for Stage 4):
-
-```
-You are all about analyzing the ongoing news articles, keeping strong focus on matters of facts.
-Your responses MUST follow the rules:
-- respond in JSON format! according responseSchema provided.
-- preserve '[text](#[1-9]+)' tokens intact;
-- no extra punctuation; no any emoji;
-- keep neutral tone, avoid hate speech;
-```
-
-**Schema.** Required: `title`, `summary`, `country`, `location`, `importance`, `category`. Optional: `peoples`, `properNames`, `tags`.
-
-| Field | Constraint | Description |
-| --- | --- | --- |
-| `title` | string | Essential subject in three words, English. |
-| `summary` | string, **≤220 characters** | Brief factual matter — no implications, opinions or judgements. **In Belarusian.** |
-| `country` | string | ISO-3166 alpha-2 code. |
-| `location` | string | City or region, English. |
-| `category` | enum | One of §5.4's values. |
-| `importance` | enum | `high` \| `low`. "Diminish any of sports, criminal accidents, funny, temporary, and local content." |
-| `peoples` | string | Comma-separated person names, Latin letters, English. |
-| `properNames` | string | Comma-separated places, organisations, events, English. |
-| `tags` | string | 3–5 related tags, English. |
-
-The 220-character cap must be stated **in the field's description**, not only in the JSON schema: a schema-only `maxLength` is not honoured, and over-long summaries fail validation after the call has been paid for.
-
-`temperature` and `top_p` are not carried over — they are removed on current Claude models and return 400. Depth is controlled by `output_config.effort`.
-
-The English fields above are what makes §6 language-neutral: only `summary` (Belarusian) and `body` (Russian/Ukrainian) are not, and neither is used for matching.
-
-### 5.3 Adjudication request
-
-`aggregate` sends the ambiguous band (§6.2) to the same Messages API, in **one call per invocation** carrying at most 10 pairs.
-
-```ts
-export interface AdjudicationPair {
-  readonly id: string;              // stable, caller-assigned
-  readonly item: AdjudicationFields;
-  readonly candidate: AdjudicationFields;
-}
-
-export interface Adjudicator {
-  adjudicate(pairs: readonly AdjudicationPair[]): Promise<AdjudicationVerdicts>;
-}
-```
-
-`AdjudicationFields` carries only the English structured fields — title, entities, tags, category, location, date. **Never `body`, never `summary`**: the call stays small and language-neutral.
-
-**Verdicts are keyed by pair id and validated for exact coverage — never positional.** A model can return fewer answers than it was asked for, and a positional array would then attach every subsequent verdict to the wrong pair — a dedup fault with no error anywhere. A verdict set that does not cover the requested ids exactly is an error, not a partial result.
-
-The response is constrained by a Zod-derived strict output schema, the way the classifier's is.
-
-`ADJUDICATOR_MODEL_ID` defaults to `CLASSIFIER_MODEL_ID`'s value but is its own constant, so the two tasks can diverge.
-
-### 5.4 Categories
-
-The classifier's `category` enum, 29 values:
-
-```
-art&fashion    crime          culture&history   news-digest
-economics&finance   education   energy          entertainment
-sports         environmental  geopolitics       health
-human-rights   infrastructure international     media
-other          politics       real-estate       science
-social         technology     internet          traditions
-tourism        traffic        war               incidents
-nature
-```
-
-The enum is what constrains model output, so a value missing from this list is a category the classifier cannot say — it falls into `other`, silently degrading the routing §3.2 depends on.
-
-Note that §3.2's drop rule tests for `crime&law`, which is **not** in this list, so that rule can never fire (§25, R5).
-
----
-
-## 6. Deduplication (normative)
-
-Two items describe the same story, or they do not. The decision is deterministic wherever the evidence is clear, and a model resolves only the strip in between.
-
-### 6.1 The match key
-
-Each item and each message carries a **match key** of three sets, built from §5.2's English fields:
-
-| Set | Built from |
-| --- | --- |
-| `entities` | `peoples` and `properNames`, split on commas |
-| `titleTokens` | `title`, split on whitespace |
-| `tags` | `tags`, split on commas |
-
-**Canonical form.** Every set is lowercased, trimmed, punctuation-stripped, deduplicated and **sorted** at write time. Identical input therefore serialises to identical bytes — this is what makes AC-3.7 hold.
-
-**Merge.** Sorted union, capped at `MATCH_KEY_CAP = 256` entries per set in lexical order. The cap is a **storage bound, not a signal filter**: 20 members contributing ~10 terms each is ~200, so it is not normally reached.
-
-Stored as three String **Lists**, not String Sets: a set cannot be empty, and an item with no tags is legal.
-
-### 6.2 The score and the band
-
-```
-score = w_e * J(entities) + w_t * J(titleTokens) + w_g * J(tags)
-J(x, y) = |x ∩ y| / |x ∪ y|
-```
-
-The weights and both thresholds are in §31's table, which is the one place any tunable is written.
-
-**`J(EMPTY, EMPTY) === 0`, never 1.** Two items that both lack entities have no evidence, not perfect agreement. The naive expression is `0/0`; any reading that treats it as equality auto-merges every sparse pair.
-
-**Gate:** same `date`. This is a correctness rule, not an optimisation — it prevents an anniversary story or recurring topic from merging into a message published days earlier — and it is also the FIFO message group, so the two uses reinforce each other. Deliberately *not* gated on `category` or `country`: §5.2 permits two sources' classifications to differ, so gating there would force a false split on a real duplicate.
-
-**Band:**
-
-```
-score >= MERGE_THRESHOLD     → merge      (no model call)
-score <= DISTINCT_THRESHOLD  → separate   (no model call)
-otherwise                    → adjudicate (§5.3)
-```
-
-Both thresholds are injected with defaults, so recalibration is configuration rather than a code edit. The defaults are **provisional placeholders** until §10.3's sweep runs, and the production gate refuses to synth until real values are recorded.
-
-### 6.3 The algorithm
-
-```
-INPUT:  batch[] of item payloads from the aggregate FIFO queue   (max 10,
-        all sharing one MessageGroupId, i.e. one date)
-
-for item in batch:
-    candidates := query(messages, date-index, date = item.date)   # projects
-                                                                  # match key
-                                                                  # + memberIds
-
-    # Step 1 — replay short-circuit, by identity, before any scoring
-    if any candidate has item.id in its memberIds:
-        merge there; continue
-
-    # Step 2 — score against messages already touched in this batch
-    #          (a candidate touched here is skipped in step 3, so the
-    #           batch's own fresher work is never overwritten by the
-    #           stored copy)
-    # Step 3 — score against the remaining stored candidates
-    # Keep only the single highest-scoring candidate.
-
-    band := classify(bestScore)          # §6.2
-    if band == adjudicate: collect the pair
-
-ONE adjudication call for the whole batch (<= 10 pairs)           # §5.3
-
-for item in batch:
-    if merged: emit an attribute-level merge          # members loaded from the
-                                                      # base table, which is the
-                                                      # only access returning them
-    else:      emit a create, conditional on the id not existing
-
-WRITE the emitted operations to the messages table
-enqueue(publishQueue, each touched messageId,
-        MessageGroupId = messageId, MessageDeduplicationId = messageId)
-```
-
-The stage is **pure**: it performs no table write and enqueues nothing itself. Both are left to its caller, which is what makes the whole of §6 testable with no AWS at all.
-
-**Why replay is exactly idempotent.** The step-1 short-circuit settles a replayed item by identity, before anything is scored — so it merges into the record it already belongs to, regardless of how that record's descriptive fields have since been overwritten. Union is commutative and idempotent, and an existing member keeps its original `ts`, so a replayed merge writes the same bytes as the original.
-
-**Failure defaults to split.** An adjudication that throws, times out, or refuses yields *distinct*, and increments `DedupAdjudicationFailed`. **False merges are worse than false splits**: a false split is a duplicate post, whereas a false merge fuses two unrelated stories under one Telegram message that then keeps editing itself.
-
-### 6.4 Known limitation: the sweep measures a different distribution from runtime
-
-The calibration harness scores one item's key against another item's key. The pipeline scores an item's key against a **message's** key, and a message's key is the union accumulated over up to 20 members.
-
-Those are not the same distribution, and the direction of the difference is known. Jaccard's denominator is `|a ∪ b|`, which grows with every absorbed member while the numerator counts only what this one item shares. So a genuine duplicate scores progressively lower against a story that has already absorbed several members: at three or four members a true match can drop below `DISTINCT_THRESHOLD` and be auto-split into a second message — the very duplicate the stage exists to prevent.
-
-The sweep **structurally cannot** detect this: a labelled pair is two items, and there is no union key anywhere in the harness. Thresholds fitted there are fitted to the easier of the two distributions.
-
-This is recorded, not fixed. Correcting it means changing the rule — a containment or coverage measure in place of symmetric Jaccard against the union, or scoring against members individually — and that is a design decision, not a calibration one. Until the labelled set carries item-versus-merged-key pairs at a couple of group sizes, the recorded auto-split recall should be read as an **upper bound** on the multi-member case.
-
----
-
-## 7. AWS Architecture
-
-### 7.1 Component map
-
-| Concern | Source (Firebase) | Target (AWS) |
-| --- | --- | --- |
-| Work in flight | `items` table + `status` column | **SQS** (3 queues + 3 DLQs) |
-| Durable records | 4 Firestore collections | DynamoDB (**2 tables**) |
-| Duplicate detection | Firestore `findNearest` | Date-partitioned query + in-memory scoring (§6) |
-| Scraper | Cloud Scheduler + Functions | EventBridge rule + Lambda |
-| Stage execution | Scheduled polling | SQS event source mappings |
-| HTTP API | `onRequest` handler | API Gateway HTTP API + one Lambda (§8.4) |
-| Auth | Firebase Auth | Amazon Cognito |
-| Secrets | Firebase secrets | Secrets Manager (Telegram + OpenRouter) |
-| AI | Gemini REST | OpenRouter (Claude, Messages API) |
-| Hosting | Firebase Hosting | Firebase Hosting, static (§9.3) |
-| Pipeline metrics | Table scans in the browser | CloudWatch metrics + Logs Insights |
-
-### 7.2 DynamoDB design
-
-**Two tables**, both `PAY_PER_REQUEST`. Nothing is co-queried across them, so single-table modelling would add ceremony with no payoff.
-
-| Table | PK | GSIs |
-| --- | --- | --- |
-| `telegator-sources` | `id` (S) | `status-index`: PK `status` — drives scrape selection |
-| `telegator-messages` | `id` (S) | `status-index`: PK `status`, SK `ts` — publish backlog, dashboard listing, counts<br>`date-index`: PK `date`, SK `ts` — **the deduplication index** |
-
-**GSI projections.** `status-index` on `messages` uses `INCLUDE` with dashboard-visible attributes only, **excluding `members`** — the one large attribute. `date-index` projects the three match-key lists plus `memberIds` and `deleted`, and nothing else: that is the whole input §6 needs, at a few hundred bytes per candidate. Nothing projects `members`, so publish and any member-level merge read the base table.
-
-**A GSI's projection cannot be changed in place.** `cdk diff` renders such a change as a harmless in-place `[~]` because a diff is computed from the template and cannot predict what the service accepts; DynamoDB's `UpdateTable` then refuses it. Nor is there a fallback — `tableName` is fixed and `removalPolicy` is `RETAIN`, so a table replacement fails outright on the existing name. Changing a projection on an environment where the index already exists is **two deploys**: one with the index definition removed, waiting for the delete; one with it restored and the new projection in place, waiting for the backfill. Between the two, `aggregate` has no candidate query, so every item creates its own message and same-story items in that window are not deduplicated. Choosing when to spend that window is an operator's call. A brand-new environment creates the index once and is unaffected.
-
-**Required alarm.** Emit `DedupCandidateCount` per aggregate run. Alarm at **> 500** — the point at which the in-memory comparison assumption needs revisiting. The migration path is a `date#shard` key or a dedicated index; documented now so it is not a surprise.
-
-### 7.3 SQS design
-
-| Queue | Type | Producer | Consumer | Key settings |
-| --- | --- | --- | --- | --- |
-| `telegator-analyze` | **Standard** | scrape | analyze | `batchSize 10`, window 60 s, visibility 1800 s, `maxReceiveCount 3` |
-| `telegator-aggregate` | **FIFO** | analyze | aggregate | `MessageGroupId = date`, `MessageDeduplicationId = itemId`, `batchSize 10`, visibility 1800 s, `maxReceiveCount 3` |
-| `telegator-publish` | **FIFO** | aggregate | publish | `MessageGroupId = messageId`, `MessageDeduplicationId = messageId`, `batchSize 1`, `DelaySeconds 300`, visibility 1800 s, `maxReceiveCount 5` |
-
-Each has a matching DLQ, which for a FIFO queue must itself be FIFO. **Message retention: 14 days** (the SQS maximum) on every queue and DLQ.
-
-**Why the types differ.**
-
-- `analyze` is embarrassingly parallel — no item depends on another. Standard maximises throughput.
-- `aggregate` must not run concurrently over the same day's items, or two invocations would each miss the other's write and create duplicate messages. FIFO with `MessageGroupId = date` serialises exactly that scope while letting different dates proceed in parallel. This replaces a blunt reserved-concurrency-of-1.
-- `publish` must not edit the same Telegram message twice at once. `MessageGroupId = messageId` serialises per message; `MessageDeduplicationId = messageId` collapses repeat requests inside the 5-minute window; `DelaySeconds` lets a story settle before its first send.
-
-**AWS does not support a batching window on a FIFO queue.** The aggregate queue therefore has `batchSize` alone. Deduplication survives it: candidates are queried from `date-index`, so correctness never depended on items arriving together.
-
-**Content-based deduplication is off**, deliberately. Hashing the body would collapse two genuinely different posts that happen to share text; an explicit id is used instead.
-
-**Visibility timeout is 6× the function timeout**, per AWS guidance, so a slow invocation cannot cause redelivery to a second worker.
-
-**Partial batch failures.** Every consumer sets `functionResponseTypes: ["ReportBatchItemFailures"]` and returns the failed message ids. Without this, one poison message forces the whole batch to retry — which for `analyze` means re-billing nine successful model calls.
-
-**FIFO throughput.** 300 messages/s without batching, 3,000 with. Volumes here are orders of magnitude below that.
-
-### 7.4 Why queues rather than scheduled status polling
-
-| Property | Scheduled polling | SQS |
-| --- | --- | --- |
-| End-to-end latency | Up to 4 hours (schedule-bound) | Seconds to minutes |
-| Retry | Hand-rolled via `status: error`; nothing re-reads it | Native, with backoff and `maxReceiveCount` |
-| Failure isolation | One bad row can abort a batch | Partial batch failure reporting |
-| Poison messages | Stuck as `error` rows forever | DLQ, inspectable and replayable |
-| Back-pressure | None — fixed batch every N minutes | Queue depth is the signal |
-| Cost at idle | Every schedule fires and scans regardless | No messages, no invocations |
-
-FIFO message groups also give **finer** concurrency control than reserved concurrency: serialised per date, parallel across dates.
-
-The scraper stays on a schedule because nothing can push to us — Telegram must be polled. The result is **scheduled at the edge, event-driven internally**.
-
-### 7.5 Lambda inventory
-
-All Node.js 22, ARM64, bundled with esbuild.
-
-| Function | Trigger | Timeout | Memory | Concurrency |
-| --- | --- | --- | --- | --- |
-| `telegator-scrape` | EventBridge `rate(30 minutes)` | 300 s | 512 MB | 1 (reserved) |
-| `telegator-analyze` | SQS `telegator-analyze` | 300 s | 512 MB | 5 (reserved) |
-| `telegator-aggregate` | SQS `telegator-aggregate` (FIFO) | 300 s | 1024 MB | by message group |
-| `telegator-publish` | SQS `telegator-publish` (FIFO) | 300 s | 512 MB | by message group |
-| `telegator-dlq-replay` | Manual (dashboard) | 300 s | 512 MB | 1 (reserved) |
-
-Reserved concurrency is creatable only while the account keeps 5 concurrent executions unreserved, and a cold account's *entire* quota is 5 — so on an unraised account every reservation is rejected and the stack cannot be created at all. It is therefore behind a flag.
-
-### 7.6 Secrets and IAM
-
-| Secret | Store | Consumers |
-| --- | --- | --- |
-| `telegator/telegram-bot-token` | Secrets Manager | `publish` |
-| `telegator/openrouter-api-key` | Secrets Manager | `analyze`, `aggregate` |
-
-Per-function least privilege:
-
-- `scrape` → read/write `sources`; `sqs:SendMessage` on the analyze queue
-- `analyze` → consume the analyze queue; `sqs:SendMessage` on aggregate; `secretsmanager:GetSecretValue` on the OpenRouter key ARN
-- `aggregate` → consume the aggregate queue; read/write `messages`; `sqs:SendMessage` on publish; `secretsmanager:GetSecretValue` on the OpenRouter key ARN
-- `publish` → consume the publish queue; `GetItem`/`UpdateItem` on `messages`; `secretsmanager:GetSecretValue` on the bot-token ARN
-- `dlq-replay` → receive on all DLQs, send on all source queues
-- Dashboard API role → read both tables, write `sources`/`messages`, `cloudwatch:GetMetricData`, `cloudwatch:PutMetricData` (namespace-conditioned), `logs:StartQuery`, `sqs:GetQueueAttributes`, `lambda:InvokeFunction` on the scraper and the replay handler, `cognito-idp:AdminGetUser`
-
-"Read/write" is a description, not a grant: a stage that never deletes does not get `DeleteItem`. And a `Query` against an index authorises against the **index ARN**, not the table's — a grant on the table alone passes every test and fails at runtime.
-
-**No model-inference grant exists.** With OpenRouter the only AWS-side statement is the *read of the token*; nothing in IAM can pin which model is called. The single model-id constant (§5.1) is the whole guard.
-
-### 7.7 Observability
-
-Because there is no items table, **CloudWatch is the pipeline's system of record for volume**. This is a deliberate trade, and it makes the metric set load-bearing rather than decorative.
-
-**Counters** (custom metrics, namespace `Telegator`):
-
-| Metric | Dimensions | Emitted by |
-| --- | --- | --- |
-| `ItemsScraped` | `Source` | scrape |
-| `ItemsDropped` | `Reason` = `forward`\|`empty`\|`obsolete` | scrape |
-| `ItemsAnalyzed` | — | analyze |
-| `ItemsSkipped` | `Reason` = `low`\|`category`\|`nobody` | analyze |
-| `MessagesCreated`, `MessagesMerged` | — | aggregate |
-| `MessagesPublished`, `MessagesEdited` | — | publish |
-| `DedupCandidateCount`, `MemberCapReached` | — | aggregate |
-| `DedupAdjudicated`, `DedupAdjudicationFailed` | — | aggregate |
-| `TelegramApiErrors` | `Method` | publish |
-| `SourceStale` | `Source` | scrape |
-
-**Category distribution** is *not* a custom metric. Custom metrics are billed per name-and-dimension combination, so 29 category dimensions would create 29 billable metrics for a chart nobody watches minute-to-minute. It comes instead from a **CloudWatch Logs Insights** query over `analyze`'s structured logs, run on demand and cached 60 s by the dashboard.
-
-**The structured-log contract.** The category chart is a Logs Insights query, so the log *shape* is an interface and not a convenience:
-
-- `analyze` writes one JSON object per line per classified item, carrying at least `msg: "item classified"` and `category`.
-- The query is `filter msg = "item classified" | stats count() as count by category`.
-- The Lambda log format must stay **`TEXT`**. `LoggingFormat.JSON` wraps each record in an envelope, after which the query matches nothing and the chart is empty with no error anywhere.
-- Retention is §11.5's 90 days, applied to the group the function actually writes to.
-
-Both literals are shared constants, because the emitter and the query are in layers that may not import each other.
-
-**Queue depth** (`ApproximateNumberOfMessagesVisible`) is the modern equivalent of "count of items with `status = fetched`", and the dashboard surfaces it per queue.
-
-**Alarms:** any DLQ depth > 0; `SourceStale`; `DedupCandidateCount` > 500; Lambda error rate > 10% over 15 minutes; `telegator-analyze` queue age > 1 hour. Every alarm treats missing data as **not breaching** — an idle queue reports nothing rather than zero, and the opposite setting would ring forever on a healthy system.
-
-`SourceStale` is emitted **undimensioned as well as per source**: a CloudWatch alarm cannot enumerate a runtime-discovered dimension at synth time, and context lookups are banned (§22), so the alarm watches the undimensioned series.
-
----
-
-## 8. Dashboard
-
-### 8.1 Architecture decision
-
-**A static console over an authenticated API. The offline-first layer stays deleted.**
-
-The console is an Arrmatura single-page app, served as static files from Firebase Hosting (§9.3). It holds no AWS credential. Everything it shows or changes goes through one HTTP endpoint — `POST /rpc` on an API Gateway HTTP API — backed by one Lambda that runs §8.4's actions under the dashboard role of §7.6.
-
-The source dashboard maintained an IndexedDB mirror of all seven collections, filled by a delta-sync protocol with a per-collection `ts` watermark. For an internal operator dashboard over a small dataset, one API read per page gives the same UX with none of that machinery.
-
-**Removed:** IndexedDB schema and stores, the `downstream`/`since` protocol, `upsertBatch` reconciliation, soft-delete tombstone propagation, `resetDb`, and the client cache-invalidation surface.
-
-**Cost:** search, filters and sort run in the browser over the rows one read returned, and every write is followed by a reload. At these volumes it is not perceptible.
-
-### 8.2 Layout and routes
-
-```
-packages/
-  tg-web/              The console (Arrmatura): static, served by Firebase Hosting
-    cml/               Templates — app shell, dashboard, pipeline, records
-    src/services/      AuthService, ApiService, GridService, OverviewService, PipelineService
-    src/               Pure logic — auth/ (PKCE, hosted-UI URLs), grid/, pipeline/, api/
-    www/               The hosted root — index.html, dist/ (build output), config.json
-  tg-api/              The API Lambda — actions.ts (the registry), http.ts (RPC), handler.ts
-  tg-actions/          The actions' cores (§8.4) and the §8.5 computations
-  tg-pipeline/         Stage implementations — never reached by the dashboard
-```
-
-**`tg-pipeline` holds the single implementation of every stage.** The Lambda handlers are thin wrappers around it, built from this same repository. The dashboard does **not** import it — manual triggers call `lambda:InvokeFunction` on the deployed function, so "run this now" executes the exact deployed artefact.
-
-`test/boundaries.test.ts` checks this over the **transitive** closure of `tg-web`, `tg-api` and `tg-actions`, along with `aws-cdk-lib`. A constant needed by both layers moves to a module neither owns. A second wall stands in front of the browser: nothing the console bundles may reach the AWS SDK, `tg-aws`, `tg-api` or a Node built-in.
-
-The routes are hash routes, so the host serves one `index.html` for every path:
-
-| Route | Page |
-| --- | --- |
-| `#/` | Dashboard — pipeline health |
-| `#/pipeline` | The pipeline as one diagram, with every manual trigger |
-| `#/sources` | Sources |
-| `#/targets` | Targets |
-| `#/messages?status=topublish` | Messages, one tab per status |
-
-### 8.3 Pages
-
-| Page | Content |
-| --- | --- |
-| **Dashboard** | Stat cards (items scraped / analysed / skipped 24 h, messages published, dead letters), status and category charts, 10 most recent messages |
-| **Pipeline** | §1.4's chain as one interactive diagram — the schedule, the four stages, the three queues between them, Telegram — with each queue's depth and dead-letter count, refreshed every 30 s. Selecting a node opens its panel: a stage's purpose and trigger (**Scrape now**, **Publish now**); a queue's **Consume one batch**, DLQ inspection, **Replay** and an armed **Discard all** |
-| **Sources** | Table of id, status, target, category, `teaser`, via, lastCount, lastResult, `zeroYieldRuns`; inline edit; add; delete; export; **Scrape now**; an armed **Reset all cursors** |
-| **Messages** | Status tabs; table of id, title, category, status, date, tgChannel, `memberCount`, with an expandable member list; inline edit; **Re-publish**; **Publish now** on the `topublish` tab; delete selected; export |
-| **Targets** | Table of id, type, the two `lastPosted*` mirrors and the template; inline edit; add; delete; export |
-
-Every table offers a keyword search across visible columns, per-column filters ANDed together, and column sort. Sorting is numeric-aware for numeric columns and locale-aware for strings — the content is Dutch and Russian as well as English. When filters narrow the result to nothing, the empty state renders *inside* the table so the controls stay reachable.
-
-The expandable member list is a per-row base-table `GetItem`, because no index projects `members`. Rendering it from the list query instead would fail silently — the map is simply absent, so every row would expand to nothing.
-
-**Mobile first.** On a phone each record is a card — the id as its title, every field labelled — with a sort select in the toolbar; from `md` the same markup is a table with sortable headings and a filter row. The pipeline diagram is a column until `xl` and a row from it. No page scrolls sideways at 390 px.
-
-### 8.4 Actions
-
-| Action | Signature | Authorisation |
-| --- | --- | --- |
-| `upsertRecord` | `(table, id, delta) => void` | `editor` |
-| `deleteRecords` | `(table, ids[]) => void` | `editor` — soft delete, sets `deleted: true` |
-| `loadMembers` | `(messageId) => MemberRow[]` | `viewer` |
-| `exportTable` | `(table) => string` | `viewer` |
-| `inspectDlq` | `(queueName) => DlqMessage[]` | `viewer` — reading is not acting; replay and purge are `admin` |
-| `runScraper` | `() => {processed}` | `admin` — invokes the scraper Lambda |
-| `republishMessage` | `(messageId) => void` | `admin` — sets `topublish`, enqueues |
-| `publishPending` | `(max) => {published, failed}` | `admin` — drains the `topublish` backlog, capped server-side |
-| `replayDlq` | `(queueName, max) => {replayed}` | `admin` — invokes the replay handler |
-
-Deletes are **soft**. Every action validates input with Zod and re-checks the caller's role server-side. The reads the pages make — `whoami`, `overview`, `listSources`, `listTargets`, `listMessages`, `loadQueues` — are `viewer`.
-
-**Transport.** One route, `POST /rpc`, with `{ action, input }`, answered with `{ result }` or `{ error }`: **401** for an absent or rejected token, **403** for `disabled` or `forbidden`, **400** for input its schema rejects, **500** with the action's own message otherwise — an operator needs "no such message: x" in the failure toast. An anonymous caller is refused before the body is read, so it learns neither the action names nor which inputs validate. One route rather than one per action, because `tg-api/actions.ts` is already a closed registry; a route per action would restate it in API Gateway, and the two would drift.
-
-### 8.5 Dashboard computations
-
-| Card / chart | Source | Window |
-| --- | --- | --- |
-| Items scraped | CloudWatch `ItemsScraped` Sum | 24 h |
-| Items analysed | CloudWatch `ItemsAnalyzed` Sum | 24 h |
-| Items skipped | CloudWatch `ItemsSkipped` Sum by `Reason` | 24 h |
-| Messages published | DynamoDB count on `status-index` (`published`) | all |
-| Errors | Sum of all DLQ depths | current |
-| Status chart | Queue depths + message status counts | current |
-| Category chart | Logs Insights over `analyze` logs | 7 d |
-| Recent messages | `messages` `status-index`, `ts` descending, first 10 | — |
-
-All CloudWatch reads are cached 60 s so a refresh does not re-query. The cache decorates the ports rather than wrapping each card, so the rule holds for reads added later.
-
-The two donut charts are one CSS `conic-gradient` each over the source's 10-colour palette, less its red: red is kept for dead letters and failures alone. The browser does the arc geometry, so a single slice needs no special case. No charting library is needed for two charts. A number that could not be read shows as `—`, never as `0`.
-
-### 8.6 Authentication and authorisation
-
-**Amazon Cognito user pool**, hosted UI, one group per role.
-
-| Role | Grants |
-| --- | --- |
-| `viewer` | Read all pages, export |
-| `editor` | + inline edit, add, delete |
-| `admin` | + manual triggers, DLQ replay, re-publish, publish-now |
-
-**Every action calls `requireRole`, at `viewer` or above** — pinned by `tg-api/actions.test.ts`, which calls each one anonymously and as a disabled admin.
-
-Roles are **ordered**, `viewer` < `editor` < `admin`, and one array is the single source of that order: the Cognito group precedences, the `RoleSchema` enum and every `requireRole` comparison are all derived from it, so they cannot drift. Cognito precedence counts the other way — lower is more privileged — so the number is computed, never written by hand.
-
-**The sign-in flow** is the browser's own: authorization code with PKCE (RFC 7636). The app client is public and has no secret; the code verifier is what binds the exchange to the tab that started it.
-
-| Step | Does |
-| --- | --- |
-| Sign in | Generates a `code_verifier` and a `state`, keeps both in `sessionStorage`, redirects to the hosted UI with the S256 challenge |
-| Return | Cognito redirects to the site's root with `?code&state`. The console removes both from the address bar, refuses a `state` it did not issue, and exchanges code and verifier at `/oauth2/token` |
-| Use | Sends the ID token as `Authorization: Bearer` on every call, refreshing it a minute before it expires |
-| Sign out | Forgets the tokens and redirects to the hosted UI's logout endpoint |
-
-The tokens are kept in `localStorage`, so a reload or a second tab stays signed in. That makes script injection on the console's origin a token theft, which is why §9.3's headers carry a strict Content-Security-Policy: scripts from the origin only, no inline script, no `eval`.
-
-**Two checks per call.** API Gateway's JWT authorizer refuses any token not issued by this pool for this client, before the Lambda runs. The Lambda then verifies the token again against the pool's JWKS — HTTP API flattens `cognito:groups` into a string, so the role must be read from the real claim — and the action re-checks role and status.
-
-**Access is the API's answer, not the token's.** After sign-in the console calls `whoami`, and only `granted` opens it. A 403 shows a fixed explanation — disabled, or no role. A refused sign-in shows a fixed sentence too: the hosted UI's `error` text is attacker-supplied, so echoing it would put reflected XSS on the operator console's own origin.
-
-Ported rules: a new user is created **disabled** with no roles and must be enabled manually; a disabled user is rejected at every action, which needs a live read of one field.
-
-**Not ported — deliberately.** The source's API handler bypassed authentication entirely when an emulator environment variable was set, granting `admin` with a synthetic uid. Local development uses a real Cognito dev pool. No code path skips authorisation.
-
----
-
-## 9. Deployment
-
-### 9.1 Stacks (AWS CDK, TypeScript)
-
-| Stack | Contents | Status |
-| --- | --- | --- |
-| `TelegatorDataStack` | 2 DynamoDB tables + GSIs, PITR on `messages` | built |
-| `TelegatorQueueStack` | 3 queues + 3 DLQs, redrive policies | built |
-| `TelegatorAuthStack` | Cognito user pool, groups, app client | built |
-| `TelegatorPipelineStack` | 5 Lambdas, 1 EventBridge rule, 3 event source mappings, IAM roles, log groups, alarms | built |
-| `TelegatorAppStack` | The dashboard API: one Lambda behind an HTTP API with a Cognito JWT authorizer — see §9.3 | built |
-
-Order: `Data`, `Queue`, `Auth` → `Pipeline` → `App`.
-
-Deploy with `npm run deploy`, never a bare `cdk deploy`: a bare one omits the two secret ARNs, and the pipeline stack falls back rather than failing — so the stack creates cleanly and `publish` and `analyze` fail on their first message instead. The script resolves both ARNs by name, refuses to run as the account root (which cannot assume the bootstrap roles), and **diffs by default**; `--execute` is the opt-in.
-
-### 9.2 Environments
-
-`dev` and `prod`, isolated by AWS account. Resource names are `telegator-{env}-{resource}`, so a name in a console or a log says which environment made it.
-
-**The EventBridge schedule defaults to disabled in both environments.** §9.5 step 4 deploys prod disabled and enables it only at step 6, after a 48-hour soak — so a flag derived from the environment name would start posting on day one. A deploy opts in with `-c scheduleEnabled=true`.
-
-### 9.3 Hosting
-
-The dashboard's hosting is the one part of the design that changed four times.
-
-| Stage | Status | Outcome |
-| --- | --- | --- |
-| **Amplify Hosting** | built, undeployable | `CreateApp` returns 401 — "please open a Billing Support Case". `amplify:ListApps` succeeds and the deploy identity holds AdministratorAccess, so this is **account standing**, not IAM and not the template. Nothing in this repository can work around it. |
-| **App Runner** | probed, rejected | `CreateService` was accepted; the service settled at `CREATE_FAILED`. Not a demonstrated escape either. The probe resources were deleted. |
-| **ECS Fargate + ALB + CloudFront** | designed, superseded | ~$77/mo of VPC, NAT gateway, load balancer and an always-on task — to serve pages that need no server once sign-in moves into the browser. |
-| **Firebase Hosting + API Gateway** | **built** | The current design, below. |
-
-**Why it works.** The Next.js dashboard needed a server for two things only: AWS credentials and a cookie key. With the sign-in in the browser (§8.6) and every action behind one Lambda (§8.4), the console is static. Firebase Hosting serves it over HTTPS on its own domain at no cost, and the server side becomes pay-per-request.
-
-```
-Browser ──HTTPS──► Firebase Hosting   telegator-581db.web.app — index.html, dist/, config.json
-   │
-   ├──HTTPS──► Cognito hosted UI      sign-in, /oauth2/token (PKCE)
-   │
-   └──HTTPS──► API Gateway HTTP API   POST /rpc — JWT authorizer, CORS for the web origins
-                 │
-                 ▼
-               telegator-{env}-api    Lambda (tg-api), the dashboard role of §7.6
-                 ├── DynamoDB, SQS, CloudWatch, Logs Insights
-                 ├── lambda:InvokeFunction on scrape, dlq-replay, publish, consume
-                 └── cognito-idp:AdminGetUser
-```
-
-**Three findings constrain it, and each is pinned by a test:**
-
-1. **One origin list, two consumers.** Cognito redirects only to a registered callback, and the API answers CORS only for an allowed origin; an origin in one list and not the other signs in and then fails every call. `tg-infra/lib/web.ts` holds the one list — `http://localhost:8080` and the site's two domains — and both stacks read it. `-c webOrigins=` overrides it.
-2. **API Gateway gives up at 30 s.** The function's timeout is 29 s, so a long "Scrape now" fails where the operator can see it, rather than running on after the browser was told it failed.
-3. **A static site cannot be built per environment.** The console reads `/config.json` — the API URL, the client id, the hosted-UI domain — before it starts. `npm run deploy:web` writes it from the Auth and App stacks' outputs, so nothing in it is typed by hand, and nothing in it is secret.
-
-**Headers** (`firebase.json`). A Content-Security-Policy that allows scripts from the origin only; styles and fonts from Google Fonts and unpkg, which serves the Lucide icon font; `connect-src` to `*.execute-api.eu-central-1.amazonaws.com` and `*.auth.eu-central-1.amazoncognito.com`; `frame-ancestors 'none'` and `form-action 'none'`. Inline `style` attributes are allowed through `style-src-attr`, because Arrmatura writes them; nothing needs `eval`. `index.html` and `config.json` are never cached, and every path rewrites to `index.html`.
-
-**Deploy sequence.** `npm run deploy -- --execute` (§9.1's order, Auth before App) → `npm run deploy:web -- --execute`. The callback URLs are known before the first deploy, so the two-phase dance Amplify and Fargate both required is gone.
-
-**Cost:** the HTTP API at ~$1 per million calls, the Lambda inside the free tier at these volumes, Firebase Hosting's free tier — **about $0/mo**.
-
-**Out of scope:** a custom domain; a second Hosting site per environment.
-
-### 9.4 Seeding
-
-`scripts/seed.ts` reads the existing `data/*.json` exports and writes the two tables. Because the schema changed, seeding is a **migration**, not a copy — and it covers `sources` only: §11.6 skips the historical message import entirely.
-
-| Source file | Target | Transform |
-| --- | --- | --- |
-| `data-sources.json` | `sources` | Direct, minus unused stat columns (`members`, `views`, `adv_*`, …). |
-
-`--data-dir` is required, because the export lives outside this repository. Writing is opt-in: a migration is hard to undo once it has run.
-
-### 9.5 Cutover
-
-1. Deploy to `dev`; seed sources.
-2. Trigger the scraper manually; verify every §10 criterion.
-3. Recalibrate the thresholds (§10.3).
-4. Deploy to `prod` with the schedule **disabled**, pointed at test Telegram channels; run 48 hours.
-5. Re-seed source cursors (`lastItemId`) from the live Firebase values, so AWS resumes where Firebase stopped rather than re-scraping.
-6. Enable the AWS schedule against production channels.
-
-The two systems must never publish the same Telegram content concurrently — they would double-post.
-
----
-
-## 10. Acceptance Criteria
-
-### 10.1 Per stage
-
-§3.1–3.4's AC ids are the functional test suite, implementable against DynamoDB Local and ElasticMQ (SQS-compatible) with stubbed Telegram and OpenRouter clients. `test/acceptance.test.ts` audits the mapping **bidirectionally**: every AC declared here is named by a test, and no test claims an AC this document does not declare.
-
-The end-to-end harness wires the stages the way SQS wires them and no more tightly than that: each stage's output is a queue message, turned into the records the next stage's handler receives exactly as an event source mapping would. Nothing is passed straight from one stage to the next, because a harness that short-circuited the serialisation would not be testing the pipeline.
-
-### 10.2 End-to-end
-
-- **E2E-1** A seeded source with three fresh posts produces three analyze messages, at least one message record, and one Telegram send.
-- **E2E-2** Two near-identical posts from different sources on the same date produce **one** message with two members.
-- **E2E-3** Re-running the scraper with no new upstream content enqueues **zero** messages and makes **zero** Telegram calls.
-- **E2E-4** A new item merged into a published message triggers `editMessageText` with the stored `tgId`.
-- **E2E-5** **Replaying the entire aggregate DLQ leaves the messages table byte-identical.** This is the master idempotency test.
-- **E2E-6** Killing the analyze consumer for 10 minutes and restarting it processes the accumulated backlog with no loss and no duplicates.
-- **E2E-7** An OpenRouter outage sends every in-flight item to the analyze DLQ; restoring service and replaying completes them.
-
-### 10.3 Threshold calibration *(mandatory before production)*
-
-Thresholds are properties of the exact scoring rule and the exact set they were tuned on. The defaults in §6.2 are placeholders.
-
-1. Assemble ≥100 hand-judged item pairs from existing data — same-story and different-story.
-2. **2-D sweep** over `(DISTINCT_THRESHOLD, MERGE_THRESHOLD)` with `DISTINCT ≤ MERGE`. The sweep is fully offline: scores come from the analyzed fields, so it makes no model calls.
-3. Objective, three-way — the widest auto regions subject to both error floors:
-   - maximise auto-merge precision (**false merges are the costly error**),
-   - maximise auto-split recall,
-   - minimise band volume, which is the model-call cost.
-4. Measure adjudicator accuracy on band pairs only. This part does spend model calls; record the measured value.
-5. Record thresholds, weights, the curve, the **labelled-set hash** and adjudicator accuracy in `calibration/record.json`.
-
-**Weights are not swept continuously.** Five continuous parameters fitted to ~100 pairs overfits and produces a curve that means nothing. Weights come from a coarse grid of two or three hand-reasoned candidates; only the two thresholds are swept.
-
-Read §6.4 before trusting the result: the sweep measures item-versus-item, and the pipeline scores item-versus-union.
-
-**The production gate.** `cdk synth -c env=prod -c scheduleEnabled=true` refuses until the record exists. Until then the pipeline must not publish to production channels.
-
-### 10.4 Non-functional
-
-| Property | Target |
-| --- | --- |
-| End-to-end latency | Telegram post → published within **15 minutes** |
-| Stage duration | p95 < 60 s per invocation |
-| Queue age | Oldest message < 1 hour under normal load |
-| Cost | < $40/month at current volumes, excluding model inference and §9.3 hosting |
-| Availability | No DLQ non-empty for more than one hour without an alarm |
-| Data durability | PITR on `messages` |
-
-Four of these six are measurable only against a running system. Two are verifiable from the synthesised template, and the latency row is checkable a third way — against its own arithmetic (§25, R28).
-
----
-
-## 11. Decisions
-
-Questions this design deliberately closed. Where a decision contradicts an earlier statement elsewhere in Part I, **the decision wins** — it is the later, explicitly-resolved position.
-
-| # | Question | Decision |
-| --- | --- | --- |
-| 11.1 | Model tier for classification | `claude-haiku-4.5`. Directly proportional to running cost (§5.1). |
-| 11.2 | Summary length | 220 characters maximum (§5.2). |
-| 11.3 | Hashtag line | Append it to Telegram messages (§3.4). |
-| 11.4 | Settle delay | 300 s, as a starting value (§7.3). |
-| 11.5 | Analyze log retention | 90 days. |
-| 11.6 | Historical messages | Skip the import entirely (§9.4). |
-
----
-
-# Part II — AWS explained
-
-Written for someone new to AWS who wants to read this repository. No cloud
-experience is assumed. Each section gives a one-line meaning, what the service
-buys, what it costs, and the traps this project actually hit. **Part I owns the
-numbers**; this part explains what they mean and points back.
-
-## 12. Ten words to learn first
-
-Everything else is built from these.
-
-```mermaid
-flowchart TD
-  Org["AWS account: the box you pay for"] --> Reg["Region: a place, eu-central-1"]
-  Reg --> Svc["Service: a product, for example Lambda"]
-  Svc --> Res["Resource: one thing you created"]
-  Res --> Arn["ARN: the full name of that thing"]
-  Res --> Tag2["Console, CLI and code all call the same API"]
-  Iam["IAM: the guard on every API call"] -. checks .-> Tag2
-  Iac["CDK: your code writes the resources"] --> Res
-  Ev["Event-driven: a thing happens, code runs"] --> Svc
-  Mgd["Managed: AWS runs the servers, not you"] --> Svc
-```
-
-| Term | One-line meaning |
-| --- | --- |
-| **Account** | The box that owns and pays for everything you create; the strongest wall in AWS |
-| **Region** | A group of data centres in one part of the world; Telegator uses `eu-central-1` (Frankfurt) only |
-| **Availability Zone** | One data centre inside a Region, with its own power and network; two zones rarely fail together |
-| **Service** | One AWS product, such as Lambda or DynamoDB; each has its own API |
-| **Resource** | One thing you made with a Service: a queue, a table, a function |
-| **ARN** | The full unique name of a Resource, like `arn:aws:sqs:eu-central-1:1234:telegator-dev-analyze`; permissions are written against ARNs |
-| **API call** | Every action in AWS is an API call, whether you click the console, type the CLI, or run code |
-| **IAM** | The guard that says yes or no to every API call (§14) |
-| **Managed service** | AWS runs and patches the servers; you only bring configuration and code |
-| **Serverless** | A managed service that also costs nothing when nothing happens; Lambda, SQS and DynamoDB on-demand are all serverless |
-| **Event-driven** | Code runs because something happened (a message arrived), not because a clock told it to |
-| **Infrastructure as code** | You describe resources in a programming language, and a tool creates them (§22) |
-
-**Telegator is serverless and event-driven.** Nothing runs while nothing happens. That is the single idea the whole design is built on — and the one exception, the always-on Fargate task of §9.3, is the reason that section costs more than everything else combined.
-
-## 13. Accounts, Regions and names
-
-| Concept | One-line meaning | Status |
-| --- | --- | --- |
-| **Environment separation** | `dev` and `prod` are separate Accounts, so a mistake in one cannot touch the other | built — `tg-infra/lib/config.ts` |
-| **Resource name** | `telegator-{env}-{resource}` (§9.2) | built — `tg-infra/lib/naming.ts` |
-| **Service quota** | A limit per Account and Region on how many of a thing you may have | built as a *problem*: the concurrency trap in §26 |
-| **Partition** | The part of an ARN saying which AWS world you are in (`aws`, `aws-cn`, `aws-us-gov`); code writes `Aws.PARTITION`, never the literal | built — `tg-infra/lib/pipeline-stack.ts` |
-| **Organization / OU / Service Control Policy** | A tree of Accounts, and rules that *remove* permissions from all of them at once | context — but it bit this project: a whole service was disabled above IAM (§26) |
-| **Tag** | A key/value label on a Resource, used for cost reports and access rules | context |
-
-## 14. IAM — who may do what
-
-The most important service to understand, because every other section depends on
-it. The rule is simple: **every API call is denied unless a policy allows it, and
-an explicit deny always wins.**
-
-```mermaid
-flowchart LR
-  Fn["Lambda: publish"] --> Role["IAM Role<br/>(a costume with permissions)"]
-  Role --> P1["Policy: messages table<br/>GetItem, UpdateItem only"]
-  Role --> P2["Policy: read ONE secret<br/>GetSecretValue on its ARN"]
-  Role --> P3["Policy: consume publish queue"]
-  Fn -->|"API call"| Check{"IAM check"}
-  P1 & P2 & P3 --> Check
-  Check -->|"a policy allows it"| Yes["allowed"]
-  Check -->|"no policy allows it"| No["denied"]
-```
-
-| Concept | One-line meaning |
-| --- | --- |
-| **Policy** | A JSON list of statements: *effect* (allow/deny), *action* (`dynamodb:Query`), *resource* (an ARN), optional *condition* |
-| **Role** | A named set of permissions with no password of its own; a service "assumes" it and gets short-lived keys |
-| **Principal** | Whoever is making the call: a role session, a user, or an AWS service |
-| **Service principal** | An AWS service allowed to assume a Role, e.g. `amplify.amazonaws.com`; planned: `ecs-tasks.amazonaws.com` |
-| **Least privilege** | Grant only the exact actions the code actually calls, on the exact ARNs it touches — this project's signature habit |
-| **Trust policy** | The statement on a Role saying *who* may put the costume on; CDK writes it for you |
-| **Condition** | An extra check, used when the action takes no ARN — e.g. `PutMetricData` limited to the `Telegator` namespace |
-| **Resource policy** | A policy attached to the *resource* instead of the caller; how a queue lets another account send to it (context) |
-| **STS** | The service handing out the short-lived keys when a Role is assumed; it works underneath, you never call it here (context) |
-
-**Three traps worth remembering**, all of which §7.6 encodes:
-
-- Some actions take no resource ARN at all (`cloudwatch:PutMetricData`, `GetMetricData`, `logs:GetQueryResults`). The only honest scope is `*` plus a condition where one exists.
-- A DynamoDB `Query` on an index checks the **index ARN**, not the table ARN. A grant on the table alone passes every test and fails at runtime. This is why `tg-infra/lib/grants.ts` exists.
-- **The permission must name the service the client actually signs for**, not the one the documentation names. A role can look perfectly scoped and return 403 on every call (§26).
-
-## 15. Lambda — code that runs only when needed
-
-**One-line meaning:** you upload a function; AWS runs it when an event arrives,
-bills per millisecond, and runs nothing between events. **built** — five of them,
-inventoried in §7.5.
-
-- **Benefit** — zero cost while idle (a perfect match for a pipeline that sleeps most of the day), scaling that follows the queues automatically, and no server to patch.
-- **Tradeoffs** — an invocation may run at most 15 minutes (here capped at 300 s); a rarely-used function pays a cold-start delay; and local execution is never quite the real thing, which is why every AWS boundary here is a port with an in-memory fake.
-
-```mermaid
-flowchart LR
-  E1["EventBridge schedule"] --> L1["scrape"]
-  E2["SQS messages"] --> ESM["Event source mapping<br/>(AWS polls the queue for you)"]
-  ESM --> L2["analyze / aggregate / publish"]
-  E3["Dashboard: InvokeFunction"] --> L3["scrape, dlq-replay"]
-  L2 --> R["Handler returns<br/>list of failed message ids"]
-  R --> ESM
-```
-
-| Concept | One-line meaning |
-| --- | --- |
-| **Handler** | The exported function AWS calls with the event; here always `handler` in `tg-pipeline/handlers/*.ts` |
-| **Runtime** | The language image the function runs on; Node.js 22 |
-| **Architecture** | The CPU type; ARM64 (Graviton) — cheaper, and native to the Apple Silicon build machine |
-| **Environment variable** | A named string given to the function at deploy time — table names, queue URLs; names live in `tg-configs/env.ts` |
-| **Event source mapping** | The poller AWS runs against a queue on your behalf; you set batch size, it invokes with batches |
-| **Partial batch failure** | The handler returns only the ids that failed, so nine good messages are not retried because of one bad one |
-| **Reserved concurrency** | A fixed cap on parallel copies of one function |
-| **Cold start** | Extra delay when AWS must create a fresh sandbox; harmless at this scale |
-| **Bundling** | Packing the TypeScript into one JS file with esbuild at synth time; the AWS SDK is left out because the runtime ships it |
-
-**Traps**
-
-- **Reserved concurrency needs quota headroom** — see §7.5. Hence the escape-hatch flag.
-- **`AWS_REGION` is reserved.** Lambda sets it; CloudFormation rejects a template that declares it. Read it, never write it.
-- **Bundling falls back to Docker.** Without a local esbuild, CDK builds the bundle in a container. The dependency plus `forceDockerBundling: false` keeps `cdk synth` self-contained.
-- **Partial batch failure is real money here.** Analyze receives 10 posts and calls a model for each; without `reportBatchItemFailures` one bad post makes AWS redeliver all 10, and you pay for nine successful calls again. One flag.
-
-**Concurrency without a number:** aggregate and publish have *no* reserved concurrency. Their parallelism comes from FIFO message groups instead (§16). A reserved concurrency of 1 would be blunter — it would serialise across days too, which is more than correctness needs.
-
-## 16. SQS — queues carry the work
-
-**One-line meaning:** a durable mailbox between a producer and a consumer, so
-they never need to be fast, alive, or awake at the same time. **built** — three
-queues and three DLQs, specified in §7.3.
-
-**The central design idea of the whole project:** the queue *is* the pipeline (§1.3). A post travels as a queue message and touches no table while in flight.
-
-```mermaid
-flowchart LR
-  P["Producer sends"] --> Q["Queue"]
-  Q --> C["Consumer receives"]
-  C -->|"success: delete"| Done["gone"]
-  C -->|"crash or timeout"| Hidden["message hidden for<br/>visibility timeout"]
-  Hidden -->|"timeout expires"| Q
-  Q -->|"failed maxReceiveCount times"| DLQ["Dead-letter queue<br/>kept 14 days"]
-  DLQ -->|"operator clicks replay"| Q
-```
-
-| Concept | One-line meaning |
-| --- | --- |
-| **Standard queue** | Best-effort order, unlimited throughput, possible rare duplicates; used for analyze, where no post depends on another |
-| **FIFO queue** | Strict order and exactly-once *within a message group*; the name must end `.fifo`; used for aggregate and publish |
-| **Message group** | The unit of order in a FIFO queue: one group is processed one message at a time, different groups run in parallel |
-| **Deduplication id** | FIFO refuses a second message with the same id within 5 minutes; set explicitly here, never from a body hash |
-| **Visibility timeout** | How long a received message stays hidden, so a slow worker is not doubled |
-| **Dead-letter queue (DLQ)** | Where a message goes after failing too many times, instead of blocking the queue forever |
-| **maxReceiveCount** | The "too many" number |
-| **Retention** | How long an unconsumed message survives: 14 days, the SQS maximum |
-| **Delivery delay** | Messages become visible only after a wait — the settle delay of §3.3 |
-| **Queue depth** | `ApproximateNumberOfMessagesVisible` — how much work is waiting; the dashboard's health signal |
-
-- **Benefit** — retry, back-pressure, failure isolation and a poison-message drawer, all for free; at idle, no messages means no invocations and no cost. §7.4 compares this to scheduled polling row by row.
-- **Tradeoffs** — a message may arrive more than once (Standard), so consumers must tolerate repeats; FIFO buys order at a throughput cap; a message body maxes out at 256 KB; and 14 days is the *longest* anything can wait.
-
-**Traps**
-
-- **Visibility timeout too short is silent double-processing.** A slow worker's message reappears and a second worker takes it. The 6× rule (§7.3) exists for exactly this.
-- **A FIFO queue's DLQ must itself be FIFO** — an AWS rule the specification did not state.
-- **A FIFO queue cannot have a batching window.** CDK rejects it at synth (§25, R33).
-- **Content-based deduplication is a trap for news** — see §7.3.
-
-**Why the message groups are clever.** Aggregate must never process two posts of the same day at the same time; group = *date* gives exactly that, one day serial, different days parallel. Publish must never edit one Telegram message twice at once; group = *message id* gives exactly that, per message.
-
-## 17. DynamoDB — the two tables
-
-**One-line meaning:** a key-value database with the same speed at any size —
-*if* you design the table around the questions you will ask it. **built** — two
-tables, specified in §7.2.
-
-```mermaid
-flowchart TD
-  subgraph messages["Table: telegator-messages"]
-    Base["Base table<br/>PK: id<br/>full item, including members"]
-    G1["GSI status-index<br/>PK: status, SK: ts<br/>projects: list columns only"]
-    G2["GSI date-index<br/>PK: date, SK: ts<br/>projects: match key + memberIds"]
-  end
-  Dash2["Dashboard lists"] --> G1
-  Dedup["aggregate: find same-day stories"] --> G2
-  Pub2["publish, and member expansion"] --> Base
-```
-
-| Concept | One-line meaning |
-| --- | --- |
-| **Table** | A collection of items (rows) addressed by a key |
-| **Item** | One record, a bag of attributes; no fixed schema — the Zod schemas in `tg-domain` are the real schema |
-| **Partition key (PK)** | The attribute deciding where an item is stored; you can only fetch cheaply by it |
-| **Sort key (SK)** | An optional second key ordering items within one partition value |
-| **Global secondary index (GSI)** | A second copy of the table with a different key layout, kept in sync by AWS, so a second question becomes cheap |
-| **Projection** | Which attributes a GSI copies; `INCLUDE` lists them, `ALL` copies everything |
-| **On-demand billing** | `PAY_PER_REQUEST`: no capacity to guess, pay per read and write |
-| **Query** | Fetch items by key, cheap and indexed |
-| **Scan** | Read the whole table; acceptable only for the small `sources` table |
-| **Point-in-time recovery (PITR)** | Continuous backup restoring the table to any second in 35 days; on for `messages` |
-| **Removal policy RETAIN** | Deleting the stack leaves the table alive; both tables outlive their stack on purpose |
-| **Single-table design** | Putting many entity types in one table; considered and *rejected* here — nothing is co-queried |
-
-- **Benefit** — no server, no connection pool, no capacity planning, and read latency that stays flat whether the table holds a hundred stories or a hundred million.
-- **Tradeoffs** — you must know your questions *before* designing the table: every cheap query is pre-built as a key or an index, and a question nobody planned for is a Scan. No joins, no ad-hoc SQL. Each GSI doubles the write cost of the attributes it projects.
-
-**Traps**
-
-- **A projection is a cost decision.** Every attribute a GSI projects is stored twice and written twice, which is why `status-index` excludes `members` and `date-index` carries only what §6 scores on.
-- **A projection cannot be changed in place** — the two-deploy story in §7.2. `cdk diff` will not warn you.
-- **An item may not exceed 400 KB**, which is why the member list is capped at 20.
-- **`Query` on an index authorises against the index ARN** (§14).
-- **`RETAIN` + a fixed name is a one-way street.** Delete the stack and the table survives — good — but a redeploy then fails because the name is taken. Back up before touching retained tables.
-
-## 18. EventBridge — the only clock
-
-**One-line meaning:** a managed event router; here used for its simplest skill —
-firing a rule on a schedule. **built** — one rule, in §7.5.
-
-Telegram cannot push to us, so the edge of the system must poll. Everything after that edge is event-driven: **scheduled at the edge, event-driven internally** (§7.4).
-
-- **Benefit** — a cron job with no server to keep alive; if the target fails, the rule still fires next time; the `enabled` flag makes "deployed but quiet" a safe state.
-- **Tradeoffs** — a schedule is a floor on latency (up to 30 minutes for a new post). AWS also offers two products with confusingly similar names: the older *EventBridge Rules* (used here, matching §1.2's "one EventBridge rule" and §7.5's `rate()` syntax) and the newer *EventBridge Scheduler* (time zones, one-off runs).
-- **Traps** — the schedule defaults to disabled in **both** environments, for the reason in §9.2. And `rate(30 minutes)` is a fixed string format: a typo fails at deploy, not at synth.
-
-## 19. OpenRouter — calling the AI model
-
-**One-line meaning:** a single HTTPS endpoint fronting models from many vendors,
-so calling Claude is a bearer-token API call rather than an AWS one. **built** —
-the contract is §5.
-
-```mermaid
-flowchart LR
-  An["Lambda: analyze"] --> C["Anthropic SDK<br/>baseURL: openrouter.ai/api"]
-  Ag2["Lambda: aggregate<br/>(band adjudicator)"] --> C
-  S["Secrets Manager<br/>telegator/openrouter-api-key"] -->|"GetSecretValue"| C
-  C -->|"POST /v1/messages"| M["Claude"]
-```
-
-- **Benefit** — it works here, which Bedrock does not. Beyond that: one account reaches many vendors, model access needs no per-model approval, and the wire format is Anthropic's own Messages API — so §5.2's request bodies did not change when the provider did, and neither did the `Classifier` and `Adjudicator` ports.
-- **Tradeoffs** — a bearer key is a real secret: it must be stored, rotated and granted, and IAM no longer authorises the inference itself, only the *read* of the token. Inference traffic leaves AWS, and a second vendor sits on the critical path.
-
-**Traps**
-
-- **An Organization can veto a whole AWS service.** Bedrock is not enabled in this account's Organization, so calls failed *above* IAM and no policy in this repository could fix it. That is what forced the provider swap — the same lesson as Amplify in §9.3: **account standing beats correct code**.
-- **IAM cannot pin the model, and now cannot see it at all.** The only guard is the single model-id constant (§5.1).
-- **The base URL must not carry the version segment** (§5.1). A 404 that reads like an outage.
-- **State a length limit in the field description, not only in the schema** (§5.2). A schema-only cap is not honoured, and the failure arrives after you have paid for the call.
-
-## 20. Cognito — who is allowed into the dashboard
-
-**One-line meaning:** a managed user directory plus ready-made login pages (the
-"hosted UI"); your app never sees a password. **built** — the rules are §8.6.
-
-```mermaid
-sequenceDiagram
-  participant B as Browser
-  participant H as Cognito hosted UI
-  participant A as Dashboard API
-  B->>B: open the console (no token), make a PKCE verifier
-  B->>H: redirect to hosted UI with the challenge
-  H->>B: sign in (email + password), redirect back with a one-time code
-  B->>H: exchange code + verifier for tokens (POST /oauth2/token)
-  H->>B: id token (a signed JWT)
-  B->>A: POST /rpc, Authorization: Bearer id token
-  A->>A: verify signature via JWKS, read groups, check enabled
-```
-
-| Concept | One-line meaning |
-| --- | --- |
-| **User pool** | The user directory: accounts, passwords, groups |
-| **App client** | One application's registration with the pool — its id, allowed callback URLs, allowed OAuth flows |
-| **Hosted UI** | Cognito's own login pages on `<prefix>.auth.<region>.amazoncognito.com`; needs a domain to exist |
-| **Authorization-code flow** | The browser gets a one-time code and swaps it for tokens; tokens never sit in a URL |
-| **PKCE** | A one-time secret the browser makes before sign-in and proves at the swap — what lets a client with no secret use the code flow safely |
-| **Callback URL** | Where Cognito may send the browser back to; anything not on the list is refused |
-| **JWT / id token** | A signed statement of who the user is and which groups they are in |
-| **JWKS** | The public keys used to check that signature, fetched from Cognito |
-| **Group** | A named set of users; §8.6's roles are groups |
-| **Precedence** | Group ordering where a **lower number wins** |
-| **AdminCreateUser** | The only way into this pool: self-sign-up is disabled, an operator creates each user |
-
-- **Benefit** — passwords, reset, login pages and token signing are AWS's problem; the API only verifies a signature and reads a group list.
-- **Tradeoffs** — OAuth has many moving parts for what feels like a simple need; the hosted UI is barely customisable; configuration spreads across stack, environment and context.
-
-**Traps**
-
-- **Callbacks must be HTTPS**, with `http://localhost` as the only exception. This tiny rule shaped the hosting design twice (§9.3): an ALB has no free HTTPS, which made CloudFront mandatory for Fargate; Firebase Hosting has it on its own domain.
-- **The implicit flow is a security hole** — it returns tokens in the URL, where they land in browser history. Only the authorization-code flow is enabled.
-- **Precedence is upside down** — lower is more powerful. The numbers are derived from the roles array so the two cannot drift.
-- **Self-sign-up is one boolean away** from letting strangers register. `selfSignUpEnabled: false` is the security-critical property of that stack.
-
-## 21. Secrets Manager — values that must not be written down
-
-**One-line meaning:** a small database for secrets, where reading a value is an
-IAM-checked API call that leaves an audit trail. **built** — the inventory is §7.6.
-
-```mermaid
-flowchart LR
-  T["CloudFormation template<br/>holds only the ARN"] --> Fn2["publish Lambda / dashboard"]
-  Fn2 -->|"GetSecretValue (IAM-checked)"| SM2["Secrets Manager"]
-  SM2 --> V["the actual token, at runtime only"]
-```
-
-- **Benefit** — the value never appears in a template, an environment variable listing, or the repository. Anyone who can *describe* your infrastructure still cannot *read* your secrets.
-- **Tradeoffs** — each secret costs ~$0.40/month plus per-call fees, and the value must be fetched at runtime. For non-secret configuration, plain environment variables are the right tool, and Telegator uses them for table names and queue URLs.
-
-**Traps**
-
-- **Pass the ARN, never the value.** An environment variable holding the session key would sit readable in the template — and that key can forge admin sessions.
-- **Scope the grant to one ARN.** `GetSecretValue` on `*` would let the dashboard read the bot token too.
-- **`Secret.fromLookup` breaks the build** — see §22.
-
-## 22. CDK and CloudFormation
-
-**One-line meaning:** CloudFormation creates AWS resources from a JSON template
-and can roll the whole set back as one unit; the CDK lets you *write TypeScript
-that generates that template*. **built** — the whole `tg-infra/` directory.
-
-```mermaid
-flowchart LR
-  TS["tg-infra/*.ts<br/>TypeScript constructs"] -->|"cdk synth<br/>(no credentials needed)"| Tpl["cdk.out/*.json<br/>CloudFormation templates"]
-  Tpl -->|"cdk deploy<br/>(credentials needed)"| CF["CloudFormation service"]
-  CF -->|"create / update / rollback"| Res2["real queues, tables, functions"]
-  Test["vitest: Template.fromStack()<br/>asserts on the JSON"] --> Tpl
-```
-
-| Concept | One-line meaning |
-| --- | --- |
-| **Template** | The JSON description of resources CloudFormation executes |
-| **Stack** | One deployed template; the unit of create, update and rollback — §9.1 lists them |
-| **Construct** | A reusable building block in CDK code; `new Queue(...)` is a construct |
-| **L1 / L2** | Two levels: L1 (`CfnApp`) mirrors raw CloudFormation exactly; L2 (`Queue`, `Table`) adds good defaults and helpers like `grantSendMessages` |
-| **Synth** | Turning the TypeScript into templates; the fourth gate, and it must never need credentials |
-| **Context** | `-c key=value` inputs read with `tryGetContext`; how deploy-time facts (image tags, callback URLs, secret ARNs) enter without lookups |
-| **Cross-stack reference** | One stack using another's value; CDK writes the export/import wiring when you pass the construct object |
-| **Assertions** | Tests over the synthesized JSON (`Template.fromStack`), e.g. "the publish role has no DeleteItem" |
-| **Rollback** | A failed create/update is undone automatically; a stack whose *first* create failed sits in `ROLLBACK_COMPLETE` and can only be deleted |
-| **Drift** | The gap between template and reality after manual console edits |
-
-- **Benefit** — infrastructure is reviewed, tested and versioned like any other code. The L2 `grant*` helpers write correct IAM for you, and the assertion tests pin every hard-won decision so it cannot silently regress.
-- **Tradeoffs** — L2 defaults are magic you must learn to read; the tool adds its own vocabulary on top of AWS's; and a synthesized template can still fail at deploy.
-
-**Traps** — each cost this project real time:
-
-- **Synth validates less than you hope.** CloudWatch metric math, GSI update rules and account quotas are all checked by the *service at deploy time*. An invalid alarm expression passed all four gates and failed on deploy.
-- **L1 constructs accept unknown properties.** `iamServiceRole` vs `iamServiceRoleArn`: the wrong name compiled, synthesized, deployed — and the app ran with no role. Only `tsc` caught it. This is why the first gate is never skipped.
-- **`fromLookup` is a poisoned convenience.** Any context lookup makes synth call AWS with credentials, destroying the one credential-free gate. It is banned outright.
-- **`TableV2` is not "Table, newer".** It synthesizes a different resource type (`AWS::DynamoDB::GlobalTable`) with a different settings layout.
-
-## 23. CloudWatch — metrics, logs and alarms
-
-**One-line meaning:** the shared place every AWS service reports numbers and logs
-into, plus alarms that watch those numbers. **built** — the metric set is §7.7.
-
-Because posts in flight live in queues and not tables (§1.3), **CloudWatch is the only record of how much work happened.** The metrics are load-bearing.
-
-```mermaid
-flowchart TD
-  Ls["Lambdas emit counters<br/>ItemsScraped, MessagesMerged, ..."] --> NS["Namespace: Telegator"]
-  AWSm["AWS emits its own for free<br/>queue depth, Lambda errors"] --> NS2["Namespaces: AWS/SQS, AWS/Lambda"]
-  NS & NS2 --> Al["Alarms"]
-  Ls2["analyze writes one JSON<br/>log line per item"] --> LG2["Log group, 90-day retention"]
-  LG2 --> LI["Logs Insights query:<br/>count by category"]
-  NS & NS2 --> DashR["Dashboard cards<br/>GetMetricData"]
-  LI --> DashR
-```
-
-| Concept | One-line meaning |
-| --- | --- |
-| **Metric** | A named time series of numbers |
-| **Namespace** | The folder metrics live in; custom ones in `Telegator`, AWS's own in `AWS/Lambda`, `AWS/SQS` |
-| **Dimension** | A label that splits a metric, e.g. `ItemsScraped` per `Source` |
-| **Alarm** | A rule that fires when a metric crosses a threshold for long enough |
-| **treatMissingData** | What an alarm does when there is *no* datapoint; here always `NOT_BREACHING` |
-| **Metric math** | An expression over metrics, evaluated by CloudWatch — the error *rate* is `100 * errors / invocations` |
-| **Log group** | The container for one function's logs, with retention and access control |
-| **Retention** | How long logs are kept; **the default is forever**, and billed forever |
-| **Structured logging** | One JSON object per line, so queries can address fields |
-| **Logs Insights** | A query language over log groups; the category chart is a query, not a metric |
-
-- **Benefit** — every service reports in without being asked; custom counters are two lines of code; alarms replace a human watching a screen.
-- **Tradeoffs** — custom metrics are billed per name-and-dimension combination (§7.7); metrics arrive with a delay. This is monitoring, not tracing.
-
-**Traps**
-
-- **An empty queue reports nothing, not zero.** An alarm treating missing data as breaching would ring forever on a healthy system.
-- **Metric math is parsed only at deploy.** `MAX([series, 1])` looks fine, synthesizes fine, and is rejected by the service.
-- **A log format change can silently blank a feature.** Lambda's `LoggingFormat.JSON` wraps each record in an envelope; the category query would then match nothing, and the chart would be empty with no error anywhere. `TEXT` is pinned.
-- **Log group names collide.** Declaring `/aws/lambda/<name>` yourself while CDK's managed-group feature also declares it fails the deploy — and until it collided it was inert, because the function wrote to the managed group instead. Create the group first and hand it to the function.
-
-## 24. The wider AWS map
-
-Telegator uses a narrow slice of AWS. This section exists so the names in blogs
-and interviews are not strangers. **Used** points back to a section above;
-everything else is context.
-
-### Compute
-
-| Concept | One line | Here |
-| --- | --- | --- |
-| **EC2** | A rented virtual machine billed per second; you own patching and scaling | context |
-| **Auto Scaling Group** | A fleet of EC2 held at a target size, replacing what fails | context |
-| **EKS** | Managed upstream Kubernetes; AWS runs the control plane | context |
-| **ECS** | AWS's own container orchestrator: describe a task, it keeps N copies running | context — §9.3's superseded design |
-| **Fargate** | The "no servers" way to run ECS tasks: AWS supplies the machines, you pay per vCPU-second and GB-second | context — §9.3's superseded design |
-| **ECR** | The private Docker image registry, with lifecycle rules to expire old images | context |
-| **App Runner** | Image in, HTTPS out — the "easy mode" of what §9.3 builds by hand | probed, rejected |
-| **Graviton** | AWS's ARM processors; the reason every Lambda says ARM64 | used — §7.5 |
-| **Spot / Savings Plan** | Discounts for interruptible or committed workloads | context |
-
-### Networking (context — the superseded Fargate design of §9.3)
-
-| Concept | One line |
-| --- | --- |
-| **VPC** | Your own private network inside a Region; nothing enters or leaves unless you build a door |
-| **Subnet** | A slice of the VPC pinned to one AZ; **public** (routed to an internet gateway) or **private** |
-| **Internet gateway** | The door that makes public subnets reachable from the internet |
-| **NAT gateway** | A one-way door: private subnets call out, nothing calls in; billed per hour *and* per GB |
-| **Route table** | The rules deciding where a subnet's traffic goes |
-| **Security group** | A stateful allow-list firewall on a network interface; reply traffic needs no rule, and rules can reference *other groups* rather than IP ranges |
-| **VPC endpoint (gateway)** | A free private path to S3 or DynamoDB, skipping NAT and its per-GB fee |
-| **VPC endpoint (interface) / PrivateLink** | A paid (~$7.30/mo per AZ) private entrance to other AWS services — and coverage gaps decide designs (§9.3) |
-| **Application Load Balancer** | An HTTP-aware traffic distributor: listeners, rules, and health checks over a target group |
-| **Target group** | What traffic is forwarded to, plus the health check that decides who receives it |
-| **CloudFront** | The CDN: terminates HTTPS at edge locations on a free `*.cloudfront.net` name and forwards to an origin |
-| **ACM** | The certificate service; it issues only for domains you *prove you control* — which an `*.elb.amazonaws.com` name never is |
-
-### Storage, messaging, operations
-
-| Concept | One line | Here |
-| --- | --- | --- |
-| **S3** | Object storage by key; very durable, no filesystem | context |
-| **EBS / EFS** | A block disk for one instance / a shared filesystem for many | context |
-| **RDS / Aurora** | Managed relational databases; the road not taken — this data is key-value shaped | context |
-| **ElastiCache** | Managed Redis/Memcached for repeated reads | context |
-| **OpenSearch / Redshift / Athena** | Text search / warehouse analytics / SQL directly over S3 files | context |
-| **SNS** | One message fanned out to many subscribers; SQS is one-to-one | context |
-| **Kinesis / MSK** | Ordered, replayable streams; readers keep a position instead of consuming | context |
-| **Step Functions** | A state machine coordinating services with retries and waits as data | context — the queues *are* Telegator's state machine |
-| **API Gateway** | A managed HTTP front door with auth and throttling | used — §9.3: the dashboard API's front door, with a JWT authorizer |
-| **CloudTrail** | The audit log of every API call in the account | context |
-| **AWS Config** | Configuration history of resources, judged against compliance rules | context |
-| **X-Ray** | Tracing one request's path across services | context |
-| **Systems Manager** | Fleet operations and a shell onto instances without SSH | context |
-| **KMS** | Managed encryption keys that never leave the service; everything here uses AWS-owned keys implicitly | context |
-| **WAF** | Rule-based request filtering at the edge | context |
-
-### Ideas rather than services
-
-| Concept | One line | Here |
-| --- | --- | --- |
-| **Shared responsibility model** | AWS secures the cloud; you secure what you put in it | throughout — IAM scoping, `selfSignUpEnabled: false`, secret handling |
-| **RTO / RPO** | How long recovery may take / how much data it may lose | used — PITR on `messages` is an RPO decision (§7.2) |
-| **Idempotency** | Repeating a request changes nothing more — what makes at-least-once delivery safe | used — §6.3 |
-| **Exponential backoff with jitter** | Retrying after a growing, randomized delay so callers do not stampede | used — inside every AWS SDK client |
-
----
-
-# Part III — Record
-
-## 25. Reconciliations
-
-Where the code diverges from Part I, the divergence carries a number. The comment
-that makes it names the number and its reason; this register holds the full
-account, so a reader meeting `R46` in a comment can find out what it settled and
-why without reading the module.
-
-Numbers are permanent. `R6` was never issued.
-
-| # | Settles | What the code does instead, and why |
-| --- | --- | --- |
-| **R2** | §5.1 vs §11.1 | §5.1 specified `claude-opus-5`; §11.1 decided `claude-haiku-4.5`. §11 is the later, explicitly-resolved position, so the haiku tier wins. Written once, as a single constant, so the disagreement cannot be re-litigated in code. Re-slugged by R50 into OpenRouter's `vendor/model` form. |
-| **R3** | §5.2 | The adapter asserts nothing about *what* a model returns — its job is the request shape and the handling of bytes handed back. Every test injects a fake client; no test touches the network. |
-| **R4** | §5.4 | The category block contains **29** entries, while its own heading and two cross-references say 35, and two entries sit off its four-column grid — what removed text leaves behind. The six missing names are not recoverable from the document, so the list that ships is the list the document contains, and the discrepancy is recorded rather than guessed at. It matters beyond arithmetic: the enum constrains model output, so a wrong list makes a legitimate category unsayable. |
-| **R5** | §3.2 | The drop rule tests `category === "crime&law"`, which is **not** one of §5.4's values — so the model cannot emit it, the rule can never fire, its metric is always zero, and crime content is published. Implemented exactly as written and pinned by test rather than silently corrected: changing the string changes what reaches production channels, which is the specification owner's decision. |
-| **R7** | §6 | Building a record by spreading the whole item would write `body`, `kind`, `importance`, `properNames` and `forwardedFrom`, none of them in §2.3's field table. The descriptive fields are picked explicitly. |
-| **R8** | §6, §2.3 | §6 assigns `ts` on neither branch, yet §2.3 makes it the sort key on both GSIs. Every write carries it. |
-| **R9** | §6, §7.2 | Candidates come from `date-index`, which projects no `members`. A merge is therefore emitted as an attribute-level operation, and the matched record's members are loaded from the base table first. |
-| **R10** | §6 | Re-querying per item lets an item that scores below threshold against the batch's fresher copy still match the *stale stored copy* and overwrite the batch's own work. Pass 2 skips any candidate already touched in this batch. |
-| **R11** | §6, AC-3.7 | Stamping `ts: now()` unconditionally makes byte-identical replay impossible. An existing member keeps its original `ts`; without that, every replay would rewrite every block and §3.4's ordering would shuffle. |
-| **R12** | §3.4, §11.3 | The hashtag line **is** appended — §11.3 is the later decision. Appending makes overflow reachable for the first time, so a truncation rule has to exist: drop the hashtag line first, then reduce member blocks. Hashtags are derived metadata and reconstructible; a member block is the only surviving rendering of a scraped post. Content outlives metadata. |
-| **R13** | §3.4, AC-4.2 | The photo threshold is **1012**, not the 1024-character caption limit: 1012 is the stricter bound *and* the one an acceptance criterion asserts. This makes the 1013–1024 band unreachable. Kept separate from Telegram's protocol limit, which is a different number for a different reason. |
-| **R14** | §3.1, AC-1.2 | §3.1's two-tier formula puts a hot source in the same 30-minute bucket as a warm one, contradicting its own prose and failing AC-1.2 for any hot source polled recently. Prose and criterion agree against the formula, so the formula is the defect: the hot tier is restored as a leading disjunct, with the published expression kept verbatim below it. |
-| **R15** | §2.1, §9.4 | The legacy export carries no `lastNonZeroCount`, so seeding it from `lastCount` is the closest true statement available: the last poll's count was, at the time, the last non-zero one if it was non-zero. |
-| **R16** | §2.1, §2.3 | A soft-deleted record must be neither a merge target nor a dashboard row, and §3.1's selection never consults the flag on its own. The condition is written once and applied to every read of both tables. |
-| **R17** | §2.3 | `status: error` has no writer in the current code — only the DLQ handler is specified to set it. |
-| **R18** | §10.1 | §10.1's DynamoDB Local and ElasticMQ need Docker. The harness instead wires the stages the way SQS wires them and no more tightly: every hand-off is a serialised queue message, never an object passed straight from one stage to the next. |
-| **R19** | §3.3 | No per-message `DelaySeconds`. SQS FIFO supports only a queue-level delay, so the settle delay is configured on the publish queue itself. |
-| **R20** | §9.4, §11.6 | Seeding covers `sources` only; §11.6's "skip the import entirely" wins over the message-migration row. |
-| **R21** | §9.4 | `--data-dir` is required rather than defaulted: the export lives outside this repository. Writing is opt-in — a migration is hard to undo once it has run. |
-| **R22** | §7.1, §7.5 | `events.Rule`, matching §1.2's "one EventBridge rule" and §7.5's `rate()` syntax, rather than the newer EventBridge Scheduler. |
-| **R23** | §9.2, §9.5 | The schedule is **off unless asked, in both environments**. §9.5 deploys prod disabled and enables it only after a 48-hour soak, so this cannot be inferred from the environment name. |
-| **R24** | §7.6, §7.7 | §7.6 omits `cloudwatch:PutMetricData`, yet §7.7's counters are unemittable without it and §7.7 makes them the system of record for volume. Granted, conditioned on the `Telegator` namespace. |
-| **R25** | §7.7 | §7.7 alarms on `SourceStale` for any source, but the metric is dimensioned by a source discovered at runtime. A CloudWatch alarm cannot enumerate that at synth time and lookups are banned, so the metric is emitted undimensioned as well and the alarm watches that. |
-| **R26** | §8.3, §7.2 | The expandable member list is a lazy per-row base-table `GetItem`, because no index projects `members`. Rendering it from the list query would fail *silently* — the map is simply absent, so every row would expand to nothing. |
-| **R27** | §7.2 | Defines the `status-index` projection as a schema, so the dashboard's list type and the index's `INCLUDE` list cannot drift apart. Amended by R44 and R51. |
-| **R28** | §10.4 | The end-to-end latency target is checkable in a way the specification did not intend: its own stated arithmetic contradicts it. Recorded rather than corrected. |
-| **R29** | §3.1, §6 | §3.1 offers the `members` map as a safety net if the cursor ever fails. It holds only while the re-scraped duplicate lands on the same `date`, because candidates come from `date-index` for that date alone. The same cursor failure either side of midnight produces different outcomes — that is the bound, asserted rather than merely recorded. |
-| **R30** | §6 | The image field keeps an existing value including an empty string — `??`, not `\|\|`. |
-| **R31** | §3.2 | Read literally, the dropped body is a 12-character string, which §3.1's tokeniser would essentially never produce — so the rule would never fire. The parenthetical states the intent (a bare link with no prose), so the pattern is implemented instead of the example. |
-| **R32** | §3.1 | An emoji sprite served as a background image is not the post's photo. Detected by URL pattern, falling back to the carrying element's class so a sprite from another host is still not mistaken for one. |
-| **R33** | §3.3, §7.3 | Both give the aggregate queue a 300 s batching window, and **AWS does not support one on a FIFO queue** — CDK rejects it at synth. `batchSize: 10` is all that survives, and §7.4 has already reasoned about that outcome. |
-| **R34** | §8.6, revises R24 | R24 withheld Cognito from the dashboard role because §8.2–§8.4 define no user-management surface. But §8.6 states normatively that a disabled user is rejected at every action, and enforcing that needs a live read of one field. `AdminGetUser` is that read — and the only Cognito action the role holds. Narrows R24 rather than relaxing it. |
-| **R35** | §8.5 | The 60 s cache decorates the ports rather than wrapping each card, so the rule holds for reads added later. Deliberately **not** Next's `unstable_cache`, which a page may still add on top for a cache shared across instances. |
-| **R36** | §8.5 | Recent messages come from `status-index`, `ts` descending. |
-| **R37** | §8.4 | Pins the three message fields a server action will accept, so the table's editable set and the action's schema cannot drift. |
-| **R38** | §6 | A create is conditional on `attribute_not_exists(id)`. The condition *is* the behaviour: without it a replay silently overwrites. The in-memory fake enforces it too, or the tests would not be testing the same thing. |
-| **R39** | §3.3 | A merge that changes nothing a reader would see omits the status reset, so a replayed message stays `published` instead of being edited with its own text. A create always publishes: there is no stored record for it to render identically to. |
-| **R40** | §7.5 | Reserved concurrency is behind a flag, because a reservation is creatable only while the account keeps 5 concurrent executions unreserved — and a cold account's entire quota is 5. |
-| **R41** | §7.7 | Log retention has to apply to the group the function actually writes to. CDK's managed-log-group feature makes every function declare its own `/aws/lambda/<name>`; declaring a second beside it collides on deploy, and until it collided it was **inert**. The group is created first and handed to the function. |
-| **R42**, **R49** | §7.6 | Two rounds getting Bedrock's IAM right: the statement had to name the service the client actually signed for (`bedrock-mantle:CreateInference`), not the action the documentation named (`bedrock:InvokeModel`). Both are superseded by R50, but the lesson outlived the provider. |
-| **R43** | §5.3 (as was) | The embedding adapter is removed entirely. Dedup no longer calls a model at all except for R46's adjudicator, which goes through the same Messages API as classification. |
-| **R44** | §7.2 | The `embedding` Binary attribute is replaced by three String Lists plus `memberIds`, and `date-index` projects those instead. The candidate query drops from ~4 KB per candidate to a few hundred bytes. |
-| **R45** | §3.3, §6 | Merging two messages by elementwise mean has nothing to average without vectors. A merged message's match key is the **sorted union** of the two: it keeps every discriminating term either side contributed and — unlike a mean — is commutative and idempotent, which is what lets a replayed merge write the same bytes as the original. |
-| **R46** | §6 | The whole matching rule. Embedding the batch and comparing cosines against a single threshold is replaced by an in-process match key, a weighted Jaccard score, and a **band**: above merge and below distinct are decided from the `date-index` projection alone — no model call, no base-table read — and the strip between them is the only thing a model ever sees, in one call for the whole batch. |
-| **R47** | AC-3.1, AC-3.3, AC-3.6 | Restated from cosine terms into score terms. The ids are unchanged; only the threshold vocabulary is. |
-| **R48** | §10.3 | Recalibration rewritten: no embedding step, a 2-D sweep, a three-way objective, and a measured adjudicator accuracy. The labelled set survives unchanged — it is model-agnostic, and it is the real asset. |
-| **R50** | §5.1, §7.6 | The provider swap. Bedrock is disabled above IAM by this account's Organization, so no role policy could ever have reached it. `bedrock.ts` became `openrouter.ts`: the request shape did not change, only where the client points and how it authenticates. §7.6 gains a second secret, and the two stages that call a model are the two that read it. |
-| **R51** | AC-3.7, §7.2 | Byte-identical replay is guaranteed by an explicit item-id short-circuit over the projected `memberIds`, rather than emerging from idempotent member writes. The wording of AC-3.7 is unchanged; how it holds is not. It has to be identity-based, because §3.3 lets the newest item overwrite the descriptive fields, so a replayed item may no longer resemble the message it belongs to. |
-| **R52** | §9.1 | The app stack also declares the branch its host builds, which §9.1's inventory does not name. A host with no branch has nothing to build and serves nothing. |
-| **R53** | §8.4 | "Publish now" is `admin` only, offered only on the `topublish` tab, and capped server-side rather than trusting the caller's number. |
-| **R54** | §2.1, §3.1, §8.3, §8.4, §9.4 | `sources.tgChannel` is `sources.target`, a **comma-separated list** of target ids carried verbatim into the item payload as `target` and into `messages.tgChannel`, whose name is kept because it sits in the `status-index` projection (§7.2 L639). A stored `tgChannel` on a source is an orphan the schema strips; `scripts/migrate-targets.ts` copies it across before deploy. The full account is `.spectomat/done/multi-target.spec.md`, in git history since `.spectomat/` left the tree (`git show 0575678:<path>`). |
-| **R55** | §2.3, §3.3, §3.4, §8.4 | Publish sends **once per target**: `messages.posts` maps each canonical target id to its `{tgId, tgAt}`, written whole after every send; `tgId`/`tgAt` are frozen legacy fields read only by the first-target fallback. A post is current when `tgAt >= ts` and is skipped; a rejected send fails the record so the redelivery sends to the rest; a sent-but-unrecorded post is acknowledged. `republishMessage` bumps `ts` so every post is re-sent. Base table only; no projection changes. |
-| **R56** | §8.3 | Both tables' toolbars gain a **select all**, which §8.3 L803-804 does not list: a bulk delete over a narrowed table is what the per-column filters were added to produce, and a checkbox per row is the only way to address one. "All" is the rows the filters and sort left on screen, and the click **replaces** the selection rather than adding to it — the button sits beside "Delete selected", so a selection made before a filter narrowed the table would otherwise delete rows the operator cannot see. A second click clears; an empty table disables it. The set arithmetic is `tg-utils/ui/selection`, shared by both tables. |
-| **R57** | §8.4, §7.6 | **"Cleanup all"** — `purgeDlq(queueName) => {discarded}`, `admin`. §8.4 lists no such action and §7.6 L712 grants the dashboard role no queue write, yet §3.5's replay is the only exit a DLQ has: a backlog that will never drain cleanly — a poison payload, a batch a later scrape superseded — keeps §7.7's depth alarm lit for good, and an operator learns to ignore the one signal that means act. It is one `PurgeQueue` call with no pipeline behind it, so it runs from the dashboard's own SQS client like §8.2 L776's inspection rather than through the replay Lambda, and `sqs:PurgeQueue` is granted **per dead-letter queue only**. Irreversible in a way replay is not (§1.3 L69 makes the DLQ the last copy), so the panel arms on one press and fires on a second, and the confirmation names the count. |
-| **R58** | §2, §7.2, §8.2, §8.3, §8.4, §9.1, §29 | A **third table**, `telegator-{env}-targets`, gives every publish destination a row: `id`, `type` (`telegram_channel` today), `lastPostedDate`, `lastPostedMessageId`, `messageTemplate` and the usual soft-delete flag. PK `id`, `PAY_PER_REQUEST`, `RETAIN`, and **no GSI** — tens of rows, one `GetItem` and one `Scan`. It is a **registry, not an allowlist**: a target with no row publishes normally, and publish's own write creates the row, so a forgotten row can never become silent non-publication. Publish mirrors the two `lastPosted*` fields after `recordPosts` and only logs if that write fails; `messages.posts` remains the authority for the edit decision. §8.2's route tree gains `/targets` and §29's map gains `TELEGATOR_TARGETS_TABLE`. The full account is `.spectomat/done/target-table.spec.md`, in git history since `.spectomat/` left the tree (`git show 0575678:<path>`). |
-| **R59** | §3.4 | A target may carry a `messageTemplate`, and §3.4's composition step then runs through it: literal operator-authored HTML with `{header}`, `{body}`, `{hashtags}`, `{title}`, `{category}`, `{country}`, `{location}` and `{date}` substituted, unknown names rendering empty, and runs of blank lines collapsed. The overflow ladder is unchanged in order — hashtags before member blocks, never below one — but parameterised by the composer, so both paths shorten the same way. A target with no template takes §3.4's built-in layout byte for byte, so there is no default template and nothing changes for a target nobody configured. |
-| **R60** | §8.3, §8.4, §2.1, §3.1 | **"Reset all"** — `resetSourceCursors() => {reset}`, `admin`. §8.4 lists no such action and §2.1 L116 makes `lastItemId` scrape-owned, which is why it cannot be an inline edit: `SOURCE_WRITABLE_FIELDS` deliberately excludes it. It exists because a cursor can end up pointing deep in a channel's history — a re-seed from a stale export (§9.5 L963), or a channel that removed the post the cursor names — and §3.1 L208 then re-fetches the same dead window every run, yielding nothing while the table shows a source polling normally. One `updateCursor` per source clears three fields: `lastItemId` to empty, which §3.1 L208 already reads as no cursor and therefore as the bare `t.me/s/{id}` — the channel's newest page; `lastUpdated` to 0, so §3.1 L203 makes every source due at once and a "Scrape now" pressed straight after actually polls; and `zeroYieldRuns` to 0, since §4.1 L379's counter describes the window just discarded. Disabled sources are reset too — they are not polled, but they must start from the latest message when re-enabled. **It is a stored-state write and nothing else**: DynamoDB only, instant, no Telegram fetch to fail halfway. The price is that with no cursor nothing suppresses duplicates (§3.1 L223), so each channel's newest window is enqueued as new and whatever §6 does not match to an existing message is published again — which is why the button arms on one press and fires on a second, exactly as R57's "Cleanup all" does. `scripts/set-cursors-now.ts` remains the other operation, writing each channel's *newest* id to skip that window; it stays a script because it needs the network. |
-| **R61** | §7.5, §7.6, §8.2 | **"Consume now"** — `consumeQueue({queueName, max}) => {consumed, failed}`, `admin`, one button per queue card capped at `MAX_CONSUME`. §7.5 drives every stage from an event source mapping and §8.4 offers no way to ask for a batch: a trigger invokes a *function*, and a stage function does nothing unless handed records. R53's "Publish now" only works around that for publish, whose payload happens to be a message id. The mechanism is a **sixth Lambda**, `telegator-{env}-consume` (1024 MB, reserved concurrency 1): it receives up to ten messages off the named live queue, runs that stage — through the stage's own handler, so it cannot drift from what the mapping calls — and deletes what §7.3 L665's partial batch response did not report, exactly as the mapping would. A stage that throws deletes nothing, because redelivery is harmless (§2.3 L181, R51) and a silent drop is not (§1.3 L69). It is a function rather than dashboard logic to *keep* §7.6 L712 and §8.2 L776 intact: consuming a queue means running a stage, so doing it in the dashboard would have put `sqs:ReceiveMessage`, `sqs:DeleteMessage` and invokes on both analysis stages onto the **web role**, reachable by every request the console serves. Instead the pump holds the union of the three stages' grants plus receive/delete on the three live queues, and the app role gains one more invoke — `analyze` and `aggregate` stay ungranted there, still asserted by the stack test. |
-| **R62** | §8.2 | The route tree's `lib/` directories are **npm workspaces** under `packages/`, the layout of the sibling `bombarbia` project: `tg-enums`, `tg-rc`, `tg-configs`, `tg-utils`, `tg-domain`, `tg-ports`, `tg-dedup`, `tg-aws`, `tg-ai`, `tg-telegram`, `tg-auth`, `tg-pipeline`, `tg-actions`, `tg-web`, `tg-infra`, `tg-mcp`, `tg-ops` (§28 maps each). §8.2's rule is unchanged and now holds at two levels: `tg-pipeline` is the single implementation of every stage and no workspace depends on it, while `test/boundaries.test.ts` still checks the dashboard's transitive closure file by file. The split surfaced four cycles the flat tree hid — `ai`↔`pipeline`, `configs`↔`domain`, `ui`↔`dashboard`, `domain`↔`ports` — and each was cut by moving the shared piece down: the §5.2 request builder to `tg-ai`, `MEMBER_RENDER_LIMIT` to `tg-configs`, `Slice` and `Clock` to `tg-utils`, and §6 into its own package. Workspaces reach each other by name (`tg-domain/message`) through `"./*": "./*.ts"` exports and no barrels, so a bundle still holds only the files it imports. The dashboard builds from `packages/tg-web`, which Amplify must be told: the build spec's `appRoot` and `AMPLIFY_MONOREPO_APP_ROOT`. |
-| **R63** | §2.1, §3.1, §4.1, §7.5, §7.6 | **A second scrape transport, MTProto**, for the chats §3.1 L208's `t.me/s/` preview cannot render — groups and private chats. A source opts in with **`via: "mtproto"`** (absent means `web`), an operator-writable field shown on the Sources table. The stage is **not** copied: §3.1's fetch becomes a `ChannelReader` port (`tg-ports/telegram`), `webReader` wraps the preview fetch and parse, and the new **`tg-mtproto`** package implements the port over GramJS through a logged-in **user account**. `selectSources` takes the reader's `via`, so each run polls only its own sources and one cursor is never advanced by two readers. The same guards, enqueue rule and cursor write apply unchanged. A **seventh Lambda**, `telegator-{env}-scrape-mtproto` (512 MB, reserved concurrency 1), runs on its own `rate(30 minutes)` rule behind R23's switch. The concurrency of 1 matters more here: one session opened twice at once is revoked by Telegram (`AUTH_KEY_DUPLICATED`). It holds `scrape`'s two grants plus `GetSecretValue` on a **third secret**, `telegator-{env}-mtproto-session`: JSON `{apiId, apiHash, session}`, written by `npm run mtproto:login`, which is a one-time interactive login. The session *is* a login to the account. A run reads at most `MTPROTO_PAGE_SIZE` posts after the cursor, oldest first, or the newest page when there is no cursor, so a missing cursor never replays the chat's history. A numeric `-100…` source id resolves through one dialog-list load per run. Three differences from the preview: links come from message entities, a forward is marked by its origin's name or peer id, and **there is no `image`**, because an MTProto photo has no public URL to give `sendPhoto`, so photo posts publish as text. |
-
-## 26. Traps this project actually hit
-
-Every row cost real time, and every row is now pinned by a test or a comment so
-it cannot happen twice silently.
-
-| # | Trap | The lesson | Recorded in |
-| --- | --- | --- | --- |
-| 1 | Model calls 403'd with a "correct" role | The permission must name the service the client *actually signs for* | §25 R42/R49 |
-| 2 | The model service was refused above IAM | An AWS Organization can disable a whole service; no policy in the repository can help | §25 R50, §19 |
-| 3 | Amplify `CreateApp` returned 401 | Account standing beats correct templates | §9.3 |
-| 4 | GSI projection change rejected at deploy | `cdk diff` predicts from the template only; DynamoDB refuses in-place projection edits — plan two deploys | §7.2, §17 |
-| 5 | Reserved concurrency uncreatable | A cold account's whole quota is 5; reserving any breaks stack creation | §25 R40 |
-| 6 | Alarm metric math failed only at deploy | Synth checks shape, the service checks meaning | §23 |
-| 7 | FIFO queue rejected its batching window | An AWS constraint absent from the specification; CDK caught it at synth | §25 R33 |
-| 8 | Log group name collision on deploy | Create the group yourself and pass it in; two owners of one name cannot coexist | §25 R41 |
-| 9 | Wrong L1 property name accepted silently | `iamServiceRole` vs `iamServiceRoleArn` — only `tsc` caught an app running with no role | §22 |
-| 10 | `AWS_REGION` cannot be declared | Lambda reserves it; CloudFormation rejects setting it — read it, never write it | §15 |
-| 11 | Retained tables blocked a redeploy | `RETAIN` + a fixed name orphans tables on stack delete; back up before touching them | §17 |
-| 12 | Root user could not assume roles | Deploy as an IAM identity, never as root | §9.1 |
-| 13 | Health checks would crashloop the planned service | An all-authenticated app answers 401 on `/`; give the load balancer its own unauthenticated route | §9.3 |
-| 14 | A "fully private" VPC would break only login | No VPC endpoint exists for the Cognito hosted UI; NAT is mandatory | §9.3 |
-| 15 | A schema-only length cap was ignored | State the limit in the field *description*; the failure arrives after the call is paid for | §5.2, §19 |
-| 16 | Line-number citations rotted silently | 16 of 1503 pointed at the wrong section while all four gates stayed green | §27 |
-
-Read the table twice and one pattern appears: **the four local gates verify
-shape, and AWS verifies meaning at deploy time.** Synth passing is the beginning
-of confidence, not the end.
-
-## 27. Where each concept lives
-
-| You want to see... | Open |
-| --- | --- |
-| All stacks assembled, in order | [tg-infra/lib/app.ts](../packages/tg-infra/lib/app.ts) |
-| Tables, GSIs, projections, PITR, RETAIN | [tg-infra/lib/data-stack.ts](../packages/tg-infra/lib/data-stack.ts) |
-| Queues, FIFO groups, DLQs, delays | [tg-infra/lib/queue-stack.ts](../packages/tg-infra/lib/queue-stack.ts) |
-| Lambdas, triggers, IAM grants, alarms | [tg-infra/lib/pipeline-stack.ts](../packages/tg-infra/lib/pipeline-stack.ts) |
-| Cognito pool, hosted UI, groups | [tg-infra/lib/auth-stack.ts](../packages/tg-infra/lib/auth-stack.ts) |
-| The dashboard host and its role | [tg-infra/lib/app-stack.ts](../packages/tg-infra/lib/app-stack.ts) |
-| Narrow IAM as a habit | [tg-infra/lib/grants.ts](../packages/tg-infra/lib/grants.ts) |
-| The match key, the score, the band | [tg-dedup/](../packages/tg-dedup/) |
-| The whole of §6 | [tg-dedup/dedupBatch.ts](../packages/tg-dedup/dedupBatch.ts) |
-| The OpenRouter client and model id | [tg-ai/openrouter.ts](../packages/tg-ai/openrouter.ts), [tg-configs/ai.ts](../packages/tg-configs/ai.ts) |
-| The adjudicator | [tg-ai/adjudicator.ts](../packages/tg-ai/adjudicator.ts) |
-| OAuth token exchange and JWT checking | [tg-auth/cognito.ts](../packages/tg-auth/cognito.ts) |
-| Reading metrics, queue depth, Logs Insights | [tg-aws/observability.ts](../packages/tg-aws/observability.ts) |
-| Emitting custom metrics | [tg-aws/metrics/cloudwatch.ts](../packages/tg-aws/metrics/cloudwatch.ts) |
-| The calibration sweep | [tg-dedup/calibration/](../packages/tg-dedup/calibration/) |
-| Which package holds what, and that the graph has no cycle | [test/layout.test.ts](../test/layout.test.ts) |
-| That every AC here is named by a test | [test/acceptance.test.ts](../test/acceptance.test.ts) |
-| That every `§x.y L###` citation still resolves | [test/specCitations.test.ts](../test/specCitations.test.ts) |
-| That the dashboard never reaches the pipeline | [test/boundaries.test.ts](../test/boundaries.test.ts) |
-
----
-
-# Part IV — Building it
-
-Parts I–III say what the system does and why. This part says what it is made of.
-It exists because everything in it was discovered by reading the repository
-rather than the document, and a reader rebuilding from Parts I–III alone would
-have to re-derive all of it.
-
-## 28. Toolchain and layout
-
-**Runtime:** Node.js 22, ESM (`"type": "module"`), TypeScript throughout.
-
-| Dependency | Why this one |
-| --- | --- |
-| `zod` 4 | **Schemas are the source of truth**; every type comes from `z.infer`. Never declare a type and a schema separately. |
-| `telegram` (GramJS) | R63's MTProto client. The only library that logs in as a Telegram *user*, which the reader needs to reach groups. It bundles with esbuild unchanged. |
-| `@anthropic-ai/sdk` | §5.1's client. Its default export takes `baseURL` + `apiKey`, which is what makes OpenRouter a two-line swap. |
-| `@aws-sdk/client-*` v3 | One client per service, plus `lib-dynamodb` for the document interface. The Lambda runtime ships the SDK, so it is excluded from the bundle. |
-| `aws-cdk-lib` 2 + `constructs` | §9's infrastructure. |
-| `arrmatura`, `arrmatura-web`, `ultimus` | §8's console framework: CML templates and services. Private sibling checkouts, linked into `node_modules` by `postinstall` (`scripts/link-packages.sh`). They ship TypeScript written to looser settings than this repository's, so `tsc` reads `tg-web/src/types/arrmatura-web.d.ts` in their place and esbuild bundles the real source. |
-| `esbuild`, `tailwindcss` 4.1.14, `daisyui` 5.0.0-beta.9 | The console's bundle and stylesheet (`scripts/web.ts`). |
-| `jose` | ID-token verification against Cognito's JWKS (§8.6). |
-| `vitest` 4 | The suite. |
-| `@biomejs/biome` 2 | Lint and format, in one tool. |
-| `tsx` | Runs the `scripts/` entry points directly. |
-| `aws-sdk-client-mock` | Declared, and deliberately **unused**: its `mockClient()` signature is built against an older `@smithy/types` than the installed SDK and does not typecheck against it, and 4.1.0 is the latest release. Inject a structural client port and stub that instead. |
-
-**Layout.** npm workspaces under `packages/`, one concern each (R62). Every
-rule lives in a package; `scripts/` and `test/` wrap them.
-
-```
-packages/
-  tg-enums/     closed vocabularies: categories, roles, statuses, item kinds, target types, queues
-  tg-rc/        resources: the §5.2 prompt, the console's columns, words and pipeline stages
-  tg-configs/   the §29 env contract, the §31 constants, auth config, shared log field names
-  tg-utils/     the injected clock, the structured logger, table and chart helpers
-  tg-domain/    Zod schemas and derived types: source, item, message, target, ids, tags, dates
-  tg-ports/     every boundary as an interface (§30)
-  tg-dedup/     match key, score, band, the §6 algorithm, the §10.3 calibration sweep
-  tg-aws/       DynamoDB repositories, SQS, CloudWatch, Lambda invoke, Secrets Manager
-  tg-ai/        the §5.2 request, the classifier and adjudicator adapters
-  tg-telegram/  HTML parser, bot client, HTTP adapters
-  tg-mtproto/   R63's MTProto reader: the GramJS client, the secret's schema, message mapping
-  tg-auth/      ID-token verification, the session it yields, roles
-  tg-pipeline/  the four stages plus the DLQ replay; tg-pipeline/handlers/ are the Lambda entry points
-  tg-actions/   the actions' cores (§8.4) in dashboard/, with the §8.5 computations and caching
-  tg-api/       the dashboard API Lambda: the action registry and the RPC transport
-  tg-web/       the console (Arrmatura): cml/ templates, src/ services and logic, www/ the hosted root
-  tg-infra/     the CDK stacks of §9.1
-  tg-mcp/       the MCP server
-  tg-ops/       seeding (§9.4), deploy arguments, target parsing for the scripts
-scripts/        operator entry points (§33)
-test/           cross-cutting invariants, fakes, fixtures; unit tests sit beside their module
-```
-
-Dependencies point down the list: vocabularies, resources, configs and utils
-first; then domain, ports, dedup and the adapters; then the pipeline and the
-actions; the API, the console and the stacks last. `test/layout.test.ts` fails on a cycle
-between packages, and on any package that depends on `tg-pipeline`.
-
-**Conventions that are enforced, not preferred:**
-
-- **Across packages, import by name; inside one, relatively.** Write `"tg-domain/message"`, never `"../../tg-domain/message"`. Each package exports `"./*": "./*.ts"` and has no barrel file, so a bundle holds only the files it imports — the unit §8.2's boundary is measured in.
-- **Relative imports carry no extension.** Write `"./clock"`, never `"./clock.js"`. `tsc`, Vite, esbuild and tsx all perform the `.js` → `.ts` substitution. The Next.js dashboard's Turbopack did not, and every route 500'd with `Module not found` while all four gates stayed green; extensionless is the one form every resolver accepts, so the rule outlived the bundler.
-- **A constant needed by two layers moves to a module neither owns.** The dashboard may not import `tg-pipeline` (§8.2), so a shared literal cannot live in either.
-- `console` belongs in `scripts/` only. Everywhere else, the injected logger.
-- Magic numbers are banned in every package but `tg-web` and `tg-infra`. Every value in §31 is a named constant.
-- A source scan that names what it forbids will match itself. Exclude the scanning file, or scan only shipped source.
-
-## 29. Configuration contract
-
-Nothing reads an environment variable by an inline string. Both maps below live
-in one module that the CDK stacks import — a stack that forgets a variable is
-then a grep away rather than a runtime discovery.
-
-**The pipeline's, supplied by §9.1's pipeline stack:**
-
-| Variable | Carries |
-| --- | --- |
-| `TELEGATOR_SOURCES_TABLE` | §2.1's table name |
-| `TELEGATOR_MESSAGES_TABLE` | §2.3's table name |
-| `TELEGATOR_ANALYZE_QUEUE_URL` | §7.3's three queue URLs |
-| `TELEGATOR_AGGREGATE_QUEUE_URL` | |
-| `TELEGATOR_PUBLISH_QUEUE_URL` | |
-| `TELEGATOR_ANALYZE_DLQ_URL` | the matching DLQs, which §3.5's replay handler drains |
-| `TELEGATOR_AGGREGATE_DLQ_URL` | |
-| `TELEGATOR_PUBLISH_DLQ_URL` | |
-| `TELEGATOR_TELEGRAM_SECRET_ARN` | §7.6's bot-token secret |
-| `TELEGATOR_OPENROUTER_SECRET_ARN` | §7.6's model-key secret |
-| `TELEGATOR_MTPROTO_SECRET_ARN` | the MTProto session secret (§25, R63) |
-
-**The dashboard API's, in addition:**
-
-| Variable | Carries |
-| --- | --- |
-| `TELEGATOR_SCRAPE_FUNCTION_NAME` | the "Scrape now" target |
-| `TELEGATOR_DLQ_REPLAY_FUNCTION_NAME` | the replay target |
-| `TELEGATOR_PUBLISH_FUNCTION_NAME` | the "Publish now" target (§25, R53) |
-| `TELEGATOR_CONSUME_FUNCTION_NAME` | the "Consume now" pump (§25, R61) |
-| `TELEGATOR_USER_POOL_ID` | §8.6's pool, the token's issuer |
-| `TELEGATOR_USER_POOL_CLIENT_ID` | the token's audience |
-| `TELEGATOR_ANALYZE_LOG_GROUP` | the group §7.7's category query runs over |
-
-**`AWS_REGION` is deliberately absent.** Lambda sets it and CloudFormation
-rejects a template that declares it, so it is read, never written.
-
-**Reads fail loudly and by name.** An unset variable would otherwise build a
-client pointed at `undefined`, and the AWS error that follows names neither the
-function nor the variable.
-
-**Synth-time context** (`-c key=value`), which is how deploy-time facts enter
-without a `fromLookup` (§22):
-
-| Key | Effect |
-| --- | --- |
-| `env` | `dev` or `prod`; drives every resource name |
-| `scheduleEnabled` | §9.2's opt-in; also triggers §10.3's production gate |
-| `reserveConcurrency` | §25 R40's escape hatch for a cold account |
-| `settleDelaySeconds` | §7.3's publish-queue delay |
-| `webOrigins` | §9.3's origins: Cognito's callbacks and the API's CORS |
-
-**The console's own configuration** is `packages/tg-web/www/config.json` — the API URL, the client id and the hosted-UI domain (§9.3) — written by `npm run deploy:web` from the stacks' outputs.
-
-## 30. Boundaries: ports and fakes
-
-**Every AWS, Telegram and model boundary is an interface in `tg-ports`, with
-an in-memory fake in `test/fakes/`. No test touches the network** — the suite
-forbids it, and the build machine can reach neither AWS nor a model provider.
-
-| Port | Behind it |
-| --- | --- |
-| `tg-ports/ai.ts` | `Classifier` (§5.2) and `Adjudicator` (§5.3) |
-| `tg-ports/auth.ts` | ID-token verification (JWKS) and the disabled-user read |
-| `tg-ports/aws.ts` | CloudWatch metric reads, Logs Insights, queue attributes |
-| `tg-ports/db.ts` | the two repositories of §2 |
-| `tg-ports/metrics.ts` | §7.7's counters |
-| `tg-ports/queues.ts` | §7.3's producers |
-| `tg-ports/telegram.ts` | the page fetcher and the bot client (§4) |
-
-This is not only a local convenience. It is what lets §10's acceptance criteria
-be checked at all: a test that needed a live model could not assert "these two
-posts produce one message with two members".
-
-**The clock is a port too**, though it lives in `tg-utils/clock.ts` because the domain itself reads it. Nothing calls `Date.now()` directly. Several
-properties — AC-3.7's byte-identical replay, the member ordering of §3.4, the
-60 s cache of §8.5 — are false under a real clock and untestable without control
-of it.
-
-**Ports are shaped by the access pattern, not by the SDK.** A DynamoDB port
-exposes `queryByDate`, not `query`; the projection each one returns is a
-distinct type, so dashboard code cannot read an attribute the index never
-returned (§7.2).
-
-## 31. Tunable constants
-
-The one place any of these is written. Each is a named constant in code, and
-`style/noMagicNumbers` keeps it that way.
-
-| Constant | Value | Set by |
-| --- | --- | --- |
-| `MERGE_THRESHOLD` | **0.72** | §6.2 — provisional until §10.3's sweep |
-| `DISTINCT_THRESHOLD` | **0.35** | §6.2 — provisional until §10.3's sweep |
-| `SCORE_WEIGHTS` | entities **0.60**, titleTokens **0.25**, tags **0.15** | §6.2 — provisional |
-| `MATCH_KEY_CAP` | 256 terms per set | §6.1 |
-| `MAX_MEMBERS` | 20 | §2.3 |
-| `MEMBER_RENDER_LIMIT` | 12 | §3.4 |
-| `MAX_BATCH_SIZE` | 10 | §7.3 |
-| `SETTLE_DELAY_SECONDS` | 300 | §11.4 |
-| `SQS_MAX_DELAY_SECONDS` | 900 | SQS's own ceiling on the above |
-| `PURGE_COOLDOWN_SECONDS` | 60 | SQS's own limit on `PurgeQueue`, §25 R57 — one per queue per minute |
-| `MTPROTO_PAGE_SIZE` | 20 | posts per MTProto read, one `t.me/s/` page's worth, §25 R63 |
-| `MAX_CONSUME` | 10 | "Consume now"'s batch, §25 R61 — the operator's cap and `ReceiveMessage`'s in one number |
-| photo suppression threshold | 1012 characters | §25, R13 — **not** the 1024 caption limit |
-| `TELEGRAM_MESSAGE_LIMIT` | 4096 | §4.2 |
-| `TELEGRAM_CAPTION_LIMIT` | 1024 | §4.2 |
-| summary cap | 220 characters | §11.2 |
-| `MIN_TITLE_WORD_LENGTH` | 4 (so 5 and up are kept) | §3.4's hashtag rule |
-| hot / warm / cold thresholds | >20 posts / 30 min / 240 min | §3.1 |
-| `MAX_POST_AGE_DAYS` | 3 | §3.1 — older posts are `obsolete` and never analysed |
-| `zeroYieldRuns` alarm | 3 consecutive | §4.1 |
-| `DedupCandidateCount` alarm | 500 | §7.2 |
-| dashboard cache TTL | 60 s | §8.5 |
-| `STATE_TTL_SECONDS` | 600 | §8.6 |
-| `SESSION_KEY_BYTES` | 32 | §8.6 |
-| log retention | 90 days | §11.5 |
-
-**The three provisional values are the reason §10.3's gate exists.** They are
-placeholders, and `cdk synth -c env=prod -c scheduleEnabled=true` refuses until
-a calibration record replaces them.
-
-## 32. Verification
-
-### 32.1 The four gates
-
-All four pass before any commit. Not three.
+## 7. Development
 
 ```bash
-npx tsc --noEmit     # never skip it
-npx vitest run
-npx biome check .
-npx cdk synth        # credential-free, and must stay that way
+npm install              # also links the private arrmatura checkouts
+npm run dev              # emulators + functions watch + console on :8080
 ```
 
-`tsc` and `vitest` disagree more often than expected — an unattached L1 CDK
-property, an untyped mock, a fixture inventing a field. **Never weaken a gate to
-pass:** no skipped test, no `any`, no error suppression, no lint exception.
+`npm run dev` builds the functions bundle, then runs three things in parallel:
 
-### 32.2 What the gates do not cover
+- the **emulators**: Auth 9099, Functions 5001, Firestore 8180, Tasks 9499, UI 4000. Data persists in `.emulator/`.
+- an esbuild **watch** of `tg-functions`. The Functions emulator reloads on every rebuild.
+- the **console** with live reload at `http://localhost:8080`.
 
-Each of these has shipped a green suite over a broken system:
-
-- **No gate makes a model call**, and none can. A base URL that composes to the wrong path, an unrecognised auth header, or an `output_config` the tier rejects all pass every gate against an adapter that cannot classify a single item. Cover it with an offline smoke test over the real adapter and a canned far end, with an opt-in flag for one live call.
-- **No gate runs the console in a browser.** `npm run build` bundles it, but a CML mistake compiles and then renders nothing, often logging nothing. Run `npm run dev` and look at every page you touched, at phone width too; `test/webCml.test.ts` proves only that each template is registered.
-- **`cdk synth` checks shape; AWS checks meaning.** Metric math, GSI projection updates and account quotas are all validated at deploy time (§26).
-
-### 32.3 The invariants that must be tests
-
-Each of these was violated at least once, and each is now pinned:
-
-| Invariant | Why a test and not a rule |
+| Need | Do |
 | --- | --- |
-| Every AC in §3.1–3.4 is named by a test, **and** no test names one this document does not declare | A dropped criterion is invisible; the audit runs both ways |
-| The dashboard never reaches `tg-pipeline/` (§8.2), over the **transitive** closure, and never imports `aws-cdk-lib` | A direct-import rule misses the second hop |
-| Every API action calls `requireRole` at `viewer` or above | The dashboard root once shipped without it |
-| Nothing the console bundles reaches the AWS SDK, a server workspace or a Node built-in | The browser holds no credential, and the bundle would carry the code anyway |
-| Every relative import is extension-free | All four gates pass against an app that cannot serve a page |
-| Every `§x.y L###` citation resolves inside the section it names | 16 of 1,503 had already rotted, silently |
-| `tsconfig.json` still includes `**/*.ts` and `**/*.tsx` | A directory-scoped include once left four categories unchecked |
-| The Logs Insights query still matches what `analyze` writes | §7.7's contract, whose failure mode is an empty chart and no error |
-| The synthesised template carries the log retention, the narrow IAM, and no Docker image asset | The parts AWS validates only at deploy |
-| Publish's role has no `DeleteItem` | §7.6's narrow reading, which a helper would silently widen |
+| Secrets for the emulator | `packages/tg-functions/.secret.local` (git-ignored), linked from `~/.keys/telegator-functions-secrets.env`. `TELEGRAM_BOT_TOKEN` there is a placeholder, so local runs never post to live channels. Put a test bot's token there to try publishing. |
+| Sign in locally | Press *Sign in*. The Auth emulator signs in `dev@example.com`, and the first emulator sign-in is an enabled admin. |
+| Data | `FIRESTORE_EMULATOR_HOST=127.0.0.1:8180 npm run seed -- <dir> --write` loads `sources` and `targets` from DynamoDB scan exports. |
+| A scrape | *Scrape now* on Sources or Pipeline. Scheduled functions do not fire in the emulator. |
 
-## 33. Operator entry points
+Scripts (`seed`, `mcp`, `cursors:now`) use the emulator when `FIRESTORE_EMULATOR_HOST` is set. Otherwise they use production through `gcloud auth application-default login`.
 
-Everything below is a `scripts/` entry point, run with `tsx`, and the only place
-`console` is allowed.
+**Gates**: all four pass before a commit.
 
-| Script | Does |
-| --- | --- |
-| `deploy` | The only supported deploy. Resolves all three secret ARNs by name (R63 added the MTProto session, so `mtproto:login` must run first), refuses to run as the account root (which cannot assume the bootstrap roles), and **diffs by default** — `--execute` is the opt-in. A bare `cdk deploy` omits the ARNs and the stack falls back rather than failing, so it creates cleanly and then fails on its first message. |
-| `deploy:web` | §9.3's console deploy. Writes `www/config.json` from the Auth and App stacks' outputs, builds, and stops; `--execute` publishes to Firebase Hosting, `--config-only` writes the config for `npm run dev` and nothing else. |
-| `dev`, `build` | The console: `scripts/web.ts` regenerates the CML index, compiles Tailwind and bundles with esbuild — served with live reload on `localhost:8080`, or once into `www/dist/`. |
-| `seed` | §9.4's migration. `--data-dir` is required (the export lives outside the repository) and writing is opt-in. |
-| `reseed-cursors` | §9.5 step 5 — carries `lastItemId` across from the legacy system so AWS resumes rather than re-scraping. |
-| `set-cursors-now` | Fast-forwards every cursor to the current head, for a dev environment that should not replay history. |
-| `scrape` | Invokes the deployed scraper, for a manual run outside the schedule. |
-| `mtproto:login` | R63's one interactive step. With `TG_API_ID` and `TG_API_HASH` read from `~/.keys/tg-api-id.key` and `~/.keys/tg-api-hash.key` (my.telegram.org's app credentials, kept out of the repository), it logs in as a Telegram user (phone number, code, 2FA) and writes `{apiId, apiHash, session}` to `telegator-{env}-mtproto-session`, creating the secret on first use. Never prints the session. Re-run it whenever Telegram revokes the session. |
-| `smoke:openrouter` | The §32.2 gap-filler: the real adapter and the real SDK against a canned far end. Offline by default; `-- --live` with `OPENROUTER_API_KEY` set makes exactly one real call. |
-| `migrate:targets` | R54's copy of `tgChannel` into `target` on every live source row that lacks it, **before** the deploy that reads `target`. Dry run by default, `--write` to apply; never removes `tgChannel`; idempotent. |
+```bash
+npx tsc --noEmit
+npm test                 # vitest inside `firebase emulators:exec` (Firestore + Auth)
+npx biome check .
+npm run build            # console bundle + functions bundle
+```
 
-Region and `--env` parsing are shared between all of them, so no two scripts can
-disagree about which environment they are pointed at.
+Tests never touch the network. Pure logic is unit-tested, and Firestore code runs against the emulator. Cloud Tasks and the model are mocked with `vi.mock`. `npm test` cannot start while `npm run dev` holds the ports; in that case run `FIRESTORE_EMULATOR_HOST=127.0.0.1:8180 GCLOUD_PROJECT=demo-test npx vitest run`.
 
-## 34. Build sequence
+## 8. Deployment
 
-Bottom-up, because every layer above is a wrapper. Each step ends with all four
-gates green.
+One Firebase project, `telegator-581db`. Functions run in `us-central1`, next to Firestore (`nam5`).
 
-1. **Toolchain** — the dependencies of §28, the four gate commands, the Biome and
-   Vitest configuration, and `tsconfig`.
-2. **Domain** — §2's Zod schemas and derived types, ids, tags, the date key, the
-   clock port. Nothing here has a dependency.
-3. **Ports and fakes** — §30's seven interfaces and their in-memory doubles,
-   before any adapter exists. Writing them first is what keeps the stages pure.
-4. **Deduplication** — §6, as a pure function: match key, score, band, batch.
-   Fully testable with no AWS and no model.
-5. **Adapters** — §4's Telegram parser and bot client, §5's two model adapters,
-   the DynamoDB repositories, the SQS producers, the metric sink, the logger.
-6. **Stages** — §3's four consumers plus the replay handler, as wiring over
-   steps 4 and 5, then the Lambda entry points over those.
-7. **Infrastructure** — §9.1's stacks in dependency order, each with assertion
-   tests over the synthesised template.
-8. **Dashboard** — §8's auth first (nothing renders without it), then the
-   computations and the actions, then the API, then the console.
-9. **Operations** — §33's scripts, and §10.3's calibration harness.
-10. **Cross-cutting** — §32.3's invariant tests, and the end-to-end harness of
-    §10.1, which wires the stages the way SQS wires them: every hand-off is a
-    serialised queue message, never an object passed straight through.
+1. The project must be on the **Blaze** plan: Functions, Cloud Tasks and Scheduler need it.
+2. Set the secrets once: `firebase functions:secrets:set OPENROUTER_API_KEY`, the same for `TELEGRAM_BOT_TOKEN`, and `npm run mtproto:login` for `MTPROTO_SESSION`.
+3. Enable the Google provider in Firebase Auth. Add its OAuth web client id to `firebaseConfig.googleClientId` in `tg-configs/firebase.ts`, and list the site's origins on that client.
+4. `npm run deploy`: builds both bundles, then deploys hosting, functions, Firestore rules and indexes.
+5. Sign in once, then set your `users/{uid}` to `{enabled: true, roles: ["admin"]}` in the Firestore console.
+6. Start the schedule: set `SCRAPE_ENABLED=true` in `packages/tg-functions/.env` and redeploy the functions.
 
-**The order is not arbitrary.** Steps 2–4 have no boundary at all, so they are
-the parts that can be proven rather than merely exercised — and they are where
-every rule in §6 lives. Everything from step 5 on is an adapter or a wrapper,
-and its tests assert wiring rather than behaviour.
+## 9. Decisions and limits
+
+- **Serial aggregate and publish.** Cloud Tasks has no FIFO groups, so both queues dispatch one task at a time. Fine at hundreds of posts a day; revisit with per-day locking if volume grows a hundredfold.
+- **Publish dedup** is a task id per message per 5-minute window. A request in a new window is a new publish, which is harmless because publish skips current posts.
+- **Send then record.** If writing `posts` fails right after a successful send, the retry posts again. This is rare and is accepted.
+- **Counters live in Firestore**, not a metrics service. There are no alarms; the dashboard shows dead letters and stale sources.
+- **AWS history.** The AWS build (DynamoDB, SQS, Lambda, Cognito, CDK) ran until 2026-10-20 and lives in git history before this rewrite.

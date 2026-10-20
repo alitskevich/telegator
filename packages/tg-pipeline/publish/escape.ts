@@ -1,17 +1,9 @@
 /**
- * §3.4 L348 sends with Telegram's HTML parse mode, so every value interpolated
- * into a message must be escaped or Telegram reads it as markup — a summary
- * containing `<` or `&` otherwise yields broken tags or a rejected send. The
- * spec does not state this; it is a recorded correctness decision.
- *
- * One definition, shared by `render.ts` and `assemble.ts`. They previously held
- * identical private copies, which is how one of them later gains a fifth
- * substitution and the other does not — and the two escape the same message.
+ * Messages are sent in Telegram's HTML parse mode, so every interpolated value
+ * is escaped, or a `<` or `&` breaks the markup or the send.
  */
 export function escapeHtml(text: string): string {
-  // `&` first. Escaping `<` to `&lt;` before ampersands would let the next
-  // replacement turn it into `&amp;lt;`, so every bracket in a summary would
-  // reach subscribers as visible mojibake.
+  // `&` first, or the `&lt;` written next would become `&amp;lt;`.
   return text
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")

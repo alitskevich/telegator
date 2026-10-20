@@ -14,9 +14,9 @@ function templates(dir: string): string[] {
 }
 
 /**
- * §9.3 — a template missing from the generated registry renders as an
- * unknown-tag stub, silently. `scripts/web.ts` regenerates it on every build;
- * this catches a checked-in copy that was not rebuilt after a template moved.
+ * A template missing from the generated registry renders silently as an
+ * unknown-tag stub. `scripts/web.ts` regenerates it on every build; this
+ * catches a checked-in copy that was not rebuilt after a template moved.
  */
 describe("the console's CML registry", () => {
   test("src/index.cml.ts lists exactly the templates on disk", () => {
@@ -33,7 +33,12 @@ describe("the console's CML registry", () => {
         [...readFileSync(file, "utf8").matchAll(/<(\w+Service)\b/g)].map((match) => match[1]),
       ),
     );
-    const platform = new Set(["ToastService", "NavigationService", "BrowserService"]);
+    const platform = new Set([
+      "ToastService",
+      "NavigationService",
+      "BrowserService",
+      "FirebaseService",
+    ]);
 
     for (const service of mounted) {
       if (service !== undefined && !platform.has(service)) expect(registry).toContain(service);

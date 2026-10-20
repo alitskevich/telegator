@@ -1,70 +1,49 @@
 import type { Message } from "tg-domain/message";
-import { chatIdFor, TELEGRAM_MESSAGE_LIMIT } from "tg-ports/telegram";
+import { chatIdFor, TELEGRAM_MESSAGE_LIMIT } from "tg-telegram/types";
 import { escapeHtml } from "./escape";
 import { buildHashtagLine } from "./hashtags";
 import { renderMembers } from "./render";
 import { renderTemplate } from "./template";
 
 /**
- * §3.4 L329–352 — message assembly and the send-mode decision, as pure
- * functions.
+ * Message assembly and the send-mode decision, as pure functions.
  *
- * Everything here is a total function of the stored record: no clock, no
- * network, no Telegram client. Stage 4 is the one stage that both *edits*
- * previously published posts (§3.4 L350) and is replayed by SQS after a failure,
- * so the bytes it produces must depend on the record alone — the same record has
- * to assemble to the same message on the second delivery, or an idempotent
- * republish rewrites a post that did not change (AC-4.6, L363).
+ * The output depends on the stored record alone: a retried publish must produce
+ * the same bytes, or an idempotent republish rewrites a post that did not change.
  */
 
 /**
- * **R13 — the photo threshold is 1012, not §3.4 L349's 1024 caption limit.**
- * 1012 is the stricter bound and the one AC-4.2 asserts, which makes the
- * 1013–1024 band unreachable.
- *
- * Deliberately not `TELEGRAM_CAPTION_LIMIT`: that is Telegram's protocol limit
- * (§4.2 L392), and collapsing the two would lose the 12 characters R13 turns on.
+ * A photo is sent only when the text fits in 1012 characters. This is stricter
+ * than Telegram's 1024 caption limit, so it is kept apart from `TELEGRAM_CAPTION_LIMIT`.
  */
 export const PHOTO_SUPPRESSION_LIMIT = 1012;
 
 /**
- * Overflow never truncates below one member block.
- *
- * A header with no content is not a story: it would publish, be marked
- * `published`, and silently lose everything the message was for. Stopping at one
- * block means a pathological record fails loudly at the Bot API (and DLQs per
- * §3.4 L355) instead of succeeding as an empty post.
+ * Overflow never drops the last member block. A header with no content would
+ * publish as an empty post; one block that is too long fails loudly at the Bot API.
  */
 const MIN_RENDERED_MEMBERS = 1;
 
-/** `renderMembers` emits one block per line, so `\n` is the block boundary by construction. */
+/** `renderMembers` emits one block per line, so `\n` is the block boundary. */
 const BLOCK_SEPARATOR = "\n";
 
-/** The §3.4 L333 blank line, reused to set the hashtag line off from the members. */
+/** Sets the hashtag line off from the members. */
 const BLANK_LINE = "\n\n";
 
-/** §3.4 L341 — "joined with `\", \"`". */
 const HEADER_PART_SEPARATOR = ", ";
 
-/** Absent, empty and whitespace-only are all "empty" for §3.4 L345 and L351. */
+/** Absent, empty and whitespace-only all count as empty. */
 function hasValue(value: string | undefined): value is string {
   return value !== undefined && value.trim() !== "";
 }
 
-/** The fields §3.4 L332/L336 draw the header from. */
+/** The fields the header is drawn from. */
 export type HeaderSource = Pick<Message, "date" | "country" | "location" | "category">;
 
 /**
- * §3.4 L332 — `<b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location, category}</b>`,
- * the parts being the non-empty `country` (uppercased), `location` and
- * `category` in that order (L336). Exported so the format can be pinned alone.
- *
- * `date` is not escaped: `DateKeySchema` (§2.3 L160) admits only digits and
- * hyphens.
- *
- * **Recorded decision:** with every part empty the whole `<b>…</b>` group is
- * dropped. A literal reading of the template would publish a stray `<b></b>`
- * and a trailing space on every uncategorised message.
+ * `<b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location, category}</b>`, from the
+ * non-empty parts in that order. With every part empty the `<b>…</b>` group is
+ * dropped. `date` is not escaped: it holds only digits and hyphens.
  */
 export function buildHeader(source: HeaderSource): string {
   const parts = [source.country?.toUpperCase(), source.location, source.category]
@@ -77,18 +56,12 @@ export function buildHeader(source: HeaderSource): string {
 }
 
 /**
- * How one candidate text is built from the blocks that survived the ladder.
- *
- * A parameter rather than a branch inside `fitToLimit` (R59): the shortening
- * order is a property of the *message*, not of the layout, so both paths get
- * the same ladder and a template cannot quietly acquire a different one.
+ * Builds one candidate text from the blocks that survived shortening. Both the
+ * built-in layout and a target template use it, so both shorten the same way.
  */
 type Compose = (blocks: readonly string[], hashtagLine: string) => string;
 
-/**
- * §3.4 L332–339's layout, plus R12's hashtag line — after the member blocks,
- * separated by a blank line, because metadata trails content.
- */
+/** Header, blank line, member blocks, then the hashtag line after a blank line. */
 function builtInCompose(header: string, blocks: readonly string[], hashtagLine: string): string {
   const body = [header, "", ...blocks].join(BLOCK_SEPARATOR);
 
@@ -96,21 +69,12 @@ function builtInCompose(header: string, blocks: readonly string[], hashtagLine: 
 }
 
 /**
- * **Recorded decision, not spec text.** §3.4 L345 caps a message at 4096
- * characters and the spec states no truncation rule — because before R12 the
- * cap was unreachable: 12 blocks (L319) of a 220-character summary (§11.2)
- * cannot reach 4096. Appending the hashtag line makes overflow reachable, so the
- * rule has to exist.
+ * Fits the text into Telegram's 4096-character limit: drop the hashtag line
+ * first, then member blocks from the end. Hashtags can be rebuilt from the
+ * record; a member block is the only rendering of a post.
  *
- * Order: drop the hashtag line first, then reduce the number of rendered member
- * blocks. Hashtags are derived metadata and are reconstructible from the record;
- * a member block is the only surviving rendering of a scraped post (§1.3 L63).
- * Content outlives metadata.
- *
- * A template that names neither `{body}` nor `{hashtags}` cannot be shortened:
- * every rung returns the same string and the Bot API rejects it (§3.4 L355).
- * That is the designed outcome — silently truncating an operator's own text
- * would be worse than a loud rejection.
+ * A template that names neither `{body}` nor `{hashtags}` cannot be shortened,
+ * and the Bot API rejects it. That is better than cutting an operator's own text.
  */
 function fitToLimit(compose: Compose, blocks: readonly string[], hashtagLine: string): string {
   const withHashtags = compose(blocks, hashtagLine);
@@ -124,33 +88,27 @@ function fitToLimit(compose: Compose, blocks: readonly string[], hashtagLine: st
     if (candidate.length <= TELEGRAM_MESSAGE_LIMIT) return candidate;
   }
 
-  // Nothing fits. Emit the floor and let the Bot API reject it (§3.4 L355).
+  // Nothing fits. Emit the floor and let the Bot API reject it.
   return compose(blocks.slice(0, MIN_RENDERED_MEMBERS), "");
 }
 
-/** §4.2 L387 — the three methods, and only these three. */
 export type SendMethod = "sendMessage" | "sendPhoto" | "editMessageText";
 
 export interface AssembledMessage {
   readonly text: string;
   readonly method: SendMethod;
-  /** Present only on `sendPhoto`; §3.4 L350 never re-sends a photo on an edit. */
+  /** Present only on `sendPhoto`; an edit never re-sends a photo. */
   readonly photo?: string;
   readonly disableWebPagePreview: boolean;
   readonly chatId: string;
 }
 
 /**
- * §3.4 L329–352 — the whole publish payload decision for one message on one
- * target (multi-target#3.4).
+ * What to send for one message on one target. The caller owns the status
+ * check, the target loop, pacing and retry.
  *
- * The stage that calls this owns the status check (L317), the target loop
- * (multi-target#5.1), the pacing and the retry (L348); this function owns only
- * what to send. `tgId` is the post this target already has, from `postFor`
- * (multi-target#5.2) — the record's own frozen `tgId` is never read here.
- *
- * `template` is that target's own `messageTemplate` (target-table#5.1); absent,
- * empty or whitespace-only leaves the built-in layout untouched, byte for byte.
+ * `tgId` is the post this target already has. `template` is the target's own
+ * `messageTemplate`; absent, empty or whitespace-only uses the built-in layout.
  */
 export function assembleMessage(
   message: Message,
@@ -172,13 +130,6 @@ export function assembleMessage(
     ts: message.ts,
   });
 
-  /**
-   * target-table#5.1 — the target's own layout, when it has one (D6, R59).
-   *
-   * An absent, empty or whitespace-only template is no template: the built-in
-   * path runs byte for byte, so a target with no row publishes exactly what it
-   * published the day before.
-   */
   const compose: Compose =
     template === undefined || template.trim() === ""
       ? (blocks_, hashtags) => builtInCompose(header, blocks_, hashtags)
@@ -193,18 +144,15 @@ export function assembleMessage(
   const text = fitToLimit(compose, blocks, hashtagLine);
 
   const chatId = chatIdFor(target);
-  /** §3.4 L352 — "link preview disabled when the message has a title or image". */
   const disableWebPagePreview = hasValue(message.title) || hasValue(message.image);
 
-  // §3.4 L350 — a `tgId` makes this an edit (AC-4.1, L358), and an edit never
-  // carries a photo: Telegram's editMessageText cannot change media, so a photo
-  // here would be a second post rather than an update.
+  // A `tgId` makes this an edit. editMessageText cannot change media, so an
+  // edit never carries a photo.
   if (hasValue(tgId)) {
     return { text, method: "editMessageText", disableWebPagePreview, chatId };
   }
 
-  // §3.4 L349/L346 — a photo only when there is one and the text still fits
-  // under R13's threshold; above it the caption cannot hold the message.
+  // A photo only when there is one and the text fits as a caption.
   if (hasValue(message.image) && text.length <= PHOTO_SUPPRESSION_LIMIT) {
     return { text, method: "sendPhoto", photo: message.image, disableWebPagePreview, chatId };
   }

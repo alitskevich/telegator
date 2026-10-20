@@ -2,18 +2,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
- * Recorded `t.me/s/` markup, per the loop's rule that real Telegram HTML is
- * captured rather than fetched at test time.
- *
- * The structure here was read off a live page — the wrapper marker, the
- * `tgme_widget_message_text js-message_text` class, the `https://t.me/{chan}/{digits}`
- * date anchor, the self-closing `<br/>`, the `forwarded_from_name` anchor and the
- * three classes that carry a `background-image`. The *content* is placeholder
- * text: the live page is 148 KB of third-party news, and only the structure is
- * what §3.1 L210–222 parses.
+ * Recorded `t.me/s/` markup, so tests never fetch Telegram. The structure was
+ * read off a live page; the content is placeholder text.
  */
 
-/** §3.1 L210 — the literal the page is split on. */
+/** The literal the page is split on. */
 export const CHUNK_MARKER = '<div class="tgme_widget_message_wrap js-widget_message_wrap">';
 
 const files = {
@@ -34,17 +27,12 @@ export function telegramFixture(name: TelegramFixtureName): string {
   return readFileSync(resolve(import.meta.dirname, files[name]), "utf8");
 }
 
-/** The publish time every recorded chunk carries (§3.1 L220). */
+/** The publish time every recorded chunk carries. */
 export const FIXTURE_POSTED_AT = "2026-08-29T09:15:00+00:00";
 
 /**
- * The same markup, re-dated to `at`.
- *
- * §3.1 L228 makes a post's age part of its classification, so a fixture frozen
- * at one instant is fresh or stale depending only on the clock a test pins —
- * and a test about links or images should never depend on that. Every such test
- * re-dates the page to its own `now`; the cases that are *about* age offset it
- * deliberately.
+ * The same markup, re-dated to `at`. A post's age decides whether it is kept,
+ * so tests re-date the page to their own `now`; tests about age offset it.
  */
 export function datedTelegramMarkup(html: string, at: number): string {
   return html.split(FIXTURE_POSTED_AT).join(new Date(at).toISOString());

@@ -1,15 +1,6 @@
 /**
- * Column sorting for §8.3's tables.
- *
- * *Reconciliation.* §8.3 L812 specifies only the cross-column search, and §8.1
- * L766 records that with the offline layer deleted "filtering and sorting become
- * server round-trips". This sorts on the client instead, over the rows the page
- * already holds — the same set, no second query — which is the precedent
- * `filterByKeyword` set for the search beside it. A server sort would be a
- * round-trip per header click for a page whose rows are already in memory.
- *
- * Shared by both tables rather than written per page, so a header behaves the
- * same way wherever an operator clicks one.
+ * Column sorting for the console's tables, on the client over the rows the page
+ * already holds, like `filterByKeyword`. Shared, so every header behaves alike.
  */
 
 export type SortDirection = "asc" | "desc";
@@ -21,12 +12,8 @@ export interface SortState {
 
 /**
  * What one click on `column` does to the current sort: ascending, then
- * descending, then none.
- *
- * The third click clears rather than returning to ascending, because the order
- * the server sent carries meaning of its own — §8.5 L847 reads `status-index`
- * with `ts` descending, so an unsorted Messages table is "newest first". A cycle
- * that never reached it would put that order out of reach for the session.
+ * descending, then none. The third click clears, because the server's order
+ * means something: an unsorted Messages table is newest first.
  */
 export function cycleSort(current: SortState | undefined, column: string): SortState | undefined {
   if (current?.column !== column) return { column, direction: "asc" };
@@ -35,13 +22,9 @@ export function cycleSort(current: SortState | undefined, column: string): SortS
 }
 
 /**
- * The value a cell sorts by, or `undefined` when it holds nothing to order.
- *
- * The blank cases mirror `filterByKeyword`'s `searchableText`, and for the same
- * reasons: `undefined` and `null` are absent rather than empty, and an object —
- * `members` — coerces to "[object Object]", which would order every row that has
- * one identically while appearing to have sorted them. An empty string joins
- * them: a cell showing nothing has no position among the ones that do.
+ * The value a cell sorts by, or `undefined` when it holds nothing to order:
+ * `undefined`, `null`, an empty string, or an object such as `members`, which
+ * would coerce to "[object Object]".
  */
 function comparable(value: unknown): string | number | undefined {
   if (typeof value === "string") return value === "" ? undefined : value;
@@ -53,13 +36,9 @@ function comparable(value: unknown): string | number | undefined {
 }
 
 /**
- * Two cells that both hold something, ordered ascending.
- *
- * Numbers compare numerically. As text, 120 sorts before 3, and the column an
- * operator sorts to find the busiest source answers with the emptiest one.
- * Everything else goes through `localeCompare` rather than `<`: §2.1's
- * categories and titles are Dutch and Russian, where code-unit order is not
- * alphabetical order.
+ * Two cells that both hold something, ordered ascending. Numbers compare
+ * numerically (as text, 120 sorts before 3). Text uses `localeCompare`, since
+ * code-unit order is not alphabetical outside English.
  */
 function compare(left: string | number, right: string | number): number {
   if (typeof left === "number" && typeof right === "number") return left - right;
@@ -81,12 +60,7 @@ export function sortRows<T extends Record<string, unknown>>(
     const left = comparable(a[sort.column]);
     const right = comparable(b[sort.column]);
 
-    /**
-     * Blanks last, and the direction does not flip them: an empty cell has no
-     * place in the ordering an operator asked for, so sorting it with the
-     * values would put the rows with the least to say at the top of every
-     * ascending column.
-     */
+    // Blanks last in either direction, so empty rows never top a column.
     if (left === undefined || right === undefined) {
       return Number(left === undefined) - Number(right === undefined);
     }

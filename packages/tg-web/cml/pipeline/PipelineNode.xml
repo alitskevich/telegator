@@ -1,6 +1,6 @@
 <Component id="PipelineNode">
   <Signature purpose="One node of the pipeline diagram: a stage, a queue, the clock or Telegram"
-    description="A queue shows its depth and a DLQ chip that turns red when anything is dead-lettered; a stage shows its count. Pressing it selects it. Text wraps rather than truncates: the diagram is read, not skimmed.">
+    description="A queue shows its depth and a dead-letter chip that turns red when there are any; a stage shows its count. Pressing it selects it. Text wraps rather than truncates.">
     <Prop id="node" type="object" required="true" description="A `PipelineNode` from `src/pipeline/nodes.ts`" />
     <Prop id="select" type="action" required="true" description="Called with `{ id }`" />
   </Signature>

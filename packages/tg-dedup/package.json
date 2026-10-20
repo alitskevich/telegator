@@ -1,7 +1,7 @@
 {
   "name": "tg-dedup",
   "version": "1.0.0",
-  "description": "Deduplication (§6): match key, score, band, the batch algorithm, and the §10.3 calibration sweep.",
+  "description": "Deduplication (\u00a76): match key, score, band, the batch algorithm, and the \u00a710.3 calibration sweep.",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,7 +10,7 @@
   "dependencies": {
     "tg-configs": "*",
     "tg-domain": "*",
-    "tg-ports": "*",
-    "tg-utils": "*"
+    "tg-utils": "*",
+    "tg-ai": "*"
   }
 }
