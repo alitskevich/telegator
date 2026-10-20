@@ -6,14 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": [
-      "**",
-      "!**/node_modules",
-      "!**/cdk.out",
-      "!**/.next",
-      "!package-lock.json",
-      "!.spectomat/**/snippets"
-    ]
+    "includes": ["**", "!**/node_modules", "!**/cdk.out", "!package-lock.json"]
   },
   "formatter": {
     "enabled": true,

@@ -47,33 +47,8 @@ npm run deploy                    # the stacks — a diff only; add -- --execute
 npm run deploy:web -- --execute   # the console, to Firebase Hosting (telegator-581db)
 ```
 
-## MCP server
-
-`docs/telegator.md`'s companion, `.spectomat/specs/002-mcp-server.md`, specs a
-local stdio MCP server exposing three tools — `add_source`, `add_target`,
-`find_messages_by_tags` — over this repository's own DynamoDB tables. It
-deploys nothing and needs the same AWS credentials `npm run dev` does.
-
-```bash
-npm run mcp                 # dev tables
-npm run mcp -- --env=prod   # prod tables
-```
-
-Configure an MCP client with that command and this repository as its working
-directory, for example:
-
-```json
-{
-  "mcpServers": {
-    "telegator": { "command": "npm", "args": ["run", "--silent", "mcp"], "cwd": "<repo>" }
-  }
-}
-```
-
-## Deploying
-
-**This repository carries no AWS credentials, and nothing here has been
-deployed.** Use `npm run deploy`, never a bare `cdk deploy` (§33). Two gates
+**This repository carries no AWS credentials.** Dev is deployed — the console on
+Firebase Hosting, its API on API Gateway (§9.3); prod is not. Use `npm run deploy`, never a bare `cdk deploy` (§33). Two gates
 precede production:
 
 - §10.3's threshold calibration. Until `calibration/record.json` exists,
@@ -81,4 +56,18 @@ precede production:
 - §10.4's latency, throughput and cost targets, which are measured against a
   running system and are unverified here.
 
-Node 22. Secrets live in Secrets Manager; none is in this repository.
+Secrets live in Secrets Manager; none is in this repository.
+
+## MCP server
+
+`docs/telegator.md`'s companion spec — `mcp-server#n` in code citations — specs a
+local stdio MCP server exposing three tools — `add_source`, `add_target`,
+`find_messages_by_tags` — over this repository's own DynamoDB tables. It
+deploys nothing and needs the same AWS credentials as `npm run deploy`. The spec
+left the tree with `.spectomat/`; read it from history with
+`git show 0575678:.spectomat/done/002-mcp-server.spec.md`.
+
+```bash
+npm run mcp                 # dev tables
+npm run mcp -- --env=prod   # prod tables
+```
