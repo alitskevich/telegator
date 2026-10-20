@@ -1,0 +1,20 @@
+{
+  "name": "tg-actions",
+  "version": "1.0.0",
+  "description": "Server actions (§8.4) and the dashboard computations behind them (§8.5).",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "tg-auth": "*",
+    "tg-aws": "*",
+    "tg-configs": "*",
+    "tg-domain": "*",
+    "tg-enums": "*",
+    "tg-ports": "*",
+    "tg-rc": "*",
+    "tg-utils": "*"
+  }
+}

@@ -7,10 +7,10 @@ import { isolatedOutdir, removeIsolatedOutdirs } from "./support/cdkOutdir";
 // Item 10.0 — synthesising leaves bundles behind unless they are removed.
 afterAll(removeIsolatedOutdirs);
 
-import { resolveConfig } from "../infra/lib/config";
-import { TelegatorDataStack } from "../infra/lib/data-stack";
-import { TelegatorPipelineStack } from "../infra/lib/pipeline-stack";
-import { TelegatorQueueStack } from "../infra/lib/queue-stack";
+import { resolveConfig } from "tg-infra/lib/config";
+import { TelegatorDataStack } from "tg-infra/lib/data-stack";
+import { TelegatorPipelineStack } from "tg-infra/lib/pipeline-stack";
+import { TelegatorQueueStack } from "tg-infra/lib/queue-stack";
 
 vi.setConfig({ testTimeout: 60_000 });
 

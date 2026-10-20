@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { DescribeSecretCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
-import type { Environment } from "../infra/lib/config";
-import { resourceName } from "../infra/lib/naming";
-import { cdkArgs, type DeploySecrets, parseDeployArgs } from "../lib/deploy/args";
-import { REGION } from "../lib/ops/target";
+import type { Environment } from "tg-infra/lib/config";
+import { resourceName } from "tg-infra/lib/naming";
+import { cdkArgs, type DeploySecrets, parseDeployArgs } from "tg-ops/deploy/args";
+import { REGION } from "tg-ops/target";
 
 /**
  * §9.5's deploy, as a command.
@@ -15,7 +15,7 @@ import { REGION } from "../lib/ops/target";
  * absent — so the failure surfaces on the first Telegram post and the first
  * classification, not at deploy time. Resolving the two ARNs is the job.
  *
- * Everything decidable is in `lib/deploy/args.ts` where a test can reach it.
+ * Everything decidable is in `tg-ops/deploy/args.ts` where a test can reach it.
  * This file resolves ARNs, checks who is deploying, and spawns `cdk`.
  *
  *   npm run deploy                    # dev, diff only — changes nothing

@@ -1,7 +1,7 @@
+import type { NewsItem } from "tg-domain/newsItemSchema";
+import { TargetSchema } from "tg-domain/target";
+import type { Classifier } from "tg-ports/ai";
 import { beforeEach, describe, expect, test } from "vitest";
-import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier } from "../../lib/ai/ports";
-import { TargetSchema } from "../../lib/domain/target";
 import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
 import { fakeMessageRepo, fakeSourceRepo, fakeTargetRepo } from "../fakes/db";

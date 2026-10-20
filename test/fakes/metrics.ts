@@ -1,4 +1,4 @@
-import type { MetricDimensions, MetricName, MetricSink } from "../../lib/metrics/ports";
+import type { MetricDimensions, MetricName, MetricSink } from "tg-ports/metrics";
 
 export interface MetricRecord {
   readonly name: MetricName;

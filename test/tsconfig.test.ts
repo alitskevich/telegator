@@ -16,7 +16,7 @@ const tsconfig = () =>
  *
  * The `include` list used to enumerate directories, and four categories of file
  * were therefore never type-checked at all: a root-level `.ts`, a root-level
- * `.tsx`, any `.tsx` under `test/`, and any `.ts` under `components/`. Four
+ * `.tsx`, any `.tsx` under `test/`, and any `.ts` under `tg-web/components/`. Four
  * deliberately broken files in those positions produced `tsc` exit 0.
  *
  * These assertions are on the configuration rather than on behaviour because the
@@ -48,7 +48,7 @@ describe("the tsc gate covers the whole tree", () => {
    */
   test("no include entry narrows the tree to a source directory", () => {
     const narrowing = (tsconfig().include ?? []).filter(
-      (pattern) => !pattern.startsWith("**/") && !pattern.startsWith(".next/"),
+      (pattern) => !pattern.startsWith("**/") && !pattern.includes(".next/"),
     );
 
     expect(narrowing).toEqual([]);
@@ -62,7 +62,7 @@ describe("the tsc gate covers the whole tree", () => {
   test("only build output is excluded", () => {
     const exclude = tsconfig().exclude ?? [];
 
-    for (const directory of ["node_modules", "cdk.out", ".next"]) {
+    for (const directory of ["node_modules", "cdk.out", "**/.next"]) {
       expect(exclude).toContain(directory);
     }
   });
@@ -74,16 +74,7 @@ describe("the tsc gate covers the whole tree", () => {
   test("no source directory is excluded", () => {
     const exclude = tsconfig().exclude ?? [];
 
-    for (const source of [
-      "lib",
-      "handlers",
-      "infra",
-      "actions",
-      "app",
-      "components",
-      "scripts",
-      "test",
-    ]) {
+    for (const source of ["packages", "scripts", "test"]) {
       expect(exclude).not.toContain(source);
       expect(exclude).not.toContain(`${source}/**`);
     }

@@ -1,10 +1,10 @@
+import type { AnalyzedItem, ScrapedItem } from "tg-domain/item";
+import type { NewsItem } from "tg-domain/newsItemSchema";
+import { runAggregate } from "tg-pipeline/aggregate/index";
+import { runAnalyze } from "tg-pipeline/analyze/index";
+import type { Classifier } from "tg-ports/ai";
+import { createLogger } from "tg-utils/logger";
 import { describe, expect, test, vi } from "vitest";
-import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier } from "../../lib/ai/ports";
-import type { AnalyzedItem, ScrapedItem } from "../../lib/domain/item";
-import { createLogger } from "../../lib/logging/logger";
-import { runAggregate } from "../../lib/pipeline/aggregate/index";
-import { runAnalyze } from "../../lib/pipeline/analyze/index";
 import { fakeAdjudicator } from "../fakes/ai";
 import { fixedClock } from "../fakes/clock";
 import { fakeMessageRepo } from "../fakes/db";
@@ -28,7 +28,7 @@ import { fakeQueueProducer } from "../fakes/queues";
  * The configuration that makes the SQS half true in production —
  * `MessageRetentionPeriod` of 14 days on all six queues and a 1800 s
  * `VisibilityTimeout` on the three consumers — is asserted in
- * `infra/lib/queue-stack.test.ts` rather than duplicated here.
+ * `tg-infra/lib/queue-stack.test.ts` rather than duplicated here.
  *
  * And the property the criterion needs FROM the code: a restarted consumer must
  * behave exactly like one that never stopped. That holds only if a stage carries
@@ -147,7 +147,7 @@ describe("E2E-6 — a restarted consumer behaves like one that never stopped", (
     const warmResult = await runAnalyze(records(backlog, scraped), warm.deps);
 
     vi.resetModules();
-    const cold = await import("../../lib/pipeline/analyze/index");
+    const cold = await import("tg-pipeline/analyze/index");
     const coldWorld = analyzeDeps();
     const coldResult = await cold.runAnalyze(records(backlog, scraped), coldWorld.deps);
 
@@ -160,7 +160,7 @@ describe("E2E-6 — a restarted consumer behaves like one that never stopped", (
     const warmResult = await runAggregate(records(backlog, analyzedItem), warm.deps);
 
     vi.resetModules();
-    const cold = await import("../../lib/pipeline/aggregate/index");
+    const cold = await import("tg-pipeline/aggregate/index");
     const coldWorld = aggregateDeps();
     const coldResult = await cold.runAggregate(records(backlog, analyzedItem), coldWorld.deps);
 

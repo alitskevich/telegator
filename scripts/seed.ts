@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { ENV_VARS } from "../handlers/env";
-import { createSourceRepo } from "../lib/db/sources";
-import { parseSeedArgs } from "../lib/seed/args";
-import { seedSourcesFrom } from "../lib/seed/sources";
+import { createSourceRepo } from "tg-aws/db/sources";
+import { ENV_VARS } from "tg-configs/env";
+import { parseSeedArgs } from "tg-ops/seed/args";
+import { seedSourcesFrom } from "tg-ops/seed/sources";
 
 /**
  * §9.4 — the seed, run by hand during §9.5's cutover.
@@ -14,7 +14,7 @@ import { seedSourcesFrom } from "../lib/seed/sources";
  * outside this repository and a default that silently found nothing would look
  * like a successful migration of an empty file.
  *
- * Everything worth testing is in `lib/seed/`; this file reads a file, prints,
+ * Everything worth testing is in `tg-ops/seed/`; this file reads a file, prints,
  * and writes.
  */
 

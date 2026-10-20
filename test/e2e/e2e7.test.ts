@@ -1,10 +1,10 @@
+import type { ScrapedItem } from "tg-domain/item";
+import type { NewsItem } from "tg-domain/newsItemSchema";
+import { runAnalyze } from "tg-pipeline/analyze/index";
+import type { Classifier } from "tg-ports/ai";
+import { SKIP_REASONS } from "tg-ports/metrics";
+import { createLogger } from "tg-utils/logger";
 import { describe, expect, test } from "vitest";
-import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier } from "../../lib/ai/ports";
-import type { ScrapedItem } from "../../lib/domain/item";
-import { createLogger } from "../../lib/logging/logger";
-import { SKIP_REASONS } from "../../lib/metrics/ports";
-import { runAnalyze } from "../../lib/pipeline/analyze/index";
 import { recordingSink } from "../fakes/logging";
 import { recordingMetrics } from "../fakes/metrics";
 import { fakeQueueProducer } from "../fakes/queues";
@@ -51,7 +51,7 @@ const newsItem = (id: string): NewsItem => ({
   importance: "high",
 });
 
-/** The provider is unavailable: every call throws, as `lib/ai/openrouter.ts` would. */
+/** The provider is unavailable: every call throws, as `tg-ai/openrouter.ts` would. */
 const outage = (): Classifier => ({
   classify: async () => {
     throw new Error("503 Service Unavailable: OpenRouter is unavailable");

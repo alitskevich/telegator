@@ -1095,10 +1095,10 @@ flowchart TD
 
 | Concept | One-line meaning | Status |
 | --- | --- | --- |
-| **Environment separation** | `dev` and `prod` are separate Accounts, so a mistake in one cannot touch the other | built — `infra/lib/config.ts` |
-| **Resource name** | `telegator-{env}-{resource}` (§9.2) | built — `infra/lib/naming.ts` |
+| **Environment separation** | `dev` and `prod` are separate Accounts, so a mistake in one cannot touch the other | built — `tg-infra/lib/config.ts` |
+| **Resource name** | `telegator-{env}-{resource}` (§9.2) | built — `tg-infra/lib/naming.ts` |
 | **Service quota** | A limit per Account and Region on how many of a thing you may have | built as a *problem*: the concurrency trap in §26 |
-| **Partition** | The part of an ARN saying which AWS world you are in (`aws`, `aws-cn`, `aws-us-gov`); code writes `Aws.PARTITION`, never the literal | built — `infra/lib/pipeline-stack.ts` |
+| **Partition** | The part of an ARN saying which AWS world you are in (`aws`, `aws-cn`, `aws-us-gov`); code writes `Aws.PARTITION`, never the literal | built — `tg-infra/lib/pipeline-stack.ts` |
 | **Organization / OU / Service Control Policy** | A tree of Accounts, and rules that *remove* permissions from all of them at once | context — but it bit this project: a whole service was disabled above IAM (§26) |
 | **Tag** | A key/value label on a Resource, used for cost reports and access rules | context |
 
@@ -1135,7 +1135,7 @@ flowchart LR
 **Three traps worth remembering**, all of which §7.6 encodes:
 
 - Some actions take no resource ARN at all (`cloudwatch:PutMetricData`, `GetMetricData`, `logs:GetQueryResults`). The only honest scope is `*` plus a condition where one exists.
-- A DynamoDB `Query` on an index checks the **index ARN**, not the table ARN. A grant on the table alone passes every test and fails at runtime. This is why `infra/lib/grants.ts` exists.
+- A DynamoDB `Query` on an index checks the **index ARN**, not the table ARN. A grant on the table alone passes every test and fails at runtime. This is why `tg-infra/lib/grants.ts` exists.
 - **The permission must name the service the client actually signs for**, not the one the documentation names. A role can look perfectly scoped and return 403 on every call (§26).
 
 ## 15. Lambda — code that runs only when needed
@@ -1159,10 +1159,10 @@ flowchart LR
 
 | Concept | One-line meaning |
 | --- | --- |
-| **Handler** | The exported function AWS calls with the event; here always `handler` in `handlers/*.ts` |
+| **Handler** | The exported function AWS calls with the event; here always `handler` in `tg-pipeline/handlers/*.ts` |
 | **Runtime** | The language image the function runs on; Node.js 22 |
 | **Architecture** | The CPU type; ARM64 (Graviton) — cheaper, and native to the Apple Silicon build machine |
-| **Environment variable** | A named string given to the function at deploy time — table names, queue URLs; names live in `handlers/env.ts` |
+| **Environment variable** | A named string given to the function at deploy time — table names, queue URLs; names live in `tg-configs/env.ts` |
 | **Event source mapping** | The poller AWS runs against a queue on your behalf; you set batch size, it invokes with batches |
 | **Partial batch failure** | The handler returns only the ids that failed, so nine good messages are not retried because of one bad one |
 | **Reserved concurrency** | A fixed cap on parallel copies of one function |
@@ -1243,7 +1243,7 @@ flowchart TD
 | Concept | One-line meaning |
 | --- | --- |
 | **Table** | A collection of items (rows) addressed by a key |
-| **Item** | One record, a bag of attributes; no fixed schema — the Zod schemas in `lib/` are the real schema |
+| **Item** | One record, a bag of attributes; no fixed schema — the Zod schemas in `tg-domain` are the real schema |
 | **Partition key (PK)** | The attribute deciding where an item is stored; you can only fetch cheaply by it |
 | **Sort key (SK)** | An optional second key ordering items within one partition value |
 | **Global secondary index (GSI)** | A second copy of the table with a different key layout, kept in sync by AWS, so a second question becomes cheap |
@@ -1370,11 +1370,11 @@ flowchart LR
 
 **One-line meaning:** CloudFormation creates AWS resources from a JSON template
 and can roll the whole set back as one unit; the CDK lets you *write TypeScript
-that generates that template*. **built** — the whole `infra/` directory.
+that generates that template*. **built** — the whole `tg-infra/` directory.
 
 ```mermaid
 flowchart LR
-  TS["infra/*.ts<br/>TypeScript constructs"] -->|"cdk synth<br/>(no credentials needed)"| Tpl["cdk.out/*.json<br/>CloudFormation templates"]
+  TS["tg-infra/*.ts<br/>TypeScript constructs"] -->|"cdk synth<br/>(no credentials needed)"| Tpl["cdk.out/*.json<br/>CloudFormation templates"]
   Tpl -->|"cdk deploy<br/>(credentials needed)"| CF["CloudFormation service"]
   CF -->|"create / update / rollback"| Res2["real queues, tables, functions"]
   Test["vitest: Template.fromStack()<br/>asserts on the JSON"] --> Tpl
@@ -1577,12 +1577,13 @@ Numbers are permanent. `R6` was never issued.
 | **R53** | §8.4 | "Publish now" is `admin` only, offered only on the `topublish` tab, and capped server-side rather than trusting the caller's number. |
 | **R54** | §2.1, §3.1, §8.3, §8.4, §9.4 | `sources.tgChannel` is `sources.target`, a **comma-separated list** of target ids carried verbatim into the item payload as `target` and into `messages.tgChannel`, whose name is kept because it sits in the `status-index` projection (§7.2 L638). A stored `tgChannel` on a source is an orphan the schema strips; `scripts/migrate-targets.ts` copies it across before deploy. The full account is `.spectomat/done/multi-target.spec.md` (or `specs/` while it is being built). |
 | **R55** | §2.3, §3.3, §3.4, §8.4 | Publish sends **once per target**: `messages.posts` maps each canonical target id to its `{tgId, tgAt}`, written whole after every send; `tgId`/`tgAt` are frozen legacy fields read only by the first-target fallback. A post is current when `tgAt >= ts` and is skipped; a rejected send fails the record so the redelivery sends to the rest; a sent-but-unrecorded post is acknowledged. `republishMessage` bumps `ts` so every post is re-sent. Base table only; no projection changes. |
-| **R56** | §8.3 | Both tables' toolbars gain a **select all**, which §8.3 L797-798 does not list: a bulk delete over a narrowed table is what the per-column filters were added to produce, and a checkbox per row is the only way to address one. "All" is the rows the filters and sort left on screen, and the click **replaces** the selection rather than adding to it — the button sits beside "Delete selected", so a selection made before a filter narrowed the table would otherwise delete rows the operator cannot see. A second click clears; an empty table disables it. The set arithmetic is `lib/ui/selection`, shared by both tables. |
+| **R56** | §8.3 | Both tables' toolbars gain a **select all**, which §8.3 L797-798 does not list: a bulk delete over a narrowed table is what the per-column filters were added to produce, and a checkbox per row is the only way to address one. "All" is the rows the filters and sort left on screen, and the click **replaces** the selection rather than adding to it — the button sits beside "Delete selected", so a selection made before a filter narrowed the table would otherwise delete rows the operator cannot see. A second click clears; an empty table disables it. The set arithmetic is `tg-utils/ui/selection`, shared by both tables. |
 | **R57** | §8.4, §7.6 | **"Cleanup all"** — `purgeDlq(queueName) => {discarded}`, `admin`. §8.4 lists no such action and §7.6 L712 grants the dashboard role no queue write, yet §3.5's replay is the only exit a DLQ has: a backlog that will never drain cleanly — a poison payload, a batch a later scrape superseded — keeps §7.7's depth alarm lit for good, and an operator learns to ignore the one signal that means act. It is one `PurgeQueue` call with no pipeline behind it, so it runs from the dashboard's own SQS client like §8.2 L776's inspection rather than through the replay Lambda, and `sqs:PurgeQueue` is granted **per dead-letter queue only**. Irreversible in a way replay is not (§1.3 L69 makes the DLQ the last copy), so the panel arms on one press and fires on a second, and the confirmation names the count. |
 | **R58** | §2, §7.2, §8.2, §8.3, §8.4, §9.1, §29 | A **third table**, `telegator-{env}-targets`, gives every publish destination a row: `id`, `type` (`telegram_channel` today), `lastPostedDate`, `lastPostedMessageId`, `messageTemplate` and the usual soft-delete flag. PK `id`, `PAY_PER_REQUEST`, `RETAIN`, and **no GSI** — tens of rows, one `GetItem` and one `Scan`. It is a **registry, not an allowlist**: a target with no row publishes normally, and publish's own write creates the row, so a forgotten row can never become silent non-publication. Publish mirrors the two `lastPosted*` fields after `recordPosts` and only logs if that write fails; `messages.posts` remains the authority for the edit decision. §8.2's route tree gains `/targets` and §29's map gains `TELEGATOR_TARGETS_TABLE`. The full account is `.spectomat/done/target-table.spec.md` (or `specs/` while it is being built). |
 | **R59** | §3.4 | A target may carry a `messageTemplate`, and §3.4's composition step then runs through it: literal operator-authored HTML with `{header}`, `{body}`, `{hashtags}`, `{title}`, `{category}`, `{country}`, `{location}` and `{date}` substituted, unknown names rendering empty, and runs of blank lines collapsed. The overflow ladder is unchanged in order — hashtags before member blocks, never below one — but parameterised by the composer, so both paths shorten the same way. A target with no template takes §3.4's built-in layout byte for byte, so there is no default template and nothing changes for a target nobody configured. |
 | **R60** | §8.3, §8.4, §2.1, §3.1 | **"Reset all"** — `resetSourceCursors() => {reset}`, `admin`. §8.4 lists no such action and §2.1 L115 makes `lastItemId` scrape-owned, which is why it cannot be an inline edit: `SOURCE_WRITABLE_FIELDS` deliberately excludes it. It exists because a cursor can end up pointing deep in a channel's history — a re-seed from a stale export (§9.5 L975), or a channel that removed the post the cursor names — and §3.1 L207 then re-fetches the same dead window every run, yielding nothing while the table shows a source polling normally. One `updateCursor` per source clears three fields: `lastItemId` to empty, which §3.1 L207 already reads as no cursor and therefore as the bare `t.me/s/{id}` — the channel's newest page; `lastUpdated` to 0, so §3.1 L202 makes every source due at once and a "Scrape now" pressed straight after actually polls; and `zeroYieldRuns` to 0, since §4.1 L378's counter describes the window just discarded. Disabled sources are reset too — they are not polled, but they must start from the latest message when re-enabled. **It is a stored-state write and nothing else**: DynamoDB only, instant, no Telegram fetch to fail halfway. The price is that with no cursor nothing suppresses duplicates (§3.1 L222), so each channel's newest window is enqueued as new and whatever §6 does not match to an existing message is published again — which is why the button arms on one press and fires on a second, exactly as R57's "Cleanup all" does. `scripts/set-cursors-now.ts` remains the other operation, writing each channel's *newest* id to skip that window; it stays a script because it needs the network. |
 | **R61** | §7.5, §7.6, §8.2 | **"Consume now"** — `consumeQueue({queueName, max}) => {consumed, failed}`, `admin`, one button per queue card capped at `MAX_CONSUME`. §7.5 drives every stage from an event source mapping and §8.4 offers no way to ask for a batch: a trigger invokes a *function*, and a stage function does nothing unless handed records. R53's "Publish now" only works around that for publish, whose payload happens to be a message id. The mechanism is a **sixth Lambda**, `telegator-{env}-consume` (1024 MB, reserved concurrency 1): it receives up to ten messages off the named live queue, runs that stage — through the stage's own handler, so it cannot drift from what the mapping calls — and deletes what §7.3 L664's partial batch response did not report, exactly as the mapping would. A stage that throws deletes nothing, because redelivery is harmless (§2.3 L180, R51) and a silent drop is not (§1.3 L69). It is a function rather than dashboard logic to *keep* §7.6 L712 and §8.2 L788 intact: consuming a queue means running a stage, so doing it in the dashboard would have put `sqs:ReceiveMessage`, `sqs:DeleteMessage` and invokes on both analysis stages onto the **web role**, reachable by every request the console serves. Instead the pump holds the union of the three stages' grants plus receive/delete on the three live queues, and the app role gains one more invoke — `analyze` and `aggregate` stay ungranted there, still asserted by the stack test. |
+| **R62** | §8.2 | The route tree's `lib/` directories are **npm workspaces** under `packages/`, the layout of the sibling `bombarbia` project: `tg-enums`, `tg-rc`, `tg-configs`, `tg-utils`, `tg-domain`, `tg-ports`, `tg-dedup`, `tg-aws`, `tg-ai`, `tg-telegram`, `tg-auth`, `tg-pipeline`, `tg-actions`, `tg-web`, `tg-infra`, `tg-mcp`, `tg-ops` (§28 maps each). §8.2's rule is unchanged and now holds at two levels: `tg-pipeline` is the single implementation of every stage and no workspace depends on it, while `test/boundaries.test.ts` still checks the dashboard's transitive closure file by file. The split surfaced four cycles the flat tree hid — `ai`↔`pipeline`, `configs`↔`domain`, `ui`↔`dashboard`, `domain`↔`ports` — and each was cut by moving the shared piece down: the §5.2 request builder to `tg-ai`, `MEMBER_RENDER_LIMIT` to `tg-configs`, `Slice` and `Clock` to `tg-utils`, and §6 into its own package. Workspaces reach each other by name (`tg-domain/message`) through `"./*": "./*.ts"` exports and no barrels, so a bundle still holds only the files it imports. The dashboard builds from `packages/tg-web`, which Amplify must be told: the build spec's `appRoot` and `AMPLIFY_MONOREPO_APP_ROOT`. |
 
 ## 26. Traps this project actually hit
 
@@ -1616,21 +1617,22 @@ of confidence, not the end.
 
 | You want to see... | Open |
 | --- | --- |
-| All stacks assembled, in order | [infra/lib/app.ts](../infra/lib/app.ts) |
-| Tables, GSIs, projections, PITR, RETAIN | [infra/lib/data-stack.ts](../infra/lib/data-stack.ts) |
-| Queues, FIFO groups, DLQs, delays | [infra/lib/queue-stack.ts](../infra/lib/queue-stack.ts) |
-| Lambdas, triggers, IAM grants, alarms | [infra/lib/pipeline-stack.ts](../infra/lib/pipeline-stack.ts) |
-| Cognito pool, hosted UI, groups | [infra/lib/auth-stack.ts](../infra/lib/auth-stack.ts) |
-| The dashboard host and its role | [infra/lib/app-stack.ts](../infra/lib/app-stack.ts) |
-| Narrow IAM as a habit | [infra/lib/grants.ts](../infra/lib/grants.ts) |
-| The match key, the score, the band | [lib/dedup/](../lib/dedup/) |
-| The whole of §6 | [lib/dedup/dedupBatch.ts](../lib/dedup/dedupBatch.ts) |
-| The OpenRouter client and model id | [lib/ai/openrouter.ts](../lib/ai/openrouter.ts), [lib/ai/constants.ts](../lib/ai/constants.ts) |
-| The adjudicator | [lib/ai/adjudicator.ts](../lib/ai/adjudicator.ts) |
-| OAuth token exchange and JWT checking | [lib/auth/cognito.ts](../lib/auth/cognito.ts) |
-| Reading metrics, queue depth, Logs Insights | [lib/aws/observability.ts](../lib/aws/observability.ts) |
-| Emitting custom metrics | [lib/metrics/cloudwatch.ts](../lib/metrics/cloudwatch.ts) |
-| The calibration sweep | [lib/calibration/](../lib/calibration/) |
+| All stacks assembled, in order | [tg-infra/lib/app.ts](../packages/tg-infra/lib/app.ts) |
+| Tables, GSIs, projections, PITR, RETAIN | [tg-infra/lib/data-stack.ts](../packages/tg-infra/lib/data-stack.ts) |
+| Queues, FIFO groups, DLQs, delays | [tg-infra/lib/queue-stack.ts](../packages/tg-infra/lib/queue-stack.ts) |
+| Lambdas, triggers, IAM grants, alarms | [tg-infra/lib/pipeline-stack.ts](../packages/tg-infra/lib/pipeline-stack.ts) |
+| Cognito pool, hosted UI, groups | [tg-infra/lib/auth-stack.ts](../packages/tg-infra/lib/auth-stack.ts) |
+| The dashboard host and its role | [tg-infra/lib/app-stack.ts](../packages/tg-infra/lib/app-stack.ts) |
+| Narrow IAM as a habit | [tg-infra/lib/grants.ts](../packages/tg-infra/lib/grants.ts) |
+| The match key, the score, the band | [tg-dedup/](../packages/tg-dedup/) |
+| The whole of §6 | [tg-dedup/dedupBatch.ts](../packages/tg-dedup/dedupBatch.ts) |
+| The OpenRouter client and model id | [tg-ai/openrouter.ts](../packages/tg-ai/openrouter.ts), [tg-configs/ai.ts](../packages/tg-configs/ai.ts) |
+| The adjudicator | [tg-ai/adjudicator.ts](../packages/tg-ai/adjudicator.ts) |
+| OAuth token exchange and JWT checking | [tg-auth/cognito.ts](../packages/tg-auth/cognito.ts) |
+| Reading metrics, queue depth, Logs Insights | [tg-aws/observability.ts](../packages/tg-aws/observability.ts) |
+| Emitting custom metrics | [tg-aws/metrics/cloudwatch.ts](../packages/tg-aws/metrics/cloudwatch.ts) |
+| The calibration sweep | [tg-dedup/calibration/](../packages/tg-dedup/calibration/) |
+| Which package holds what, and that the graph has no cycle | [test/layout.test.ts](../test/layout.test.ts) |
 | That every AC here is named by a test | [test/acceptance.test.ts](../test/acceptance.test.ts) |
 | That every `§x.y L###` citation still resolves | [test/specCitations.test.ts](../test/specCitations.test.ts) |
 | That the dashboard never reaches the pipeline | [test/boundaries.test.ts](../test/boundaries.test.ts) |
@@ -1662,43 +1664,44 @@ have to re-derive all of it.
 | `tsx` | Runs the `scripts/` entry points directly. |
 | `aws-sdk-client-mock` | Declared, and deliberately **unused**: its `mockClient()` signature is built against an older `@smithy/types` than the installed SDK and does not typecheck against it, and 4.1.0 is the latest release. Inject a structural client port and stub that instead. |
 
-**Layout.** Every rule lives in `lib/`; everything else is a wrapper over it.
+**Layout.** npm workspaces under `packages/`, one concern each (R62). Every
+rule lives in a package; `scripts/` and `test/` wrap them.
 
 ```
-lib/            every rule, and the only place decisions are made
-  ai/           classifier + adjudicator adapters, prompt, schemas, constants
-  auth/         Cognito OAuth, JWT verification, session, roles
-  aws/          CloudWatch metrics/logs reads (observability)
-  calibration/  the §10.3 sweep, its file formats, the record schema
-  clock.ts      the injected clock — nothing else reads the time
-  dashboard/    the §8.5 computations, caching, triggers
-  db/           DynamoDB repositories for sources and messages
-  dedup/        match key, score, band, the §6 algorithm
-  domain/       Zod schemas and derived types: source, item, message, ids, tags
-  deploy/       argument parsing shared by the ops scripts
-  logging/      the structured logger and its shared field names
-  metrics/      the §7.7 counters
-  ops/          region and --env parsing shared between scripts
-  pipeline/     the four stages plus the DLQ replay, wiring only
-  queues/       SQS producers and payload schemas
-  seed/         the §9.4 migration
-  telegram/     HTML parser, bot client, HTTP adapters
-  ui/           filter, sort, column and chart helpers shared by components
-handlers/       Lambda entry points — thin wrappers over lib/pipeline
-infra/lib/      the CDK stacks of §9.1
-app/            App Router routes (§8.2)
-components/     dashboard React components
-actions/        server actions (§8.4)
+packages/
+  tg-enums/     closed vocabularies: categories, roles, statuses, item kinds, target types, queues
+  tg-rc/        resources: the §5.2 prompt, the dashboard's column definitions
+  tg-configs/   the §29 env contract, the §31 constants, auth config, shared log field names
+  tg-utils/     the injected clock, the structured logger, table and chart helpers
+  tg-domain/    Zod schemas and derived types: source, item, message, target, ids, tags, dates
+  tg-ports/     every boundary as an interface (§30)
+  tg-dedup/     match key, score, band, the §6 algorithm, the §10.3 calibration sweep
+  tg-aws/       DynamoDB repositories, SQS, CloudWatch, Lambda invoke, Secrets Manager
+  tg-ai/        the §5.2 request, the classifier and adjudicator adapters
+  tg-telegram/  HTML parser, bot client, HTTP adapters
+  tg-auth/      Cognito OAuth, JWT verification, session, roles
+  tg-pipeline/  the four stages plus the DLQ replay; tg-pipeline/handlers/ are the Lambda entry points
+  tg-actions/   server actions (§8.4); dashboard/ holds the §8.5 computations, caching, triggers
+  tg-web/       the Next.js app: tg-web/app/ routes (§8.2), tg-web/components/
+  tg-infra/     the CDK stacks of §9.1
+  tg-mcp/       the MCP server
+  tg-ops/       seeding (§9.4), deploy arguments, target parsing for the scripts
 scripts/        operator entry points (§33)
-test/           cross-cutting invariants; unit tests sit beside their module
+test/           cross-cutting invariants, fakes, fixtures; unit tests sit beside their module
 ```
+
+Dependencies point down the list: vocabularies, resources, configs and utils
+first; then domain, ports, dedup and the adapters; then the pipeline and the
+actions; the web app and the stacks last. `test/layout.test.ts` fails on a cycle
+between packages, and on any package that depends on `tg-pipeline`.
 
 **Conventions that are enforced, not preferred:**
 
-- **Relative imports carry no extension.** Write `"../lib/clock"`, never `"../lib/clock.js"`. `tsc`, Vite, esbuild and tsx all perform the `.js` → `.ts` substitution; **Turbopack does not**, so the extension form passes every check and then makes every dashboard route 500 with `Module not found`. There is no Turbopack setting that restores it.
-- **A constant needed by two layers moves to a module neither owns.** The dashboard may not import `lib/pipeline/` (§8.2), so a shared literal cannot live in either.
+- **Across packages, import by name; inside one, relatively.** Write `"tg-domain/message"`, never `"../../tg-domain/message"`. Each package exports `"./*": "./*.ts"` and has no barrel file, so a bundle holds only the files it imports — the unit §8.2's boundary is measured in.
+- **Relative imports carry no extension.** Write `"./clock"`, never `"./clock.js"`. `tsc`, Vite, esbuild and tsx all perform the `.js` → `.ts` substitution; **Turbopack does not**, so the extension form passes every check and then makes every dashboard route 500 with `Module not found`. There is no Turbopack setting that restores it.
+- **A constant needed by two layers moves to a module neither owns.** The dashboard may not import `tg-pipeline` (§8.2), so a shared literal cannot live in either.
 - `console` belongs in `scripts/` only. Everywhere else, the injected logger.
-- Magic numbers are banned in `lib/`, `handlers/` and `actions/`. Every value in §31 is a named constant.
+- Magic numbers are banned in every package but `tg-web` and `tg-infra`. Every value in §31 is a named constant.
 - A source scan that names what it forbids will match itself. Exclude the scanning file, or scan only shipped source.
 
 ## 29. Configuration contract
@@ -1759,25 +1762,25 @@ without a `fromLookup` (§22):
 
 ## 30. Boundaries: ports and fakes
 
-**Every AWS, Telegram and model boundary is an interface in a `ports.ts`, with
-an in-memory fake beside the tests. No test touches the network** — the suite
+**Every AWS, Telegram and model boundary is an interface in `tg-ports`, with
+an in-memory fake in `test/fakes/`. No test touches the network** — the suite
 forbids it, and the build machine can reach neither AWS nor a model provider.
 
 | Port | Behind it |
 | --- | --- |
-| `lib/ai/ports.ts` | `Classifier` (§5.2) and `Adjudicator` (§5.3) |
-| `lib/auth/ports.ts` | token exchange, JWKS, the cookie jar, the disabled-user read |
-| `lib/aws/ports.ts` | CloudWatch metric reads, Logs Insights, queue attributes |
-| `lib/db/ports.ts` | the two repositories of §2 |
-| `lib/metrics/ports.ts` | §7.7's counters |
-| `lib/queues/ports.ts` | §7.3's producers |
-| `lib/telegram/ports.ts` | the page fetcher and the bot client (§4) |
+| `tg-ports/ai.ts` | `Classifier` (§5.2) and `Adjudicator` (§5.3) |
+| `tg-ports/auth.ts` | token exchange, JWKS, the cookie jar, the disabled-user read |
+| `tg-ports/aws.ts` | CloudWatch metric reads, Logs Insights, queue attributes |
+| `tg-ports/db.ts` | the two repositories of §2 |
+| `tg-ports/metrics.ts` | §7.7's counters |
+| `tg-ports/queues.ts` | §7.3's producers |
+| `tg-ports/telegram.ts` | the page fetcher and the bot client (§4) |
 
 This is not only a local convenience. It is what lets §10's acceptance criteria
 be checked at all: a test that needed a live model could not assert "these two
 posts produce one message with two members".
 
-**The clock is a port too.** Nothing calls `Date.now()` directly. Several
+**The clock is a port too**, though it lives in `tg-utils/clock.ts` because the domain itself reads it. Nothing calls `Date.now()` directly. Several
 properties — AC-3.7's byte-identical replay, the member ordering of §3.4, the
 60 s cache of §8.5 — are false under a real clock and untestable without control
 of it.
@@ -1845,7 +1848,7 @@ pass:** no skipped test, no `any`, no error suppression, no lint exception.
 Each of these has shipped a green suite over a broken system:
 
 - **No gate makes a model call**, and none can. A base URL that composes to the wrong path, an unrecognised auth header, or an `output_config` the tier rejects all pass every gate against an adapter that cannot classify a single item. Cover it with an offline smoke test over the real adapter and a canned far end, with an opt-in flag for one live call.
-- **No gate runs a bundler.** Only a real `next build` compiles `app/`, and it needs §29's environment, so it is not one of the four. Run the dev server and request the routes before believing the dashboard works.
+- **No gate runs a bundler.** Only a real `next build` compiles `tg-web/app/`, and it needs §29's environment, so it is not one of the four. Run the dev server and request the routes before believing the dashboard works.
 - **`cdk synth` checks shape; AWS checks meaning.** Metric math, GSI projection updates and account quotas are all validated at deploy time (§26).
 - An invalid `experimental` option in the Next config is warned about once at startup and then **dropped whole**, taking its valid siblings with it.
 
@@ -1856,8 +1859,8 @@ Each of these was violated at least once, and each is now pinned:
 | Invariant | Why a test and not a rule |
 | --- | --- |
 | Every AC in §3.1–3.4 is named by a test, **and** no test names one this document does not declare | A dropped criterion is invisible; the audit runs both ways |
-| The dashboard never reaches `lib/pipeline/` (§8.2), over the **transitive** closure, and never imports `aws-cdk-lib` | A direct-import rule misses the second hop |
-| Every `app/**/page.tsx` calls `requireRole("viewer", …)` | The dashboard root shipped once without it |
+| The dashboard never reaches `tg-pipeline/` (§8.2), over the **transitive** closure, and never imports `aws-cdk-lib` | A direct-import rule misses the second hop |
+| Every `tg-web/app/**/page.tsx` calls `requireRole("viewer", …)` | The dashboard root shipped once without it |
 | Every relative import is extension-free | All four gates pass against an app that cannot serve a page |
 | Every `§x.y L###` citation resolves inside the section it names | 16 of 1,503 had already rotted, silently |
 | `tsconfig.json` still includes `**/*.ts` and `**/*.tsx` | `next dev` rewrites the file; a directory-scoped include left four categories unchecked |

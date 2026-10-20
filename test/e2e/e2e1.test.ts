@@ -1,10 +1,10 @@
+import { DISTINCT_THRESHOLD } from "tg-configs/dedup";
+import { buildMatchKey, type MatchKeyFields } from "tg-dedup/matchKey";
+import { matchScore } from "tg-dedup/score";
+import type { NewsItem } from "tg-domain/newsItemSchema";
+import { SCRAPE_HEADERS } from "tg-pipeline/scrape/index";
+import type { Classifier } from "tg-ports/ai";
 import { beforeEach, describe, expect, test } from "vitest";
-import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Classifier } from "../../lib/ai/ports";
-import { DISTINCT_THRESHOLD } from "../../lib/dedup/constants";
-import { buildMatchKey, type MatchKeyFields } from "../../lib/dedup/matchKey";
-import { matchScore } from "../../lib/dedup/score";
-import { SCRAPE_HEADERS } from "../../lib/pipeline/scrape/index";
 import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
 

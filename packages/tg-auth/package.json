@@ -1,0 +1,16 @@
+{
+  "name": "tg-auth",
+  "version": "1.0.0",
+  "description": "Cognito OAuth, ID-token verification, sessions and roles (§8.6).",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "tg-configs": "*",
+    "tg-enums": "*",
+    "tg-ports": "*",
+    "tg-utils": "*"
+  }
+}

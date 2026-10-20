@@ -1,0 +1,13 @@
+{
+  "name": "tg-ops",
+  "version": "1.0.0",
+  "description": "Helpers for the operator scripts: seeding, deploy arguments, target parsing.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "tg-domain": "*"
+  }
+}

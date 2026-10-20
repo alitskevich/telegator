@@ -29,22 +29,22 @@ const repoRoot = resolve(import.meta.dirname, "..");
  * by reading, in the same place the id-based coverage is:
  *
  *  1. A pair scoring inside the band is adjudicated, and the verdict decides.
- *     — `lib/dedup/dedupBatch.test.ts`: "adjudicates the band in ONE call for
+ *     — `tg-dedup/dedupBatch.test.ts`: "adjudicates the band in ONE call for
  *       the whole batch"; "a 'same' verdict merges and a 'different' verdict
  *       splits".
  *  2. A failing adjudication splits, and increments `DedupAdjudicationFailed`.
- *     — `lib/dedup/dedupBatch.test.ts`: "a failing adjudication splits rather
+ *     — `tg-dedup/dedupBatch.test.ts`: "a failing adjudication splits rather
  *       than merging"; "a failing adjudication still writes the items that were
  *       never ambiguous"; "counts the pairs it sent".
  *  3. A verdict set that does not cover the requested pair ids exactly is an
  *     error.
- *     — `lib/ai/adjudicator.test.ts`: "rejects a verdict set that does not cover
+ *     — `tg-ai/adjudicator.test.ts`: "rejects a verdict set that does not cover
  *       every requested pair"; "rejects a verdict for a pair that was never
  *       sent"; "rejects a duplicated pair id rather than letting the last one
  *       win".
  *  4. `J(EMPTY, EMPTY)` scores 0, and two entity-less items do not merge.
- *     — `lib/dedup/score.test.ts`: "scores two entity-less items on evidence,
- *       never on shared emptiness"; `lib/dedup/dedupBatch.test.ts`: "two items
+ *     — `tg-dedup/score.test.ts`: "scores two entity-less items on evidence,
+ *       never on shared emptiness"; `tg-dedup/dedupBatch.test.ts`: "two items
  *       with no entities do not merge on their shared emptiness".
  *
  * This is a note, not a mechanism: it deliberately does not extend the audit
@@ -84,9 +84,7 @@ function testFiles(): string[] {
     });
   };
 
-  return ["lib", "test", "handlers", "infra", "components", "actions"].flatMap((dir) =>
-    walk(join(repoRoot, dir)),
-  );
+  return ["packages", "test"].flatMap((dir) => walk(join(repoRoot, dir)));
 }
 
 describe("§10.1 — every stage criterion is named by a test", () => {

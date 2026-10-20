@@ -12,7 +12,7 @@
       "!**/cdk.out",
       "!**/.next",
       "!package-lock.json",
-      "!.spectomat/snippets"
+      "!.spectomat/**/snippets"
     ]
   },
   "formatter": {
@@ -48,7 +48,7 @@
   },
   "overrides": [
     {
-      "includes": ["lib/**/*.ts", "handlers/**/*.ts", "actions/**/*.ts"],
+      "includes": ["packages/**/*.ts", "!packages/tg-web/**", "!packages/tg-infra/**"],
       "linter": {
         "rules": {
           "style": {
@@ -87,7 +87,7 @@
       }
     },
     {
-      "includes": ["tsconfig.json", "next-env.d.ts"],
+      "includes": ["**/tsconfig.json", "**/next-env.d.ts"],
       "formatter": {
         "enabled": false
       }

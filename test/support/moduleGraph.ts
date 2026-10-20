@@ -5,14 +5,14 @@ import { dirname, resolve } from "node:path";
  * A static import graph, used to enforce §8.2 L792 transitively.
  *
  * The first version of `test/boundaries.test.ts` read each file's own text, so a
- * dashboard file importing a module that itself imports `lib/pipeline/` passed —
- * which is exactly what nearly happened through `handlers/dlqReplay.ts` in item
+ * dashboard file importing a module that itself imports `tg-pipeline/` passed —
+ * which is exactly what nearly happened through `tg-pipeline/handlers/dlqReplay.ts` in item
  * 5.10. What ships in a bundle is the transitive closure, so that is what the
  * boundary has to be measured over.
  *
  * Deliberately not a real resolver: it handles the forms this repository uses —
- * extensionless relative specifiers — and records everything else as a package
- * name. A specifier it cannot resolve is ignored rather than thrown on, so an
+ * extensionless relative specifiers, and `tg-<name>/<sub>` workspace specifiers (R62)
+ * — and records everything else as a package name. A specifier it cannot resolve is ignored rather than thrown on, so an
  * unrelated refactor cannot turn this into a failing gate for the wrong reason.
  */
 
@@ -74,7 +74,24 @@ const isFile = (path: string): boolean => {
  * job, not this one's.
  */
 function resolveRelative(fromFile: string, specifier: string): string | undefined {
-  const base = resolve(dirname(fromFile), specifier);
+  return resolveFile(resolve(dirname(fromFile), specifier));
+}
+
+/** The workspaces of R62, which every package reaches by name. */
+const WORKSPACES = resolve(import.meta.dirname, "../../packages");
+
+/**
+ * `tg-domain/message` → `packages/tg-domain/message.ts`, which is what each
+ * package's `"./*": "./*.ts"` export says. Followed as a file edge, not
+ * recorded as a package: the boundary is about which *files* ship, and a
+ * workspace edge that stopped the walk would hide every stage behind it.
+ */
+function resolveWorkspace(specifier: string): string | undefined {
+  if (!/^tg-[a-z]+\//.test(specifier)) return undefined;
+  return resolveFile(resolve(WORKSPACES, specifier));
+}
+
+function resolveFile(base: string): string | undefined {
   const withoutJs = base.replace(/\.js$/, "");
 
   const candidates = [
@@ -121,6 +138,12 @@ export function reachableFrom(entries: readonly string[]): ModuleGraph {
         // An unresolvable relative specifier is ignored: a missing file is
         // tsc's complaint, not this gate's.
         if (resolved !== undefined) queue.push(resolved);
+        continue;
+      }
+
+      const workspace = resolveWorkspace(specifier);
+      if (workspace !== undefined) {
+        queue.push(workspace);
         continue;
       }
 

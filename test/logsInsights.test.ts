@@ -1,8 +1,8 @@
 import type { StartQueryCommand } from "@aws-sdk/client-cloudwatch-logs";
+import { logsInsightsCategoryReader } from "tg-aws/observability";
+import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "tg-configs/logFields";
+import { createLogger, type LogSink } from "tg-utils/logger";
 import { describe, expect, test } from "vitest";
-import { logsInsightsCategoryReader } from "../lib/aws/observability";
-import { CATEGORY_LOG_FIELD, CLASSIFIED_LOG_MESSAGE } from "../lib/logging/fields";
-import { createLogger, type LogSink } from "../lib/logging/logger";
 
 /**
  * §8.5 L835's category chart spans two modules that never call each other: the
@@ -52,7 +52,7 @@ const recordingSink = () => {
   return { lines, sink };
 };
 
-/** What the analyze stage writes for one classified item (`lib/pipeline/analyze/index.ts`). */
+/** What the analyze stage writes for one classified item (`tg-pipeline/analyze/index.ts`). */
 function emitClassified(category: string, decision = "enqueue"): string {
   const { lines, sink } = recordingSink();
   createLogger(sink).info(CLASSIFIED_LOG_MESSAGE, {

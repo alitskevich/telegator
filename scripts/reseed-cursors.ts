@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { ENV_VARS } from "../handlers/env";
-import { createSourceRepo } from "../lib/db/sources";
-import { parseReseedArgs } from "../lib/seed/args";
-import { parseCursorFile, planCursorReseed } from "../lib/seed/cursors";
+import { createSourceRepo } from "tg-aws/db/sources";
+import { ENV_VARS } from "tg-configs/env";
+import { parseReseedArgs } from "tg-ops/seed/args";
+import { parseCursorFile, planCursorReseed } from "tg-ops/seed/cursors";
 
 /**
  * §9.5 step 5 (L975) — re-seed `lastItemId` so AWS resumes where Firebase
@@ -18,7 +18,7 @@ import { parseCursorFile, planCursorReseed } from "../lib/seed/cursors";
  * that they have stopped, so the script says so and refuses any cursor that
  * would move backwards.
  *
- * Everything worth testing is in `lib/seed/cursors.ts`.
+ * Everything worth testing is in `tg-ops/seed/cursors.ts`.
  */
 
 async function main(): Promise<void> {

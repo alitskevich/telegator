@@ -1,0 +1,241 @@
+import { MESSAGE_STATUSES } from "tg-enums/messageStatus";
+import { describe, expect, test } from "vitest";
+import {
+  DEFAULT_TG_CHANNEL,
+  DedupCandidateSchema,
+  MemberBlockSchema,
+  MessageListItemSchema,
+  MessageSchema,
+  PostSchema,
+} from "./message";
+
+const block = {
+  summary: "Выбухі ў сталіцы [паведамляе](#1)",
+  links: [{ id: 1, href: "https://example.test/a" }],
+  channel: "yigal_levin",
+  ts: 1_772_458_034_502,
+};
+
+const message = {
+  id: "yigal_levin/12345",
+  status: "topublish",
+  members: { "yigal_levin/12345": block },
+  memberCount: 1,
+  date: "2026-08-29",
+  ts: 1_772_458_034_502,
+};
+
+describe("MemberBlockSchema (§2.3 L168-175)", () => {
+  test("carries everything publish needs to render one item", () => {
+    expect(MemberBlockSchema.parse(block)).toEqual(block);
+  });
+
+  test("reuses LinkSchema, so a malformed link is rejected here too", () => {
+    expect(MemberBlockSchema.safeParse({ ...block, links: [{ id: "1", href: "x" }] }).success).toBe(
+      false,
+    );
+  });
+
+  test("defaults links to empty, since a summary need not contain tokens", () => {
+    const { links: _omitted, ...rest } = block;
+
+    expect(MemberBlockSchema.parse(rest).links).toEqual([]);
+  });
+
+  test("requires ts, which §3.4 L323 sorts members by", () => {
+    const { ts: _omitted, ...rest } = block;
+
+    expect(MemberBlockSchema.safeParse(rest).success).toBe(false);
+  });
+});
+
+describe("MessageSchema (§2.3 L150-163)", () => {
+  test("parses a freshly created message", () => {
+    expect(MessageSchema.parse(message)).toMatchObject(message);
+  });
+
+  test.each(MESSAGE_STATUSES)("accepts status %s", (status) => {
+    expect(MessageSchema.safeParse({ ...message, status }).success).toBe(true);
+  });
+
+  test("rejects a status outside §2.3 L153's enum", () => {
+    expect(MessageSchema.safeParse({ ...message, status: "fetched" }).success).toBe(false);
+  });
+
+  /** §2.3 L160 — "Target channel; defaults to `telegator_news`". */
+  test("defaults tgChannel to telegator_news", () => {
+    expect(MessageSchema.parse(message).tgChannel).toBe(DEFAULT_TG_CHANNEL);
+    expect(DEFAULT_TG_CHANNEL).toBe("telegator_news");
+  });
+
+  /**
+   * §2.3 L155 caches memberCount "so the dashboard need not read the map", and
+   * §3.3 L283 recomputes it on every write. Drift means a stage bug, and nothing
+   * downstream repairs it — the dashboard would simply show a wrong number.
+   */
+  test("rejects a memberCount that disagrees with the map", () => {
+    expect(MessageSchema.safeParse({ ...message, memberCount: 2 }).success).toBe(false);
+  });
+
+  test("accepts a consistent multi-member message", () => {
+    const two = {
+      ...message,
+      members: {
+        "yigal_levin/12345": block,
+        "nexta_live/98765": { ...block, channel: "nexta_live" },
+      },
+      memberCount: 2,
+    };
+
+    expect(MessageSchema.parse(two).memberCount).toBe(2);
+  });
+
+  /**
+   * §2.4 L187: ids are used verbatim as DynamoDB map keys. The slash must
+   * survive the round trip or every member lookup breaks.
+   */
+  test("round-trips a member key containing a slash", () => {
+    const parsed = MessageSchema.parse(message);
+
+    expect(Object.keys(parsed.members)).toEqual(["yigal_levin/12345"]);
+    expect(parsed.members["yigal_levin/12345"]).toEqual(block);
+  });
+
+  test("rejects a member key that is not a composite item id", () => {
+    expect(MessageSchema.safeParse({ ...message, members: { nonsense: block } }).success).toBe(
+      false,
+    );
+  });
+
+  /**
+   * R8: §6 sets `ts` on neither branch, yet §2.3 L163 makes it the sort key on
+   * both GSIs (§7.2 L638). A record without it is absent from status-index and
+   * date-index — invisible to the dedup query that created it. Required here so
+   * the omission cannot ship.
+   */
+  test("requires ts, the sort key on both GSIs", () => {
+    const { ts: _omitted, ...rest } = message;
+
+    expect(MessageSchema.safeParse(rest).success).toBe(false);
+  });
+
+  /** R43 — the embedding field is gone; an `embedding` key on the input is stripped. */
+  test("strips an embedding attribute a legacy row might still carry", () => {
+    const legacy = { ...message, embedding: new Uint8Array(4096) };
+
+    expect(MessageSchema.parse(legacy)).not.toHaveProperty("embedding");
+  });
+
+  test("treats tgId and tgAt as absent until publish writes them", () => {
+    const parsed = MessageSchema.parse(message);
+
+    expect(parsed.tgId).toBeUndefined();
+    expect(parsed.tgAt).toBeUndefined();
+  });
+
+  test("accepts the soft-delete flag §8.4 L814 requires", () => {
+    expect(MessageSchema.parse({ ...message, deleted: true }).deleted).toBe(true);
+  });
+
+  /**
+   * R7: §6 L585/L584 spread `{...item}` into the record, which would write body,
+   * links, kind, importance, properNames and forwardedFrom — none of them in
+   * §2.3's field table. §2.3 is the schema; the spread is shorthand for "the
+   * item's descriptive fields overwrite" (§3.3 L287).
+   */
+  test("strips item-only fields the §6 spread would otherwise carry in", () => {
+    const parsed = MessageSchema.parse({
+      ...message,
+      body: "the full post text",
+      kind: "post",
+      importance: "high",
+      properNames: "Kyiv",
+      forwardedFrom: "other_channel",
+    });
+
+    for (const key of ["body", "kind", "importance", "properNames", "forwardedFrom"]) {
+      expect(parsed).not.toHaveProperty(key);
+    }
+  });
+});
+
+describe("MessageListItemSchema (the status-index projection, R27)", () => {
+  test("omits the two attributes §7.2 L640 excludes", () => {
+    const { members: _m, ...projected } = message;
+    const parsed = MessageListItemSchema.parse({ ...projected, memberCount: 1 });
+
+    expect(parsed).not.toHaveProperty("members");
+    expect(parsed).not.toHaveProperty("embedding");
+  });
+
+  /** §2.3 L155: memberCount exists precisely so the dashboard need not read the map. */
+  test("keeps memberCount, which the Messages page lists", () => {
+    const { members: _m, ...projected } = message;
+
+    expect(MessageListItemSchema.parse(projected).memberCount).toBe(1);
+  });
+
+  test("parses without members, which the index does not project", () => {
+    const { members: _m, ...projected } = message;
+
+    expect(MessageListItemSchema.safeParse(projected).success).toBe(true);
+  });
+
+  /**
+   * `status-index` projects `MESSAGE_LIST_ATTRIBUTES` (`tg-infra/lib/data-stack.ts`)
+   * and none of the four match-key attributes is in it. They default to `[]`,
+   * so a type that still carried them would read as four empty lists in
+   * production while this suite's whole-record fake handed back populated ones
+   * — a page that disagrees with its own tests. Parsing a record that HAS them
+   * is the case that matters: the schema must strip, not merely default.
+   */
+  test("drops the four match-key attributes the status-index does not project", () => {
+    const { members: _m, ...projected } = message;
+    const parsed = MessageListItemSchema.parse({
+      ...projected,
+      keyEntities: ["minsk"],
+      keyTitle: ["fire"],
+      keyTags: ["safety"],
+      memberIds: ["src/1"],
+    });
+
+    expect(parsed).not.toHaveProperty("keyEntities");
+    expect(parsed).not.toHaveProperty("keyTitle");
+    expect(parsed).not.toHaveProperty("keyTags");
+    expect(parsed).not.toHaveProperty("memberIds");
+  });
+});
+
+describe("posts — multi-target#2.4 (R55)", () => {
+  const post = { tgId: "4711", tgAt: 1_772_458_034_502 };
+
+  test("MT-15: a record without posts parses as posts: {}", () => {
+    expect(MessageSchema.parse(message).posts).toEqual({});
+  });
+
+  test("MT-15: a stored post map is kept, keyed by canonical target id", () => {
+    expect(MessageSchema.parse({ ...message, posts: { a: post } }).posts).toEqual({ a: post });
+  });
+
+  test("MT-15: neither projection type carries posts", () => {
+    const stored = { ...message, posts: { a: post } };
+
+    expect(MessageListItemSchema.parse(stored)).not.toHaveProperty("posts");
+    expect(DedupCandidateSchema.parse(stored)).not.toHaveProperty("posts");
+  });
+
+  test("a post needs a string tgId and an integer tgAt", () => {
+    expect(PostSchema.safeParse({ tgId: 4711, tgAt: 1 }).success).toBe(false);
+    expect(PostSchema.safeParse({ tgId: "4711", tgAt: 1.5 }).success).toBe(false);
+    expect(MessageSchema.safeParse({ ...message, posts: { a: { tgId: "1" } } }).success).toBe(
+      false,
+    );
+  });
+
+  test("the legacy tgId/tgAt pair still parses beside the map", () => {
+    const parsed = MessageSchema.parse({ ...message, tgId: "1", tgAt: 5, posts: {} });
+
+    expect(parsed.tgId).toBe("1");
+    expect(parsed.tgAt).toBe(5);
+  });
+});

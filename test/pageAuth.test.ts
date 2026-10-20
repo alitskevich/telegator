@@ -3,11 +3,11 @@ import { join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 
 const repoRoot = resolve(import.meta.dirname, "..");
-const appRoot = join(repoRoot, "app");
+const appRoot = join(repoRoot, "packages/tg-web/app");
 
 /**
  * Every rendered page must authorise, and this is checked structurally because
- * the alternative failed: `app/page.tsx` shipped in item 5.11 with no check at
+ * the alternative failed: `tg-web/app/page.tsx` shipped in item 5.11 with no check at
  * all, rendering live pipeline data to anyone, while the other three pages each
  * called `requireRole`. Nothing caught it — the page's own tests exercised the
  * data load, which takes no session, and the boundary tests only looked at
@@ -38,10 +38,10 @@ function pageFiles(): string[] {
 describe("every page authorises (§8.6 L877)", () => {
   /** The rule is worthless if it is scanning nothing. */
   test("TT-22: finds the pages, including /targets", () => {
-    const pages = pageFiles().map((path) => relative(repoRoot, path));
+    const pages = pageFiles().map((path) => relative(appRoot, path));
 
-    expect(pages).toContain("app/page.tsx");
-    expect(pages).toContain("app/targets/page.tsx");
+    expect(pages).toContain("page.tsx");
+    expect(pages).toContain("targets/page.tsx");
     expect(pages.length).toBeGreaterThanOrEqual(5);
   });
 
@@ -74,7 +74,7 @@ describe("every page authorises (§8.6 L877)", () => {
    * Authorising is half of it. `requireRole` refuses by throwing, and a throw
    * out of a server component is a 500 — which is what all four of these pages
    * served to a signed-out browser, the state every first visit is in. The
-   * refusal has to reach `app/authorize.ts`, which turns it into the 401 that
+   * refusal has to reach `tg-web/app/authorize.ts`, which turns it into the 401 that
    * offers the sign-in route or the 403 that explains itself.
    *
    * Scanned per page for the same reason as the rule above: a fifth page added

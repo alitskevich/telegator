@@ -1,5 +1,5 @@
 {
-  "app": "npx tsx infra/bin/telegator.ts",
+  "app": "npx tsx packages/tg-infra/bin/telegator.ts",
   "output": "cdk.out",
   "requireApproval": "never",
   "notices": false,

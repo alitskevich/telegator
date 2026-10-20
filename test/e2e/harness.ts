@@ -1,12 +1,12 @@
-import type { Adjudicator, Classifier } from "../../lib/ai/ports";
-import type { Clock } from "../../lib/clock";
-import type { Band } from "../../lib/dedup/score";
-import { createLogger } from "../../lib/logging/logger";
-import { runAggregate } from "../../lib/pipeline/aggregate/index";
-import { runAnalyze } from "../../lib/pipeline/analyze/index";
-import { runPublish } from "../../lib/pipeline/publish/index";
-import { runScrape } from "../../lib/pipeline/scrape/index";
-import type { QueueMessage } from "../../lib/queues/ports";
+import type { Band } from "tg-dedup/score";
+import { runAggregate } from "tg-pipeline/aggregate/index";
+import { runAnalyze } from "tg-pipeline/analyze/index";
+import { runPublish } from "tg-pipeline/publish/index";
+import { runScrape } from "tg-pipeline/scrape/index";
+import type { Adjudicator, Classifier } from "tg-ports/ai";
+import type { QueueMessage } from "tg-ports/queues";
+import type { Clock } from "tg-utils/clock";
+import { createLogger } from "tg-utils/logger";
 import {
   type FakeMessageRepo,
   type FakeSourceRepo,

@@ -1,0 +1,23 @@
+{
+  "name": "tg-web",
+  "version": "1.0.0",
+  "description": "The Next.js operator dashboard (§8): App Router routes and React components.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "tg-actions": "*",
+    "tg-auth": "*",
+    "tg-aws": "*",
+    "tg-configs": "*",
+    "tg-domain": "*",
+    "tg-enums": "*",
+    "tg-ports": "*",
+    "tg-rc": "*",
+    "tg-utils": "*"
+  }
+}

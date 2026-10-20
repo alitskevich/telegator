@@ -1,4 +1,5 @@
-import type { DlqInspector, DlqMessage } from "../../lib/queues/inspect";
+import type { DlqInspector, DlqMessage } from "tg-aws/queues/inspect";
+import type { DlqPurger } from "tg-aws/queues/purge";
 import type {
   QueueDrainer,
   QueueMessage,
@@ -6,8 +7,7 @@ import type {
   ReceivedMessage,
   SendFailure,
   SendResult,
-} from "../../lib/queues/ports";
-import type { DlqPurger } from "../../lib/queues/purge";
+} from "tg-ports/queues";
 
 export interface FakeQueueProducer extends QueueProducer {
   /** Every message handed to `send`, flattened across calls, in order. */

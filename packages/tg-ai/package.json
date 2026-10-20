@@ -1,0 +1,16 @@
+{
+  "name": "tg-ai",
+  "version": "1.0.0",
+  "description": "OpenRouter classifier and adjudicator adapters (§5).",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "tg-configs": "*",
+    "tg-domain": "*",
+    "tg-ports": "*",
+    "tg-rc": "*"
+  }
+}

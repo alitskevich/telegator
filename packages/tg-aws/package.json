@@ -1,0 +1,17 @@
+{
+  "name": "tg-aws",
+  "version": "1.0.0",
+  "description": "AWS adapters behind the ports: DynamoDB repositories, SQS, CloudWatch, Lambda invoke, Secrets Manager.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "tg-configs": "*",
+    "tg-domain": "*",
+    "tg-enums": "*",
+    "tg-ports": "*",
+    "tg-utils": "*"
+  }
+}

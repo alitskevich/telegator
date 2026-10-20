@@ -1,3 +1,13 @@
+import {
+  type DedupCandidate,
+  DedupCandidateSchema,
+  type Message,
+  type MessageListItem,
+  MessageListItemSchema,
+} from "tg-domain/message";
+import type { Source, SourceCursor } from "tg-domain/source";
+import { type Target, TargetSchema } from "tg-domain/target";
+import type { MessageStatus } from "tg-enums/messageStatus";
 import type {
   LastPost,
   MemberMerge,
@@ -6,17 +16,7 @@ import type {
   PublishResult,
   SourceRepo,
   TargetRepo,
-} from "../../lib/db/ports";
-import {
-  type DedupCandidate,
-  DedupCandidateSchema,
-  type Message,
-  type MessageListItem,
-  MessageListItemSchema,
-  type MessageStatus,
-} from "../../lib/domain/message";
-import type { Source, SourceCursor } from "../../lib/domain/source";
-import { type Target, TargetSchema } from "../../lib/domain/target";
+} from "tg-ports/db";
 
 export interface FakeSourceRepo extends SourceRepo {
   readonly writeCount: number;

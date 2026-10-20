@@ -5,6 +5,9 @@
   "description": "Telegram news pipeline on AWS (SQS, Lambda, DynamoDB) with Claude via OpenRouter and a Next.js operator dashboard",
   "license": "ISC",
   "type": "module",
+  "workspaces": [
+    "packages/tg-*"
+  ],
   "engines": {
     "node": ">=22"
   },
@@ -22,9 +25,9 @@
     "migrate:targets": "tsx scripts/migrate-targets.ts --write",
     "mcp": "tsx scripts/mcp.ts",
     "smoke:openrouter": "export OPENROUTER_API_KEY=$(cat $HOME/.keys/openrouter-api.key) &&tsx scripts/smoke-openrouter.ts",
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "dev": "npm -w tg-web run dev",
+    "build": "npm -w tg-web run build",
+    "start": "npm -w tg-web run start"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

@@ -46,7 +46,7 @@ function testFiles(): string[] {
    * each record having made.
    */
   const self = resolve(import.meta.dirname, "cdkContext.test.ts");
-  return [...walk(join(repoRoot, "infra")), ...walk(join(repoRoot, "test"))].filter(
+  return [...walk(join(repoRoot, "packages/tg-infra")), ...walk(join(repoRoot, "test"))].filter(
     (path) => path !== self,
   );
 }

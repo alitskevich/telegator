@@ -48,13 +48,14 @@ jobs:
       # Relative imports carrying a `.js` extension are the recorded case:
       # tsc, Vite, esbuild and tsx all substitute `.ts`, Turbopack does not.
       - name: dashboard compiles (next build)
-        run: npx next build
+        # R62 — the app is the `tg-web` workspace; the root script runs it there.
+        run: npm run build
         # §9.3's environment, with placeholder values — scoped to this step
         # alone, deliberately.
         #
         # These are NOT secrets and must never become secrets: every one is a
         # resource name, URL or ARN, the point `.env.local.example` makes at
-        # length. Only `next build` needs them, because `actions/context.ts`
+        # length. Only `next build` needs them, because `tg-actions/context.ts`
         # calls `readAuthConfig()` at *module scope*, so page-data collection
         # throws before a single request is served. Nothing connects to AWS:
         # every route is `force-dynamic`, so no build-time render reads a table.
@@ -67,6 +68,7 @@ jobs:
           AWS_REGION: eu-central-1
           TELEGATOR_SOURCES_TABLE: telegator-ci-sources
           TELEGATOR_MESSAGES_TABLE: telegator-ci-messages
+          TELEGATOR_TARGETS_TABLE: telegator-ci-targets
           TELEGATOR_ANALYZE_QUEUE_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/telegator-ci-analyze
           TELEGATOR_AGGREGATE_QUEUE_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/telegator-ci-aggregate.fifo
           TELEGATOR_PUBLISH_QUEUE_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/telegator-ci-publish.fifo
@@ -75,6 +77,8 @@ jobs:
           TELEGATOR_PUBLISH_DLQ_URL: https://sqs.eu-central-1.amazonaws.com/123456789012/telegator-ci-publish-dlq.fifo
           TELEGATOR_SCRAPE_FUNCTION_NAME: telegator-ci-scrape
           TELEGATOR_DLQ_REPLAY_FUNCTION_NAME: telegator-ci-dlq-replay
+          TELEGATOR_PUBLISH_FUNCTION_NAME: telegator-ci-publish
+          TELEGATOR_CONSUME_FUNCTION_NAME: telegator-ci-consume
           TELEGATOR_USER_POOL_ID: eu-central-1_ciciciciC
           TELEGATOR_USER_POOL_CLIENT_ID: 0000000000000000000000000
           TELEGATOR_COGNITO_DOMAIN: https://telegator-ci-users.auth.eu-central-1.amazoncognito.com

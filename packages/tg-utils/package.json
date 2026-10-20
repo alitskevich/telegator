@@ -1,0 +1,10 @@
+{
+  "name": "tg-utils",
+  "version": "1.0.0",
+  "description": "Low-level helpers: the injected clock, the structured logger and the table/chart helpers.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  }
+}

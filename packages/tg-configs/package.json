@@ -1,0 +1,10 @@
+{
+  "name": "tg-configs",
+  "version": "1.0.0",
+  "description": "Configuration: the environment contract (§29), the tunable constants (§31) and shared log field names.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  }
+}

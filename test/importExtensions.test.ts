@@ -23,15 +23,16 @@ function shippedSources(): string[] {
       return [];
     }
     return entries.flatMap((entry) => {
+      // Build output, installed packages and Next's generated `next-env.d.ts`
+      // (which references `.next/types/*.d.ts` by design) are not source anyone wrote.
+      if (["node_modules", ".next", "next-env.d.ts"].includes(entry)) return [];
       const path = join(dir, entry);
       if (statSync(path).isDirectory()) return walk(path);
       return /\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path) ? [path] : [];
     });
   };
 
-  return ["app", "actions", "components", "lib", "handlers", "infra", "scripts"]
-    .map((directory) => join(repoRoot, directory))
-    .flatMap(walk);
+  return ["packages", "scripts"].map((directory) => join(repoRoot, directory)).flatMap(walk);
 }
 
 /**

@@ -1,5 +1,5 @@
-import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { AdjudicationPair, Adjudicator, Classifier } from "../../lib/ai/ports";
+import type { NewsItem } from "tg-domain/newsItemSchema";
+import type { AdjudicationPair, Adjudicator, Classifier } from "tg-ports/ai";
 
 export interface StubClassifier extends Classifier {
   /** Bodies this classifier was asked about, in order. */

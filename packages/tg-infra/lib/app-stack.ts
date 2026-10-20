@@ -1,0 +1,404 @@
+import { SecretValue, Stack, type StackProps } from "aws-cdk-lib";
+import { CfnApp, CfnBranch } from "aws-cdk-lib/aws-amplify";
+import { Effect, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
+import type { Construct } from "constructs";
+import { DASHBOARD_ENV_VARS, ENV_VARS } from "tg-configs/env";
+import type { TelegatorAuthStack } from "./auth-stack";
+import type { TelegatorConfig } from "./config";
+import type { TelegatorDataStack } from "./data-stack";
+import { grantTableActions } from "./grants";
+import type { TelegatorPipelineStack } from "./pipeline-stack";
+import type { TelegatorQueueStack } from "./queue-stack";
+
+/**
+ * §9.1 L891 — the Amplify Hosting app, its environment config and the app's
+ * IAM role.
+ *
+ * §9.3 L910 chooses Amplify because it "supports the App Router (SSR, server
+ * actions, streaming) natively with no OpenNext adapter or Fargate service".
+ * Last in §9.1 L894's order, since it consumes every other stack.
+ */
+
+/** Env vars the dashboard needs beyond the pipeline's own (`tg-configs/env.ts`). */
+/**
+ * Re-exported so this stack keeps one import surface, but *defined* in
+ * `tg-configs/env.ts` — a server action reads the same names and cannot import a
+ * CDK module to get them.
+ */
+export { DASHBOARD_ENV_VARS };
+
+/**
+ * Amplify assigns the app's domain after the app exists, so it cannot be read at
+ * synth without a circular reference. It is deployment configuration the spec
+ * does not state, so it comes from context, defaulting to the dev origin that
+ * `tg-infra/lib/auth-stack.ts` already registers as a callback URL.
+ */
+const DEFAULT_APP_URL = "http://localhost:3000";
+
+/**
+ * The branch Amplify builds, when a repository is connected.
+ *
+ * Which branch is deployment configuration in exactly the sense the repository
+ * is, so it arrives the same way and defaults to the conventional trunk.
+ */
+const DEFAULT_BRANCH = "main";
+
+/**
+ * Amplify's own name for the Next.js server-side runtime.
+ *
+ * It is what selects the SSR build, and it is a free-text field: a value
+ * Amplify does not recognise is accepted and the branch silently builds as a
+ * static site, which is the `WEB_COMPUTE`/`WEB` mistake one level down.
+ */
+const NEXT_SSR_FRAMEWORK = "Next.js - SSR";
+
+/**
+ * R62 — the dashboard is the `tg-web` workspace, not the repository root.
+ *
+ * Amplify builds a monorepo app only when the build spec names its `appRoot`
+ * and `AMPLIFY_MONOREPO_APP_ROOT` repeats it; with neither, it looks for a Next
+ * app at the root, finds none, and the branch fails to build. The install runs
+ * at the root because the workspaces share its one `package-lock.json`.
+ */
+export const DASHBOARD_APP_ROOT = "packages/tg-web";
+
+const BUILD_SPEC = `version: 1
+applications:
+  - appRoot: ${DASHBOARD_APP_ROOT}
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci --prefix ../..
+        build:
+          commands:
+            - npx next build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - "**/*"
+      cache:
+        paths:
+          - .next/cache/**/*
+`;
+
+export interface TelegatorAppStackProps extends StackProps {
+  readonly config: TelegatorConfig;
+  readonly data: TelegatorDataStack;
+  readonly queues: TelegatorQueueStack;
+  readonly auth: TelegatorAuthStack;
+  readonly pipeline: TelegatorPipelineStack;
+}
+
+export class TelegatorAppStack extends Stack {
+  public readonly appRole: Role;
+
+  constructor(scope: Construct, id: string, props: TelegatorAppStackProps) {
+    super(scope, id, props);
+
+    const { config, data, queues, auth, pipeline } = props;
+
+    this.appRole = new Role(this, "DashboardRole", {
+      roleName: config.name("dashboard"),
+      assumedBy: new ServicePrincipal("amplify.amazonaws.com"),
+    });
+
+    const sessionSecretArn = String(
+      this.node.tryGetContext("sessionSecretArn") ??
+        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:${config.name("session-key")}`,
+    );
+
+    this.grantAppPermissions(data, queues, pipeline, auth, sessionSecretArn);
+
+    const [analyzeDlq, aggregateDlq, publishDlq] = queues.deadLetterQueues;
+    if (analyzeDlq === undefined || aggregateDlq === undefined || publishDlq === undefined) {
+      throw new Error("the queue stack must expose all three DLQs");
+    }
+
+    const environmentVariables = [
+      // The dashboard reads the same tables and queues the pipeline writes, so
+      // the names come from `tg-configs/env.ts` rather than a second vocabulary.
+      [ENV_VARS.sourcesTable, data.sources.tableName],
+      [ENV_VARS.messagesTable, data.messages.tableName],
+      [ENV_VARS.targetsTable, data.targets.tableName],
+      [ENV_VARS.analyzeQueueUrl, queues.analyze.queueUrl],
+      [ENV_VARS.aggregateQueueUrl, queues.aggregate.queueUrl],
+      [ENV_VARS.publishQueueUrl, queues.publish.queueUrl],
+      [ENV_VARS.analyzeDlqUrl, analyzeDlq.queueUrl],
+      [ENV_VARS.aggregateDlqUrl, aggregateDlq.queueUrl],
+      [ENV_VARS.publishDlqUrl, publishDlq.queueUrl],
+      // §8.4 L818/L817 — the two functions the manual triggers invoke by name.
+      [DASHBOARD_ENV_VARS.scrapeFunctionName, pipeline.functions.scrape.functionName],
+      [DASHBOARD_ENV_VARS.dlqReplayFunctionName, pipeline.functions.dlqReplay.functionName],
+      [DASHBOARD_ENV_VARS.publishFunctionName, pipeline.functions.publish.functionName],
+      [DASHBOARD_ENV_VARS.consumeFunctionName, pipeline.functions.consume.functionName],
+      // §8.6 L844 — the hosted-UI session layer.
+      [DASHBOARD_ENV_VARS.userPoolId, auth.userPool.userPoolId],
+      [DASHBOARD_ENV_VARS.userPoolClientId, auth.userPoolClient.userPoolClientId],
+      // `baseUrl()` is the hosted UI's origin, derived from the domain this
+      // build already creates rather than reconstructed from a string template.
+      [DASHBOARD_ENV_VARS.hostedUiDomain, auth.userPoolDomain.baseUrl()],
+      [DASHBOARD_ENV_VARS.appUrl, String(this.node.tryGetContext("appUrl") ?? DEFAULT_APP_URL)],
+      /**
+       * The ARN, never the value. A literal key here would sit in the
+       * CloudFormation template and be readable by anyone who can describe the
+       * Amplify app — and this key seals the session cookie, so it forges admin
+       * sessions. `tg-pipeline/handlers/publish.ts` treats the bot token the same way.
+       */
+      [DASHBOARD_ENV_VARS.sessionSecretArn, sessionSecretArn],
+      // §8.5 L835. Taken from the function's own log group rather than rebuilt
+      // as `/aws/lambda/${name}`, so a change to either stays in step.
+      [DASHBOARD_ENV_VARS.analyzeLogGroup, pipeline.functions.analyze.logGroup.logGroupName],
+      ["AMPLIFY_MONOREPO_APP_ROOT", DASHBOARD_APP_ROOT],
+    ].map(([name, value]) => ({ name: String(name), value: String(value) }));
+
+    const connection = repositoryConnection(this);
+
+    const dashboard = new CfnApp(this, "DashboardApp", {
+      name: config.name("dashboard"),
+      // §9.3 L910 — only WEB_COMPUTE runs server-side. WEB would deploy a static
+      // export, and every server action of §8.4 would 404.
+      platform: "WEB_COMPUTE",
+      // `iamServiceRole`, not `iamServiceRoleArn`. The L1 construct accepts an
+      // unknown property at runtime, so this compiled and synthesised happily
+      // while the app ran with no role at all — tsc is what caught it.
+      iamServiceRole: this.appRole.roleArn,
+      buildSpec: BUILD_SPEC,
+      environmentVariables,
+      /**
+       * The repository connection is deployment configuration the spec never
+       * states, so it comes from context. `SecretValue.secretsManager` resolves
+       * at deploy time and leaves a token in the template — unlike
+       * `Secret.fromLookup`, which would make synth an authenticated call and
+       * break the only infrastructure gate this build has.
+       */
+      ...connection,
+    });
+
+    this.addBranch(dashboard, config, connection);
+  }
+
+  /**
+   * R52 — §9.1 L891's inventory names no branch, but a branch is what the host
+   * actually builds and serves, so a stack stopping at the app would satisfy
+   * §9.1 word for word and leave §9.3 L910 unimplemented.
+   *
+   * It appears only when a repository does: there is nothing to build a branch
+   * from without one, and `cdk synth` must stay credential-free.
+   */
+  private addBranch(
+    dashboard: CfnApp,
+    config: TelegatorConfig,
+    connection: RepositoryConnection,
+  ): void {
+    if (connection.repository === undefined) return;
+
+    new CfnBranch(this, "DashboardBranch", {
+      // `attrAppId`, not `ref`: an Amplify app's Ref is its ARN, and the branch
+      // takes the bare id. The wrong one deploys and then fails to build.
+      appId: dashboard.attrAppId,
+      branchName: String(this.node.tryGetContext("branch") ?? DEFAULT_BRANCH),
+      framework: NEXT_SSR_FRAMEWORK,
+      // §9.5's cutover is a sequence of deliberate deploys, but the branch is
+      // the trunk: a merge is the intended trigger, so Amplify watches it.
+      enableAutoBuild: true,
+      stage: config.env === "prod" ? "PRODUCTION" : "DEVELOPMENT",
+    });
+  }
+
+  /**
+   * §7.6 L716's app role, plus R24's additions — each one below names the
+   * section that needs it. Cognito administration is deliberately not granted:
+   * §8.2–§8.4 define no user-management surface, so the grant §8.6 L850 implies
+   * would exceed the task. R34 later admits exactly one Cognito read.
+   */
+  private grantAppPermissions(
+    data: TelegatorDataStack,
+    queues: TelegatorQueueStack,
+    pipeline: TelegatorPipelineStack,
+    auth: TelegatorAuthStack,
+    sessionSecretArn: string,
+  ): void {
+    // §7.6 L716 — "read both tables, write `sources`/`messages`". Soft deletes
+    // (§8.4 L814) are writes, so no DeleteItem is needed.
+    // §8.3 L801's table is a Scan (`listAll`); §8.4 L812 creates a source with a
+    // PutItem and edits one with an UpdateItem; L810's delete is soft, so it is
+    // an update too.
+    grantTableActions(
+      data.sources,
+      this.appRole,
+      "dynamodb:GetItem",
+      "dynamodb:Scan",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    );
+
+    // target-table#3.2 — `/targets` lists (a Scan), creates (PutItem), edits
+    // and soft-deletes (both UpdateItem). The same four the Sources page needs.
+    grantTableActions(
+      data.targets,
+      this.appRole,
+      "dynamodb:GetItem",
+      "dynamodb:Scan",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    );
+
+    // §8.3 L802's tabs and §8.5 L832's count are Queries on `status-index`.
+    // No PutItem: R37 — a message id is minted by the scrape stage, so the
+    // dashboard cannot create one.
+    grantTableActions(
+      data.messages,
+      this.appRole,
+      "dynamodb:GetItem",
+      "dynamodb:Query",
+      "dynamodb:UpdateItem",
+    );
+
+    /**
+     * R34. §8.6 L875 — "a disabled user is rejected at every action" — needs a
+     * live read, and this is it. R24 withheld Cognito from this role because
+     * §8.2–§8.4 define no user-management surface; that still holds, and this
+     * grant does not reopen it: one read action, on this pool only. The
+     * user-management APIs of §8.6 L850 remain ungranted, and a test names them.
+     */
+    this.appRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["cognito-idp:AdminGetUser"],
+        resources: [auth.userPool.userPoolArn],
+      }),
+    );
+
+    // The cookie sealing key, read at runtime rather than carried in the app's
+    // environment. Scoped to the one secret; `secretsmanager:GetSecretValue` on
+    // `*` would also read the Telegram bot token of §7.6 L705.
+    this.appRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [sessionSecretArn],
+      }),
+    );
+
+    this.appRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        // §8.5 L829–831's cards. GetMetricData takes no resource-level ARN.
+        actions: ["cloudwatch:GetMetricData"],
+        resources: ["*"],
+      }),
+    );
+
+    /**
+     * §8.5 L835's category chart runs one Logs Insights query over one log
+     * group — the analyze function's, which is the only group
+     * `tg-aws/observability.ts` is ever constructed with. `StartQuery` takes a
+     * resource, so it is scoped to that group; on `*` this role could query
+     * every log group in the account.
+     */
+    this.appRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["logs:StartQuery"],
+        resources: [pipeline.functions.analyze.logGroup.logGroupArn],
+      }),
+    );
+
+    /**
+     * R24 — §7.6 L716 grants only `StartQuery`, which returns nothing on its
+     * own. These two key off an ephemeral query id rather than a log group, so
+     * `*` is the only form AWS accepts; kept separate so the narrowing above is
+     * not undone by grouping them.
+     */
+    this.appRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["logs:GetQueryResults", "logs:StopQuery"],
+        resources: ["*"],
+      }),
+    );
+
+    // §8.5 L833–834's queue-depth strip and error card.
+    for (const queue of [queues.analyze, queues.aggregate, queues.publish]) {
+      queue.grant(this.appRole, "sqs:GetQueueAttributes");
+    }
+
+    /**
+     * R24 — §8.2 L780's "DLQ inspection" reads message bodies, which
+     * GetQueueAttributes cannot do.
+     *
+     * R57 adds `PurgeQueue`, and only here: the grant is per dead-letter queue,
+     * so nothing in this stack can purge a *source* queue and discard work still
+     * in flight. §7.6 L716 grants the role no queue write at all, so both
+     * actions are recorded divergences rather than transcribed ones.
+     */
+    for (const dlq of queues.deadLetterQueues) {
+      dlq.grant(this.appRole, "sqs:GetQueueAttributes", "sqs:ReceiveMessage", "sqs:PurgeQueue");
+    }
+
+    // R24 — §8.4 L819's republishMessage "sets `topublish`, enqueues", and §7.6
+    // L712 grants no send at all.
+    queues.publish.grantSendMessages(this.appRole);
+
+    /**
+     * §7.6 L716 — "lambda:InvokeFunction on the scraper and the replay
+     * handler", and only those two.
+     *
+     * §8.2 L792 makes the narrowness matter: the dashboard must not import
+     * `tg-pipeline/`, so a broader grant would let it invoke the stages
+     * directly and the boundary would exist only in the source tree.
+     *
+     * R53 — `publish` is a recorded third, because "Publish now" has no other
+     * route: §7.3 L652's queue-level `DelaySeconds 300`, FIFO's lack of a
+     * per-message delay and the five-minute deduplication mean the queue cannot
+     * express "send this now" at all. The boundary L712 protects is `analyze`
+     * and `aggregate`, which stay ungranted and are named in the test.
+     *
+     * R61 — `consume` is a fourth, and it is what keeps that boundary intact
+     * rather than what breaks it. "Consume now" has to receive from a live
+     * queue, run a stage over the batch and delete what succeeded; doing it
+     * from here would have put `sqs:ReceiveMessage`, `sqs:DeleteMessage` and an
+     * invoke on both analysis stages onto the *web* role, reachable by every
+     * request the console serves. Instead one Lambda holds those grants, and
+     * this role may only ask it to run.
+     */
+    this.appRole.addToPolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["lambda:InvokeFunction"],
+        resources: [
+          pipeline.functions.scrape.functionArn,
+          pipeline.functions.dlqReplay.functionArn,
+          pipeline.functions.publish.functionArn,
+          pipeline.functions.consume.functionArn,
+        ],
+      }),
+    );
+  }
+}
+
+/**
+ * The GitHub connection, when one is configured.
+ *
+ * Amplify needs a repository and an access token to build. Both are deployment
+ * facts the spec never states, so they arrive as context and are simply absent
+ * from a local synth — which keeps `cdk synth` runnable with no credentials and
+ * no repository.
+ */
+interface RepositoryConnection {
+  repository?: string;
+  oauthToken?: string;
+}
+
+function repositoryConnection(stack: Stack): RepositoryConnection {
+  const repository = stack.node.tryGetContext("repository");
+  const tokenSecretName = stack.node.tryGetContext("githubTokenSecretName");
+
+  if (typeof repository !== "string" || typeof tokenSecretName !== "string") return {};
+
+  return {
+    repository,
+    oauthToken: SecretValue.secretsManager(tokenSecretName).unsafeUnwrap(),
+  };
+}

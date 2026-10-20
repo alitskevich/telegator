@@ -1,9 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { isolatedOutdir, removeIsolatedOutdirs } from "./cdkOutdir";
 
 afterAll(removeIsolatedOutdirs);
+
+const repoRoot = resolve(import.meta.dirname, "../..");
 
 import { reachableFrom } from "./moduleGraph";
 
@@ -28,8 +30,8 @@ describe("reachableFrom", () => {
 
   /**
    * The whole point of item 5.10a. A text scan of `a.ts` sees only `b.js`; the
-   * violation is one hop further on, which is exactly how `handlers/dlqReplay.ts`
-   * nearly carried `lib/pipeline/` into the dashboard bundle.
+   * violation is one hop further on, which is exactly how `tg-pipeline/handlers/dlqReplay.ts`
+   * nearly carried `tg-pipeline/` into the dashboard bundle.
    */
   test("follows imports transitively", () => {
     const t = tree({
@@ -109,6 +111,27 @@ describe("reachableFrom", () => {
       });
 
       expect(reachableFrom([t.path("a.ts")]).files).not.toContain(t.path("types.ts"));
+    });
+  });
+
+  /** R62 — packages reach each other by name, and the walk must not stop there. */
+  describe("workspaces", () => {
+    test("a tg-* specifier is followed into packages/ as a file", () => {
+      const t = tree({
+        "a.ts": 'import { ItemIdSchema } from "tg-domain/ids";\nexport const a = 1;',
+      });
+      const graph = reachableFrom([t.path("a.ts")]);
+
+      expect(graph.files).toContain(join(repoRoot, "packages/tg-domain/ids.ts"));
+      expect(graph.packages).not.toContain("tg-domain");
+    });
+
+    test("and transitively through the workspace's own imports", () => {
+      const t = tree({ "a.ts": 'import { x } from "tg-domain/message";\nexport const a = x;' });
+
+      expect(reachableFrom([t.path("a.ts")]).files).toContain(
+        join(repoRoot, "packages/tg-enums/messageStatus.ts"),
+      );
     });
   });
 

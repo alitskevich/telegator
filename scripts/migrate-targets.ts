@@ -1,10 +1,10 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
-import type { Environment } from "../infra/lib/config";
-import { resourceName } from "../infra/lib/naming";
-import { createSourceRepo } from "../lib/db/sources";
-import { parseTarget, REGION } from "../lib/ops/target";
-import { legacyTargetPatch } from "../lib/seed/targets";
+import { createSourceRepo } from "tg-aws/db/sources";
+import type { Environment } from "tg-infra/lib/config";
+import { resourceName } from "tg-infra/lib/naming";
+import { legacyTargetPatch } from "tg-ops/seed/targets";
+import { parseTarget, REGION } from "tg-ops/target";
 
 /**
  * multi-target#8.1 step 1 — copy `tgChannel` into `target` on every live source

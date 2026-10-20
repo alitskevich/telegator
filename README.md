@@ -11,6 +11,10 @@ uses (Part II), the register of decisions, reconciliations and traps behind both
 whole pipeline in one picture. This file gets you running and does not summarise
 the document.
 
+The code is npm workspaces under `packages/tg-*` — one concern each, mapped in
+§28. `scripts/` holds the operator entry points and `test/` the cross-cutting
+invariants.
+
 ## Running it
 
 ```bash
@@ -19,13 +23,14 @@ npm run typecheck   # tsc --noEmit
 npm test            # vitest run
 npm run lint        # biome check .
 npm run synth       # cdk synth — no credentials needed
-npm run dev         # the dashboard, at localhost:3000
+npm run dev         # the dashboard (packages/tg-web), at localhost:3000
 ```
 
 The first four need nothing else: no AWS account, no credentials, no network.
 
 `npm run dev` does. The dashboard reads live DynamoDB, SQS, CloudWatch and
-Cognito, so copy `.env.local.example` to `.env.local` and fill it in — every
+Cognito, so copy `packages/tg-web/.env.local.example` to `.env.local` beside it
+and fill it in — every
 variable is documented there, and §29 says where each value comes from. Without
 it the server starts and answers every route with `missing required environment
 variable`; with it but without credentials for that account, the pages render and

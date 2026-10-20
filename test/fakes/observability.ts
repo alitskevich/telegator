@@ -5,8 +5,8 @@ import type {
   QueueDepth,
   QueueDepthReader,
   TimeWindow,
-} from "../../lib/aws/ports";
-import type { MetricName } from "../../lib/metrics/ports";
+} from "tg-ports/aws";
+import type { MetricName } from "tg-ports/metrics";
 
 /**
  * In-memory stand-ins for §8.5's three read surfaces, so a card or page test can

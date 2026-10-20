@@ -1,9 +1,9 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { Message } from "tg-domain/message";
+import { createMcpServer } from "tg-mcp/server";
+import type { McpDeps } from "tg-mcp/tools";
 import { beforeEach, describe, expect, test } from "vitest";
-import type { Message } from "../../lib/domain/message";
-import { createMcpServer } from "../../lib/mcp/server";
-import type { McpDeps } from "../../lib/mcp/tools";
 import { fakeMessageRepo, fakeSourceRepo, fakeTargetRepo } from "../fakes/db";
 
 /**

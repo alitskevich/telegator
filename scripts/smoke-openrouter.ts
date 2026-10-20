@@ -1,10 +1,6 @@
-import { createOpenRouterAdjudicator } from "../lib/ai/adjudicator";
-import {
-  CLASSIFIER_MAX_TOKENS,
-  CLASSIFIER_MODEL_ID,
-  OPENROUTER_BASE_URL,
-} from "../lib/ai/constants";
-import { createOpenRouterClassifier } from "../lib/ai/openrouter";
+import { createOpenRouterAdjudicator } from "tg-ai/adjudicator";
+import { createOpenRouterClassifier } from "tg-ai/openrouter";
+import { CLASSIFIER_MAX_TOKENS, CLASSIFIER_MODEL_ID, OPENROUTER_BASE_URL } from "tg-configs/ai";
 
 /**
  * R50 — the smoke test for the OpenRouter swap.
@@ -17,9 +13,9 @@ import { createOpenRouterClassifier } from "../lib/ai/openrouter";
  * against an adapter that cannot classify a single item. This file is the thing
  * that would have caught them.
  *
- * Unlike `seed.ts`, the logic is *not* pushed down into `lib/`: what is being
+ * Unlike `seed.ts`, the logic is *not* pushed down into `packages/`: what is being
  * checked here is the behaviour of the real SDK against a real socket, which is
- * precisely the part `lib/` is built to keep out of the test process.
+ * precisely the part `packages/` is built to keep out of the test process.
  *
  * ```
  * npm run smoke:openrouter           # offline — canned far end, no network, no key
@@ -221,7 +217,7 @@ async function runLive(apiKey: string): Promise<void> {
     if (/effort/i.test(message)) {
       console.log("\n  → the tier rejects `output_config.effort`. Pass `effort: false` in");
       console.log(
-        "    `handlers/analyze.ts`, which `buildClassificationRequest` already supports.\n",
+        "    `tg-pipeline/handlers/analyze.ts`, which `buildClassificationRequest` already supports.\n",
       );
     }
   }

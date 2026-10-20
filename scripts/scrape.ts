@@ -1,13 +1,13 @@
 import { LambdaClient } from "@aws-sdk/client-lambda";
-import type { Environment } from "../infra/lib/config";
-import { resourceName } from "../infra/lib/naming";
-import { lambdaInvoker } from "../lib/aws/lambda";
-import { parseTarget, REGION } from "../lib/ops/target";
+import { lambdaInvoker } from "tg-aws/lambda";
+import type { Environment } from "tg-infra/lib/config";
+import { resourceName } from "tg-infra/lib/naming";
+import { parseTarget, REGION } from "tg-ops/target";
 
 /**
  * §8.4 L818's "Scrape now", as a command.
  *
- * It **invokes the deployed function**; it does not run `lib/pipeline/scrape/`
+ * It **invokes the deployed function**; it does not run `tg-pipeline/scrape/`
  * here. That is §8.2 L792's rule, and the reason it gives applies to a terminal
  * exactly as it does to the dashboard: "manual triggers call
  * `lambda:InvokeFunction` on the deployed function, so 'run this now' executes
@@ -38,7 +38,7 @@ interface ScrapeSummary {
 }
 
 /**
- * The stage answers `{ processed, enqueued }` (`lib/pipeline/scrape/index.ts`).
+ * The stage answers `{ processed, enqueued }` (`tg-pipeline/scrape/index.ts`).
  *
  * Checked rather than cast: `lambdaInvoker` returns the parsed payload as
  * `unknown`, and a handler that changed its summary shape would otherwise print

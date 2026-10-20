@@ -12,6 +12,6 @@ export default defineConfig({
     // interface with an in-memory fake (ralph-loop-prompt.md, Engineering Bar).
     environment: "node",
     include: ["**/*.test.ts", "**/*.test.tsx"],
-    exclude: ["node_modules/**", "cdk.out/**", ".next/**"],
+    exclude: ["**/node_modules/**", "cdk.out/**", "**/.next/**"],
   },
 });

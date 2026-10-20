@@ -1,0 +1,17 @@
+{
+  "name": "tg-domain",
+  "version": "1.0.0",
+  "description": "Zod schemas and the types derived from them: source, item, message, target, ids, tags, dates.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "tg-enums": "*",
+    "tg-utils": "*"
+  },
+  "devDependencies": {
+    "tg-dedup": "*"
+  }
+}

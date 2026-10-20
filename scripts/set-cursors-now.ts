@@ -1,11 +1,11 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import type { Environment } from "../infra/lib/config";
-import { resourceName } from "../infra/lib/naming";
-import { createSourceRepo } from "../lib/db/sources";
-import { parseTarget, REGION } from "../lib/ops/target";
-import { SCRAPE_HEADERS } from "../lib/pipeline/scrape/index";
-import { parseTelegramPage } from "../lib/telegram/parse";
+import { createSourceRepo } from "tg-aws/db/sources";
+import type { Environment } from "tg-infra/lib/config";
+import { resourceName } from "tg-infra/lib/naming";
+import { parseTarget, REGION } from "tg-ops/target";
+import { SCRAPE_HEADERS } from "tg-pipeline/scrape/index";
+import { parseTelegramPage } from "tg-telegram/parse";
 
 /**
  * "Start scraping from now": point every live source's `lastItemId` at the
@@ -50,7 +50,7 @@ interface Advance {
 }
 
 /**
- * Numeric, mirroring `newestItemId` in `lib/pipeline/scrape/index.ts`:
+ * Numeric, mirroring `newestItemId` in `tg-pipeline/scrape/index.ts`:
  * lexicographically `"9" > "10"`, which would drag a cursor backwards on any
  * channel crossing a digit boundary and re-publish everything between.
  */

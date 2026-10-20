@@ -1,0 +1,21 @@
+{
+  "name": "tg-pipeline",
+  "version": "1.0.0",
+  "description": "The four stages plus DLQ replay (§3), and the Lambda handlers that wrap them.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "tg-ai": "*",
+    "tg-aws": "*",
+    "tg-configs": "*",
+    "tg-dedup": "*",
+    "tg-domain": "*",
+    "tg-enums": "*",
+    "tg-ports": "*",
+    "tg-telegram": "*",
+    "tg-utils": "*"
+  }
+}

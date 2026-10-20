@@ -1,6 +1,6 @@
+import { AuthorizationError, type AuthorizationReason, type Session } from "tg-auth/session";
+import { type AuthInterrupts, authorized } from "tg-web/app/authorize";
 import { describe, expect, test } from "vitest";
-import { type AuthInterrupts, authorized } from "../app/authorize";
-import { AuthorizationError, type AuthorizationReason, type Session } from "../lib/auth/session";
 
 /**
  * `requireRole` throws, and a throw out of a server component is an HTTP 500.

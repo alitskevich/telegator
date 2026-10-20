@@ -1,11 +1,11 @@
+import { MERGE_THRESHOLD } from "tg-configs/dedup";
+import { buildMatchKey, type MatchKeyFields } from "tg-dedup/matchKey";
+import { matchScore } from "tg-dedup/score";
+import type { NewsItem } from "tg-domain/newsItemSchema";
+import type { Source } from "tg-domain/source";
+import type { Adjudicator, Classifier } from "tg-ports/ai";
+import type { EditMessageTextArgs } from "tg-ports/telegram";
 import { beforeEach, describe, expect, test } from "vitest";
-import type { NewsItem } from "../../lib/ai/newsItemSchema";
-import type { Adjudicator, Classifier } from "../../lib/ai/ports";
-import { MERGE_THRESHOLD } from "../../lib/dedup/constants";
-import { buildMatchKey, type MatchKeyFields } from "../../lib/dedup/matchKey";
-import { matchScore } from "../../lib/dedup/score";
-import type { Source } from "../../lib/domain/source";
-import type { EditMessageTextArgs } from "../../lib/telegram/ports";
 import { fakeAdjudicator } from "../fakes/ai";
 import { manualClock } from "../fakes/clock";
 import { fakeMessageRepo, fakeSourceRepo } from "../fakes/db";

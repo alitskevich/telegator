@@ -1,0 +1,61 @@
+import { type NewsItem, NewsItemSchema } from "tg-domain/newsItemSchema";
+import type { Classifier } from "tg-ports/ai";
+import {
+  buildClassificationRequest,
+  type ClassificationRequest,
+  type ClassificationRequestOptions,
+} from "./classificationRequest";
+import { extractText } from "./messagesContent";
+import { type ApiKeyProvider, createMessagesClient, missingApiKey } from "./openrouterClient";
+
+/**
+ * The OpenRouter adapter (§5.1 — "Decision: OpenRouter", as revised by R50).
+ *
+ * The client is injectable and built lazily, so constructing an adapter never
+ * fetches a secret — which is what lets this module be imported in a test
+ * process at all.
+ *
+ * R3 — nothing here asserts anything about what a model returns. The adapter's
+ * job is the request shape and the handling of bytes handed back.
+ */
+
+/** Kept as a named export because the tests inject against exactly this shape. */
+export interface ClassifierClient {
+  create(request: ClassificationRequest): Promise<unknown>;
+}
+
+export interface OpenRouterClassifierOptions {
+  readonly client?: ClassifierClient;
+  /** §7.6 — reads the key from Secrets Manager; supplied by `tg-pipeline/handlers/analyze.ts`. */
+  readonly apiKey?: ApiKeyProvider;
+  /** R3 — `false` omits `output_config.effort` entirely. */
+  readonly effort?: ClassificationRequestOptions["effort"];
+}
+
+export function createOpenRouterClassifier(options: OpenRouterClassifierOptions = {}): Classifier {
+  let client = options.client;
+
+  return {
+    classify: async (body: string): Promise<NewsItem> => {
+      if (client === undefined) {
+        if (options.apiKey === undefined) throw missingApiKey("the classifier");
+        client = await createMessagesClient(options.apiKey);
+      }
+
+      // The request shape is item 3.7's, reused rather than rebuilt, so §5.2's
+      // contract has one definition.
+      const request = buildClassificationRequest(
+        body,
+        options.effort === undefined ? {} : { effort: options.effort },
+      );
+
+      const response = await client.create(request);
+
+      // Validated here rather than downstream: §3.2 L255 sends a provider error
+      // back through SQS retry to the DLQ, and a response that violates the
+      // schema is the same class of event. Letting it through would put an
+      // unvalidated category into the aggregate queue.
+      return NewsItemSchema.parse(JSON.parse(extractText(response, "openrouter")));
+    },
+  };
+}

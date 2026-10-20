@@ -12,9 +12,9 @@ What the factory has learned about this codebase. Every loop reads it before wor
 
 - `test/fakes/` holds one in-memory fake per port — `ai`, `auth`, `clock`, `db`, `logging`, `metrics`, `observability`, `queues`, `telegram` — so a new port needs its fake here before any test can use it.
 - End-to-end cases are `test/e2e/*.test.ts` and all drive `runPipeline(world)` from `test/e2e/harness.ts` — extend that harness's `PipelineWorld`, never build a second one.
-- `actions/context.ts` constructs every repository, queue, reader and client once; `records.ts`, `triggers.ts` and `queues.ts` consume it — a new repository is wired there first or the actions cannot reach it.
-- Table columns are `SOURCE_COLUMNS`, `MESSAGE_COLUMNS` and `TARGET_COLUMNS` in `lib/ui/columns.ts`, read by both `components/*Table.tsx` and `lib/dashboard/triggers.ts` for CSV export — a column added for the page only silently misses the export.
-- Every Lambda and dashboard environment variable name is declared once in `handlers/env.ts` (`ENV_VARS`, `DASHBOARD_ENV_VARS`); the pipeline stack supplies them and `requireEnv` reads them.
+- `tg-actions/context.ts` constructs every repository, queue, reader and client once; `records.ts`, `triggers.ts` and `queues.ts` consume it — a new repository is wired there first or the actions cannot reach it.
+- Table columns are `SOURCE_COLUMNS`, `MESSAGE_COLUMNS` and `TARGET_COLUMNS` in `tg-rc/columns.ts`, read by both `tg-web/components/*Table.tsx` and `tg-actions/dashboard/triggers.ts` for CSV export — a column added for the page only silently misses the export.
+- Every Lambda and dashboard environment variable name is declared once in `tg-configs/env.ts` (`ENV_VARS`, `DASHBOARD_ENV_VARS`); the pipeline stack supplies them and `requireEnv` reads them.
 
 ## Commands
 
@@ -25,14 +25,14 @@ What the factory has learned about this codebase. Every loop reads it before wor
 
 ## Patterns
 
-- An operational script gets its tables from `parseTarget(argv)` + `resourceName(env, "sources")` + `REGION` (`lib/ops/target.ts`, `infra/lib/naming.ts`), never from `ENV_VARS` — that route is for Lambdas and the dashboard and needs a `.env.local` entry no gate covers.
+- An operational script gets its tables from `parseTarget(argv)` + `resourceName(env, "sources")` + `REGION` (`tg-ops/target.ts`, `tg-infra/lib/naming.ts`), never from `ENV_VARS` — that route is for Lambdas and the dashboard and needs a `.env.local` entry no gate covers.
 - A test needing a scratch directory takes it from `isolatedOutdir()` in `test/support/cdkOutdir.ts` and registers `afterAll(removeIsolatedOutdirs)` — never `/tmp` by hand, never the shared `cdk.out/`.
 
 ## Traps
 
 - `test/acceptance.test.ts` audits `AC-x.y` in both directions against `docs/telegator.md` §3.1–3.4 only, so a slug spec must give its criteria a prefix of their own (`MT-`, `TT-`, `MCP-`) or every test naming one fails the reverse check.
 - `test/specCitations.test.ts` resolves every `§n` in any `.ts`/`.tsx` file against `docs/telegator.md` alone, so a comment citing a slug spec must use the `<slug>#n` form — a `§` would be resolved against the base spec and fail or, worse, point at an unrelated section.
-- A new environment variable needs four edits and only two are gated: `handlers/env.ts`, the stack that supplies it, `.env.local.example`, and your own `.env.local`. The dashboard reads the last one through `requireEnv`, so a missing entry there passes all four gates and throws only under `next dev`.
+- A new environment variable needs four edits and only two are gated: `tg-configs/env.ts`, the stack that supplies it, `packages/tg-web/.env.local.example`, and your own `.env.local` beside it. The dashboard reads the last one through `requireEnv`, so a missing entry there passes all four gates and throws only under `next dev`.
 - `Message.id` must match `/^[^/]+\/\d+$/` (`"{sourceId}/{telegramMessageId}"`) — `MessageListItemSchema.parse` inside `test/fakes/db.ts`'s `queryByStatus`/`queryByDate` throws on any other shape, so message fixtures anywhere (`"a"`, `"m1"`) fail with a Zod error, not a logic bug.
 - `fakeMessageRepo`'s `queryByStatus`/`queryByDate` filter out `deleted: true` rows (`live()`), but its `get` does not — a row seeded `deleted: true` never surfaces as a query match at all, so to simulate "vanished between index query and base-table read" you spy-wrap `get` to return `undefined` for one id, not seed `deleted: true`. `fakeSourceRepo.get`/`fakeTargetRepo.get` do return soft-deleted rows, unfiltered.
 - An SDK `CallToolResult`-shaped return type (`@modelcontextprotocol/sdk`) carries an implicit `[x: string]: unknown` index signature; a hand-written result interface needs `readonly [key: string]: unknown;` or `tsc` rejects it with "index signature ... is missing" even after the array-mutability mismatch is fixed.

@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { isolatedOutdir, removeIsolatedOutdirs } from "./support/cdkOutdir";
 
@@ -27,18 +27,19 @@ function dashboardSources(): string[] {
       return [];
     }
     return entries.flatMap((entry) => {
+      if (entry === "node_modules" || entry === ".next") return [];
       const path = join(dir, entry);
       if (statSync(path).isDirectory()) return walk(path);
       return /\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path) ? [path] : [];
     });
   };
 
-  return [join(repoRoot, "app"), join(repoRoot, "actions")].flatMap(walk);
+  return [join(repoRoot, "packages/tg-web"), join(repoRoot, "packages/tg-actions")].flatMap(walk);
 }
 
 describe("the §8.2 L792 boundary", () => {
   /**
-   * "**`lib/pipeline/` holds the single implementation of every stage.** The
+   * "**`tg-pipeline/` holds the single implementation of every stage.** The
    * Lambda handlers are thin wrappers around it... The dashboard does **not**
    * import it — manual triggers call `lambda:InvokeFunction` on the deployed
    * function, so 'run this now' executes the exact deployed artefact."
@@ -48,9 +49,9 @@ describe("the §8.2 L792 boundary", () => {
    * now" would quietly stop meaning what §8.2 says it means, and every test in
    * this build would still pass.
    */
-  test("no dashboard source imports lib/pipeline/", () => {
+  test("no dashboard source imports tg-pipeline", () => {
     const offenders = dashboardSources().filter((path) =>
-      /\bfrom\s+["'][^"']*lib\/pipeline\//.test(readFileSync(path, "utf8")),
+      /\bfrom\s+["'][^"']*tg-pipeline\//.test(readFileSync(path, "utf8")),
     );
 
     expect(offenders).toEqual([]);
@@ -61,13 +62,13 @@ describe("the §8.2 L792 boundary", () => {
    *
    * The direct check above passes for a dashboard file that imports a module
    * which itself imports a stage — and that is not hypothetical: in item 5.10,
-   * `REPLAYABLE_QUEUES` lived in `handlers/dlqReplay.ts`, one hop from
-   * `lib/pipeline/dlqReplay.ts`. A bundle contains the closure, so the boundary
+   * `REPLAYABLE_QUEUES` lived in `tg-pipeline/handlers/dlqReplay.ts`, one hop from
+   * `tg-pipeline/dlqReplay.ts`. A bundle contains the closure, so the boundary
    * has to be measured over it.
    */
   test("nothing reachable from the dashboard is a pipeline stage", () => {
     const reached = [...reachableFrom(dashboardSources()).files].filter((path) =>
-      under(path, "lib/pipeline"),
+      under(path, "packages/tg-pipeline"),
     );
 
     expect(reached).toEqual([]);
@@ -82,14 +83,17 @@ describe("the §8.2 L792 boundary", () => {
   test("and the rule would catch a violation", () => {
     const scratch = isolatedOutdir("telegator-boundary-");
     const offender = join(scratch, "page.tsx");
-    // A relative specifier, because that is the form the resolver handles and
-    // the form real source uses. Writing an absolute path here made this test
-    // pass vacuously on its first run — the resolver read it as a package name.
-    const stage = relative(scratch, join(repoRoot, "lib/pipeline/scrape/index.js"));
-    writeFileSync(offender, `import { runScrape } from "${stage}";\nexport default runScrape;\n`);
+    // A workspace specifier, because that is the form real source uses to reach
+    // another package. It must resolve from outside the repository too: an
+    // unresolved specifier would make this test pass vacuously, as an absolute
+    // path once did — the resolver read it as a package name.
+    writeFileSync(
+      offender,
+      `import { runScrape } from "tg-pipeline/scrape/index";\nexport default runScrape;\n`,
+    );
 
     const reached = [...reachableFrom([offender]).files].filter((path) =>
-      under(path, "lib/pipeline"),
+      under(path, "packages/tg-pipeline"),
     );
 
     expect(reached.length).toBeGreaterThan(0);
@@ -98,7 +102,7 @@ describe("the §8.2 L792 boundary", () => {
   /**
    * §9.3 L910 deploys this on Amplify. A CDK import would pull the whole
    * construct library into the server bundle to read a constant — which is what
-   * `actions/context.ts` briefly did in item 5.10 for `DASHBOARD_ENV_VARS`, and
+   * `tg-actions/context.ts` briefly did in item 5.10 for `DASHBOARD_ENV_VARS`, and
    * what moving `ROLE_GROUPS` avoided in item 5.2.
    */
   test("no infrastructure library is reachable from the dashboard", () => {
@@ -149,7 +153,7 @@ describe("the §8.2 L792 boundary", () => {
 
 /**
  * mcp-server#5.5, #6.2 — the two boundaries this subsystem adds. Shipped
- * source only, same reasoning as `dashboardSources()` above: `lib/mcp/` names
+ * source only, same reasoning as `dashboardSources()` above: `tg-mcp/` names
  * `console.log` and `process.stdout` in this very file's banned list, so a
  * scan over the test tree would match itself.
  */
@@ -162,13 +166,14 @@ function mcpSources(): string[] {
       return [];
     }
     return entries.flatMap((entry) => {
+      if (entry === "node_modules" || entry === ".next") return [];
       const path = join(dir, entry);
       if (statSync(path).isDirectory()) return walk(path);
       return /\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path) ? [path] : [];
     });
   };
 
-  return [...walk(join(repoRoot, "lib/mcp")), join(repoRoot, "scripts/mcp.ts")];
+  return [...walk(join(repoRoot, "packages/tg-mcp")), join(repoRoot, "scripts/mcp.ts")];
 }
 
 describe("the mcp-server#5.5 and #6.2 boundaries", () => {
@@ -177,7 +182,7 @@ describe("the mcp-server#5.5 and #6.2 boundaries", () => {
    * other byte corrupts the stream, and the symptom is a client reporting a
    * malformed message rather than a stack trace.
    */
-  test("no file under lib/mcp/ or scripts/mcp.ts writes to stdout", () => {
+  test("no file under tg-mcp or scripts/mcp.ts writes to stdout", () => {
     const banned = ["console.log", "process.stdout"];
     const offenders = mcpSources().flatMap((path) => {
       const source = readFileSync(path, "utf8");
@@ -192,9 +197,9 @@ describe("the mcp-server#5.5 and #6.2 boundaries", () => {
    * transitive closure: a tool must never run a local copy of a deployed
    * stage.
    */
-  test("nothing reachable from lib/mcp/ or scripts/mcp.ts is a pipeline stage", () => {
+  test("nothing reachable from tg-mcp or scripts/mcp.ts is a pipeline stage", () => {
     const reached = [...reachableFrom(mcpSources()).files].filter((path) =>
-      under(path, "lib/pipeline"),
+      under(path, "packages/tg-pipeline"),
     );
 
     expect(reached).toEqual([]);
@@ -213,9 +218,9 @@ describe("the mcp-server#5.5 and #6.2 boundaries", () => {
   test("all mcp-related files use mcp-server#n citations, not bare §", () => {
     const citingFiles = [
       ...mcpSources(),
-      join(repoRoot, "lib/mcp/ids.test.ts"),
-      join(repoRoot, "lib/mcp/tools.test.ts"),
-      join(repoRoot, "lib/mcp/server.test.ts"),
+      join(repoRoot, "packages/tg-mcp/ids.test.ts"),
+      join(repoRoot, "packages/tg-mcp/tools.test.ts"),
+      join(repoRoot, "packages/tg-mcp/server.test.ts"),
       join(repoRoot, "test/e2e/mcp.test.ts"),
     ];
 

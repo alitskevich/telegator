@@ -3,14 +3,14 @@ import { fileURLToPath } from "node:url";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { createMessageRepo } from "tg-aws/db/messages";
+import { createSourceRepo } from "tg-aws/db/sources";
+import { createTargetRepo } from "tg-aws/db/targets";
+import type { Environment } from "tg-infra/lib/config";
+import { resourceName } from "tg-infra/lib/naming";
+import { createMcpServer } from "tg-mcp/server";
+import { parseTarget, REGION } from "tg-ops/target";
 import { z } from "zod";
-import type { Environment } from "../infra/lib/config";
-import { resourceName } from "../infra/lib/naming";
-import { createMessageRepo } from "../lib/db/messages";
-import { createSourceRepo } from "../lib/db/sources";
-import { createTargetRepo } from "../lib/db/targets";
-import { createMcpServer } from "../lib/mcp/server";
-import { parseTarget, REGION } from "../lib/ops/target";
 
 /**
  * mcp-server#6.4, #3.1 — the entry point. `npm run mcp [-- --env=<env>]`, or
