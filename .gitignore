@@ -4,6 +4,8 @@ node_modules/
 # build output
 out/
 dist/
+# graphify knowledge graph, rebuilt by /graphify
+graphify-out/
 *.tsbuildinfo
 .firebase/
 *-debug.log
