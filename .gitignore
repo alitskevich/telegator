@@ -29,3 +29,8 @@ data/
 # Browser-check scratch (Playwright MCP screenshots and harnesses).
 .playwright-mcp/
 !packages/tg-functions/.env
+
+# YouTube absorber working files: transcripts in and archived, and the docs symlink.
+packages/tg-youtube/input/
+packages/tg-youtube/done/
+packages/tg-youtube/docs

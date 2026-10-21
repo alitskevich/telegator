@@ -35,3 +35,7 @@ First-time setup (Blaze plan, secrets, Google sign-in, the first admin, turning 
 ## MCP server
 
 `npm run mcp` starts a local stdio MCP server with three tools, `add_source`, `add_target` and `find_messages_by_tags`, over the Firestore collections. It uses the emulator when `FIRESTORE_EMULATOR_HOST` is set, and production otherwise.
+
+## YouTube absorber
+
+The `youtube` function turns the videos saved to one YouTube playlist into transcripts. `npm run youtube:absorb` then merges them into a docs repo with a Claude Code agent. Setup is §10 of the doc.

@@ -25,14 +25,14 @@ While `npm run dev` holds the emulator ports, run tests against it with a throwa
 - **Tests never touch the network.** Firestore code runs against the emulator, and each file calls `clearFirestore` from `test/support.ts`. Mock `tg-firebase/tasks` and `tg-firebase/metrics` with `vi.mock`.
 - **Across packages, import by name; inside one, relatively, with no extension.** `"tg-domain/message"`, never `"../../tg-domain/message"` or `"./clock.js"`.
 - **The console bundle must stay server-free.** `tg-web` may import only types from `tg-actions`, `tg-firebase` or `tg-api`; a value import pulls `firebase-admin` into the browser. Shared constants go to `tg-configs` or `tg-rc`.
-- **Every API action has a least role** in `tg-api/actions.ts`. The dispatcher checks it before the action runs; `tg-api/function.test.ts` calls each one anonymously and as a disabled admin.
+- **Every API action has a least role** in `tg-api/src/actions.ts`. The dispatcher checks it before the action runs; `tg-api/src/function.test.ts` calls each one anonymously and as a disabled admin.
 - **Local runs must not post to live channels.** `.secret.local` holds a placeholder `TELEGRAM_BOT_TOKEN`; only swap in a test bot's token.
 - Zod schemas in `tg-domain` are the source of truth for every document shape.
 - `console` belongs in `scripts/` only.
 
 ## Conventions
 
-npm workspaces under `packages/tg-*`, one concern each. `tg-functions/index.ts` binds the stages to their triggers and is bundled by esbuild into `dist/index.js`, which the Functions emulator reloads on change.
+npm workspaces under `packages/tg-*`, one concern each, code under each package's `src/`. `tg-functions/src/index.ts` binds the stages to their triggers and is bundled by esbuild into `dist/index.js`, which the Functions emulator reloads on change.
 
 The console is `packages/tg-web`, an Arrmatura app. Load the `arrmatura:arrmatura` skill before touching a `.xml` template or a service: CML mistakes compile and render nothing.
 
@@ -42,4 +42,4 @@ The console is `packages/tg-web`, an Arrmatura app. Load the `arrmatura:arrmatur
 
 ## Deploying
 
-`npm run deploy`. First-time setup is in the doc's §8. The scheduled scrape stays off until `SCRAPE_ENABLED=true` in `packages/tg-functions/.env`.
+`npm run deploy`. First-time setup is in the doc's §8. The scheduled scrape stays off until `SCRAPE_ENABLED=true` in `packages/tg-functions/.env`, and the YouTube intake until `YOUTUBE_PLAYLIST_ID` is set there.

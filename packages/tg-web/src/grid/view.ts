@@ -25,7 +25,7 @@ export interface ColumnSpec {
 
 export interface GridSpec {
   readonly columns: readonly ColumnSpec[];
-  /** The fields `tg-actions/dashboard/records.ts` lets an editor write. */
+  /** The fields `tg-actions/src/dashboard/records.ts` lets an editor write. */
   readonly editable: readonly string[];
   /** Fields whose values hold newlines, edited in a textarea. */
   readonly multiline: readonly string[];

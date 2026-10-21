@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./*": "./*.ts"
+    "./*": "./src/*.ts"
   },
   "dependencies": {
     "firebase-admin": "^14.4.0",

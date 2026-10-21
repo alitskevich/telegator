@@ -29,12 +29,13 @@ flowchart LR
 | --- | --- | --- |
 | Clock | `onSchedule`, every 30 min | `tg-functions/index.ts` |
 | Work in flight | Cloud Tasks queues, `onTaskDispatched` | `tg-firebase/tasks.ts` |
-| Durable records | Firestore: `sources`, `targets`, `messages` | `tg-firebase/db.ts` |
+| Durable records | Firestore: `sources`, `targets`, `messages`, `videos` | `tg-firebase/db.ts` |
 | Failed work | Firestore `deadLetters` | `tg-firebase/deadLetters.ts` |
 | Counters | Firestore `metrics`, one doc per hour | `tg-firebase/metrics.ts` |
 | Operators | Firebase Auth + Firestore `users` | `tg-firebase/operators.ts` |
 | Console API | one `onRequest` function, `api` | `tg-api/` |
 | Console | Arrmatura app on Firebase Hosting | `tg-web/` |
+| YouTube absorber (§10) | `onSchedule`, every 6 h | `tg-youtube/` |
 | Secrets | `defineSecret` (Secret Manager) | `tg-functions/index.ts` |
 
 ## 2. Data
@@ -48,7 +49,7 @@ All ids that contain `/` (`channel/12345`) are stored with `~` in the document i
 | `id` | Channel username; also the scrape URL segment. |
 | `status` | `ok` enables polling. Any other value disables it. |
 | `target`, `category`, `tags`, `teaser` | Operator settings stamped onto every post. `teaser` is boilerplate stripped from the body. |
-| `via` | `web` (public preview page, default) or `mtproto` (a logged-in account). |
+| `via` | `web` (public preview page, default), `mtproto` (a logged-in account) or `gmail` (one sender's mail; the id is the sender's address). |
 | `lastItemId` | Newest post id seen. The `?after=` cursor and **the only duplicate guard** on the way in. |
 | `lastCount`, `lastUpdated`, `lastResult` | Last poll: post count, epoch ms, ISO time of success. |
 | `zeroYieldRuns`, `lastNonZeroCount` | Empty polls in a row, and the last non-empty count. Together they detect a stale source. |
@@ -83,11 +84,12 @@ Each task stage runs one item per invocation. A thrown error retries the task wi
 
 | Function | Trigger | Attempts | Concurrency |
 | --- | --- | --- | --- |
-| `scrape`, `scrapeMtproto` | every 30 min, if `SCRAPE_ENABLED` | — | — |
+| `scrape`, `scrapeMtproto`, `scrapeGmail` | every 30 min, if `SCRAPE_ENABLED` | — | — |
 | `analyze` | queue `analyze` | 3 | 5 |
 | `aggregate` | queue `aggregate` | 3 | **1** |
 | `publish` | queue `publish` | 5 | **1** |
 | `api` | HTTPS | — | — |
+| `youtube` | every 6 h, if `YOUTUBE_PLAYLIST_ID` is set (§10) | — | — |
 
 ### 3.1 scrape
 
@@ -96,6 +98,7 @@ Each task stage runs one item per invocation. A thrown error retries the task wi
 - **Kinds.** `forward`, `empty`, and `obsolete` (posted more than 3 days ago, or with no date) are dropped with a counter. Only `post` is enqueued.
 - **Cursor.** Written only when every enqueue succeeded, so a failure retries the window next run.
 - **Stale source.** 3 empty runs on a source that once yielded counts `SourceStale`.
+- **Gmail** (`tg-gmail/`). The Gmail API searches `in:inbox from:{id}`, read-only. A post is one mail: the subject, then the plain-text part (else the HTML part), capped at 10,000 characters. Its id is the mail's `internalDate` in ms, which is also the cursor (`after:`). Mail is never marked read or moved. A published mail member reads `✉ {sender}`, with no link.
 
 ### 3.2 analyze
 
@@ -193,7 +196,7 @@ Tests never touch the network. Pure logic is unit-tested, and Firestore code run
 One Firebase project, `telegator-581db`. Functions run in `us-central1`, next to Firestore (`nam5`).
 
 1. The project must be on the **Blaze** plan: Functions, Cloud Tasks and Scheduler need it.
-2. Set the secrets once: `firebase functions:secrets:set OPENROUTER_API_KEY`, the same for `TELEGRAM_BOT_TOKEN`, and `npm run mtproto:login` for `MTPROTO_SESSION`.
+2. Set the secrets once: `firebase functions:secrets:set OPENROUTER_API_KEY`, the same for `TELEGRAM_BOT_TOKEN`, `npm run mtproto:login` for `MTPROTO_SESSION`, `npm run youtube:login` for `YOUTUBE_OAUTH` (§10), and `npm run gmail:login` for `GMAIL_OAUTH`. The Gmail login reuses the YouTube Desktop OAuth client (§10, setup steps 1–2); enable the *Gmail API* in the same project first.
 3. Enable the Google provider in Firebase Auth. Add its OAuth web client id to `firebaseConfig.googleClientId` in `tg-configs/firebase.ts`, and list the site's origins on that client.
 4. `npm run deploy`: builds both bundles, then deploys hosting, functions, Firestore rules and indexes.
 5. Sign in once, then set your `users/{uid}` to `{enabled: true, roles: ["admin"]}` in the Firestore console.
@@ -206,3 +209,26 @@ One Firebase project, `telegator-581db`. Functions run in `us-central1`, next to
 - **Send then record.** If writing `posts` fails right after a successful send, the retry posts again. This is rare and is accepted.
 - **Counters live in Firestore**, not a metrics service. There are no alarms; the dashboard shows dead letters and stale sources.
 - **AWS history.** The AWS build (DynamoDB, SQS, Lambda, Cognito, CDK) ran until 2026-10-20 and lives in git history before this rewrite.
+
+## 10. YouTube absorber
+
+Turns YouTube videos into knowledge in a docs repo. You save a video to one playlist; the `youtube` function fetches its captions, and a local Claude Code agent merges the transcript into the docs repo's topic files. It shares only Firebase with the news pipeline.
+
+| Step | Where | Does |
+| --- | --- | --- |
+| 1. Intake | `youtube`, every 6 h | Adds each playlist video `videos` does not hold as `todo`. |
+| 2. Fetch | same run | yt-dlp fetches captions for the 20 oldest `todo` videos. The result is `fetched` (with `transcript`), `skipped` (no captions) or `unavailable`. Any other error leaves the video `todo` for the next run. |
+| 3. Clean up | same run | Removes every video past `todo` from the playlist. |
+| 4. Absorb | `npm run youtube:absorb`, local | Writes `fetched` transcripts to `tg-youtube/input/`, then runs the `yt-absorb` agent (`tg-youtube/.claude/agents/`). It merges each one into `tg-youtube/docs` and moves it to `done/`, and the script marks the video `absorbed`. |
+
+- **Transcript.** Markdown: title, link, then one bullet per ~25 s of captions, each linking to its moment in the video. An `-orig` track (the spoken language) beats a machine translation.
+- **Why a playlist, not Watch Later.** Watch Later was removed from the Data API in 2016, so reading it needs browser cookies, which Google revokes when they are used from a datacenter.
+- **yt-dlp** is the standalone build, downloaded into the temp dir on first use: Linux in Cloud Functions, macOS locally. YouTube may ask datacenter IPs to "confirm you're not a bot"; the video then stays `todo`, and the run logs a warning.
+
+**Setup**, once:
+
+1. In the Google Cloud console of `telegator-581db`, enable the *YouTube Data API v3*. Create an OAuth client of type *Desktop app*, and put its id and secret in `~/.keys/yt-client-id.key` and `~/.keys/yt-client-secret.key`.
+2. Set the OAuth consent screen to **In production**. In *Testing*, the refresh token expires after 7 days.
+3. `npm run youtube:login`: sign in as the playlist owner. This stores `YOUTUBE_OAUTH`.
+4. Set `YOUTUBE_PLAYLIST_ID` in `packages/tg-functions/.env` and redeploy the functions.
+5. Link the docs folder: `ln -s ../../../almaat/docs packages/tg-youtube/docs`.

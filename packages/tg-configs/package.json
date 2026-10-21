@@ -5,6 +5,6 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./*": "./*.ts"
+    "./*": "./src/*.ts"
   }
 }

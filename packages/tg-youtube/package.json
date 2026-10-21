@@ -1,0 +1,16 @@
+{
+  "name": "tg-youtube",
+  "version": "1.0.0",
+  "description": "The YouTube absorber: playlist intake, caption transcripts, and the local absorb agent.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "tg-domain": "*",
+    "tg-firebase": "*",
+    "tg-utils": "*",
+    "zod": "^4.5.2"
+  }
+}

@@ -202,7 +202,7 @@ async function runLive(apiKey: string): Promise<void> {
     if (/effort/i.test(message)) {
       console.log("\n  → the tier rejects `output_config.effort`. Pass `effort: false` in");
       console.log(
-        "    `tg-ai/openrouter.ts`, which `buildClassificationRequest` already supports.\n",
+        "    `tg-ai/src/openrouter.ts`, which `buildClassificationRequest` already supports.\n",
       );
     }
   }

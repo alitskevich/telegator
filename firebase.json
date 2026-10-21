@@ -69,7 +69,7 @@
     {
       "source": "packages/tg-functions",
       "runtime": "nodejs22",
-      "ignore": ["node_modules", "*.ts", "*.local", ".gitignore"],
+      "ignore": ["node_modules", "src", "*.local", ".gitignore"],
       "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
     }
   ],

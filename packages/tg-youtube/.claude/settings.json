@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(git:*)",
+      "Bash(rg:*)",
+      "Bash(wc:*)",
+      "Bash(mv:*)",
+      "Bash(npm:*)",
+      "Bash(diff:*)",
+      "WebSearch",
+      "WebFetch"
+    ]
+  }
+}
