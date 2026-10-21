@@ -1,7 +1,9 @@
 import { WebClientService } from "arrmatura-web";
-import type { Overview } from "tg-actions/dashboard/overview";
-import { conicGradient, type PieSlice, type Slice, toPieSlices } from "tg-utils/ui/pie";
+import type { Overview } from "tg-actions/dashboard/types";
+import { conicGradient, toPieSlices } from "tg-utils/ui/pie";
+import type { Slice } from "tg-utils/ui/types";
 import type { ApiService } from "./ApiService";
+import type { Donut } from "./types";
 
 /**
  * The Dashboard page's data: one `overview` read, refreshed on a timer while the
@@ -10,12 +12,6 @@ import type { ApiService } from "./ApiService";
 
 /** How often the dashboard re-reads its counters. */
 export const OVERVIEW_REFRESH_MS = 60_000;
-
-export interface Donut {
-  readonly slices: readonly PieSlice[];
-  /** The chart itself, as a CSS background. */
-  readonly background: string;
-}
 
 const donut = (values: readonly Slice[] | undefined): Donut => {
   const slices = toPieSlices(values ?? []);

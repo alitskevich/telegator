@@ -8,8 +8,9 @@ import {
   toCurveCsv,
   toKeyPairs,
 } from "./formats";
-import type { BandRow } from "./sweep";
+
 import { sweepBands } from "./sweep";
+import type { BandRow } from "./types";
 
 describe("parsePairsJsonl", () => {
   test("reads one labelled pair per line", () => {

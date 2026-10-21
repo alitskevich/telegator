@@ -18,3 +18,24 @@ export type FetchOutcome =
   | { status: "skipped" | "unavailable"; note: string };
 
 export type TranscriptFetcher = (videoId: string) => Promise<FetchOutcome>;
+
+export interface CaptionTracks {
+  manual?: readonly string[];
+  auto?: readonly string[];
+  langPref?: string;
+  videoLanguage?: string;
+}
+
+export interface Chunk {
+  /** Seconds from the start. */
+  start: number;
+  text: string;
+}
+
+export interface VideoInfo {
+  id: string;
+  title: string;
+  channel: string;
+  /** Seconds. */
+  duration?: number | undefined;
+}

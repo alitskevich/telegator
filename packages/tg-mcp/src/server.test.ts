@@ -2,7 +2,8 @@ import { messages, sources, targets } from "tg-firebase/db";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import { callTool } from "./server";
-import type { McpDeps, ToolDefinition } from "./tools";
+
+import type { McpDeps, ToolDefinition } from "./types";
 
 /** The stub tools below never reach Firestore. */
 const deps: McpDeps = { sources, targets, messages };

@@ -3,14 +3,13 @@ import { Api } from "telegram";
 import { describe, expect, test } from "vitest";
 import {
   createMtprotoReader,
-  type MessageClient,
-  type MessagePage,
   MTPROTO_PAGE_SIZE,
   pageAfter,
   toChannelPost,
   tokeniseLinks,
   UNKNOWN_FORWARD_ORIGIN,
 } from "./reader";
+import type { MessageClient, MessagePage } from "./types";
 
 /** 2026-10-20T12:00:00Z, in Telegram's unit. */
 const POSTED_AT_S = 1_792_497_600;

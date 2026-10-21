@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { cmlIndexSource } from "tg-ops/web/cml";
 import { describe, expect, test } from "vitest";
+import { cmlIndexSource } from "../scripts/cmlIndexSource";
 
 const web = resolve(import.meta.dirname, "../packages/tg-web");
 

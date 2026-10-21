@@ -21,7 +21,7 @@ While `npm run dev` holds the emulator ports, run tests against it with a throwa
 
 ## Rules
 
-- **Code is plain and short.** Firestore, Cloud Tasks and the metrics live in `tg-firebase`; stages and actions call them directly. Inject only what a test must replace and cannot reach locally: the model, Telegram, the clock.
+- **Code is plain and short.** Firestore, the `ingest` queue and the metrics live in `tg-firebase`; stages and actions call them directly. Inject only what a test must replace and cannot reach locally: the model, Telegram, the clock.
 - **Tests never touch the network.** Firestore code runs against the emulator, and each file calls `clearFirestore` from `test/support.ts`. Mock `tg-firebase/tasks` and `tg-firebase/metrics` with `vi.mock`.
 - **Across packages, import by name; inside one, relatively, with no extension.** `"tg-domain/message"`, never `"../../tg-domain/message"` or `"./clock.js"`.
 - **The console bundle must stay server-free.** `tg-web` may import only types from `tg-actions`, `tg-firebase` or `tg-api`; a value import pulls `firebase-admin` into the browser. Shared constants go to `tg-configs` or `tg-rc`.

@@ -1,12 +1,8 @@
 import type { AdjudicationFields, AdjudicationPair } from "tg-ai/types";
 import { ADJUDICATOR_MAX_TOKENS, ADJUDICATOR_MODEL_ID } from "tg-configs/ai";
 import { describe, expect, test } from "vitest";
-import {
-  type AdjudicatorClient,
-  createOpenRouterAdjudicator,
-  parseVerdicts,
-  VERDICTS_SCHEMA,
-} from "./adjudicator";
+import { createOpenRouterAdjudicator, parseVerdicts, VERDICTS_SCHEMA } from "./adjudicator";
+import type { AdjudicatorClient } from "./types";
 
 const response = (verdicts: unknown) => ({
   content: [{ type: "text", text: JSON.stringify({ verdicts }) }],

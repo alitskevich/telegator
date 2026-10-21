@@ -4,8 +4,8 @@ import { DateKeySchema } from "./date";
 import { ItemIdSchema } from "./ids";
 
 /**
- * The post in flight: a Cloud Tasks payload, never a stored record
- * (docs/telegator.md §2.2). Scrape sends the scraped shape to analyze, and
+ * The post in flight: the `raw` of an `ingest` item, not a record of its own
+ * (docs/telegator.md §2). Scrape sends the scraped shape to analyze, and
  * analyze adds the AI fields before sending it to aggregate.
  */
 

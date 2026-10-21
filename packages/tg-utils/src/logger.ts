@@ -1,18 +1,7 @@
+import type { Logger, LogSink } from "./types";
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export type LogFields = Record<string, unknown>;
-
-/** Where a log line goes. Injected so tests can read what was written. */
-export interface LogSink {
-  write(line: string): void;
-}
-
-export interface Logger {
-  debug(msg: string, fields?: LogFields): void;
-  info(msg: string, fields?: LogFields): void;
-  warn(msg: string, fields?: LogFields): void;
-  error(msg: string, fields?: LogFields): void;
-}
 
 /**
  * The production sink. Writing the string directly guarantees one record per

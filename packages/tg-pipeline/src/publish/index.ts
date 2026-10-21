@@ -5,8 +5,9 @@ import { messages, targets } from "tg-firebase/db";
 import { metrics } from "tg-firebase/metrics";
 import type { TelegramBot, TelegramResponse } from "tg-telegram/types";
 import { log } from "tg-utils/logger";
-import { type AssembledMessage, assembleMessage } from "./assemble";
+import { assembleMessage } from "./assemble";
 import { isCurrent, postFor } from "./posts";
+import type { AssembledMessage } from "./types";
 
 /**
  * Stage 4 — publish one message to each of its targets: send it the first

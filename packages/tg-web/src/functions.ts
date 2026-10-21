@@ -1,4 +1,4 @@
-import type { SortState } from "tg-utils/ui/sort";
+import type { SortState } from "tg-utils/ui/types";
 
 /**
  * Helpers templates call by name, e.g. `{value | num}`, on top of `ultimus`.

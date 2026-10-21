@@ -1,10 +1,6 @@
 import { describe, expect, test } from "vitest";
-import {
-  MAX_CONSECUTIVE_NEWLINES,
-  renderTemplate,
-  TEMPLATE_PLACEHOLDER,
-  type TemplateValues,
-} from "./template";
+import { MAX_CONSECUTIVE_NEWLINES, renderTemplate, TEMPLATE_PLACEHOLDER } from "./template";
+import type { TemplateValues } from "./types";
 
 const HEADER = "<b>⚡️</b> <i>2026-09-08</i> <b>BY, Minsk, politics</b>";
 const BODY = "<b>Story</b>\n@chan_a";

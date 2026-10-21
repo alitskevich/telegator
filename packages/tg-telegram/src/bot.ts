@@ -4,7 +4,6 @@
  * a network, a secret or a real three-second wait.
  */
 
-import type { Metrics } from "tg-enums/metrics";
 import type {
   EditMessageTextArgs,
   SendMessageArgs,
@@ -13,7 +12,7 @@ import type {
   TelegramResponse,
 } from "tg-telegram/types";
 import { chatIdFor } from "tg-telegram/types";
-import type { Logger } from "tg-utils/logger";
+import type { TelegramBotOptions } from "./types";
 
 /** Requests go to `{base}/bot{token}/{method}`. */
 export const TELEGRAM_API_BASE = "https://api.telegram.org";
@@ -38,35 +37,6 @@ export const FALLBACK_RETRY_AFTER_MS = 60_000;
 
 /** One retry, so at most two attempts. */
 const MAX_ATTEMPTS = 2;
-
-export interface HttpPostResponse {
-  /** Kept only for the 429 retry decision. It is *not* the error signal: `ok` is. */
-  readonly status: number;
-  /** Parsed JSON, or whatever the body decoded to. Validated, never trusted. */
-  readonly body: unknown;
-}
-
-/**
- * The minimal HTTP port this module needs. `HttpFetcher` swallows non-2xx, so it
- * cannot express a JSON POST whose status matters for the 429 rule.
- */
-export interface HttpPost {
-  post(url: string, body: Readonly<Record<string, unknown>>): Promise<HttpPostResponse>;
-}
-
-export interface TelegramBotOptions {
-  readonly http: HttpPost;
-  /**
-   * The bot token, from the `TELEGRAM_BOT_TOKEN` function secret. A provider
-   * rather than a string, so this module never holds a stale copy.
-   */
-  readonly tokenProvider: () => Promise<string>;
-  /** Injected so tests assert the requested duration instead of waiting it. */
-  readonly sleep: (ms: number) => Promise<void>;
-  readonly logger?: Logger;
-  readonly metrics?: Metrics;
-  readonly parseMode?: string;
-}
 
 type Method = "sendMessage" | "sendPhoto" | "editMessageText";
 

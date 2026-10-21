@@ -2,7 +2,8 @@ import type { Adjudicator } from "tg-ai/types";
 import { ADJUDICATOR_MAX_TOKENS, ADJUDICATOR_MODEL_ID } from "tg-configs/ai";
 import { z } from "zod";
 import { extractText } from "./messagesContent";
-import { type ApiKeyProvider, createMessagesClient, missingApiKey } from "./openrouterClient";
+import { createMessagesClient, missingApiKey } from "./openrouterClient";
+import type { OpenRouterAdjudicatorOptions } from "./types";
 
 /**
  * The band adjudicator: the model call that resolves the "adjudicate" verdict
@@ -44,16 +45,6 @@ export function parseVerdicts(
   }
 
   return byId;
-}
-
-export interface AdjudicatorClient {
-  create(request: unknown): Promise<unknown>;
-}
-
-export interface OpenRouterAdjudicatorOptions {
-  readonly client?: AdjudicatorClient;
-  /** Reads the key from the function secret; supplied by `tg-functions/src/index.ts`. */
-  readonly apiKey?: ApiKeyProvider;
 }
 
 const SYSTEM_PROMPT =

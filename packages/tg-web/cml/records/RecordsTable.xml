@@ -106,7 +106,7 @@
 
   <Subcomponent id="Row">
     <Signature purpose="One record — a card on a phone, a table row from `md` — with its actions and, for a message, its member panel">
-      <Prop id="row" type="object" required="true" description="A `ViewRow` from `src/grid/view.ts`" />
+      <Prop id="row" type="object" required="true" description="A `ViewRow` from `src/grid/types.ts`" />
       <Prop id="table" type="string" required="true" />
     </Signature>
     <tr class="flex flex-wrap items-start gap-x-4 gap-y-3 p-4 md:table-row md:p-0 transition-colors duration-150 {row.selected ? 'bg-primary/5' : 'md:hover:bg-base-200/50'}">

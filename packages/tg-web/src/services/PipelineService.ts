@@ -1,39 +1,35 @@
 import { WebClientService } from "arrmatura-web";
-import type { Overview } from "tg-actions/dashboard/overview";
+import type { Overview } from "tg-actions/dashboard/types";
 import { MAX_PUBLISH_NOW } from "tg-configs/limits";
 import type { QueueName } from "tg-enums/queueName";
-import type { DeadLetter as StoredDeadLetter } from "tg-firebase/deadLetters";
+import type { StoredIngestItem } from "tg-firebase/types";
 import { resources } from "tg-rc/web";
-import { type PipelineNode, pipelineNodes, queueOf } from "../pipeline/nodes";
+import { pipelineNodes, queueOf } from "../pipeline/nodes";
+import type { PipelineNode } from "../pipeline/types";
 import { fill } from "../text/fill";
 import type { ApiService } from "./ApiService";
 import { asRecord } from "./GridService";
+import type { DeadLetter } from "./types";
 
 /**
- * The Pipeline page: the whole chain as one diagram, with each queue's depth and
- * dead letters, and each manual trigger on the node it acts on.
+ * The Pipeline page: the whole chain as one diagram, with each stage's count,
+ * queue and dead letters, and each manual trigger on the node it acts on.
  * Mounted as `<PipelineService Ref="pipeline" api="@api" />`.
  */
 
-/** Depths move by the minute while a backlog drains; this is the page an operator watches. */
+/** Counts move by the minute while a backlog drains; this is the page an operator watches. */
 export const PIPELINE_REFRESH_MS = 30_000;
 
 const DEFAULT_REPLAY_MAX = "10";
 
-/** Tailwind's `xl`, from which `Page.Pipeline.xml` lays the diagram out in a row. */
-const ROW_LAYOUT = "(min-width: 80rem)";
+/** Tailwind's `lg`, from which `Page.Pipeline.xml` puts the panel beside the diagram. */
+const SIDE_LAYOUT = "(min-width: 64rem)";
 const PANEL_ID = "pipeline-panel";
 
-export interface DeadLetter {
-  readonly id: string;
-  readonly body: string;
-  readonly attempts: string;
-}
-
-const deadLetter = (letter: StoredDeadLetter): DeadLetter => ({
+const deadLetter = (letter: StoredIngestItem): DeadLetter => ({
   id: letter.id,
-  body: `${letter.error}\n${JSON.stringify(letter.data, null, 2)}`,
-  attempts: fill(resources.pipeline.attempts, { count: letter.attempts }),
+  body: `${letter.error ?? ""}\n${JSON.stringify(letter.raw, null, 2)}`,
+  attempts: fill(resources.pipeline.attempts, { count: letter.retryCount }),
 });
 
 interface ValueEvent {
@@ -49,7 +45,7 @@ export class PipelineService extends WebClientService {
   updatedAt: number | null = null;
   selectedId: string | null = null;
   /** The last peek per queue: `undefined` until inspected. */
-  dlq: Readonly<Partial<Record<QueueName, readonly StoredDeadLetter[]>>> = {};
+  dlq: Readonly<Partial<Record<QueueName, readonly StoredIngestItem[]>>> = {};
   replayMax = DEFAULT_REPLAY_MAX;
   publishMax = String(MAX_PUBLISH_NOW);
   /** The dead-letter count a purge was armed at; see `purge`. */
@@ -73,7 +69,7 @@ export class PipelineService extends WebClientService {
   }
 
   /**
-   * The selected queue's last peek, keyed for the template's `Each` and with
+   * The selected stage's last peek, keyed for the template's `Each` and with
    * its attempt count worded; `null` when it has not been inspected.
    */
   get peek(): readonly DeadLetter[] | null {
@@ -110,15 +106,15 @@ export class PipelineService extends WebClientService {
   }
 
   /**
-   * A second press on the same node closes its panel. Until `xl` the diagram is
-   * a column, so the panel can sit eight nodes down: it is scrolled into view.
+   * A second press on the same node closes its panel. Until `lg` the panel sits
+   * below the diagram, six rows down: it is scrolled into view.
    */
   select(event: { readonly id?: string }): void {
     const id = event.id ?? null;
     const selectedId = id === this.selectedId ? null : id;
     this.up({ selectedId, purgeArmedAt: null });
 
-    if (selectedId !== null && !window.matchMedia(ROW_LAYOUT).matches) {
+    if (selectedId !== null && !window.matchMedia(SIDE_LAYOUT).matches) {
       requestAnimationFrame(() =>
         document.getElementById(PANEL_ID)?.scrollIntoView({ behavior: "smooth", block: "start" }),
       );
@@ -141,7 +137,7 @@ export class PipelineService extends WebClientService {
     if (Array.isArray(messages)) this.up({ dlq: { ...this.dlq, [queue]: messages } });
   }
 
-  /** Re-enqueues up to `replayMax` of this queue's dead letters. */
+  /** Re-enqueues up to `replayMax` of this stage's dead letters. */
   async replay(): Promise<void> {
     const queue = this.queue;
     const max = Number(this.replayMax);

@@ -1,17 +1,10 @@
 import { OPENROUTER_BASE_URL } from "tg-configs/ai";
+import type { MessagesClient } from "./types";
 
 /**
  * The one place a real model client is built, shared by both adapters. The SDK
  * import is lazy, so tests can import the adapters without loading it.
  */
-
-/**
- * The slice of the Anthropic client the adapters use. A structural type, so
- * test fakes satisfy it without constructing a real client and its API key.
- */
-export interface MessagesClient {
-  create(request: unknown): Promise<unknown>;
-}
 
 /** Supplies the OpenRouter API key. Injected, so `tg-ai` does not decide where the secret lives. */
 export type ApiKeyProvider = () => Promise<string>;

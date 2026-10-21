@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { MatchKeyFields } from "../matchKey";
-import type { BandRow, LabelledKeyPair } from "./sweep";
+import type { MatchKeyFields } from "../types";
+import type { BandRow, LabelledKeyPair, LabelledPair } from "./types";
 
 /**
  * The calibration file formats. `pairs.jsonl` is the labelled set, one
@@ -15,12 +15,6 @@ const LabelledPairSchema = z.object({
   b: z.string().min(1),
   label: z.enum(["same", "different"]),
 });
-
-export interface LabelledPair {
-  readonly a: string;
-  readonly b: string;
-  readonly label: "same" | "different";
-}
 
 export function parsePairsJsonl(text: string): LabelledPair[] {
   return text

@@ -10,13 +10,34 @@
       ]
     },
     {
-      "collectionGroup": "deadLetters",
+      "collectionGroup": "ingest",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "queue", "order": "ASCENDING" },
-        { "fieldPath": "at", "order": "ASCENDING" }
+        { "fieldPath": "stage", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "runAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ingest",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "stage", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "leaseUntil", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ingest",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "stage", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "finishedAt", "order": "ASCENDING" }
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    { "collectionGroup": "ingest", "fieldPath": "expireAt", "ttl": true, "indexes": [] }
+  ]
 }

@@ -1,4 +1,5 @@
 import { splitTags } from "tg-domain/tags";
+import type { HashtagSource } from "./types";
 
 /** The hashtag line that `assemble.ts` appends after the member blocks. */
 
@@ -23,19 +24,6 @@ const REMOVED_CHARACTERS = /[.,@!'"()]/g;
 
 /** Title words are whitespace-delimited; a hyphen joins one word. */
 const WHITESPACE = /\s+/;
-
-/** The fields the line is drawn from, all optional but `date` and `ts`. */
-export interface HashtagSource {
-  readonly category?: string | undefined;
-  readonly location?: string | undefined;
-  readonly peoples?: string | undefined;
-  readonly tags?: string | undefined;
-  readonly title?: string | undefined;
-  /** A `YYYY-MM-DD` key. */
-  readonly date: string;
-  /** Epoch milliseconds. */
-  readonly ts: number;
-}
 
 /**
  * The `#hashtag` form: spaces and hyphens to `_`, `.,@!'"()` removed,

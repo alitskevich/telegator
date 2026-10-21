@@ -1,7 +1,7 @@
 <Component id="RecordCell">
   <Signature purpose="One table cell: an input where the operator may write, a badge for a status, text otherwise"
     description="On a phone the cell carries its column's name, since there is no header row; the row's first cell is the card's title and needs none. Edits go to `@grid.edit` on every keystroke; nothing is sent until the row's Save.">
-    <Prop id="cell" type="object" required="true" description="A `Cell` from `src/grid/view.ts`" />
+    <Prop id="cell" type="object" required="true" description="A `Cell` from `src/grid/types.ts`" />
     <Prop id="rowId" type="string" required="true" />
   </Signature>
 

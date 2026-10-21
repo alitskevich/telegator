@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { advancingClock, fixedClock } from "../../../test/support";
-import { type Clock, systemClock } from "./clock";
+import { systemClock } from "./clock";
+import type { Clock } from "./types";
 
 describe("systemClock", () => {
   test("reports the current time in epoch milliseconds", () => {

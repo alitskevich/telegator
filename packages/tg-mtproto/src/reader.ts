@@ -2,6 +2,7 @@ import bigInt, { type BigInteger } from "big-integer";
 import { Api, utils } from "telegram";
 import type { Link } from "tg-domain/item";
 import type { ChannelPost, ChannelReader } from "tg-telegram/types";
+import type { MessageClient, MessagePage } from "./types";
 
 /**
  * The `via: "mtproto"` reader: `ChannelReader` over a logged-in GramJS client.
@@ -28,22 +29,6 @@ const NUMERIC_PEER_PATTERN = /^-?\d+$/;
  * non-emptiness matters: it marks the post as a forward, which scrape drops.
  */
 export const UNKNOWN_FORWARD_ORIGIN = "unknown";
-
-/** The page `read` asks GramJS for. */
-export interface MessagePage {
-  readonly limit: number;
-  readonly minId?: number;
-  readonly reverse?: boolean;
-}
-
-/**
- * The two client calls the reader makes — `TelegramClient` satisfies it as is,
- * and a test fakes it without a socket.
- */
-export interface MessageClient {
-  getMessages(entity: string | BigInteger, page: MessagePage): Promise<readonly Api.Message[]>;
-  getDialogs(): Promise<unknown>;
-}
 
 /**
  * The page after the cursor, oldest first, or the newest page without one.

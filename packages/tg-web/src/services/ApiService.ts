@@ -1,6 +1,7 @@
 import { WebClientService } from "arrmatura-web";
 import { hasRole } from "tg-enums/roles";
 import { resources } from "tg-rc/web";
+import type { Operator, RunOptions } from "./types";
 
 /**
  * The console's one way to the API, and the source of who the operator is.
@@ -10,11 +11,6 @@ import { resources } from "tg-rc/web";
  */
 
 export type Access = "pending" | "signedOut" | "granted" | "denied";
-
-export interface Operator {
-  readonly email: string | null;
-  readonly roles: readonly string[];
-}
 
 const WHOAMI = "whoami";
 
@@ -31,13 +27,6 @@ const statusOf = (error: unknown): number | undefined =>
 
 const isUnauthenticated = (error: unknown) => statusOf(error) === 401;
 const isForbidden = (error: unknown) => statusOf(error) === 403;
-
-export interface RunOptions {
-  /** What `busy` is keyed by — one row's button, not the whole table's. Defaults to the action. */
-  readonly key?: string;
-  /** The success toast; omitted when the result is already on screen. */
-  readonly success?: (result: unknown) => string;
-}
 
 export class ApiService extends WebClientService {
   declare auth: FirebaseAuth;

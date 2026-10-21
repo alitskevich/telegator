@@ -1,4 +1,4 @@
-import type { Clock } from "tg-utils/clock";
+import type { Clock } from "tg-utils/types";
 import { z } from "zod";
 
 /**

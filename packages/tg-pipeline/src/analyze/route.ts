@@ -3,6 +3,7 @@ import type { NewsItem } from "tg-domain/newsItemSchema";
 import { mergeTags } from "tg-domain/tags";
 import { DROPPED_CATEGORY } from "tg-enums/categories";
 import type { SkipReason } from "tg-enums/metrics";
+import type { RoutableClassification } from "./types";
 
 /**
  * The analyze pre-filter, routing table and field normalisers, as pure
@@ -36,15 +37,6 @@ export function prefilter(body: string): RouteDecision | undefined {
   }
 
   return undefined;
-}
-
-/**
- * The fields routing reads. Wider than `NewsItem`, so a missing or
- * out-of-enum category can be routed too.
- */
-export interface RoutableClassification {
-  readonly category?: string | undefined;
-  readonly importance?: NewsItem["importance"] | undefined;
 }
 
 /**

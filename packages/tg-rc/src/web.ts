@@ -119,7 +119,7 @@ const dashboard = {
   errors: "Dead letters",
   last24h: "last 24 h",
   allTime: "all time",
-  allDlqs: "across all queues",
+  allStages: "across all stages",
   status: "Status",
   categories: "Categories, 7 days",
   recent: "Recent messages",
@@ -132,7 +132,6 @@ const pipeline = {
   title: "Pipeline",
   subtitle: "Every stage, its queue and its dead letters. Select one to act on it.",
   inQueue: "in queue",
-  dlq: "DLQ",
   deadLetters: "dead letters",
   inspect: "Inspect dead letters",
   replay: "Replay",
@@ -145,13 +144,13 @@ const pipeline = {
   publishNow: "Publish now",
   publishMax: "Publish at most",
   openMessages: "Open the publish backlog",
-  selectHint: "Select a stage or a queue to see what it holds and what you can do.",
+  selectHint: "Select a stage to see what it does and what you can do.",
 };
 
 /**
  * The pipeline as the Pipeline page draws it (docs/telegator.md §1): the clock,
- * four stages and the three queues between them, then Telegram. `metric` names
- * an `Overview` field; `queue` names the Cloud Tasks queue a node stands for.
+ * four stages, then Telegram. `metric` names an `Overview` field; `queue` names
+ * the stage's lane in `ingest`.
  */
 const stages = [
   {
@@ -173,14 +172,6 @@ const stages = [
     detail: "Reads new posts from every enabled source and queues each one for analysis.",
   },
   {
-    id: "analyze-queue",
-    kind: "queue",
-    queue: "analyze",
-    icon: "inbox",
-    title: "Analyze queue",
-    caption: "Cloud Tasks, 5 at a time",
-  },
-  {
     id: "analyze",
     kind: "function",
     icon: "brain",
@@ -188,15 +179,9 @@ const stages = [
     caption: "Classifies each item",
     metric: "analyzed",
     metricLabel: "analysed, 24 h",
-    detail: "Asks the model for a category and a summary, and skips what is not news.",
-  },
-  {
-    id: "aggregate-queue",
-    kind: "queue",
-    queue: "aggregate",
-    icon: "inbox",
-    title: "Aggregate queue",
-    caption: "Cloud Tasks, one at a time",
+    queue: "analyze",
+    detail:
+      "Asks the model for a category and a summary, and skips what is not news. Runs 5 at a time.",
   },
   {
     id: "aggregate",
@@ -204,15 +189,9 @@ const stages = [
     icon: "git-merge",
     title: "Aggregate",
     caption: "Merges duplicates",
-    detail: "Matches each item against the day's stories and merges it, or starts a new one.",
-  },
-  {
-    id: "publish-queue",
-    kind: "queue",
-    queue: "publish",
-    icon: "inbox",
-    title: "Publish queue",
-    caption: "Cloud Tasks, 5 min delay",
+    queue: "aggregate",
+    detail:
+      "Matches each item against the day's stories and merges it, or starts a new one. Runs one at a time.",
   },
   {
     id: "publish",
@@ -222,7 +201,9 @@ const stages = [
     caption: "Posts to every target",
     metric: "published",
     metricLabel: "published, all time",
-    detail: "Sends each settled story to its target channels and records every post.",
+    queue: "publish",
+    detail:
+      "Sends each settled story to its target channels and records every post. Runs 5 minutes after the last merge, one at a time.",
   },
   {
     id: "telegram",
@@ -232,7 +213,7 @@ const stages = [
     caption: "Target channels",
     detail: "Where the stories land. The Targets page lists them.",
   },
-];
+] as const;
 
 const records = {
   resetAll: "Reset all cursors",

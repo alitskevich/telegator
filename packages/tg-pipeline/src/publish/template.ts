@@ -1,5 +1,6 @@
 import type { Message } from "tg-domain/message";
 import { escapeHtml } from "./escape";
+import type { TemplateValues } from "./types";
 
 /**
  * A target's own message layout, as a pure substitution, so a replay or an
@@ -17,16 +18,6 @@ export const MAX_CONSECUTIVE_NEWLINES = 2;
 
 /** The message fields a template can name. */
 export type TemplateMessage = Pick<Message, "title" | "category" | "country" | "location" | "date">;
-
-export interface TemplateValues {
-  /** Already-rendered HTML: the header line. */
-  readonly header: string;
-  /** Already-rendered HTML: the member blocks, newline-joined. */
-  readonly body: string;
-  /** Already-rendered HTML: the hashtag line, `""` once shortening drops it. */
-  readonly hashtags: string;
-  readonly message: TemplateMessage;
-}
 
 /**
  * The value for one token. The three rendered values are already HTML and are

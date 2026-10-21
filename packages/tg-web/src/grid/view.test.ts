@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { changedFields, type GridState, gridView } from "./view";
+import type { GridState } from "./types";
+import { changedFields, gridView } from "./view";
 
 const spec = {
   columns: [

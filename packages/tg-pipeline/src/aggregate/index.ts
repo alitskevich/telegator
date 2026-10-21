@@ -11,7 +11,7 @@ import { log } from "tg-utils/logger";
  * Stage 3 — aggregate one analyzed item into a story: merge it into the
  * day's matching message, or create a new one, then ask for a publish.
  *
- * The aggregate queue dispatches one task at a time, so two items of one day
+ * The aggregate stage runs one item at a time, so two items of one day
  * can never both miss each other's write. A failed write throws and the task
  * retries; every write is idempotent on redelivery.
  */

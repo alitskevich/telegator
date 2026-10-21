@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
-import type { MatchKeyFields } from "../matchKey";
-import { type LabelledKeyPair, sweepBands } from "./sweep";
+import type { MatchKeyFields } from "../types";
+import { sweepBands } from "./sweep";
+import type { LabelledKeyPair } from "./types";
 
 /**
  * A labelled pair of match-key fields. `title` and `tags` are disjoint on every

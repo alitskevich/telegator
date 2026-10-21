@@ -1,10 +1,10 @@
 import type { AdjudicationPair, Adjudicator, Classifier } from "tg-ai/types";
-import type { MemberMerge } from "tg-dedup/dedupBatch";
+import type { MemberMerge } from "tg-dedup/types";
 import { type DedupCandidate, DedupCandidateSchema, type Message } from "tg-domain/message";
 import type { NewsItem } from "tg-domain/newsItemSchema";
-import type { MetricName, Metrics } from "tg-enums/metrics";
-import type { Clock } from "tg-utils/clock";
-import type { LogSink } from "tg-utils/logger";
+import type { MetricName } from "tg-enums/metrics";
+import type { Metrics } from "tg-enums/types";
+import type { Clock, LogSink } from "tg-utils/types";
 
 /** Test helpers. No test touches the network; Firestore is the emulator `npm test` starts. */
 

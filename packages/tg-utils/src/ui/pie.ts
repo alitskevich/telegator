@@ -1,8 +1,4 @@
-/** A pie slice, in the shape the dashboard's charts consume. */
-export interface Slice {
-  readonly label: string;
-  readonly value: number;
-}
+import type { PieSlice, Slice } from "./types";
 
 /**
  * The dashboard's donut charts, drawn as one CSS `conic-gradient` rather than
@@ -31,16 +27,6 @@ export function sliceColor(index: number): string {
   // A modulus rather than a bare index, so a caller passing 29 gets a colour
   // instead of `undefined` painted as nothing.
   return PIE_PALETTE[index % PIE_PALETTE.length] ?? PIE_PALETTE[0];
-}
-
-export interface PieSlice {
-  /** The label doubles as the `Each` key in the legend, so it is also the id. */
-  readonly id: string;
-  readonly label: string;
-  readonly value: number;
-  /** Share of the whole, 0–1, for the legend. */
-  readonly fraction: number;
-  readonly color: string;
 }
 
 const PERCENT = 100;

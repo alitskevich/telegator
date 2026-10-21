@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
-import type { MetricName, Metrics } from "tg-enums/metrics";
+import type { MetricName } from "tg-enums/metrics";
+import type { Metrics } from "tg-enums/types";
 import { db } from "./app";
 
 /**

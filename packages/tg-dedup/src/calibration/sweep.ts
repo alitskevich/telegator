@@ -1,5 +1,7 @@
-import { buildMatchKey, type MatchKeyFields } from "../matchKey";
-import { classify, matchScore, type ScoreWeights } from "../score";
+import { buildMatchKey } from "../matchKey";
+import { classify, matchScore } from "../score";
+import type { ScoreWeights } from "../types";
+import type { BandRow, LabelledKeyPair, SweepGrid } from "./types";
 
 /**
  * The dedup threshold sweep (see docs/telegator.md §5). Each labelled pair is
@@ -22,30 +24,6 @@ import { classify, matchScore, type ScoreWeights } from "../score";
 const BASIS_POINTS = 100;
 const SWEEP_MIN_BP = 0;
 const SWEEP_MAX_BP = 100;
-
-/** One hand-judged pair, as the two items' match-key fields. */
-export interface LabelledKeyPair {
-  readonly fields: MatchKeyFields;
-  readonly other: MatchKeyFields;
-  readonly same: boolean;
-}
-
-export interface SweepGrid {
-  /** The grid step, in score units (e.g. 0.05), applied to both thresholds. */
-  readonly step: number;
-  /** One hand-reasoned weight candidate; defaults to `matchScore`'s own default. */
-  readonly weights?: ScoreWeights;
-}
-
-export interface BandRow {
-  readonly distinctThreshold: number;
-  readonly mergeThreshold: number;
-  /** `null` when the merge region caught nothing — evidence of nothing, not of perfection. */
-  readonly autoMergePrecision: number | null;
-  readonly autoSplitRecall: number;
-  /** The band's share of all labelled pairs — the adjudicator's model-call cost. */
-  readonly bandFraction: number;
-}
 
 /** `0.05 * 100` is `5.000000000000001`, so an exact integer test would reject it. */
 const BP_EPSILON = 1e-9;

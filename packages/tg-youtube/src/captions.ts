@@ -1,5 +1,6 @@
 import type { CaptionKind } from "tg-domain/video";
 import { z } from "zod";
+import type { CaptionTracks, Chunk, VideoInfo } from "./types";
 
 /** Caption track choice and transcript rendering. Pure. */
 
@@ -7,13 +8,6 @@ import { z } from "zod";
 const CHUNK_SECONDS = 25;
 
 export const watchUrl = (id: string): string => `https://www.youtube.com/watch?v=${id}`;
-
-export interface CaptionTracks {
-  manual?: readonly string[];
-  auto?: readonly string[];
-  langPref?: string;
-  videoLanguage?: string;
-}
 
 /**
  * Chooses one caption track. A popular video carries 150+ auto-translated
@@ -64,12 +58,6 @@ const Json3Schema = z.object({
     .default([]),
 });
 
-export interface Chunk {
-  /** Seconds from the start. */
-  start: number;
-  text: string;
-}
-
 /** yt-dlp's json3 caption file, merged into chunks of about `CHUNK_SECONDS`. */
 export function parseJson3(raw: string): Chunk[] {
   const chunks: Chunk[] = [];
@@ -94,14 +82,6 @@ export function timestamp(seconds: number): string {
   const s = seconds % 60;
   const pad = (n: number) => String(n).padStart(2, "0");
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
-}
-
-export interface VideoInfo {
-  id: string;
-  title: string;
-  channel: string;
-  /** Seconds. */
-  duration?: number | undefined;
 }
 
 /** The transcript the absorb agent reads: each bullet links to its moment in the video. */

@@ -22,8 +22,3 @@ export type MetricName = (typeof METRIC_NAMES)[number];
 export const SKIP_REASONS = ["low", "category", "nobody"] as const;
 
 export type SkipReason = (typeof SKIP_REASONS)[number];
-
-/** A counter sink. `by` splits the count by one value (a source, a reason, a category). */
-export interface Metrics {
-  count(name: MetricName, value?: number, by?: string): void;
-}

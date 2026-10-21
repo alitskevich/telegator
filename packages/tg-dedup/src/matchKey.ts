@@ -1,29 +1,5 @@
 import { MATCH_KEY_CAP } from "tg-configs/dedup";
-
-/**
- * The deduplication match key, built only from the fields the classifier emits
- * in English: `title`, `peoples`, `properNames`, `tags`.
- *
- * Every array is lowercased, punctuation-stripped, deduplicated and sorted, so
- * an identical item serialises to identical bytes. Byte-identical replay
- * depends on that.
- */
-export interface MatchKey {
-  readonly entities: readonly string[];
-  readonly titleTokens: readonly string[];
-  readonly tags: readonly string[];
-}
-
-/**
- * A structural shape rather than `AnalyzedItem`, so the calibration harness can
- * pass labelled-set records without building a full queue payload.
- */
-export interface MatchKeyFields {
-  readonly title?: string | undefined;
-  readonly peoples?: string | undefined;
-  readonly properNames?: string | undefined;
-  readonly tags?: string | undefined;
-}
+import type { MatchKey, MatchKeyFields } from "./types";
 
 /** Punctuation only; letters of any script survive, since `peoples` may not be ASCII. */
 const PUNCTUATION = /[^\p{L}\p{N}\s-]/gu;

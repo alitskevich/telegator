@@ -12,12 +12,12 @@ import {
   addSource,
   addTarget,
   findMessagesByTags,
-  type McpDeps,
   MESSAGE_RESULT_LIMIT,
   MESSAGE_SCAN_LIMIT,
   SEARCHED_STATUSES,
   TOOLS,
 } from "./tools";
+import type { McpDeps } from "./types";
 
 const deps: McpDeps = { sources, targets, messages };
 

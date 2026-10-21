@@ -2,7 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, posix, relative, resolve } from "node:path";
 import * as esbuild from "esbuild";
-import { cmlIndexSource } from "tg-ops/web/cml";
+import { cmlIndexSource } from "./cmlIndexSource";
 
 /**
  * Builds the console into `packages/tg-web/www/`, the directory Firebase

@@ -26,7 +26,7 @@
       <StatCard label="{R.dashboard.skipped}" value="{@overview.data.skipped.total}" note="{@overview.skipped || R.dashboard.last24h}" />
       <StatCard label="{R.dashboard.published}" value="{@overview.data.published}" note="{R.dashboard.allTime}" />
       <div class="col-span-2 lg:col-span-1">
-        <StatCard label="{R.dashboard.errors}" value="{@overview.data.errors}" note="{R.dashboard.allDlqs}"
+        <StatCard label="{R.dashboard.errors}" value="{@overview.data.errors}" note="{R.dashboard.allStages}"
           alert="{@overview.data.errors GT 0}" />
       </div>
     </div>

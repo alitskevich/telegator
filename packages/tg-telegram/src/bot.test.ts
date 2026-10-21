@@ -1,16 +1,16 @@
-import type { MetricName, Metrics } from "tg-enums/metrics";
+import type { MetricName } from "tg-enums/metrics";
+import type { Metrics } from "tg-enums/types";
 import { createLogger } from "tg-utils/logger";
 import { describe, expect, test } from "vitest";
 import {
   createTelegramBot,
   DEFAULT_PARSE_MODE,
   FALLBACK_RETRY_AFTER_MS,
-  type HttpPost,
-  type HttpPostResponse,
   SEND_PAUSE_MS,
   TELEGRAM_API_BASE,
   TOO_MANY_REQUESTS_STATUS,
 } from "./bot";
+import type { HttpPost, HttpPostResponse } from "./types";
 
 /**
  * An obvious placeholder: no secret belongs in the repo, so nothing here may

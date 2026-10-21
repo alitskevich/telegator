@@ -9,7 +9,7 @@ import { normalizeAnalyzed, prefilter, route } from "./route";
  * Stage 2 — analyze one scraped post: pre-filter, classify, route, and enqueue
  * the survivor for aggregate.
  *
- * A provider error throws, so Cloud Tasks retries the task; a `skip` decision is
+ * A provider error throws, so the item is retried; a `skip` decision is
  * final and returns normally.
  */
 export async function runAnalyze(payload: unknown, classifier: Classifier): Promise<void> {

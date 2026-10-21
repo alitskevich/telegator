@@ -1,5 +1,5 @@
 import { WebClientService } from "arrmatura-web";
-import type { MemberRow } from "tg-actions/dashboard/records";
+import type { MemberRow } from "tg-actions/dashboard/types";
 import { MAX_PUBLISH_NOW } from "tg-configs/limits";
 import { MessageStatusSchema } from "tg-enums/messageStatus";
 import { DEFAULT_TARGET_TYPE } from "tg-enums/targetType";
@@ -11,17 +11,11 @@ import {
 } from "tg-rc/columns";
 import { resources } from "tg-rc/web";
 import { toggleSelectAll } from "tg-utils/ui/selection";
-import { cycleSort, type SortState } from "tg-utils/ui/sort";
+import { cycleSort } from "tg-utils/ui/sort";
+import type { SortState } from "tg-utils/ui/types";
 import { downloadText, exportFilename } from "../files/download";
-import {
-  changedFields,
-  type Drafts,
-  type Expanded,
-  type GridSpec,
-  type GridView,
-  gridView,
-  type Row,
-} from "../grid/view";
+import type { GridSpec, GridView } from "../grid/types";
+import { changedFields, type Drafts, type Expanded, gridView, type Row } from "../grid/view";
 import { fill } from "../text/fill";
 import type { ApiService } from "./ApiService";
 

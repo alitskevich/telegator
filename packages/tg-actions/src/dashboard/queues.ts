@@ -1,14 +1,9 @@
 import { QUEUES } from "tg-enums/queueName";
-import {
-  type DeadLetter,
-  listDeadLetters,
-  purgeDeadLetters,
-  replayDeadLetters,
-} from "tg-firebase/deadLetters";
+import { listDeadLetters, purgeDeadLetters, replayDeadLetters } from "tg-firebase/deadLetters";
+import type { StoredIngestItem } from "tg-firebase/types";
 import { z } from "zod";
-import { type QueueStripEntry, queueStrip } from "./overview";
 
-/** The Pipeline page: queue depths and the dead letters behind each stage. */
+/** The Pipeline page: the dead letters behind each task-dispatched stage. */
 
 /** The most dead letters one inspection shows. */
 export const DEAD_LETTER_PAGE = 50;
@@ -16,9 +11,7 @@ export const DEAD_LETTER_PAGE = 50;
 const QueueInput = z.object({ queueName: z.enum(QUEUES) });
 const ReplayInput = QueueInput.extend({ max: z.number().int().positive() });
 
-export const loadQueues = (): Promise<QueueStripEntry[]> => queueStrip();
-
-export async function inspectDlq(input: unknown): Promise<DeadLetter[]> {
+export async function inspectDlq(input: unknown): Promise<StoredIngestItem[]> {
   return listDeadLetters(QueueInput.parse(input).queueName, DEAD_LETTER_PAGE);
 }
 

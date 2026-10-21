@@ -1,13 +1,13 @@
 import { defineBoolean, defineSecret, defineString } from "firebase-functions/params";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { createOpenRouterAdjudicator } from "tg-ai/adjudicator";
 import { createOpenRouterClassifier } from "tg-ai/openrouter";
 import { REGION } from "tg-configs/firebase";
-import type { QueueName } from "tg-enums/queueName";
-import { addDeadLetter } from "tg-firebase/deadLetters";
+import { IngestItemSchema } from "tg-domain/ingest";
+import { QUEUES, type QueueName } from "tg-enums/queueName";
+import { drain, reclaim, type StageOptions, type StageRun } from "tg-firebase/ingest";
 import { flushMetrics } from "tg-firebase/metrics";
-import { addPending } from "tg-firebase/tasks";
 import { createGmailClient } from "tg-gmail/client";
 import { parseGmailCredentials } from "tg-gmail/credentials";
 import { createGmailReader } from "tg-gmail/reader";
@@ -30,7 +30,7 @@ export { api } from "tg-api/function";
 
 /**
  * Every deployed function. The stages live in `tg-pipeline`; this file only
- * binds them to their triggers, secrets and queues.
+ * binds them to their triggers, secrets and the `ingest` queue.
  */
 
 const openRouterKey = defineSecret("OPENROUTER_API_KEY");
@@ -61,45 +61,6 @@ async function settle<T>(work: () => Promise<T>): Promise<T> {
       log.error("metrics not written", { error: String(error) }),
     );
   }
-}
-
-/**
- * A task-dispatched stage. A thrown error retries the task; on its last
- * attempt the task is written to `deadLetters` instead, since Cloud Tasks
- * would drop it.
- */
-function stage(
-  queue: QueueName,
-  options: { attempts: number; concurrency: number; secrets: ReturnType<typeof defineSecret>[] },
-  run: (data: unknown) => Promise<void>,
-) {
-  return onTaskDispatched(
-    {
-      region: REGION,
-      timeoutSeconds: TIMEOUT_SECONDS,
-      secrets: options.secrets,
-      retryConfig: { maxAttempts: options.attempts, minBackoffSeconds: 30 },
-      rateLimits: { maxConcurrentDispatches: options.concurrency },
-    },
-    (request) =>
-      settle(async () => {
-        try {
-          await run(request.data);
-        } catch (error) {
-          const attempts = request.retryCount + 1;
-          log.error(`${queue} failed`, { attempts, error: String(error) });
-          if (attempts < options.attempts) throw error;
-          await addDeadLetter({
-            queue,
-            data: request.data,
-            error: String(error),
-            attempts,
-            at: Date.now(),
-          });
-        }
-        await addPending(queue, -1);
-      }),
-  );
 }
 
 export const scrape = onSchedule(
@@ -142,33 +103,70 @@ export const scrapeGmail = onSchedule(
   },
 );
 
-export const analyze = stage(
-  "analyze",
-  { attempts: 3, concurrency: 5, secrets: [openRouterKey] },
-  (data) => runAnalyze(data, createOpenRouterClassifier({ apiKey })),
-);
+/** How long one drain may hold a stage: the function's own timeout. */
+const LEASE_MS = TIMEOUT_SECONDS * 1000;
 
-/** One at a time: two items of one day must not both miss each other's write. */
-export const aggregate = stage(
-  "aggregate",
-  { attempts: 3, concurrency: 1, secrets: [openRouterKey] },
-  (data) => runAggregate(data, createOpenRouterAdjudicator({ apiKey })),
-);
+/** The task stages: how often an item may fail, how many run at once, and what runs. */
+const STAGES: Readonly<Record<QueueName, StageOptions & { readonly run: StageRun }>> = {
+  analyze: {
+    attempts: 3,
+    concurrency: 5,
+    leaseMs: LEASE_MS,
+    run: (raw) => runAnalyze(raw, createOpenRouterClassifier({ apiKey })),
+  },
+  /** One at a time: two items of one day must not both miss each other's write. */
+  aggregate: {
+    attempts: 3,
+    concurrency: 1,
+    leaseMs: LEASE_MS,
+    run: (raw) => runAggregate(raw, createOpenRouterAdjudicator({ apiKey })),
+  },
+  /** One at a time: one Telegram message must not be edited twice at once. */
+  publish: {
+    attempts: 5,
+    concurrency: 1,
+    leaseMs: LEASE_MS,
+    run: (raw) =>
+      runPublish(
+        (raw as { messageId: string }).messageId,
+        createTelegramBot({
+          http: createHttpPost(),
+          tokenProvider: async () => telegramToken.value(),
+          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+          logger: log,
+        }),
+      ),
+  },
+};
 
-/** One at a time: one Telegram message must not be edited twice at once. */
-export const publish = stage(
-  "publish",
-  { attempts: 5, concurrency: 1, secrets: [telegramToken] },
-  (data) =>
-    runPublish(
-      (data as { messageId: string }).messageId,
-      createTelegramBot({
-        http: createHttpPost(),
-        tokenProvider: async () => telegramToken.value(),
-        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-        logger: log,
+const STAGE_OPTIONS = {
+  region: REGION,
+  timeoutSeconds: TIMEOUT_SECONDS,
+  secrets: [openRouterKey, telegramToken],
+};
+
+/**
+ * Drains a stage as soon as one of its items is due: on enqueue and on replay.
+ * Items due later (a delay, a retry's backoff) wait for `sweep`.
+ */
+export const ingest = onDocumentWritten({ ...STAGE_OPTIONS, document: "ingest/{id}" }, (event) => {
+  const item = IngestItemSchema.safeParse(event.data?.after.data());
+  if (!item.success || item.data.status !== "pending" || item.data.runAt > Date.now()) return;
+  const stage = STAGES[item.data.stage];
+  return settle(() => drain(item.data.stage, stage, stage.run));
+});
+
+/** Every minute: fails the items of a dead drain, then runs whatever came due. */
+export const sweep = onSchedule({ ...STAGE_OPTIONS, schedule: "every 1 minutes" }, () =>
+  settle(async () => {
+    await Promise.all(
+      QUEUES.map(async (queue) => {
+        const stage = STAGES[queue];
+        await reclaim(queue, stage.attempts);
+        await drain(queue, stage, stage.run);
       }),
-    ),
+    );
+  }),
 );
 
 /** yt-dlp unpacks itself into the in-memory temp dir, hence the memory. */

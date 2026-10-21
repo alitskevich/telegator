@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ClassificationRequest } from "./classificationRequest";
+
 import { buildClassificationRequest } from "./classificationRequest";
-import { type ClassifierClient, createOpenRouterClassifier } from "./openrouter";
+import { createOpenRouterClassifier } from "./openrouter";
+import type { ClassificationRequest, ClassifierClient } from "./types";
 
 /**
  * Tests for the OpenRouter classifier adapter. Nothing here asserts what a

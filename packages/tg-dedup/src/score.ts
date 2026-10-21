@@ -1,16 +1,5 @@
 import { DISTINCT_THRESHOLD, MERGE_THRESHOLD, SCORE_WEIGHTS } from "tg-configs/dedup";
-import type { MatchKey } from "./matchKey";
-
-export interface ScoreWeights {
-  readonly entities: number;
-  readonly titleTokens: number;
-  readonly tags: number;
-}
-
-export interface Band {
-  readonly merge: number;
-  readonly distinct: number;
-}
+import type { Band, MatchKey, ScoreWeights } from "./types";
 
 export type Verdict = "merge" | "adjudicate" | "distinct";
 

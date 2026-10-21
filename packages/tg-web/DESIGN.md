@@ -19,10 +19,10 @@ A night-shift operations console for one pipeline. Work screen only: tables,
 figures and one diagram, read many times a day. It should feel like an
 instrument panel: calm until something needs a person.
 
-**The idea.** The pipeline *is* the interface: the chain of stages (docs/telegator.md §1) and
-queues is drawn once, on the Pipeline page, and every manual trigger sits on
-the node it acts on. **The memorable thing** is the dead-letter count: the one
-red figure in the console, hanging under the queue it came from.
+**The idea.** The pipeline *is* the interface: the chain of stages (docs/telegator.md §1)
+is drawn once, on the Pipeline page, and every manual trigger sits on the node
+it acts on. **The memorable thing** is the dead-letter count: the one red
+figure in the console, on the stage it came from.
 
 ## Colors
 
@@ -59,7 +59,7 @@ toasts and the user menu float (`shadow-overlay`). Fields round 6px, panels
 
 - **Stat card** — label, figure, note; the errors card turns `error` above zero.
 - **Donut** — a `conic-gradient` ring with a legend; empty reads "No data yet".
-- **Pipeline node** — icon, title, caption, figure; a queue adds its DLQ chip.
+- **Pipeline node** — icon, title, caption, figure; a stage run by a queue adds its dead-letter chip.
 - **Records table** — DaisyUI `table-sm`, sticky header with a filter row,
   inline inputs where the operator may write.
 

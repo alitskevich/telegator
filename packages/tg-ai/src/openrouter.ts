@@ -1,30 +1,14 @@
 import type { Classifier } from "tg-ai/types";
 import { type NewsItem, NewsItemSchema } from "tg-domain/newsItemSchema";
-import {
-  buildClassificationRequest,
-  type ClassificationRequest,
-  type ClassificationRequestOptions,
-} from "./classificationRequest";
+import { buildClassificationRequest } from "./classificationRequest";
 import { extractText } from "./messagesContent";
-import { type ApiKeyProvider, createMessagesClient, missingApiKey } from "./openrouterClient";
+import { createMessagesClient, missingApiKey } from "./openrouterClient";
+import type { OpenRouterClassifierOptions } from "./types";
 
 /**
  * The OpenRouter classifier. The client is injectable and built lazily, so
  * constructing the adapter never fetches a secret and tests can import it.
  */
-
-/** Kept as a named export because the tests inject against exactly this shape. */
-export interface ClassifierClient {
-  create(request: ClassificationRequest): Promise<unknown>;
-}
-
-export interface OpenRouterClassifierOptions {
-  readonly client?: ClassifierClient;
-  /** Reads the key from the function secret; supplied by `tg-functions/src/index.ts`. */
-  readonly apiKey?: ApiKeyProvider;
-  /** `false` omits `output_config.effort` entirely. */
-  readonly effort?: ClassificationRequestOptions["effort"];
-}
 
 export function createOpenRouterClassifier(options: OpenRouterClassifierOptions = {}): Classifier {
   let client = options.client;

@@ -1,5 +1,5 @@
 import { loadOverview } from "tg-actions/dashboard/overview";
-import { inspectDlq, loadQueues, purgeDlq, replayDlq } from "tg-actions/dashboard/queues";
+import { inspectDlq, purgeDlq, replayDlq } from "tg-actions/dashboard/queues";
 import { deleteRecords, loadMembers, upsertRecord } from "tg-actions/dashboard/records";
 import {
   exportTable,
@@ -31,7 +31,6 @@ export const ACTIONS: Record<string, readonly [Role, Action]> = {
       messages.queryByStatus(z.object({ status: MessageStatusSchema }).parse(input).status),
   ],
   loadMembers: ["viewer", loadMembers],
-  loadQueues: ["viewer", () => loadQueues()],
   inspectDlq: ["viewer", inspectDlq],
   exportTable: ["viewer", exportTable],
   upsertRecord: ["editor", upsertRecord],

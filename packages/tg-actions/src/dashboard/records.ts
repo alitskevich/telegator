@@ -1,10 +1,10 @@
 import { ItemIdSchema } from "tg-domain/ids";
-import type { MemberBlock } from "tg-domain/message";
 import { SourceSchema } from "tg-domain/source";
 import { TargetConfigInput, TargetSchema } from "tg-domain/target";
 import { messages, sources, targets } from "tg-firebase/db";
 import { MESSAGE_WRITABLE_FIELDS, SOURCE_WRITABLE_FIELDS, TABLES } from "tg-rc/columns";
 import { z } from "zod";
+import type { MemberRow } from "./types";
 
 /** Operator edits to the three collections. Every write is attribute-level; a delete is soft. */
 
@@ -48,10 +48,6 @@ export async function upsertRecord(input: unknown): Promise<void> {
 export async function deleteRecords(input: unknown): Promise<void> {
   const { table, ids } = DeleteInput.parse(input);
   await collections[table].softDelete(ids);
-}
-
-export interface MemberRow extends MemberBlock {
-  readonly itemId: string;
 }
 
 /** A story's member posts, oldest first. */

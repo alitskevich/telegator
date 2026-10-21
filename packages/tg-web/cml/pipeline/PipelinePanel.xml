@@ -5,7 +5,6 @@
   <!-- Bare `section` with an id: `PipelineService.select` scrolls to it on a phone. -->
   <section id="pipeline-panel" class="bg-base-100 rounded-box p-4 sm:p-6 flex flex-col gap-4 scroll-mt-20">
     <Selector On="{@pipeline.selected.kind}">
-      <Case When="queue"><This-Queue /></Case>
       <Case When="function"><This-Stage /></Case>
       <Case When="trigger"><This-Stage /></Case>
       <Case When="sink"><This-Stage /></Case>
@@ -27,7 +26,7 @@
   </Subcomponent>
 
   <Subcomponent id="Stage">
-    <Signature purpose="A stage, the clock or Telegram: what it does, and its trigger when it has one" />
+    <Signature purpose="A stage, the clock or Telegram: what it does, its trigger and its dead letters when it has them" />
     <This-Heading />
     <p If="@pipeline.selected.detail" class="text-sm text-base-content/70 max-w-[65ch]">{@pipeline.selected.detail}</p>
     <div If="{@api.canAdmin AND @pipeline.selected.id == 'scrape'}" class="flex flex-wrap gap-2">
@@ -46,13 +45,13 @@
       </Fragment>
       <a href="#/messages?status=topublish" class="btn btn-sm btn-ghost">{R.pipeline.openMessages}</a>
     </div>
+    <This-Queue If="@pipeline.selected.queue" />
   </Subcomponent>
 
   <Subcomponent id="Queue">
-    <Signature purpose="A queue: depth, dead letters, its actions and the last dead-letter peek" />
-    <This-Heading />
+    <Signature purpose="A stage's queue and dead letters: the counts, their actions and the last peek" />
     <div class="grid grid-cols-2 gap-4 max-w-md">
-      <StatCard label="{R.pipeline.inQueue}" value="{@pipeline.selected.value}" surface="zone" />
+      <StatCard label="{R.pipeline.inQueue}" value="{@pipeline.selected.queued}" surface="zone" />
       <StatCard label="{R.pipeline.deadLetters}" value="{@pipeline.selected.dlq}"
         alert="{@pipeline.selected.alert}" surface="zone" />
     </div>

@@ -2,7 +2,7 @@
 
 Reads Telegram news channels, classifies and deduplicates the posts with Claude through OpenRouter, and publishes merged stories back to Telegram. An operator console curates sources, reviews messages and replays failures.
 
-It runs on Firebase: Firestore, Cloud Functions, Cloud Tasks and Hosting. **How it works is in [`docs/telegator.md`](docs/telegator.md).**
+It runs on Firebase: Firestore, Cloud Functions and Hosting. **How it works is in [`docs/telegator.md`](docs/telegator.md).**
 
 ## Run it locally
 

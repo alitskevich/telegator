@@ -1,14 +1,10 @@
+import type { SortState } from "./types";
 /**
  * Column sorting for the console's tables, on the client over the rows the page
  * already holds, like `filterByKeyword`. Shared, so every header behaves alike.
  */
 
 export type SortDirection = "asc" | "desc";
-
-export interface SortState {
-  readonly column: string;
-  readonly direction: SortDirection;
-}
 
 /**
  * What one click on `column` does to the current sort: ascending, then

@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { type TelegramFixtureName, telegramFixture } from "../../../test/fixtures/telegram/index";
-import type { ParsedPost } from "./parse";
+
 import { parseTelegramPage } from "./parse";
+import type { ParsedPost } from "./types";
 
 /**
  * Every case runs over recorded `t.me/s/` markup, never hand-written HTML: the

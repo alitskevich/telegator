@@ -1,22 +1,9 @@
+import type { ParsedLink, ParsedPost } from "./types";
+
 /**
  * The `t.me/s/{channel}` HTML parser. String-level on purpose: no DOM, no HTML
  * library. The patterns follow markup read off a live page.
  */
-
-export interface ParsedLink {
-  readonly id: number;
-  readonly href: string;
-}
-
-export interface ParsedPost {
-  id: string;
-  body: string;
-  links: Array<{ id: number; href: string }>;
-  image?: string;
-  forwardedFrom?: string;
-  /** The post's publish time, as the page writes it — an ISO-8601 string. */
-  postedAt?: string;
-}
 
 /** The literal the page is split on. */
 const CHUNK_MARKER = '<div class="tgme_widget_message_wrap js-widget_message_wrap">';

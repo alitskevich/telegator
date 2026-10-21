@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { cycleSort, type SortState, sortRows } from "./sort";
+import { cycleSort, sortRows } from "./sort";
+import type { SortState } from "./types";
 
 const rows = [
   { id: "example/3", title: "Budget passed", lastCount: 120, deleted: false },

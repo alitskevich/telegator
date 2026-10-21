@@ -1,7 +1,7 @@
 ---
 title: "Telegator"
 description: "How the Telegram news pipeline works on Firebase: data, stages, AI, deduplication, console, development and deployment."
-keywords: [telegator, firebase, firestore, cloud-functions, cloud-tasks, openrouter, telegram]
+keywords: [telegator, firebase, firestore, cloud-functions, openrouter, telegram]
 ---
 
 # Telegator
@@ -13,9 +13,9 @@ Telegator collects posts from public Telegram channels and asks an AI model to c
 ```mermaid
 flowchart LR
   Clock["Cloud Scheduler<br/>every 30 min"] --> Scrape["scrape"]
-  Scrape -->|task| Analyze["analyze<br/>5 at a time"]
-  Analyze -->|task| Aggregate["aggregate<br/>1 at a time"]
-  Aggregate -->|task, 5 min delay| Publish["publish<br/>1 at a time"]
+  Scrape -->|ingest| Analyze["analyze<br/>5 at a time"]
+  Analyze -->|ingest| Aggregate["aggregate<br/>1 at a time"]
+  Aggregate -->|ingest, 5 min delay| Publish["publish<br/>1 at a time"]
   Publish --> TG["Telegram Bot API"]
   Analyze & Aggregate --> AI["OpenRouter: Claude"]
   Scrape & Aggregate & Publish --> FS[("Firestore")]
@@ -23,14 +23,14 @@ flowchart LR
   Api --> FS
 ```
 
-**The queue is the pipeline.** A post in flight is a Cloud Tasks payload and is never stored. It becomes durable only when `aggregate` absorbs it into a message, and it is stored *inside* that message. A post that is dropped or dies leaves only a counter, a log line, or a dead letter.
+**The queue is the pipeline.** A post in flight is an `ingest` document: its payload in `raw`, its `status` (`pending`, `running`, `done`, `dead`), `retryCount`, `runAt` and timestamps. `aggregate` absorbs it into a message, where it is stored *inside* that message. A `done` item is deleted by a TTL policy after 7 days; a `dead` one stays until an operator replays or discards it.
 
 | Concern | Firebase piece | Code |
 | --- | --- | --- |
 | Clock | `onSchedule`, every 30 min | `tg-functions/index.ts` |
-| Work in flight | Cloud Tasks queues, `onTaskDispatched` | `tg-firebase/tasks.ts` |
+| Work in flight | Firestore `ingest`, drained by the `ingest` trigger and `sweep` | `tg-firebase/tasks.ts`, `ingest.ts` |
 | Durable records | Firestore: `sources`, `targets`, `messages`, `videos` | `tg-firebase/db.ts` |
-| Failed work | Firestore `deadLetters` | `tg-firebase/deadLetters.ts` |
+| Failed work | `ingest` items with `status = dead` | `tg-firebase/deadLetters.ts` |
 | Counters | Firestore `metrics`, one doc per hour | `tg-firebase/metrics.ts` |
 | Operators | Firebase Auth + Firestore `users` | `tg-firebase/operators.ts` |
 | Console API | one `onRequest` function, `api` | `tg-api/` |
@@ -80,14 +80,18 @@ The map makes replay free: writing `members.{itemId}` again writes the same valu
 
 ## 3. Stages
 
-Each task stage runs one item per invocation. A thrown error retries the task with backoff. On the last attempt the wrapper writes the payload to `deadLetters` instead, because Cloud Tasks would drop it.
+Each task stage drains its own `ingest` items. A drain holds the stage's lease (`ingestLeases/{stage}`), so one drain runs per stage, and it runs at most *concurrency* items at once, oldest `runAt` first. A thrown error sets the item back to `pending` with a backoff of 30 s, doubling per attempt; the last attempt sets it `dead`.
+
+- **Trigger.** `ingest` (`onDocumentWritten`) drains a stage as soon as one of its items is `pending` and due: on enqueue and on replay.
+- **Sweep.** `sweep` runs every minute. It runs what came due later (the publish delay, a retry's backoff) and fails the items of a drain that died: `running` past their lease counts as one attempt.
+- **Ids.** `enqueue` with an `id` is a create-if-absent write, so a second request with that id is refused.
 
 | Function | Trigger | Attempts | Concurrency |
 | --- | --- | --- | --- |
 | `scrape`, `scrapeMtproto`, `scrapeGmail` | every 30 min, if `SCRAPE_ENABLED` | — | — |
-| `analyze` | queue `analyze` | 3 | 5 |
-| `aggregate` | queue `aggregate` | 3 | **1** |
-| `publish` | queue `publish` | 5 | **1** |
+| `ingest`, `sweep` → analyze | `ingest`, stage `analyze` | 3 | 5 |
+| `ingest`, `sweep` → aggregate | `ingest`, stage `aggregate` | 3 | **1** |
+| `ingest`, `sweep` → publish | `ingest`, stage `publish` | 5 | **1** |
 | `api` | HTTPS | — | — |
 | `youtube` | every 6 h, if `YOUTUBE_PLAYLIST_ID` is set (§10) | — | — |
 
@@ -106,9 +110,9 @@ An empty body or a bare link is dropped before the model call. Otherwise one cla
 
 ### 3.3 aggregate
 
-Dedup (§5) decides **merge** or **create**. A merge writes `members.{itemId}` and the scalars attribute by attribute, keeps `posts`, and sets `topublish`. A create uses a create-if-absent write. Then it asks for a publish. Requests for one message within one 5-minute window share a task id, so a burst of merges publishes once, after the story settles.
+Dedup (§5) decides **merge** or **create**. A merge writes `members.{itemId}` and the scalars attribute by attribute, keeps `posts`, and sets `topublish`. A create uses a create-if-absent write. Then it asks for a publish. Requests for one message within one 5-minute window share an item id, so a burst of merges publishes once, after the story settles.
 
-The queue runs **one task at a time**. Two items of the same day therefore can never both miss each other's write. SQS FIFO serialised per day; this serialises everything, which is ample at this volume.
+The stage runs **one item at a time**. Two items of the same day therefore can never both miss each other's write. SQS FIFO serialised per day; this serialises everything, which is ample at this volume.
 
 ### 3.4 publish
 
@@ -152,11 +156,11 @@ Code: `tg-dedup/`. Constants: `tg-configs/dedup.ts`.
 
 | Role | Actions |
 | --- | --- |
-| viewer | whoami, overview, list sources/targets/messages, members, queues, inspect dead letters, export CSV |
+| viewer | whoami, overview, list sources/targets/messages, members, inspect dead letters, export CSV |
 | editor | upsert and soft-delete records |
 | admin | scrape now, reset cursors, republish, publish now, replay or purge dead letters |
 
-- **Dashboard numbers** come from the hourly `metrics` docs (24 h counters, 7-day categories). Queue depth is the `counters/pending` doc: +1 on enqueue, −1 when a task finishes or dies.
+- **Dashboard numbers** come from the hourly `metrics` docs (24 h counters, 7-day categories) and two counts per stage from `ingest`: items in queue (`pending` or `running`) and dead letters.
 
 ## 7. Development
 
@@ -176,7 +180,7 @@ npm run dev              # emulators + functions watch + console on :8080
 | Secrets for the emulator | `packages/tg-functions/.secret.local` (git-ignored), linked from `~/.keys/telegator-functions-secrets.env`. `TELEGRAM_BOT_TOKEN` there is a placeholder, so local runs never post to live channels. Put a test bot's token there to try publishing. |
 | Sign in locally | Press *Sign in*. The Auth emulator signs in `dev@example.com`, and the first emulator sign-in is an enabled admin. |
 | Data | `FIRESTORE_EMULATOR_HOST=127.0.0.1:8180 npm run seed -- <dir> --write` loads `sources` and `targets` from DynamoDB scan exports. |
-| A scrape | *Scrape now* on Sources or Pipeline. Scheduled functions do not fire in the emulator. |
+| A scrape | *Scrape now* on Sources or Pipeline. Scheduled functions do not fire in the emulator, so neither does `sweep`: an item due later (the publish delay, a retry) waits. *Publish now* skips the delay; *Replay* re-runs a dead item. |
 
 Scripts (`seed`, `mcp`, `cursors:now`) use the emulator when `FIRESTORE_EMULATOR_HOST` is set. Otherwise they use production through `gcloud auth application-default login`.
 
@@ -189,24 +193,25 @@ npx biome check .
 npm run build            # console bundle + functions bundle
 ```
 
-Tests never touch the network. Pure logic is unit-tested, and Firestore code runs against the emulator. Cloud Tasks and the model are mocked with `vi.mock`. `npm test` cannot start while `npm run dev` holds the ports; in that case run `FIRESTORE_EMULATOR_HOST=127.0.0.1:8180 GCLOUD_PROJECT=demo-test npx vitest run`.
+Tests never touch the network. Pure logic is unit-tested, and Firestore code runs against the emulator. The model is mocked, and stage tests mock `tg-firebase/tasks` with `vi.mock`. `npm test` cannot start while `npm run dev` holds the ports; in that case run `FIRESTORE_EMULATOR_HOST=127.0.0.1:8180 GCLOUD_PROJECT=demo-test npx vitest run`.
 
 ## 8. Deployment
 
 One Firebase project, `telegator-581db`. Functions run in `us-central1`, next to Firestore (`nam5`).
 
-1. The project must be on the **Blaze** plan: Functions, Cloud Tasks and Scheduler need it.
+1. The project must be on the **Blaze** plan: Functions and Scheduler need it.
 2. Set the secrets once: `firebase functions:secrets:set OPENROUTER_API_KEY`, the same for `TELEGRAM_BOT_TOKEN`, `npm run mtproto:login` for `MTPROTO_SESSION`, `npm run youtube:login` for `YOUTUBE_OAUTH` (§10), and `npm run gmail:login` for `GMAIL_OAUTH`. The Gmail login reuses the YouTube Desktop OAuth client (§10, setup steps 1–2); enable the *Gmail API* in the same project first.
 3. Enable the Google provider in Firebase Auth. Add its OAuth web client id to `firebaseConfig.googleClientId` in `tg-configs/firebase.ts`, and list the site's origins on that client.
-4. `npm run deploy`: builds both bundles, then deploys hosting, functions, Firestore rules and indexes.
+4. `npm run deploy`: builds both bundles, then deploys hosting, functions, Firestore rules, indexes and the `ingest.expireAt` TTL policy.
 5. Sign in once, then set your `users/{uid}` to `{enabled: true, roles: ["admin"]}` in the Firestore console.
 6. Start the schedule: set `SCRAPE_ENABLED=true` in `packages/tg-functions/.env` and redeploy the functions.
 
 ## 9. Decisions and limits
 
-- **Serial aggregate and publish.** Cloud Tasks has no FIFO groups, so both queues dispatch one task at a time. Fine at hundreds of posts a day; revisit with per-day locking if volume grows a hundredfold.
-- **Publish dedup** is a task id per message per 5-minute window. A request in a new window is a new publish, which is harmless because publish skips current posts.
+- **Serial aggregate and publish.** Both stages run one item at a time under their lease. Fine at hundreds of posts a day; revisit with per-day locking if volume grows a hundredfold.
+- **Publish dedup** is an item id per message per 5-minute window. A request in a new window is a new publish, which is harmless because publish skips current posts.
 - **Send then record.** If writing `posts` fails right after a successful send, the retry posts again. This is rare and is accepted.
+- **A hand-made queue.** `ingest` replaced Cloud Tasks on 2026-10-21, to show every item in flight. A delayed or retried item runs on the next `sweep`, up to a minute late; an item enqueued just as a drain ends may wait for it too.
 - **Counters live in Firestore**, not a metrics service. There are no alarms; the dashboard shows dead letters and stale sources.
 - **AWS history.** The AWS build (DynamoDB, SQS, Lambda, Cognito, CDK) ran until 2026-10-20 and lives in git history before this rewrite.
 

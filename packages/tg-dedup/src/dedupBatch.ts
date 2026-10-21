@@ -1,4 +1,4 @@
-import type { AdjudicationFields, AdjudicationPair, Adjudicator } from "tg-ai/types";
+import type { AdjudicationFields, AdjudicationPair } from "tg-ai/types";
 import { MAX_MEMBERS } from "tg-configs/dedup";
 import { sourceIdOf } from "tg-domain/ids";
 import type { AnalyzedItem } from "tg-domain/item";
@@ -10,17 +10,9 @@ import {
   type MessageMergeAttributes,
 } from "tg-domain/message";
 import { mergeTags } from "tg-domain/tags";
-import type { Metrics } from "tg-enums/metrics";
-import type { Clock } from "tg-utils/clock";
-import type { Logger } from "tg-utils/logger";
-import {
-  buildMatchKey,
-  type MatchKey,
-  matchKeyAttributes,
-  matchKeyOf,
-  unionMatchKeys,
-} from "./matchKey";
-import { type Band, classify, matchScore } from "./score";
+import { buildMatchKey, matchKeyAttributes, matchKeyOf, unionMatchKeys } from "./matchKey";
+import { classify, matchScore } from "./score";
+import type { DedupDeps, DedupResult, MatchKey, MemberMerge } from "./types";
 
 /**
  * The deduplication algorithm (see docs/telegator.md §5). Pure: it writes
@@ -39,45 +31,9 @@ import { type Band, classify, matchScore } from "./score";
  *    overwrite the fields a replay would match on.
  */
 
-export interface DedupDeps {
-  /** Resolves the ambiguous band. Called at most once per batch, and not at all when the band is empty. */
-  readonly adjudicator: Adjudicator;
-  /** The same-date Firestore query; it returns key fields only. */
-  loadCandidatesByDate(date: string): Promise<DedupCandidate[]>;
-  /**
-   * Reads the full message: the `members` a merge needs, and the `title`,
-   * `category` and `location` a band pair describes it with. Memoised per batch.
-   */
-  loadMessage(id: string): Promise<Message | undefined>;
-  readonly clock: Clock;
-  readonly metrics: Metrics;
-  /**
-   * An adjudication failure is swallowed, because splitting is the safe outcome.
-   * The metric records that it happened; the log records *why*.
-   */
-  readonly logger: Logger;
-  /** Injected, so recalibration is a configuration change rather than a code edit. */
-  readonly band?: Band;
-}
-
-/** A merge written attribute-level: one `members.{itemId}` per member, plus the scalars. */
-export interface MemberMerge {
-  readonly id: string;
-  readonly members: Readonly<Record<string, MemberBlock>>;
-  readonly attributes: MessageMergeAttributes;
-}
-
 export type DedupWrite =
   | { readonly kind: "create"; readonly message: Message }
   | { readonly kind: "merge"; readonly merge: MemberMerge };
-
-export interface DedupResult {
-  readonly writes: readonly DedupWrite[];
-  /** Every touched message id whose rendered content changed. */
-  readonly toPublish: readonly string[];
-  /** Recorded as a metric: a large count means the in-memory comparison is getting costly. */
-  readonly candidateCount: number;
-}
 
 /** The effective state of a message touched by this batch. */
 interface Pending {

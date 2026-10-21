@@ -13,9 +13,10 @@ import {
   recordingMetrics,
   recordingSink,
 } from "../../../test/support";
-import { type DedupDeps, dedupBatch } from "./dedupBatch";
-import { buildMatchKey, type MatchKeyFields, matchKeyAttributes } from "./matchKey";
+import { dedupBatch } from "./dedupBatch";
+import { buildMatchKey, matchKeyAttributes } from "./matchKey";
 import { matchScore } from "./score";
+import type { DedupDeps, MatchKeyFields } from "./types";
 
 const DATE = "2026-08-29";
 

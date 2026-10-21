@@ -13,7 +13,7 @@
  */
 
 import type { HttpFetcher } from "tg-telegram/types";
-import type { HttpPost, HttpPostResponse } from "./bot";
+import type { FetchInit, FetchResponse, HttpOptions, HttpPost, HttpPostResponse } from "./types";
 
 /**
  * Scrape has 300 s for up to ten sources. Twenty seconds each leaves a margin
@@ -27,31 +27,11 @@ export const SCRAPE_FETCH_TIMEOUT_MS = 20_000;
  */
 export const BOT_API_TIMEOUT_MS = 30_000;
 
-/** The slice of the `Response` interface these adapters use. */
-export interface FetchResponse {
-  /** True for a 2xx. */
-  readonly ok: boolean;
-  readonly status: number;
-  text(): Promise<string>;
-}
-
-export interface FetchInit {
-  readonly method: string;
-  readonly headers: Record<string, string>;
-  readonly body?: string;
-  readonly signal: AbortSignal;
-}
-
 /**
  * The injectable `fetch`. Structural rather than `typeof fetch` so a test can
  * supply a plain function and no test can reach the network.
  */
 export type FetchLike = (url: string, init: FetchInit) => Promise<FetchResponse>;
-
-export interface HttpOptions {
-  readonly fetch?: FetchLike;
-  readonly timeoutMs?: number;
-}
 
 /**
  * Wrapped rather than passed by reference: an unbound `fetch` is an illegal

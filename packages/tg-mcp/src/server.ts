@@ -1,11 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { McpDeps, ToolDefinition } from "./tools";
-import { TOOLS } from "./tools";
 
-export interface CreateMcpServerOptions {
-  readonly version: string;
-  readonly deps: McpDeps;
-}
+import { TOOLS } from "./tools";
+import type { CreateMcpServerOptions, McpDeps, ToolDefinition } from "./types";
 
 interface ToolTextResult {
   readonly [key: string]: unknown;

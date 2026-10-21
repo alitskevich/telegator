@@ -4,6 +4,7 @@ import { escapeHtml } from "./escape";
 import { buildHashtagLine } from "./hashtags";
 import { renderMembers } from "./render";
 import { renderTemplate } from "./template";
+import type { AssembledMessage } from "./types";
 
 /**
  * Message assembly and the send-mode decision, as pure functions.
@@ -93,15 +94,6 @@ function fitToLimit(compose: Compose, blocks: readonly string[], hashtagLine: st
 }
 
 export type SendMethod = "sendMessage" | "sendPhoto" | "editMessageText";
-
-export interface AssembledMessage {
-  readonly text: string;
-  readonly method: SendMethod;
-  /** Present only on `sendPhoto`; an edit never re-sends a photo. */
-  readonly photo?: string;
-  readonly disableWebPagePreview: boolean;
-  readonly chatId: string;
-}
 
 /**
  * What to send for one message on one target. The caller owns the status

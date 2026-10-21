@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ItemIdParts } from "./types";
 
 /**
  * Composite item ids, `{sourceId}/{telegramMessageId}`. Code uses them verbatim;
@@ -17,11 +18,6 @@ export const ItemIdSchema = z
   .regex(ITEM_ID_PATTERN, "expected an item id of the form {sourceId}/{telegramMessageId}");
 
 export type ItemId = z.infer<typeof ItemIdSchema>;
-
-export interface ItemIdParts {
-  readonly sourceId: string;
-  readonly tgMessageId: string;
-}
 
 export function formatItemId(sourceId: string, tgMessageId: string): ItemId {
   return ItemIdSchema.parse(`${sourceId}/${tgMessageId}`);

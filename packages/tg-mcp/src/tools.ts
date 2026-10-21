@@ -1,30 +1,15 @@
-import type { MemberBlock, Message, MessageListItem } from "tg-domain/message";
+import type { Message, MessageListItem } from "tg-domain/message";
 import { SOURCE_STATUS_OK, SourceConfigInput, SourceSchema } from "tg-domain/source";
 import { splitTags } from "tg-domain/tags";
 import { TargetSchema } from "tg-domain/target";
 import { TARGET_TYPES } from "tg-enums/targetType";
-import type { Messages, Sources, Targets } from "tg-firebase/db";
 import { z } from "zod";
 import { canonicalId } from "./ids";
+import type { McpDeps, MessageContent, ToolDefinition } from "./types";
 
 export const SEARCHED_STATUSES = ["published", "topublish"] as const;
 export const MESSAGE_SCAN_LIMIT = 200;
 export const MESSAGE_RESULT_LIMIT = 10;
-
-/** The repositories a tool may reach, and nothing else. */
-export interface McpDeps {
-  readonly sources: Sources;
-  readonly targets: Targets;
-  readonly messages: Messages;
-}
-
-/** One entry of the registry, transport-agnostic. */
-export interface ToolDefinition {
-  readonly name: string;
-  readonly description: string;
-  readonly inputSchema: z.ZodObject;
-  readonly run: (input: unknown, deps: McpDeps) => Promise<unknown>;
-}
 
 /** The optional fields are exactly `SourceConfigInput`'s; a test pins this. */
 export const AddSourceInput = z
@@ -74,29 +59,6 @@ export async function addTarget(raw: unknown, deps: McpDeps) {
   const row = TargetSchema.parse({ ...config, id });
   await deps.targets.put(row);
   return { created: row };
-}
-
-/** One member, flattened with its map key. */
-export interface MemberEntry extends MemberBlock {
-  readonly itemId: string;
-}
-
-/** What `find_messages_by_tags` returns per message. */
-export interface MessageContent {
-  readonly id: string;
-  readonly status: string;
-  readonly date: string;
-  readonly ts: number;
-  readonly title?: string;
-  readonly category?: string;
-  readonly country?: string;
-  readonly location?: string;
-  readonly peoples?: string;
-  readonly tags?: string;
-  readonly image?: string;
-  readonly tgChannel?: string;
-  readonly memberCount: number;
-  readonly members: MemberEntry[];
 }
 
 export const FindMessagesInput = z
