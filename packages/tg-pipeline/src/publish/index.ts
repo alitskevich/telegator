@@ -1,6 +1,7 @@
 import { toIsoTimestamp } from "tg-domain/date";
 import type { Post } from "tg-domain/message";
 import { resolveTargets, type Target } from "tg-domain/target";
+import { recordAudit } from "tg-firebase/audit";
 import { messages, targets } from "tg-firebase/db";
 import { metrics } from "tg-firebase/metrics";
 import type { TelegramBot, TelegramResponse } from "tg-telegram/types";
@@ -14,8 +15,8 @@ import type { AssembledMessage } from "./types";
  * time, edit it in place after that.
  *
  * `posts` is recorded after every send, so a retry skips the targets already
- * current and never posts twice. A rejected send throws once every target has
- * been tried, and the task retries.
+ * current and never posts twice. A rejected send is recorded in `audit`, and
+ * throws once every target has been tried, and the task retries.
  */
 
 function send(bot: TelegramBot, assembled: AssembledMessage, tgId: string | undefined) {
@@ -59,9 +60,13 @@ export async function runPublish(
     const response: TelegramResponse = await send(bot, assembled, existing?.tgId);
 
     if (!response.ok) {
+      const error = response.description ?? "no description";
       metrics.count("TelegramApiErrors", 1, assembled.method);
-      log.error("telegram rejected the send", { messageId, target, error: response.description });
-      rejected.push(target);
+      log.error("telegram rejected the send", { messageId, target, error });
+      await recordAudit({ messageId, target, method: assembled.method, error, at: now() }).catch(
+        (failure) => log.warn("audit not recorded", { messageId, error: String(failure) }),
+      );
+      rejected.push(`${target} (${assembled.method}): ${error}`);
       continue;
     }
 
@@ -81,6 +86,6 @@ export async function runPublish(
     log.info("published", { messageId, target, method: assembled.method });
   }
 
-  if (rejected.length > 0) throw new Error(`telegram rejected ${rejected.join(", ")}`);
+  if (rejected.length > 0) throw new Error(`telegram rejected ${rejected.join("; ")}`);
   await messages.markPublished(messageId, now());
 }

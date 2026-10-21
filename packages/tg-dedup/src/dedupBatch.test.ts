@@ -942,7 +942,7 @@ describe("the band", () => {
 
   /**
    * And it is a handled failure, not a thrown batch: the unambiguous items in a
-   * batch must still be written, or one flaky model call dead-letters them all.
+   * batch must still be written, or one flaky model call fails them all.
    */
   test("a failing adjudication still writes the items that were never ambiguous", async () => {
     const batch = [...twoAmbiguousItems(), item("chan_z/9", OTHER_EVENT)];
@@ -1123,7 +1123,7 @@ describe("replay idempotency", () => {
   });
 
   /**
-   * The publish task id only dedupes within one 5-minute window; a dead letter
+   * The publish task id only dedupes within one 5-minute window; an `error` item
    * replayed later would re-edit the live post with its own text.
    */
   test("a replay enqueues nothing, rather than relying on the 5-minute task window", async () => {

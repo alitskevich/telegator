@@ -205,8 +205,33 @@ describe("the `ok` field is the error signal, not the HTTP status", () => {
     const response = await h.bot.sendMessage({ chatId: "c", text: "t" });
 
     expect(response.ok).toBe(false);
-    expect(response.description).toBe("Bad Request: chat not found");
+    expect(response.description).toContain("Bad Request: chat not found");
     expect(response.result).toBeUndefined();
+  });
+
+  test("a chat not found names the channel and what to check", async () => {
+    const h = harness([failure("Bad Request: chat not found")]);
+
+    const response = await h.bot.sendMessage({ chatId: "news", text: "t" });
+
+    expect(response.description).toBe(
+      "Bad Request: chat not found: no public channel @news, or a private one without the bot; check the target id",
+    );
+  });
+
+  test("a 404 or 401 names the bot token as the cause", async () => {
+    for (const [status, description] of [
+      [404, "Not Found"],
+      [401, "Unauthorized"],
+    ] as const) {
+      const h = harness([{ status, body: { ok: false, description } }]);
+
+      const response = await h.bot.sendMessage({ chatId: "c", text: "t" });
+
+      expect(response.description).toBe(
+        `${description}: the bot token is invalid; check TELEGRAM_BOT_TOKEN`,
+      );
+    }
   });
 
   test("an ok:false that is not a 429 is never retried", async () => {

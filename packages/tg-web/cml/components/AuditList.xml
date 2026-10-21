@@ -1,0 +1,16 @@
+<Component id="AuditList">
+  <Signature purpose="Rejected sends, one per line: when, where, by which method, and Telegram's reason">
+    <Prop id="entries" type="array" required="true" description="`StoredAuditEntry` rows from `tg-firebase`, newest first" />
+    <Prop id="withMessage" type="boolean" default="false" description="Also names each entry's message, for a list across messages" />
+  </Signature>
+
+  <ul class="flex flex-col divide-y divide-base-300/60 text-sm min-w-0">
+    <li Each="entry of entries" class="py-2 first:pt-0 last:pb-0 flex flex-col gap-0.5 min-w-0">
+      <span class="text-xs text-base-content/60 tabular-nums break-words">
+        {entry.at | dateTimeFormat} · @{entry.target} · {entry.method}
+        <span If="withMessage"> · {entry.messageId}</span>
+      </span>
+      <span class="text-error break-words">{entry.error}</span>
+    </li>
+  </ul>
+</Component>

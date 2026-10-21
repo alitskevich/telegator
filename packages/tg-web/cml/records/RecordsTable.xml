@@ -115,8 +115,15 @@
           checked="{row.selected}" data-id="{row.id}" toggle="-> @grid.toggle(event)" />
       </td>
       <td If="{table == 'messages'}" class="order-3 block p-0 md:table-cell md:align-top md:px-3 md:py-2">
-        <IBtn icon="{row.expanded ? 'chevron-down' : 'chevron-right'}" title="{R.common.members}"
-          class="md:btn-xs" click="-> @grid.expand(row.id)" />
+        <div class="flex items-center gap-1">
+          <IBtn icon="{row.expanded ? 'chevron-down' : 'chevron-right'}" title="{R.common.members}"
+            class="md:btn-xs" click="-> @grid.expand(row.id)" />
+          <span If="{row.errors GT 0}" class="badge badge-error badge-soft badge-xs gap-0.5 tabular-nums"
+            title="{R.audit.open}">
+            <span class="icon icon-triangle-alert" aria-hidden="true"></span>
+            <span>{row.errors}</span>
+          </span>
+        </div>
       </td>
       <td Each="cell of row.cells"
         class="block p-0 min-w-0 md:table-cell md:align-top md:px-3 md:py-2 {cell.primary ? 'order-2 basis-[calc(100%-6rem)] grow font-medium' : (cell.multiline ? 'order-4 basis-full' : 'order-4 basis-[calc(50%-0.5rem)]')}">
@@ -131,7 +138,14 @@
           busy="{@api.busy['republish:' + row.id]}" click="-> @grid.republish(row.id)" />
       </td>
     </tr>
-    <tr If="row.expanded" class="block md:table-row bg-base-200">
+    <This-Panel If="row.expanded" row="{row}" />
+  </Subcomponent>
+
+  <Subcomponent id="Panel">
+    <Signature purpose="A message's expanded panel: its members, then the sends Telegram rejected">
+      <Prop id="row" type="object" required="true" description="A `ViewRow` from `src/grid/types.ts`" />
+    </Signature>
+    <tr class="block md:table-row bg-base-200">
       <td colspan="20" class="block md:table-cell px-4 py-3 md:px-6">
         <Loading If="row.membersLoading" size="sm" />
         <p If="{!row.membersLoading AND !row.members.length}" class="text-sm text-base-content/60">{R.common.noMembers}</p>
@@ -141,6 +155,10 @@
             <span class="text-base-content/80">{member.summary}</span>
           </li>
         </ul>
+        <div If="row.audit.length" class="mt-4 flex flex-col gap-2 max-w-[80ch]">
+          <h3 class="text-sm font-medium">{R.audit.rejected}</h3>
+          <AuditList entries="{row.audit}" />
+        </div>
       </td>
     </tr>
   </Subcomponent>

@@ -89,6 +89,25 @@ const redactToken = (text: string, token: string): string =>
 const describeError = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+/**
+ * Telegram answers a bad token with a bare `Unauthorized` (401) or, when it is
+ * malformed, `Not Found` (404): neither names the token, so the cause is added.
+ */
+const TOKEN_REJECTED_STATUSES = new Set([401, 404]);
+
+/** What Telegram says when `@username` resolves to no chat the bot can see. */
+const CHAT_NOT_FOUND = "Bad Request: chat not found";
+
+const explain = (status: number, description: string, chatId: string): string => {
+  if (TOKEN_REJECTED_STATUSES.has(status)) {
+    return `${description}: the bot token is invalid; check TELEGRAM_BOT_TOKEN`;
+  }
+  if (description === CHAT_NOT_FOUND) {
+    return `${description}: no public channel ${chatId}, or a private one without the bot; check the target id`;
+  }
+  return description;
+};
+
 export function createTelegramBot(options: TelegramBotOptions): TelegramBot {
   const parseMode = options.parseMode ?? DEFAULT_PARSE_MODE;
 
@@ -158,7 +177,11 @@ export function createTelegramBot(options: TelegramBotOptions): TelegramBot {
 
       last = fail(
         method,
-        redactToken(envelope.description ?? "Telegram reported ok: false", token),
+        explain(
+          status,
+          redactToken(envelope.description ?? "Telegram reported ok: false", token),
+          String(body.chat_id),
+        ),
       );
       if (envelope.parameters !== undefined) {
         last = { ...last, parameters: envelope.parameters };
@@ -170,7 +193,7 @@ export function createTelegramBot(options: TelegramBotOptions): TelegramBot {
     }
 
     // Both attempts were rate limited. The caller handles it: publish throws,
-    // the task retries, and finally lands in dead letters.
+    // the task retries, and finally ends as an `error` item.
     return last;
   };
 

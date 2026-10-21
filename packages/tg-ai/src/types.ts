@@ -1,3 +1,4 @@
+import type { ErrorDiagnosis } from "tg-domain/ingest";
 import type { NEWS_ITEM_SCHEMA, NewsItem } from "tg-domain/newsItemSchema";
 import type { ApiKeyProvider } from "./openrouterClient";
 
@@ -35,6 +36,27 @@ export interface AdjudicatorClient {
 export interface OpenRouterAdjudicatorOptions {
   readonly client?: AdjudicatorClient;
   /** Reads the key from the function secret; supplied by `tg-functions/src/index.ts`. */
+  readonly apiKey?: ApiKeyProvider;
+}
+
+/** What the diagnoser is shown of one failed `ingest` item. */
+export interface ErrorReport {
+  readonly stage: string;
+  readonly error: string;
+  readonly cause: string | undefined;
+  readonly attempts: number;
+  /** The payload as JSON, cut to a size the model reads cheaply. */
+  readonly payload: string;
+}
+
+/** Reads a failed item and proposes a fix. Throws on a provider error. */
+export interface Diagnoser {
+  diagnose(report: ErrorReport): Promise<ErrorDiagnosis>;
+}
+
+export interface OpenRouterDiagnoserOptions {
+  readonly client?: AdjudicatorClient;
+  /** Reads the key from the function secret; supplied by `tg-api`. */
   readonly apiKey?: ApiKeyProvider;
 }
 

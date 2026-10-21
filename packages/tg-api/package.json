@@ -10,6 +10,7 @@
   "dependencies": {
     "firebase-functions": "^7.4.0",
     "tg-actions": "*",
+    "tg-ai": "*",
     "tg-configs": "*",
     "tg-enums": "*",
     "tg-firebase": "*",

@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "audit",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "messageId", "order": "ASCENDING" },
+        { "fieldPath": "at", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "messages",
       "queryScope": "COLLECTION",
       "fields": [
@@ -31,13 +39,13 @@
       "collectionGroup": "ingest",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "stage", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "finishedAt", "order": "ASCENDING" }
       ]
     }
   ],
   "fieldOverrides": [
+    { "collectionGroup": "audit", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
     { "collectionGroup": "ingest", "fieldPath": "expireAt", "ttl": true, "indexes": [] }
   ]
 }

@@ -8,6 +8,7 @@
     "./*": "./src/*.ts"
   },
   "dependencies": {
+    "tg-ai": "*",
     "tg-domain": "*",
     "tg-enums": "*",
     "tg-firebase": "*",

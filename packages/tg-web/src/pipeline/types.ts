@@ -16,13 +16,13 @@ export interface StageSpec {
   /** An `Overview` count to show on the node. */
   readonly metric?: OverviewCount;
   readonly metricLabel?: string;
-  /** The stage's lane in `ingest`; its queue and dead letters show on the node. */
+  /** The stage's lane in `ingest`; its queue shows on the node. */
   readonly queue?: QueueName;
 }
 
 export interface PipelineNode extends StageSpec {
-  /** The first node has no arrow leading into it. */
-  readonly first: boolean;
+  /** An arrow leads into it: every node but the first and the Errors node. */
+  readonly arrow: boolean;
   /** Whether the node has a headline number at all; Aggregate, the clock and Telegram do not. */
   readonly hasValue: boolean;
   /** The headline number; `null` if unread. */
@@ -30,9 +30,9 @@ export interface PipelineNode extends StageSpec {
   readonly valueLabel: string;
   /** Stages with a queue only: items waiting or running, or `null` if unread. */
   readonly queued: number | null;
-  /** Stages with a queue only: dead letters, or `null` if unread. */
-  readonly dlq: number | null;
-  /** Someone has to act: there are dead letters. An unreadable count does not alert. */
+  /** An operator paused the stage: it runs only what *Step* releases. */
+  readonly paused: boolean;
+  /** Someone has to act: the Errors node holds items. An unreadable count does not alert. */
   readonly alert: boolean;
   readonly selected: boolean;
 }

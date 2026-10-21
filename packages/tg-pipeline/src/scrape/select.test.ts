@@ -2,6 +2,8 @@ import type { Source } from "tg-domain/source";
 import { SOURCE_STATUS_OK, SourceSchema } from "tg-domain/source";
 import { describe, expect, test } from "vitest";
 import {
+  COLD_INTERVAL_MS,
+  dueAt,
   HOT_THRESHOLD_COUNT,
   MAX_SOURCES_PER_RUN,
   selectSources,
@@ -175,5 +177,13 @@ describe("selectSources — cap and ordering", () => {
     expect(HOT_THRESHOLD_COUNT).toBe(20);
     expect(WARM_INTERVAL_MS).toBe(30 * MINUTE);
     expect(MAX_SOURCES_PER_RUN).toBe(10);
+  });
+});
+
+describe("dueAt", () => {
+  test("hot at its last poll, warm 30 minutes after it, cold 240 minutes after it", () => {
+    expect(dueAt(source({ lastCount: 25, lastUpdated: NOW }))).toBe(NOW);
+    expect(dueAt(source({ lastCount: 3, lastUpdated: NOW }))).toBe(NOW + WARM_INTERVAL_MS);
+    expect(dueAt(source({ lastCount: 0, lastUpdated: NOW }))).toBe(NOW + COLD_INTERVAL_MS);
   });
 });

@@ -3,6 +3,7 @@ import type { MemberRow } from "tg-actions/dashboard/types";
 import { MAX_PUBLISH_NOW } from "tg-configs/limits";
 import { MessageStatusSchema } from "tg-enums/messageStatus";
 import { DEFAULT_TARGET_TYPE } from "tg-enums/targetType";
+import type { StoredAuditEntry } from "tg-firebase/types";
 import {
   MESSAGE_WRITABLE_FIELDS,
   SOURCE_WRITABLE_FIELDS,
@@ -284,7 +285,7 @@ export class GridService extends WebClientService {
     if (typeof csv === "string") downloadText(file, csv);
   }
 
-  /** A story's members are loaded when its panel opens, and only then. */
+  /** A story's members and audit are loaded when its panel opens, and only then. */
   async expand(id: string): Promise<void> {
     if (this.expanded[id] !== undefined) {
       const { [id]: _closed, ...rest } = this.expanded;
@@ -294,8 +295,11 @@ export class GridService extends WebClientService {
 
     this.up({ expanded: { ...this.expanded, [id]: "loading" } });
     try {
-      const members = (await this.api.call("loadMembers", { messageId: id })) as MemberRow[];
-      this.up({ expanded: { ...this.expanded, [id]: members } });
+      const [members, audit] = await Promise.all([
+        this.api.call("loadMembers", { messageId: id }) as Promise<MemberRow[]>,
+        this.api.call("loadAudit", { messageId: id }) as Promise<StoredAuditEntry[]>,
+      ]);
+      this.up({ expanded: { ...this.expanded, [id]: { members, audit } } });
     } catch (error) {
       this.logError(error);
       const { [id]: _failed, ...rest } = this.expanded;

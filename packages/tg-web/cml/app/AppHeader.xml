@@ -1,5 +1,5 @@
 <Component id="AppHeader">
-  <Signature purpose="Sticky header: brand, the five routes, and the signed-in operator" />
+  <Signature purpose="Sticky header: brand, the six routes, and the signed-in operator" />
 
   <header class="sticky top-0 z-30 bg-base-100 border-b border-base-200">
     <div class="max-w-[1400px] mx-auto px-4 sm:px-6 h-14 flex items-center gap-4 sm:gap-6">

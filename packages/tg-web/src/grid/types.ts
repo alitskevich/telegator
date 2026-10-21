@@ -1,4 +1,5 @@
 import type { MemberRow } from "tg-actions/dashboard/types";
+import type { StoredAuditEntry } from "tg-firebase/types";
 import type { SortState } from "tg-utils/ui/types";
 import type { Drafts, Expanded } from "./view";
 
@@ -46,10 +47,14 @@ export interface ViewRow {
   readonly selected: boolean;
   /** An unsaved edit differs from the stored value, so Save means something. */
   readonly dirty: boolean;
+  /** A message's open `audit` entries, not yet followed by a post on their target; 0 for every other table. */
+  readonly errors: number;
   readonly expanded: boolean;
   readonly membersLoading: boolean;
   /** Keyed by `id` for the template's `Each`, which drops rows without one. */
   readonly members: readonly (MemberRow & { readonly id: string })[];
+  /** A message's rejected sends, newest first. */
+  readonly audit: readonly StoredAuditEntry[];
 }
 
 export interface GridView {

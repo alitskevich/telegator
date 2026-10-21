@@ -29,7 +29,7 @@ export function postFor(
 
 /**
  * A post at or after the message's last write needs no send. Telegram rejects
- * an edit that changes nothing, which would loop a retry into dead letters;
+ * an edit that changes nothing, which would loop a retry into an `error` item;
  * republish bumps `ts` so every post goes stale at once.
  */
 export function isCurrent(post: Post, message: Pick<Message, "ts">): boolean {

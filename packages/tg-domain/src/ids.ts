@@ -35,6 +35,9 @@ export function parseItemId(id: string): ItemIdParts {
   return { sourceId, tgMessageId };
 }
 
+/** The source of the console's fake posts (*Emulate*). */
+export const EMULATED_SOURCE = "emulated";
+
 /** The channel of an item id. Strict: a malformed id throws rather than
  * yielding `undefined` into a rendered `@mention`. */
 export function sourceIdOf(id: string): string {

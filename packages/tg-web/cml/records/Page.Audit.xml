@@ -1,0 +1,19 @@
+<Component id="Page.Audit">
+  <Signature purpose="Every send Telegram rejected, newest first, across all messages"
+    description="Reads `audit` through the `loadAudit` action; entries go after 30 days by a TTL policy." />
+
+  <AuditService Ref="audit" api="@api" />
+
+  <PageTitle title="{R.audit.title}" subtitle="{R.audit.subtitle}">
+    <Btn class="sm:btn-sm" mode="soft" icon="refresh-cw" text="{R.common.refresh}"
+      busy="{@audit.loading}" click="-> @audit.load()" />
+  </PageTitle>
+
+  <ErrorBanner If="@audit.error" text="{@audit.error}" />
+
+  <section class="bg-base-100 rounded-box p-4 min-w-0">
+    <Loading If="{@audit.loading AND !@audit.entries}" size="sm" />
+    <p If="{@audit.entries AND !@audit.entries.length}" class="text-sm text-base-content/60 py-10 text-center">{R.audit.empty}</p>
+    <AuditList If="@audit.entries.length" entries="{@audit.entries}" withMessage="{true}" />
+  </section>
+</Component>

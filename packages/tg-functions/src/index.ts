@@ -156,6 +156,16 @@ export const ingest = onDocumentWritten({ ...STAGE_OPTIONS, document: "ingest/{i
   return settle(() => drain(item.data.stage, stage, stage.run));
 });
 
+/** Wakes a stage when an operator pauses, resumes, steps or runs it. */
+export const ingestControl = onDocumentWritten(
+  { ...STAGE_OPTIONS, document: "ingestControls/{stage}" },
+  (event) => {
+    const stage = QUEUES.find((queue) => queue === event.params.stage);
+    if (stage === undefined) return;
+    return settle(() => drain(stage, STAGES[stage], STAGES[stage].run));
+  },
+);
+
 /** Every minute: fails the items of a dead drain, then runs whatever came due. */
 export const sweep = onSchedule({ ...STAGE_OPTIONS, schedule: "every 1 minutes" }, () =>
   settle(async () => {

@@ -102,17 +102,27 @@ describe("gridView", () => {
     expect(gridView(rows, state({ keyword: "zzz" }), spec).allSelected).toBe(false);
   });
 
-  test("an expanded row is loading until its members arrive", () => {
+  test("an expanded row is loading until its members and audit arrive", () => {
     const member = { itemId: "x/1", channel: "x", summary: "s" } as never;
+    const entry = { id: "e1", messageId: "x/1", error: "Not Found" } as never;
+    const panel = { members: [member], audit: [entry] };
     const loading = gridView(rows, state({ expanded: { a: "loading" } }), spec).rows[0];
-    const loaded = gridView(rows, state({ expanded: { a: [member] } }), spec).rows[0];
+    const loaded = gridView(rows, state({ expanded: { a: panel } }), spec).rows[0];
 
-    expect(loading).toMatchObject({ expanded: true, membersLoading: true, members: [] });
+    expect(loading).toMatchObject({ expanded: true, membersLoading: true, members: [], audit: [] });
     expect(loaded).toMatchObject({
       expanded: true,
       membersLoading: false,
       members: [{ id: "x/1", itemId: "x/1" }],
+      audit: [entry],
     });
+  });
+
+  test("a row's audit count is its `errors`, else 0", () => {
+    const counted = gridView([{ id: "m", errors: 2 }], state(), spec).rows[0];
+
+    expect(counted?.errors).toBe(2);
+    expect(gridView(rows, state(), spec).rows[0]?.errors).toBe(0);
   });
 });
 

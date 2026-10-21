@@ -1,5 +1,20 @@
+import { listMessages, loadAudit } from "tg-actions/dashboard/audit";
+import { emulateItem } from "tg-actions/dashboard/emulate";
 import { loadOverview } from "tg-actions/dashboard/overview";
-import { inspectDlq, purgeDlq, replayDlq } from "tg-actions/dashboard/queues";
+import {
+  diagnoseError,
+  editItem,
+  inspectErrors,
+  inspectItem,
+  inspectQueue,
+  inspectSources,
+  pauseStage,
+  purgeErrors,
+  resetIngest,
+  retryErrors,
+  runItem,
+  runStage,
+} from "tg-actions/dashboard/queues";
 import { deleteRecords, loadMembers, upsertRecord } from "tg-actions/dashboard/records";
 import {
   exportTable,
@@ -8,13 +23,15 @@ import {
   resetSourceCursors,
   runScraper,
 } from "tg-actions/dashboard/triggers";
-import { MessageStatusSchema } from "tg-enums/messageStatus";
+import { createOpenRouterDiagnoser } from "tg-ai/diagnoser";
 import type { Role } from "tg-enums/roles";
-import { messages, sources, targets } from "tg-firebase/db";
+import { sources, targets } from "tg-firebase/db";
 import type { Operator } from "tg-firebase/operators";
-import { z } from "zod";
+import { openRouterKey } from "./secrets";
 
 type Action = (input: unknown, operator: Operator) => Promise<unknown>;
+
+const diagnoser = createOpenRouterDiagnoser({ apiKey: async () => openRouterKey.value() });
 
 /**
  * Every console action, with the least role that may call it. The dispatcher
@@ -25,20 +42,27 @@ export const ACTIONS: Record<string, readonly [Role, Action]> = {
   overview: ["viewer", () => loadOverview()],
   listSources: ["viewer", () => sources.listAll()],
   listTargets: ["viewer", () => targets.listAll()],
-  listMessages: [
-    "viewer",
-    (input) =>
-      messages.queryByStatus(z.object({ status: MessageStatusSchema }).parse(input).status),
-  ],
+  listMessages: ["viewer", listMessages],
   loadMembers: ["viewer", loadMembers],
-  inspectDlq: ["viewer", inspectDlq],
+  loadAudit: ["viewer", loadAudit],
+  inspectErrors: ["viewer", () => inspectErrors()],
+  inspectQueue: ["viewer", inspectQueue],
+  inspectItem: ["viewer", inspectItem],
+  inspectSources: ["viewer", () => inspectSources()],
   exportTable: ["viewer", exportTable],
   upsertRecord: ["editor", upsertRecord],
   deleteRecords: ["editor", deleteRecords],
   runScraper: ["admin", () => runScraper()],
+  emulateItem: ["admin", () => emulateItem()],
+  resetIngest: ["admin", () => resetIngest()],
   resetSourceCursors: ["admin", () => resetSourceCursors()],
   republishMessage: ["admin", republishMessage],
   publishPending: ["admin", publishPending],
-  replayDlq: ["admin", replayDlq],
-  purgeDlq: ["admin", purgeDlq],
+  retryErrors: ["admin", retryErrors],
+  purgeErrors: ["admin", () => purgeErrors()],
+  diagnoseError: ["admin", (input) => diagnoseError(input, diagnoser)],
+  runStage: ["admin", runStage],
+  runItem: ["admin", runItem],
+  editItem: ["admin", editItem],
+  pauseStage: ["admin", pauseStage],
 };

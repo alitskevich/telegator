@@ -3,8 +3,8 @@ import { MESSAGE_STATUSES } from "tg-enums/messageStatus";
 import { SKIP_REASONS, type SkipReason } from "tg-enums/metrics";
 import { QUEUES, type QueueName } from "tg-enums/queueName";
 import { messages } from "tg-firebase/db";
-import { countDeadLetters } from "tg-firebase/deadLetters";
-import { countInQueue } from "tg-firebase/ingest";
+import { countErrors } from "tg-firebase/errors";
+import { countInQueue, readControl } from "tg-firebase/ingest";
 import { sumMetric, sumMetricBy } from "tg-firebase/metrics";
 
 import type { Overview } from "./types";
@@ -15,14 +15,12 @@ export const DAY_MS = 86_400_000;
 export const WEEK_MS = 7 * DAY_MS;
 export const RECENT_MESSAGE_LIMIT = 10;
 
-/** One count per task stage. */
-async function perStage(
-  count: (queue: QueueName) => Promise<number>,
-): Promise<Record<QueueName, number>> {
-  const counts = await Promise.all(
-    QUEUES.map(async (queue) => [queue, await count(queue)] as const),
+/** One value per task stage. */
+async function perStage<T>(read: (queue: QueueName) => Promise<T>): Promise<Record<QueueName, T>> {
+  const values = await Promise.all(
+    QUEUES.map(async (queue) => [queue, await read(queue)] as const),
   );
-  return Object.fromEntries(counts) as Record<QueueName, number>;
+  return Object.fromEntries(values) as Record<QueueName, T>;
 }
 
 async function recentMessages(): Promise<MessageListItem[]> {
@@ -37,14 +35,15 @@ async function recentMessages(): Promise<MessageListItem[]> {
 
 export async function loadOverview(now = Date.now()): Promise<Overview> {
   const day = now - DAY_MS;
-  const [scraped, analyzed, skippedBy, categories, inQueue, deadLetters, statusCounts, recent] =
+  const [scraped, analyzed, skippedBy, categories, inQueue, errors, paused, statusCounts, recent] =
     await Promise.all([
       sumMetric("ItemsScraped", day, now),
       sumMetric("ItemsAnalyzed", day, now),
       sumMetricBy("ItemsSkipped", day, now),
       sumMetricBy("ItemsClassified", now - WEEK_MS, now),
       perStage(countInQueue),
-      perStage(countDeadLetters),
+      countErrors(),
+      perStage(async (queue) => (await readControl(queue)).paused),
       Promise.all(MESSAGE_STATUSES.map((status) => messages.countByStatus(status))),
       recentMessages(),
     ]);
@@ -60,11 +59,11 @@ export async function loadOverview(now = Date.now()): Promise<Overview> {
     analyzed,
     skipped: { total: Object.values(byReason).reduce((a, b) => a + b, 0), byReason },
     published: statusOf("published"),
-    errors: Object.values(deadLetters).reduce((a, b) => a + b, 0),
+    errors,
     statusSlices: MESSAGE_STATUSES.map((status) => ({ label: status, value: statusOf(status) })),
     categorySlices: Object.entries(categories).map(([label, value]) => ({ label, value })),
     inQueue,
-    deadLetters,
+    paused,
     recent,
   };
 }

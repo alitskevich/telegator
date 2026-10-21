@@ -8,6 +8,9 @@
     <span class="text-xs text-base-content/60">{R.common.updated} {@pipeline.updatedAt | clock}</span>
     <Btn class="sm:btn-sm" mode="soft" icon="refresh-cw" text="{R.common.refresh}"
       busy="{@pipeline.loading}" click="-> @pipeline.load()" />
+    <Btn If="@api.canAdmin" class="sm:btn-sm" type="error" mode="{@pipeline.resetArmed ? null : 'soft'}"
+      icon="eraser" text="{@pipeline.resetLabel}" busy="{@api.busy.resetIngest}"
+      click="-> @pipeline.resetIngest()" />
   </PageTitle>
 
   <ErrorBanner If="@pipeline.error" text="{@pipeline.error}" />
@@ -15,8 +18,9 @@
   <div class="grid gap-4 lg:grid-cols-2 lg:items-start">
     <section class="bg-base-100 rounded-box p-4 sm:p-6">
       <ol class="flex flex-col items-center max-w-sm mx-auto">
-        <li Each="node of @pipeline.nodes" class="w-full flex flex-col items-center">
-          <span If="!node.first" aria-hidden="true"
+        <li Each="node of @pipeline.nodes"
+          class="w-full flex flex-col items-center {node.kind == 'errors' ? 'mt-6' : ''}">
+          <span If="node.arrow" aria-hidden="true"
             class="icon icon-arrow-down py-1 text-base-content/40"></span>
           <PipelineNode node="{node}" select="-> @pipeline.select(event)" />
         </li>
@@ -27,4 +31,6 @@
       <PipelinePanel />
     </div>
   </div>
+
+  <PipelineItem />
 </Component>

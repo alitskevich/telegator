@@ -18,12 +18,10 @@ export const COLD_INTERVAL_MS = COLD_INTERVAL_MINUTES * MINUTE_MS;
 /** At most this many sources per run. */
 export const MAX_SOURCES_PER_RUN = 10;
 
-/** Is this source due to be polled? Hot always; warm after 30 min; cold after 240. */
-function isDue(source: Source, now: number): boolean {
-  return (
-    source.lastCount > HOT_THRESHOLD_COUNT ||
-    now - source.lastUpdated >= (source.lastCount > 0 ? WARM_INTERVAL_MS : COLD_INTERVAL_MS)
-  );
+/** When this source is next due to be polled: hot at once; warm after 30 min; cold after 240. */
+export function dueAt(source: Source): number {
+  if (source.lastCount > HOT_THRESHOLD_COUNT) return source.lastUpdated;
+  return source.lastUpdated + (source.lastCount > 0 ? WARM_INTERVAL_MS : COLD_INTERVAL_MS);
 }
 
 /**
@@ -38,7 +36,7 @@ export function selectSources(sources: readonly Source[], now: number, via: Sour
     sources
       .filter((source) => source.status === SOURCE_STATUS_OK && source.deleted !== true)
       .filter((source) => sourceVia(source) === via)
-      .filter((source) => isDue(source, now))
+      .filter((source) => dueAt(source) <= now)
       // Most overdue first, so fresher sources cannot starve one.
       .sort((a, b) => a.lastUpdated - b.lastUpdated)
       .slice(0, MAX_SOURCES_PER_RUN)

@@ -8,6 +8,7 @@
       <Case When="function"><This-Stage /></Case>
       <Case When="trigger"><This-Stage /></Case>
       <Case When="sink"><This-Stage /></Case>
+      <Case When="errors"><This-Errors /></Case>
       <Case When="default">
         <p class="text-sm text-base-content/60">{R.pipeline.selectHint}</p>
       </Case>
@@ -26,13 +27,17 @@
   </Subcomponent>
 
   <Subcomponent id="Stage">
-    <Signature purpose="A stage, the clock or Telegram: what it does, its trigger and its dead letters when it has them" />
+    <Signature purpose="A stage, the clock or Telegram: what it does, its trigger and its queue when it has them" />
     <This-Heading />
     <p If="@pipeline.selected.detail" class="text-sm text-base-content/70 max-w-[65ch]">{@pipeline.selected.detail}</p>
     <div If="{@api.canAdmin AND @pipeline.selected.id == 'scrape'}" class="flex flex-wrap gap-2">
       <Btn type="primary" class="sm:btn-sm" icon="play" text="{R.pipeline.scrapeNow}"
-        busy="{@api.busy.runScraper}" click="-> @pipeline.scrapeNow()" />
+        busy="{@api.busy.runScraper}" disabled="{@pipeline.scrapeDue == 0}"
+        click="-> @pipeline.scrapeNow()" />
+      <Btn class="sm:btn-sm" mode="soft" icon="flask-conical" text="{R.pipeline.emulate}"
+        busy="{@api.busy.emulateItem}" click="-> @pipeline.emulate()" />
     </div>
+    <This-Sources If="{@pipeline.selected.id == 'scrape'}" />
     <div If="{@pipeline.selected.id == 'publish'}" class="flex flex-wrap items-center gap-2">
       <Fragment If="@api.canAdmin">
         <label class="input sm:input-sm w-44">
@@ -41,32 +46,88 @@
             input="-> @pipeline.setPublishMax(event)" />
         </label>
         <Btn type="primary" class="sm:btn-sm" icon="send" text="{R.pipeline.publishNow}"
-          busy="{@api.busy.publishPending}" click="-> @pipeline.publishNow()" />
+          busy="{@api.busy.publishPending}" disabled="{@pipeline.toPublish == 0}"
+          click="-> @pipeline.publishNow()" />
       </Fragment>
       <a href="#/messages?status=topublish" class="btn btn-sm btn-ghost">{R.pipeline.openMessages}</a>
     </div>
     <This-Queue If="@pipeline.selected.queue" />
   </Subcomponent>
 
+  <Subcomponent id="Sources">
+    <Signature purpose="The enabled sources scrape may poll: the next run's first, then soonest due" />
+    <Fragment If="@pipeline.sourceRows">
+      <h3 class="text-sm font-medium">{R.pipeline.sources}</h3>
+      <p If="{!@pipeline.sourceRows.length}" class="text-sm text-base-content/60">{R.pipeline.noSources}</p>
+      <ol If="@pipeline.sourceRows.length" class="flex flex-col gap-2">
+        <li Each="source of @pipeline.sourceRows"
+          class="bg-base-200 rounded-box px-3 py-2 flex flex-col gap-0.5 min-w-0 border-l-2 {source.next ? 'border-primary' : 'border-transparent'}">
+          <span class="text-sm font-medium truncate">{source.id}</span>
+          <span class="text-xs text-base-content/60 truncate">{source.meta}</span>
+        </li>
+      </ol>
+    </Fragment>
+  </Subcomponent>
+
   <Subcomponent id="Queue">
-    <Signature purpose="A stage's queue and dead letters: the counts, their actions and the last peek" />
+    <Signature purpose="A stage's queue: its count, run, pause and step, and its next items" />
     <div class="grid grid-cols-2 gap-4 max-w-md">
       <StatCard label="{R.pipeline.inQueue}" value="{@pipeline.selected.queued}" surface="zone" />
-      <StatCard label="{R.pipeline.deadLetters}" value="{@pipeline.selected.dlq}"
-        alert="{@pipeline.selected.alert}" surface="zone" />
     </div>
-    <div class="flex flex-wrap items-center gap-2">
-      <Btn class="sm:btn-sm" mode="soft" icon="eye" text="{R.pipeline.inspect}"
-        busy="{@api.busy.inspect}" click="-> @pipeline.inspect()" />
-      <Fragment If="{@api.canAdmin AND @pipeline.selected.dlq GT 0}">
-        <This-Recovery />
-      </Fragment>
+    <div If="@api.canAdmin" class="flex flex-wrap items-center gap-2">
+      <This-Control />
     </div>
-    <This-Peek />
+    <This-Next />
+  </Subcomponent>
+
+  <Subcomponent id="Control">
+    <Signature purpose="Run the stage's waiting items now, or pause it and step it item by item" />
+    <Fragment If="@pipeline.selected.paused">
+      <Then>
+        <label class="input sm:input-sm w-36">
+          <span class="text-base-content/60">{R.pipeline.stepMax}</span>
+          <input type="number" min="1" class="grow" value="{@pipeline.stepMax}"
+            input="-> @pipeline.setStepMax(event)" />
+        </label>
+        <Btn type="primary" class="sm:btn-sm" icon="step-forward" text="{R.pipeline.step}"
+          busy="{@api.busy.runStage}" disabled="{@pipeline.selected.queued == 0}"
+          click="-> @pipeline.step()" />
+        <Btn class="sm:btn-sm" mode="soft" icon="play" text="{R.pipeline.resume}"
+          busy="{@api.busy.pause}" click="-> @pipeline.togglePause()" />
+      </Then>
+      <Else>
+        <Btn type="primary" class="sm:btn-sm" icon="fast-forward" text="{R.pipeline.runNow}"
+          busy="{@api.busy.runStage}" disabled="{@pipeline.selected.queued == 0}"
+          click="-> @pipeline.runNow()" />
+        <Btn class="sm:btn-sm" mode="soft" icon="pause" text="{R.pipeline.pause}"
+          busy="{@api.busy.pause}" click="-> @pipeline.togglePause()" />
+      </Else>
+    </Fragment>
+  </Subcomponent>
+
+  <Subcomponent id="Next">
+    <Signature purpose="The stage's next items, soonest first; an admin may run any waiting one next" />
+    <Fragment If="@pipeline.nextItems">
+      <h3 class="text-sm font-medium">{R.pipeline.next}</h3>
+      <p If="{!@pipeline.nextItems.length}" class="text-sm text-base-content/60">{R.pipeline.emptyQueue}</p>
+      <ol If="@pipeline.nextItems.length" class="flex flex-col gap-2">
+        <li Each="item of @pipeline.nextItems" class="bg-base-200 rounded-box p-3 flex items-start gap-3">
+          <button type="button" data-id="{item.id}" click="-> @pipeline.openItem(event)"
+            class="group flex flex-col gap-0.5 min-w-0 grow text-left cursor-pointer">
+            <span class="text-xs text-base-content/60 truncate">{item.ref} · {item.meta}</span>
+            <span If="item.text" class="text-sm line-clamp-2 break-words group-hover:underline">{item.text}</span>
+            <span If="item.error" class="text-xs text-error truncate" title="{item.error}">{item.error}</span>
+          </button>
+          <Btn If="{@api.canAdmin AND item.canRun}" class="btn-xs shrink-0" mode="soft" icon="play"
+            text="{R.pipeline.run}" data="{item}" busy="{@api.busy.runItem}"
+            click="-> @pipeline.runItem(event)" />
+        </li>
+      </ol>
+    </Fragment>
   </Subcomponent>
 
   <Subcomponent id="Recovery">
-    <Signature purpose="Replay or discard the dead letters; the discard is armed by its first press" />
+    <Signature purpose="Replay or discard the errors; the discard is armed by its first press" />
     <label class="input sm:input-sm w-40">
       <span class="text-base-content/60">{R.pipeline.replayMax}</span>
       <input type="number" min="1" class="grow" value="{@pipeline.replayMax}"
@@ -78,16 +139,60 @@
       text="{@pipeline.purgeLabel}" busy="{@api.busy.purge}" click="-> @pipeline.purge()" />
   </Subcomponent>
 
-  <Subcomponent id="Peek">
-    <Signature purpose="The dead letters read, as text: a payload is third-party content" />
-    <Fragment If="@pipeline.peek">
-      <p If="{!@pipeline.peek.length}" class="text-sm text-base-content/60">{R.pipeline.emptyDlq}</p>
-      <ul If="@pipeline.peek.length" class="flex flex-col gap-2">
-        <li Each="letter of @pipeline.peek" class="bg-base-200 rounded-box p-3 flex flex-col gap-1">
-          <span class="text-xs text-base-content/60">{letter.attempts}</span>
-          <code class="text-xs whitespace-pre-wrap break-all">{letter.body}</code>
-        </li>
+  <Subcomponent id="Errors">
+    <Signature purpose="Every stage's failed items: message, cause, the model's reading, and what an admin may do" />
+    <This-Heading />
+    <p class="text-sm text-base-content/70 max-w-[65ch]">{@pipeline.selected.detail}</p>
+    <div If="{@api.canAdmin AND @pipeline.selected.value GT 0}" class="flex flex-wrap items-center gap-2">
+      <This-Recovery />
+    </div>
+    <Fragment If="@pipeline.errorRows">
+      <p If="{!@pipeline.errorRows.length}" class="text-sm text-base-content/60">{R.pipeline.noErrors}</p>
+      <ul If="@pipeline.errorRows.length" class="flex flex-col gap-2">
+        <This-ErrorRow Each="row of @pipeline.errorRows" row="{row}" />
       </ul>
     </Fragment>
+  </Subcomponent>
+
+  <Subcomponent id="ErrorRow">
+    <Signature purpose="One failed item: where and why it failed, its cause, and the model's reading once asked">
+      <Prop id="row" type="object" required="true" description="An `ErrorRow` from `src/services/types.ts`" />
+    </Signature>
+    <li class="bg-base-200 rounded-box p-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-2">
+      <button type="button" data-id="{row.id}" click="-> @pipeline.openItem(event)"
+        class="group flex flex-col gap-0.5 min-w-0 text-left cursor-pointer">
+        <span class="text-xs text-base-content/60 truncate">{row.meta}</span>
+        <span class="text-sm text-error break-words group-hover:underline">{row.error}</span>
+        <span If="row.text" class="text-xs text-base-content/70 line-clamp-2 break-words">{row.text}</span>
+      </button>
+      <div If="@api.canAdmin" class="flex flex-col gap-1">
+        <Btn class="btn-xs" mode="soft" icon="play" text="{R.pipeline.run}" data="{row}"
+          busy="{@api.busy.runItem}" click="-> @pipeline.runItem(event)" />
+        <Btn class="btn-xs" mode="soft" icon="sparkles" text="{row.analyseLabel}" data="{row}"
+          busy="{@api.busy.diagnose}" click="-> @pipeline.diagnose(event)" />
+      </div>
+      <details If="row.cause" class="col-span-2 text-xs">
+        <summary class="cursor-pointer text-base-content/60">{R.pipeline.cause}</summary>
+        <pre class="mt-1 whitespace-pre-wrap break-all">{row.cause}</pre>
+      </details>
+      <This-Diagnosis If="row.diagnosis" diagnosis="{row.diagnosis}" />
+    </li>
+  </Subcomponent>
+
+  <Subcomponent id="Diagnosis">
+    <Signature purpose="The model's reading of a failed item: a summary, the likely cause and a proposed fix">
+      <Prop id="diagnosis" type="object" required="true" description="`summary`, `cause` and `fix`" />
+    </Signature>
+    <dl class="col-span-2 border-l-2 border-primary/60 pl-3 text-xs flex flex-col gap-1.5">
+      <dt class="text-sm font-medium">{diagnosis.summary}</dt>
+      <dd class="flex flex-col">
+        <span class="text-base-content/60">{R.pipeline.likelyCause}</span>
+        <span class="whitespace-pre-wrap">{diagnosis.cause}</span>
+      </dd>
+      <dd class="flex flex-col">
+        <span class="text-base-content/60">{R.pipeline.proposedFix}</span>
+        <span class="whitespace-pre-wrap">{diagnosis.fix}</span>
+      </dd>
+    </dl>
   </Subcomponent>
 </Component>

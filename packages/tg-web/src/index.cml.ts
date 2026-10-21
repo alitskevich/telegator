@@ -8,6 +8,7 @@ import Page_Denied from "../cml/app/Page.Denied.xml";
 import Page_SignIn from "../cml/app/Page.SignIn.xml";
 import Page from "../cml/app/Page.xml";
 import UserMenu from "../cml/app/UserMenu.xml";
+import AuditList from "../cml/components/AuditList.xml";
 import Donut from "../cml/components/Donut.xml";
 import ErrorBanner from "../cml/components/ErrorBanner.xml";
 import PageTitle from "../cml/components/PageTitle.xml";
@@ -15,8 +16,10 @@ import StatCard from "../cml/components/StatCard.xml";
 import StatusBadge from "../cml/components/StatusBadge.xml";
 import Page_Dashboard from "../cml/dashboard/Page.Dashboard.xml";
 import Page_Pipeline from "../cml/pipeline/Page.Pipeline.xml";
+import PipelineItem from "../cml/pipeline/PipelineItem.xml";
 import PipelineNode from "../cml/pipeline/PipelineNode.xml";
 import PipelinePanel from "../cml/pipeline/PipelinePanel.xml";
+import Page_Audit from "../cml/records/Page.Audit.xml";
 import Page_Messages from "../cml/records/Page.Messages.xml";
 import Page_Sources from "../cml/records/Page.Sources.xml";
 import Page_Targets from "../cml/records/Page.Targets.xml";
@@ -33,6 +36,7 @@ export default [
   Page_SignIn,
   Page,
   UserMenu,
+  AuditList,
   Donut,
   ErrorBanner,
   PageTitle,
@@ -40,8 +44,10 @@ export default [
   StatusBadge,
   Page_Dashboard,
   Page_Pipeline,
+  PipelineItem,
   PipelineNode,
   PipelinePanel,
+  Page_Audit,
   Page_Messages,
   Page_Sources,
   Page_Targets,

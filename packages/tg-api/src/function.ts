@@ -6,6 +6,7 @@ import { operatorFrom } from "tg-firebase/operators";
 import { log } from "tg-utils/logger";
 import { ZodError, z } from "zod";
 import { ACTIONS } from "./actions";
+import { openRouterKey } from "./secrets";
 
 /**
  * The console's one endpoint: `POST {data: {action, input}}` answers
@@ -55,32 +56,35 @@ export async function dispatch(body: unknown, authorization: string | undefined)
   }
 }
 
-export const api = onRequest({ region: REGION, timeoutSeconds: 300 }, async (req, res) => {
-  const origin = req.get("Origin");
-  if (origin !== undefined && (ORIGINS.has(origin) || (isEmulator && DEV_ORIGIN.test(origin)))) {
-    res.set({ "Access-Control-Allow-Origin": origin, Vary: "Origin" });
-  }
-  res.set({
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Cache-Control": "no-store",
-  });
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).send({ data: { ok: false, error: { message: "POST only" } } });
-    return;
-  }
-
-  try {
-    const result = await dispatch(req.body, req.get("Authorization"));
-    res.send({ data: { ok: true, result: result ?? null } });
-  } catch (error) {
-    const status = error instanceof HttpError ? error.status : 500;
-    res.status(status).send({
-      data: { ok: false, error: { code: status, message: String((error as Error).message) } },
+export const api = onRequest(
+  { region: REGION, timeoutSeconds: 300, secrets: [openRouterKey] },
+  async (req, res) => {
+    const origin = req.get("Origin");
+    if (origin !== undefined && (ORIGINS.has(origin) || (isEmulator && DEV_ORIGIN.test(origin)))) {
+      res.set({ "Access-Control-Allow-Origin": origin, Vary: "Origin" });
+    }
+    res.set({
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Cache-Control": "no-store",
     });
-  }
-});
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).send({ data: { ok: false, error: { message: "POST only" } } });
+      return;
+    }
+
+    try {
+      const result = await dispatch(req.body, req.get("Authorization"));
+      res.send({ data: { ok: true, result: result ?? null } });
+    } catch (error) {
+      const status = error instanceof HttpError ? error.status : 500;
+      res.status(status).send({
+        data: { ok: false, error: { code: status, message: String((error as Error).message) } },
+      });
+    }
+  },
+);

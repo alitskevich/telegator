@@ -23,14 +23,14 @@ flowchart LR
   Api --> FS
 ```
 
-**The queue is the pipeline.** A post in flight is an `ingest` document: its payload in `raw`, its `status` (`pending`, `running`, `done`, `dead`), `retryCount`, `runAt` and timestamps. `aggregate` absorbs it into a message, where it is stored *inside* that message. A `done` item is deleted by a TTL policy after 7 days; a `dead` one stays until an operator replays or discards it.
+**The queue is the pipeline.** A post in flight is an `ingest` document: its payload in `raw`, its `status` (`pending`, `running`, `done`, `error`), `retryCount`, `runAt` and timestamps. `aggregate` absorbs it into a message, where it is stored *inside* that message. A `done` item is deleted by a TTL policy after 7 days; an `error` one keeps its message (`error`) and what lay behind it (`cause`) until an operator runs, replays or discards it.
 
 | Concern | Firebase piece | Code |
 | --- | --- | --- |
 | Clock | `onSchedule`, every 30 min | `tg-functions/index.ts` |
 | Work in flight | Firestore `ingest`, drained by the `ingest` trigger and `sweep` | `tg-firebase/tasks.ts`, `ingest.ts` |
 | Durable records | Firestore: `sources`, `targets`, `messages`, `videos` | `tg-firebase/db.ts` |
-| Failed work | `ingest` items with `status = dead` | `tg-firebase/deadLetters.ts` |
+| Failed work | `ingest` items with `status = error` | `tg-firebase/errors.ts` |
 | Counters | Firestore `metrics`, one doc per hour | `tg-firebase/metrics.ts` |
 | Operators | Firebase Auth + Firestore `users` | `tg-firebase/operators.ts` |
 | Console API | one `onRequest` function, `api` | `tg-api/` |
@@ -78,13 +78,21 @@ The map makes replay free: writing `members.{itemId}` again writes the same valu
 
 `id` (channel), `type`, optional `messageTemplate`, and `lastPostedDate` / `lastPostedMessageId`, which publish writes.
 
+### 2.5 `audit` — what went wrong with a message
+
+Append-only; publish writes one entry per send Telegram rejected: `messageId`, `target`, `method`, `error` (Telegram's reason) and `at`. It outlives the `ingest` error, which goes on replay or discard. A TTL policy on `expireAt` deletes an entry after 30 days.
+
 ## 3. Stages
 
-Each task stage drains its own `ingest` items. A drain holds the stage's lease (`ingestLeases/{stage}`), so one drain runs per stage, and it runs at most *concurrency* items at once, oldest `runAt` first. A thrown error sets the item back to `pending` with a backoff of 30 s, doubling per attempt; the last attempt sets it `dead`.
+Each task stage drains its own `ingest` items. A drain holds the stage's lease (`ingestLeases/{stage}`), so one drain runs per stage, and it runs at most *concurrency* items at once, oldest `runAt` first. A thrown error sets the item back to `pending` with a backoff of 30 s, doubling per attempt; the last attempt sets it `error`. Every failure records the message in `error` and its `cause` chain, or else its stack, in `cause`.
 
 - **Trigger.** `ingest` (`onDocumentWritten`) drains a stage as soon as one of its items is `pending` and due: on enqueue and on replay.
 - **Sweep.** `sweep` runs every minute. It runs what came due later (the publish delay, a retry's backoff) and fails the items of a drain that died: `running` past their lease counts as one attempt.
 - **Ids.** `enqueue` with an `id` is a create-if-absent write, so a second request with that id is refused.
+- **Scrape node** (Pipeline page). Lists every enabled source with its reader and when it is due. The sources the next run polls come first. *Scrape now* is off when no web source is due. *Emulate a post* queues one canned fake post from the source `emulated` for analyze. It is published like any post: with no target, to `telegator_news`.
+- **Item modal** (Pipeline page). A row of a stage's queue or of the errors opens its item whole: status, error, cause and payload. An admin may edit the payload's text fields of a waiting or failed item; the edit must pass the stage's schema.
+- **Errors node** (Pipeline page). Lists every stage's `error` items, oldest first, with message and cause. *Run* starts one afresh at the head of its stage; *Analyse* asks the model (§4); *Replay* and *Discard all* act on all of them.
+- **Operator control** (`ingestControls/{stage}`, Pipeline page, admin). *Run now* makes a stage's waiting items due at once, skipping delay and backoff. *Pause* holds the stage: trigger and sweep run nothing of it but its budget. *Step N* makes the oldest N waiting items due and adds N to the budget. *Run now*, *Step* and *Publish now* are off when nothing waits. Each control write wakes the stage through the `ingestControl` trigger. *Reset ingest* (two presses) deletes every `ingest` item, whatever its status; pause settings stay.
 
 | Function | Trigger | Attempts | Concurrency |
 | --- | --- | --- | --- |
@@ -121,16 +129,17 @@ The stage runs **one item at a time**. Two items of the same day therefore can n
    - Assembly: a header, up to 12 member blocks, then hashtags. The limit is 4096 characters: hashtags are dropped first, then member blocks.
    - A photo is used only for a first send and only when the text fits in 1012 characters.
 3. Record `posts` after **every** send, so a retry never posts twice.
-4. Write `published` only when every target succeeded. A rejected send throws.
+4. Write `published` only when every target succeeded. A rejected send is recorded in `audit` (§2.5) and throws, naming each target, method and Telegram's reason; the console shows it on the `error` item.
 
 The bot pauses at least 3 s after each send and retries once on `429`. Telegram answers errors with HTTP 200 and `ok: false`.
 
 ## 4. AI
 
-Both calls go to Claude through OpenRouter's Anthropic-compatible Messages API (`https://openrouter.ai/api`, no `/v1`; the SDK adds it). The model is `anthropic/claude-haiku-4.5`, defined once in `tg-configs/ai.ts`.
+All three calls go to Claude through OpenRouter's Anthropic-compatible Messages API (`https://openrouter.ai/api`, no `/v1`; the SDK adds it). The model is `anthropic/claude-haiku-4.5`, defined once in `tg-configs/ai.ts`.
 
 - **Classify** (`tg-ai/openrouter.ts`): JSON-schema output with `title`, `summary` (Belarusian, at most 220 characters, stated in the field description), `country`, `location`, `category` (enum in `tg-enums/categories.ts`), `importance`, `peoples`, `properNames`, `tags`. The system prompt keeps `[text](#N)` tokens intact.
 - **Adjudicate** (`tg-ai/adjudicator.ts`): ambiguous dedup pairs, using English fields only. Verdicts are keyed by pair id, and a set that does not cover every pair is an error.
+- **Diagnose** (`tg-ai/diagnoser.ts`): on an admin's *Analyse* of an `error` item, the `api` function sends its stage, message, cause, attempts and the first 4000 characters of its payload. The answer, `{summary, cause, fix}`, is stored on the item as `diagnosis`, so a second look costs nothing. The `api` function therefore holds `OPENROUTER_API_KEY` too.
 - `npm run smoke:openrouter` is the only check that calls the real model.
 
 ## 5. Deduplication
@@ -147,7 +156,9 @@ Code: `tg-dedup/`. Constants: `tg-configs/dedup.ts`.
 
 ## 6. Console
 
-`packages/tg-web`: Arrmatura app with these pages: Dashboard, Pipeline, Sources, Targets, Messages.
+`packages/tg-web`: Arrmatura app with these pages: Dashboard, Pipeline, Sources, Targets, Messages, Audit.
+
+- **Audit**: a Messages row carries a red count of its open `audit` entries, those no later successful post on that target has resolved; its expanded panel lists them under the members. The Audit page lists the newest 200 across all messages.
 
 - **Sign-in**: the platform's `FirebaseService`, with Google in production and the Auth emulator locally. The browser holds no Firestore access; `firestore.rules` denies everything.
 - **API**: `POST {data: {action, input}}` to `api`. The answer is `{data: {ok, result}}`, or an error with 400 / 401 / 403 / 500.
@@ -156,11 +167,11 @@ Code: `tg-dedup/`. Constants: `tg-configs/dedup.ts`.
 
 | Role | Actions |
 | --- | --- |
-| viewer | whoami, overview, list sources/targets/messages, members, inspect dead letters, export CSV |
+| viewer | whoami, overview, list sources/targets/messages, members, audit, inspect queues and errors, export CSV |
 | editor | upsert and soft-delete records |
-| admin | scrape now, reset cursors, republish, publish now, replay or purge dead letters |
+| admin | scrape now, emulate a post, reset ingest, reset cursors, republish, publish now, run, pause or step a stage, run one item, analyse, replay or discard errors |
 
-- **Dashboard numbers** come from the hourly `metrics` docs (24 h counters, 7-day categories) and two counts per stage from `ingest`: items in queue (`pending` or `running`) and dead letters.
+- **Dashboard numbers** come from the hourly `metrics` docs (24 h counters, 7-day categories) items in queue per stage (`pending` or `running`), and the `error` items of all stages.
 
 ## 7. Development
 
@@ -180,9 +191,11 @@ npm run dev              # emulators + functions watch + console on :8080
 | Secrets for the emulator | `packages/tg-functions/.secret.local` (git-ignored), linked from `~/.keys/telegator-functions-secrets.env`. `TELEGRAM_BOT_TOKEN` there is a placeholder, so local runs never post to live channels. Put a test bot's token there to try publishing. |
 | Sign in locally | Press *Sign in*. The Auth emulator signs in `dev@example.com`, and the first emulator sign-in is an enabled admin. |
 | Data | `FIRESTORE_EMULATOR_HOST=127.0.0.1:8180 npm run seed -- <dir> --write` loads `sources` and `targets` from DynamoDB scan exports. |
-| A scrape | *Scrape now* on Sources or Pipeline. Scheduled functions do not fire in the emulator, so neither does `sweep`: an item due later (the publish delay, a retry) waits. *Publish now* skips the delay; *Replay* re-runs a dead item. |
+| A scrape | *Scrape now* on Sources or Pipeline. Scheduled functions do not fire in the emulator, so neither does `sweep`: drive the flow from the Pipeline page instead. *Run now* runs a stage's delayed and retried items, *Pause* and *Step* walk items through one at a time, *Run* on an Errors row re-runs a failed item. |
 
-Scripts (`seed`, `mcp`, `cursors:now`) use the emulator when `FIRESTORE_EMULATOR_HOST` is set. Otherwise they use production through `gcloud auth application-default login`.
+Scripts (`seed`, `mcp`, `cursors:now`, `autofix`) use the emulator when `FIRESTORE_EMULATOR_HOST` is set. Otherwise they use production through `gcloud auth application-default login`.
+
+`npm run autofix` reads the `ingest` errors, groups them by stage and message, and asks Claude Code (`claude -p`, in this repo) for each group's root cause: `data` (corrected payloads), `code` (a code fix) or `none`. Dry run unless `--apply`; then Claude may edit code (edit tools and the four gates only), corrected payloads are saved through `editItem` and run again, and Claude's reading is kept as each item's diagnosis. A code fix needs a deploy, then *Replay*.
 
 **Gates**: all four pass before a commit.
 
@@ -202,7 +215,7 @@ One Firebase project, `telegator-581db`. Functions run in `us-central1`, next to
 1. The project must be on the **Blaze** plan: Functions and Scheduler need it.
 2. Set the secrets once: `firebase functions:secrets:set OPENROUTER_API_KEY`, the same for `TELEGRAM_BOT_TOKEN`, `npm run mtproto:login` for `MTPROTO_SESSION`, `npm run youtube:login` for `YOUTUBE_OAUTH` (§10), and `npm run gmail:login` for `GMAIL_OAUTH`. The Gmail login reuses the YouTube Desktop OAuth client (§10, setup steps 1–2); enable the *Gmail API* in the same project first.
 3. Enable the Google provider in Firebase Auth. Add its OAuth web client id to `firebaseConfig.googleClientId` in `tg-configs/firebase.ts`, and list the site's origins on that client.
-4. `npm run deploy`: builds both bundles, then deploys hosting, functions, Firestore rules, indexes and the `ingest.expireAt` TTL policy.
+4. `npm run deploy`: builds both bundles, then deploys hosting, functions, Firestore rules, indexes and the `ingest.expireAt` and `audit.expireAt` TTL policies.
 5. Sign in once, then set your `users/{uid}` to `{enabled: true, roles: ["admin"]}` in the Firestore console.
 6. Start the schedule: set `SCRAPE_ENABLED=true` in `packages/tg-functions/.env` and redeploy the functions.
 
@@ -212,7 +225,7 @@ One Firebase project, `telegator-581db`. Functions run in `us-central1`, next to
 - **Publish dedup** is an item id per message per 5-minute window. A request in a new window is a new publish, which is harmless because publish skips current posts.
 - **Send then record.** If writing `posts` fails right after a successful send, the retry posts again. This is rare and is accepted.
 - **A hand-made queue.** `ingest` replaced Cloud Tasks on 2026-10-21, to show every item in flight. A delayed or retried item runs on the next `sweep`, up to a minute late; an item enqueued just as a drain ends may wait for it too.
-- **Counters live in Firestore**, not a metrics service. There are no alarms; the dashboard shows dead letters and stale sources.
+- **Counters live in Firestore**, not a metrics service. There are no alarms; the dashboard and the Errors node show failed items, and the Sources page stale sources.
 - **AWS history.** The AWS build (DynamoDB, SQS, Lambda, Cognito, CDK) ran until 2026-10-20 and lives in git history before this rewrite.
 
 ## 10. YouTube absorber

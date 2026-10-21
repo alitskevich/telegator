@@ -87,6 +87,8 @@ export const targets = {
 /** Everything a list or a card shows; `members` is the one large field and stays out. */
 const LIST_FIELDS = Object.keys(MessageListItemSchema.shape);
 
+const PostsSchema = MessageSchema.shape.posts;
+
 /** The dedup match key and nothing else. */
 const CANDIDATE_FIELDS = Object.keys(DedupCandidateSchema.shape);
 
@@ -141,6 +143,12 @@ export const messages = {
   },
   async markPublished(id: string, ts: number): Promise<void> {
     await messageRows.doc(id).update({ status: "published", ts });
+  },
+  /** These messages' post maps, which the list type leaves out; one read of that field alone. */
+  async postsOf(ids: readonly string[]): Promise<Record<string, Post>[]> {
+    if (ids.length === 0) return [];
+    const snaps = await db.getAll(...ids.map(messageRows.doc), { fieldMask: ["posts"] });
+    return snaps.map((snap) => PostsSchema.parse(snap.get("posts")));
   },
   /** The whole post map, replaced. Publish is its only writer. */
   async recordPosts(id: string, posts: Readonly<Record<string, Post>>): Promise<void> {

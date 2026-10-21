@@ -4,6 +4,18 @@ import { z } from "zod";
 
 /** `ingest`: the work in flight between stages, one document per item (docs/telegator.md §3). */
 
+/** The model's reading of an `error` item: what went wrong, why, and what to do. */
+export const ErrorDiagnosisSchema = z.object({
+  /** One sentence an operator reads first. */
+  summary: z.string(),
+  /** The most likely root cause. */
+  cause: z.string(),
+  /** The proposed fix: an operator step, a data change or a code change. */
+  fix: z.string(),
+});
+
+export type ErrorDiagnosis = z.infer<typeof ErrorDiagnosisSchema>;
+
 export const IngestItemSchema = z.object({
   stage: z.enum(QUEUES),
   status: IngestStatusSchema,
@@ -15,8 +27,12 @@ export const IngestItemSchema = z.object({
   runAt: z.number(),
   /** While `running`: when the drain holding it is presumed dead. */
   leaseUntil: z.number().optional(),
-  /** The last failure. */
+  /** The last failure's message. */
   error: z.string().optional(),
+  /** What lay behind it: the error's `cause` chain, else its stack. */
+  cause: z.string().optional(),
+  /** On `error`, once an operator asked: the model's reading and when it was made. */
+  diagnosis: ErrorDiagnosisSchema.extend({ at: z.number() }).optional(),
   createdAt: z.number(),
   startedAt: z.number().optional(),
   finishedAt: z.number().optional(),
@@ -25,3 +41,15 @@ export const IngestItemSchema = z.object({
 });
 
 export type IngestItem = z.infer<typeof IngestItemSchema>;
+
+/** `ingestControls/{stage}`: an operator's hold on one stage; absent means running. */
+export const IngestControlSchema = z.object({
+  /** The trigger and the sweep run nothing of a paused stage beyond its `budget`. */
+  paused: z.boolean().default(false),
+  /** How many more items a paused stage may run: what *Step* released. */
+  budget: z.number().int().nonnegative().default(0),
+  /** When an operator last acted on the stage; each write wakes it. */
+  requestedAt: z.number().optional(),
+});
+
+export type IngestControl = z.infer<typeof IngestControlSchema>;

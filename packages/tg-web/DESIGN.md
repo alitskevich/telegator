@@ -21,8 +21,8 @@ instrument panel: calm until something needs a person.
 
 **The idea.** The pipeline *is* the interface: the chain of stages (docs/telegator.md §1)
 is drawn once, on the Pipeline page, and every manual trigger sits on the node
-it acts on. **The memorable thing** is the dead-letter count: the one red
-figure in the console, on the stage it came from.
+it acts on. **The memorable thing** is the error count: the one red figure
+in the console, on the Errors node below the chain.
 
 ## Colors
 
@@ -33,7 +33,7 @@ figure in the console, on the stage it came from.
 | Zone | `base-200` | Inside a panel: table headers, toolbars, the selected node |
 | Ink | `base-content`, `/70` for secondary | All text |
 | Signal | `primary` | The primary action, the current nav item, a selected node's edge |
-| Alarm | `error` | Dead letters and failure toasts only |
+| Alarm | `error` | Failed items and failure toasts only |
 
 The status badges use `success` / `warning` / `error`. Nothing else is coloured.
 
@@ -59,15 +59,20 @@ toasts and the user menu float (`shadow-overlay`). Fields round 6px, panels
 
 - **Stat card** — label, figure, note; the errors card turns `error` above zero.
 - **Donut** — a `conic-gradient` ring with a legend; empty reads "No data yet".
-- **Pipeline node** — icon, title, caption, figure; a stage run by a queue adds its dead-letter chip.
+- **Pipeline node** — icon, title, caption, figure; a stage with a queue adds its in-queue chip. The Errors node stands apart and turns red above zero.
 - **Records table** — DaisyUI `table-sm`, sticky header with a filter row,
-  inline inputs where the operator may write.
+  inline inputs where the operator may write. A message with rejected sends
+  carries a red count beside its expand button: the rejections no later
+  successful post on that target has resolved.
+- **Audit list** — one rejected send per line: a muted line of when, target and
+  method, then Telegram's reason in `error`. Used in a message's panel and on
+  the Audit page.
 
 ## Do's and Don'ts
 
 - Do show `—` for a number that could not be read, never `0`.
 - Do arm destructive actions: the second press names the count.
-- Don't use the alarm colour for anything but dead letters and failures.
+- Don't use the alarm colour for anything but failed items and failures.
 - Don't add a second accent, a gradient, glass, or a monospace label.
 
 ## Responsive

@@ -15,7 +15,7 @@ export const NewsItemSchema = AiFieldsSchema.extend({
   /**
    * The cap is stated in words: structured output does not enforce `maxLength`,
    * so an untold model wrote longer summaries, which failed validation and were
-   * retried into dead letters.
+   * retried into an `error` item.
    */
   summary: AiFieldsSchema.shape.summary.describe(
     "Brief factual matter — no implications, opinions or judgements. In Belarusian. " +

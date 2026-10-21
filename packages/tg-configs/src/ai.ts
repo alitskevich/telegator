@@ -22,3 +22,9 @@ export const ADJUDICATOR_MODEL_ID = CLASSIFIER_MODEL_ID;
 
 /** A verdict list for a few pairs is far smaller than a classification. */
 export const ADJUDICATOR_MAX_TOKENS = 1000;
+
+/** The console's *Analyse* on a failed item; its own constant, so it can move to a stronger model. */
+export const DIAGNOSER_MODEL_ID = CLASSIFIER_MODEL_ID;
+
+/** A summary, a cause and a fix: a few short paragraphs. */
+export const DIAGNOSER_MAX_TOKENS = 1500;

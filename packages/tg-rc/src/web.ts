@@ -15,6 +15,7 @@ const nav = [
   { id: "sources", name: "Sources", icon: "radio-tower" },
   { id: "targets", name: "Targets", icon: "send" },
   { id: "messages", name: "Messages", icon: "newspaper" },
+  { id: "audit", name: "Audit", icon: "scroll-text" },
 ];
 
 /** Column headings, by field. A field with no entry shows its own name. */
@@ -116,7 +117,7 @@ const dashboard = {
   analyzed: "Items analysed",
   skipped: "Items skipped",
   published: "Messages published",
-  errors: "Dead letters",
+  errors: "Errors",
   last24h: "last 24 h",
   allTime: "all time",
   allStages: "across all stages",
@@ -130,26 +131,86 @@ const dashboard = {
 
 const pipeline = {
   title: "Pipeline",
-  subtitle: "Every stage, its queue and its dead letters. Select one to act on it.",
+  subtitle: "Every stage, its queue and the items that failed. Select one to act on it.",
   inQueue: "in queue",
-  deadLetters: "dead letters",
-  inspect: "Inspect dead letters",
   replay: "Replay",
   replayMax: "Replay at most",
   cleanup: "Discard all",
   confirmCleanup: "Confirm: discard {count}",
-  emptyDlq: "No dead letters",
+  noErrors: "No errors",
   attempts: "{count} attempts",
+  cause: "Cause",
+  analyse: "Analyse",
+  analyseAgain: "Analyse again",
+  likelyCause: "Likely cause",
+  proposedFix: "Proposed fix",
   scrapeNow: "Scrape now",
+  emulate: "Emulate a post",
+  resetIngest: "Reset ingest",
+  confirmResetIngest: "Confirm: delete every item",
   publishNow: "Publish now",
   publishMax: "Publish at most",
+  runNow: "Run now",
+  pause: "Pause",
+  resume: "Resume",
+  paused: "Paused",
+  step: "Step",
+  stepMax: "Run next",
+  next: "Next in queue",
+  emptyQueue: "Nothing waiting",
+  run: "Run",
+  due: "due {time}",
+  headOfQueue: "next up",
+  sources: "Sources, next run first",
+  noSources: "No enabled sources",
+  nextRun: "next run",
+  afterNextRun: "due, after the next run",
+  lastCount: "{count} last run",
+  running: "running",
+  failedTimes: "{count} failed",
   openMessages: "Open the publish backlog",
   selectHint: "Select a stage to see what it does and what you can do.",
+  item: {
+    stage: "Stage",
+    status: "Status",
+    failed: "Failed",
+    created: "Created",
+    runAt: "Runs at",
+    finished: "Finished",
+    error: "Error",
+    payload: "Payload as JSON",
+  },
+};
+
+/** The text fields of the scraped payload; `id`, `links` and `kind` show only in the JSON. */
+const scrapedFields = [
+  { id: "body", name: "Body", type: "textarea" },
+  { id: "category", name: "Category", type: "text" },
+  { id: "tags", name: "Tags", type: "text" },
+  { id: "target", name: "Targets", type: "text" },
+  { id: "image", name: "Image", type: "text" },
+  { id: "date", name: "Date", type: "text" },
+];
+
+/** The `Forma` fields of each stage's payload in the item modal; publish carries only an id. */
+const payloadFields = {
+  analyze: scrapedFields,
+  aggregate: [
+    { id: "title", name: "Title", type: "text" },
+    { id: "summary", name: "Summary", type: "textarea" },
+    { id: "importance", name: "Importance", type: "text" },
+    { id: "country", name: "Country", type: "text" },
+    { id: "location", name: "Location", type: "text" },
+    { id: "peoples", name: "People", type: "text" },
+    { id: "properNames", name: "Proper names", type: "text" },
+    ...scrapedFields,
+  ],
+  publish: [],
 };
 
 /**
  * The pipeline as the Pipeline page draws it (docs/telegator.md §1): the clock,
- * four stages, then Telegram. `metric` names an `Overview` field; `queue` names
+ * four stages, then Telegram; the Errors node stands apart. `metric` names an `Overview` field; `queue` names
  * the stage's lane in `ingest`.
  */
 const stages = [
@@ -213,12 +274,31 @@ const stages = [
     caption: "Target channels",
     detail: "Where the stories land. The Targets page lists them.",
   },
+  {
+    id: "errors",
+    kind: "errors",
+    icon: "triangle-alert",
+    title: "Errors",
+    caption: "Items that used up their attempts",
+    metric: "errors",
+    metricLabel: "across all stages",
+    detail:
+      "Every stage's failed items, with the error and its cause. Analyse asks the model for the likely cause and a fix; Run sends one item back to its stage.",
+  },
 ] as const;
 
 const records = {
   resetAll: "Reset all cursors",
   confirmReset: "Confirm: reset {count} sources",
   republish: "Re-publish",
+};
+
+const audit = {
+  title: "Audit",
+  subtitle: "Every send Telegram rejected, newest first. Kept for 30 days.",
+  empty: "No rejected sends",
+  rejected: "Rejected sends",
+  open: "Rejected sends not yet followed by a successful post",
 };
 
 /** Success toasts, by action; `{name}` is filled from the action's result. */
@@ -228,10 +308,18 @@ const toasts = {
   deleted: "Deleted {count} {noun}(s)",
   exported: "Exported {file}",
   runScraper: "Scraped {processed} items",
+  emulateItem: "Queued fake post {id}",
+  resetIngest: "Deleted {deleted} ingest items",
   resetSourceCursors:
     "Reset {reset} sources; the next scrape starts from each channel's latest post",
-  replayDlq: "Replayed {replayed} from {queue}",
-  purgeDlq: "Discarded {discarded} from {queue}",
+  retryErrors: "Replayed {replayed} errors",
+  purgeErrors: "Discarded {discarded} errors",
+  diagnoseError: "Analysed {ref}",
+  runStage: "Released {released} in {queue}",
+  pauseStage: "Paused {queue}",
+  resumeStage: "Resumed {queue}",
+  runItem: "Running {ref} next",
+  runItemGone: "{ref} is no longer waiting",
   republishMessage: "Queued {id} for re-publishing",
   publishPending: "Queued {published} for publishing",
   failed: "Request failed",
@@ -247,7 +335,9 @@ export const resources = {
   dashboard,
   pipeline,
   stages,
+  payloadFields,
   records,
+  audit,
   toasts,
 };
 

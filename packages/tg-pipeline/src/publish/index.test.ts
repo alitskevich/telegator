@@ -1,4 +1,5 @@
 import { type Message, MessageSchema } from "tg-domain/message";
+import { listAuditFor } from "tg-firebase/audit";
 import { messages, targets } from "tg-firebase/db";
 import type { TelegramBot, TelegramResponse } from "tg-telegram/types";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -57,11 +58,23 @@ describe("runPublish", () => {
     expect((await targets.get("news_a"))?.lastPostedMessageId).toBe("chan_a/1");
   });
 
-  test("a rejected send throws and leaves the message pending", async () => {
+  test("a rejected send throws Telegram's reason per target and leaves the message pending", async () => {
     await messages.putNew(message());
-    await expect(runPublish("chan_a/1", fakeBot(false).bot, () => NOW)).rejects.toThrow(/rejected/);
+    await expect(runPublish("chan_a/1", fakeBot(false).bot, () => NOW)).rejects.toThrow(
+      "telegram rejected news_a (sendMessage): nope; news_b (sendMessage): nope",
+    );
 
     expect((await messages.get("chan_a/1"))?.status).toBe("topublish");
+    const audit = await listAuditFor("chan_a/1");
+    expect(audit.map((entry) => entry.target).sort()).toEqual(["news_a", "news_b"]);
+    expect(audit[0]).toMatchObject({ method: "sendMessage", error: "nope", at: NOW });
+  });
+
+  test("a send that succeeds records no audit", async () => {
+    await messages.putNew(message());
+    await runPublish("chan_a/1", fakeBot().bot, () => NOW);
+
+    expect(await listAuditFor("chan_a/1")).toEqual([]);
   });
 
   test("a retry skips the targets already posted", async () => {

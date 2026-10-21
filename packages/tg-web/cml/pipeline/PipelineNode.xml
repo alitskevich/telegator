@@ -1,34 +1,31 @@
 <Component id="PipelineNode">
-  <Signature purpose="One node of the pipeline diagram: a stage, the clock or Telegram"
-    description="A stage shows its count; one with a queue adds an in-queue chip and a dead-letter chip that turns red when there are any. Pressing it selects it. The caption is cut at one line; the panel shows it whole.">
+  <Signature purpose="One node of the pipeline diagram: a stage, the clock, Telegram or the Errors node"
+    description="A stage shows its count, and its queue count on its top-right corner when it has one; the Errors node turns red when it holds items. Pressing it selects it. The caption is cut at one line; the panel shows it whole.">
     <Prop id="node" type="object" required="true" description="A `PipelineNode` from `src/pipeline/types.ts`" />
     <Prop id="select" type="action" required="true" description="Called with `{ id }`" />
   </Signature>
 
   <button type="button" data-id="{node.id}" click="{select}"
     aria-pressed="{node.selected ? 'true' : 'false'}"
-    class="w-full min-h-22 min-w-0 text-left rounded-box border px-3 py-2 flex flex-col gap-0.5 cursor-pointer transition-colors duration-150 motion-safe:active:scale-[0.98] {node.selected ? 'border-primary bg-base-200' : 'border-base-200 bg-base-100 hover:border-base-content/30'} {node.alert ? 'ring-1 ring-error/60' : ''}">
-    <span class="flex items-center gap-2 text-sm font-medium leading-tight min-w-0">
+    class="relative w-full min-h-22 min-w-0 text-left rounded-box border px-3 py-2 flex flex-col gap-0.5 cursor-pointer transition-colors duration-150 motion-safe:active:scale-[0.98] {node.selected ? 'border-primary bg-base-200' : 'border-base-200 bg-base-100 hover:border-base-content/30'} {node.alert ? 'ring-1 ring-error/60' : ''}">
+    <span If="node.queue" title="{R.pipeline.inQueue}"
+      class="badge badge-sm absolute -top-2.5 -right-2.5 gap-1 tabular-nums {node.queued GT 0 ? 'badge-primary' : 'badge-neutral'}">
+      <span aria-hidden="true" class="icon icon-inbox"></span>
+      <span>{node.queued | num}</span>
+    </span>
+    <span class="flex items-center gap-2 text-sm font-medium leading-tight min-w-0 {node.queue ? 'pr-8' : ''}">
       <span aria-hidden="true"
-        class="icon icon-{node.icon} shrink-0 {node.kind == 'function' ? 'text-primary' : 'text-base-content/60'}"></span>
+        class="icon icon-{node.icon} shrink-0 {node.kind == 'function' ? 'text-primary' : node.kind == 'errors' ? 'text-error' : 'text-base-content/60'}"></span>
       <span class="truncate">{node.title}</span>
+      <span If="node.paused" class="badge badge-xs badge-ghost ml-auto shrink-0 gap-1">
+        <span aria-hidden="true" class="icon icon-pause"></span>
+        <span>{R.pipeline.paused}</span>
+      </span>
     </span>
     <span class="text-xs text-base-content/60 truncate" title="{node.caption}">{node.caption}</span>
-    <span If="{node.hasValue OR node.queue}" class="mt-auto flex items-baseline gap-1.5 min-w-0">
-      <Fragment If="node.hasValue">
-        <span class="text-lg font-semibold leading-none tabular-nums">{node.value | num}</span>
-        <span class="text-xs text-base-content/60 truncate">{node.valueLabel}</span>
-      </Fragment>
-      <span If="node.queue" title="{R.pipeline.inQueue}"
-        class="badge badge-xs badge-ghost ml-auto shrink-0 gap-1">
-        <span aria-hidden="true" class="icon icon-inbox"></span>
-        <span>{node.queued | num}</span>
-      </span>
-      <span If="node.queue" title="{R.pipeline.deadLetters}"
-        class="badge badge-xs shrink-0 gap-1 {node.alert ? 'badge-error' : 'badge-ghost'}">
-        <span aria-hidden="true" class="icon icon-mail-x"></span>
-        <span>{node.dlq | num}</span>
-      </span>
+    <span If="node.hasValue" class="mt-auto flex items-baseline gap-1.5 min-w-0">
+      <span class="text-lg font-semibold leading-none tabular-nums {node.alert ? 'text-error' : ''}">{node.value | num}</span>
+      <span class="text-xs text-base-content/60 truncate">{node.valueLabel}</span>
     </span>
   </button>
 </Component>
