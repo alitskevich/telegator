@@ -8,6 +8,8 @@ keywords: [telegator, firebase, firestore, cloud-functions, openrouter, telegram
 
 Telegator collects posts from public Telegram channels and asks an AI model to classify each one. It groups the posts that report the same story into one message and publishes that message to target channels. When more sources report the story, the message is **edited in place**. Operators use a web console to watch the pipeline and step in.
 
+The behaviour, stated precisely enough to rebuild the system, is in the [functional spec](spec/README.md).
+
 ## 1. The system in one picture
 
 ```mermaid
