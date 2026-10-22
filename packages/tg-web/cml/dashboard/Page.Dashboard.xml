@@ -1,54 +1,47 @@
 <Component id="Page.Dashboard">
-  <Signature purpose="Pipeline health at a glance: the 24 h figures, the two charts and the latest messages" />
+  <Signature purpose="The whole pipeline as one live diagram beside the overview, with every manual trigger on the node it acts on"
+    description="With no stage selected, the panel holds the overview: the 24 h figures, the two charts and the latest messages. Select a stage; the panel then holds its figures and its actions. The selected stage is `?node=` on the hash route, so a reload or a shared link opens the same one. Figures refresh every 30 s." />
 
-  <OverviewService Ref="overview" api="@api" />
+  <PipelineService Ref="pipeline" api="@api" nav="@nav" selectedId="{@nav.params.node}" />
+  <ItemService Ref="item" api="@api" owner="@pipeline" />
+  <RecordService Ref="targets" table="targets" api="@api" owner="@pipeline" />
+  <RecordService Ref="sources" table="sources" api="@api" owner="@pipeline"
+    defaults="{@pipeline.sourceDefaults}" />
 
-  <PageTitle title="{R.dashboard.title}" subtitle="{R.common.updated} {@overview.updatedAt | clock}">
+  <PageTitle title="{R.dashboard.title}" subtitle="{R.dashboard.subtitle}">
+    <span class="text-xs text-base-content/60">{R.common.updated} {@pipeline.updatedAt | clock}</span>
     <Btn class="sm:btn-sm" mode="soft" icon="refresh-cw" text="{R.common.refresh}"
-      busy="{@overview.loading}" click="-> @overview.load()" />
+      busy="{@pipeline.loading}" click="-> @pipeline.load()" />
+    <Btn If="@api.canAdmin" class="sm:btn-sm" type="error" mode="{@pipeline.resetArmed ? null : 'soft'}"
+      icon="eraser" text="{@pipeline.resetLabel}" busy="{@api.busy.resetIngest}"
+      click="-> @pipeline.resetIngest()" />
   </PageTitle>
 
-  <ErrorBanner If="@overview.error" text="{@overview.error}" />
+  <ErrorBanner If="@pipeline.error" text="{@pipeline.error}" />
 
-  <This-Stats />
+  <div class="flex flex-col lg:flex-row gap-2 lg:items-start">
+    <section class="bg-base-100 rounded-box p-4 sm:p-6 min-w-0 lg:w-48">
+      <ol class="flex flex-col items-center">
+        <li Each="node of @pipeline.nodes"
+          class="w-full max-w-96 flex flex-col items-center min-w-0">
+          <span If="node.arrow" aria-hidden="true"
+            class="icon icon-arrow-down py-1 text-base-content/40">
+          </span>
+          <PipelineNode node="{node}" select="-> @pipeline.select(event)" />
+        </li>
+      </ol>
+    </section>
 
-  <div class="grid gap-4 lg:grid-cols-3">
-    <Donut title="{R.dashboard.status}" chart="{@overview.statusChart}" empty="{R.dashboard.noData}" />
-    <Donut title="{R.dashboard.categories}" chart="{@overview.categoryChart}" empty="{R.dashboard.noData}" />
-    <This-Recent />
+    <div class="lg:sticky lg:top-20 min-w-0 flex-1 @container">
+      <PipelinePanel />
+    </div>
   </div>
 
-  <Subcomponent id="Stats">
-    <Signature purpose="The five headline figures; unread ones show a dash, the errors card turns red above zero" />
-    <div class="grid gap-4 grid-cols-2 lg:grid-cols-5 {@overview.data ? '' : 'animate-pulse'}">
-      <StatCard label="{R.dashboard.scraped}" value="{@overview.data.scraped}" note="{R.dashboard.last24h}" />
-      <StatCard label="{R.dashboard.analyzed}" value="{@overview.data.analyzed}" note="{R.dashboard.last24h}" />
-      <StatCard label="{R.dashboard.skipped}" value="{@overview.data.skipped.total}" note="{@overview.skipped || R.dashboard.last24h}" />
-      <StatCard label="{R.dashboard.published}" value="{@overview.data.published}" note="{R.dashboard.allTime}" />
-      <div class="col-span-2 lg:col-span-1">
-        <StatCard label="{R.dashboard.errors}" value="{@overview.data.errors}" note="{R.dashboard.allStages}"
-          alert="{@overview.data.errors GT 0}" />
-      </div>
-    </div>
-  </Subcomponent>
-
-  <Subcomponent id="Recent">
-    <Signature purpose="The ten most recent messages, newest first" />
-    <section class="bg-base-100 rounded-box p-4 flex flex-col gap-3 min-w-0">
-      <div class="flex items-center justify-between gap-2">
-        <h2 class="text-lg font-semibold">{R.dashboard.recent}</h2>
-        <a href="#/messages" class="btn btn-xs btn-ghost text-base-content/70">{R.dashboard.allMessages}</a>
-      </div>
-      <ul If="@overview.data.recent.length" class="flex flex-col divide-y divide-base-200">
-        <li Each="message of @overview.data.recent" class="py-2 flex flex-col gap-1 min-w-0">
-          <div class="flex items-center gap-2 min-w-0">
-            <StatusBadge status="{message.status}" />
-            <span class="truncate text-sm" title="{message.title ?? message.id}">{message.title ?? message.id}</span>
-          </div>
-          <span class="text-xs text-base-content/60">{message.category ?? '—'} · {message.date}</span>
-        </li>
-      </ul>
-      <p If="{!@overview.data.recent.length}" class="text-sm text-base-content/60 py-10">{R.dashboard.noMessages}</p>
-    </section>
-  </Subcomponent>
+  <PipelineItem />
+  <RecordModal metaId="target" detail="{@targets.detail}" fields="{R.telegram.fields}"
+    dirty="{@targets.dirty}" close="-> @targets.close()" change="-> @targets.setDraft(event)"
+    save="-> @targets.save()" remove="-> @targets.remove()" />
+  <RecordModal metaId="source" detail="{@sources.detail}" fields="{R.sourceFields}"
+    dirty="{@sources.dirty}" close="-> @sources.close()" change="-> @sources.setDraft(event)"
+    save="-> @sources.save()" remove="-> @sources.remove()" />
 </Component>

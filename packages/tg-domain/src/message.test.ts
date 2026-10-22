@@ -62,8 +62,10 @@ describe("MessageSchema", () => {
     expect(MessageSchema.safeParse({ ...message, status: "fetched" }).success).toBe(false);
   });
 
-  test("defaults tgChannel to telegator_news", () => {
-    expect(MessageSchema.parse(message).tgChannel).toBe(DEFAULT_TG_CHANNEL);
+  /** Legacy and read-only: publish routes by tags, and reads it only to find a legacy `tgId`. */
+  test("leaves an absent tgChannel absent, and keeps a stored one", () => {
+    expect(MessageSchema.parse(message).tgChannel).toBeUndefined();
+    expect(MessageSchema.parse({ ...message, tgChannel: "a,b" }).tgChannel).toBe("a,b");
     expect(DEFAULT_TG_CHANNEL).toBe("telegator_news");
   });
 

@@ -1,25 +1,13 @@
 /**
- * The two HTTP adapters behind the Telegram ports, over the platform `fetch`.
- * They differ in error semantics:
- *
- *  - `HttpFetcher`: any failure (non-2xx, socket error, timeout) yields `""`, not
- *    an exception. Scrape counts an empty fetch toward `zeroYieldRuns`, which is
- *    what flags a stale source; a throw would hide the failure.
- *  - `HttpPost`: hands back status and body, because the bot retries on `429`
- *    and Telegram signals errors with `ok`, not the status.
+ * The HTTP adapter behind the bot, over the platform `fetch`. It hands back
+ * status and body, because the bot retries on `429` and Telegram signals errors
+ * with `ok`, not the status.
  *
  * Nothing here logs: the bot token is in the request URL, and undici quotes that
  * URL into transport errors.
  */
 
-import type { HttpFetcher } from "tg-telegram/types";
 import type { FetchInit, FetchResponse, HttpOptions, HttpPost, HttpPostResponse } from "./types";
-
-/**
- * Scrape has 300 s for up to ten sources. Twenty seconds each leaves a margin
- * for the rest of the run, and stops one hung `t.me` page from eating it all.
- */
-export const SCRAPE_FETCH_TIMEOUT_MS = 20_000;
 
 /**
  * Publish has 300 s. Two attempts at 30 s plus the bot's 60 s fallback
@@ -42,40 +30,9 @@ const platformFetch: FetchLike = (url, init) => globalThis.fetch(url, init);
 
 /**
  * A request that never answers must not consume a stage's whole budget. The
- * fetch rejects with a `TimeoutError`, and each adapter applies its own rule.
+ * fetch rejects with a `TimeoutError`, which propagates.
  */
 const timeoutSignal = (timeoutMs: number): AbortSignal => AbortSignal.timeout(timeoutMs);
-
-export function createHttpFetcher(options: HttpOptions = {}): HttpFetcher {
-  const doFetch = options.fetch ?? platformFetch;
-  const timeoutMs = options.timeoutMs ?? SCRAPE_FETCH_TIMEOUT_MS;
-
-  return {
-    get: async (url, headers) => {
-      try {
-        const response = await doFetch(url, {
-          // The URL arrives fully built, cursor included, and is used verbatim.
-          method: "GET",
-          // The browser-like headers are the caller's: `t.me/s/` serves a page
-          // that parses to nothing to clients it reads as bots.
-          headers: { ...headers },
-          signal: timeoutSignal(timeoutMs),
-        });
-
-        // An error page would parse to zero posts anyway; "" says so sooner.
-        if (!response.ok) {
-          return "";
-        }
-
-        return await response.text();
-      } catch {
-        // A socket error, DNS failure, timeout or truncated body: all mean "the
-        // source yielded nothing", which scrape counts toward staleness.
-        return "";
-      }
-    },
-  };
-}
 
 /**
  * Parses a Bot API body, falling back to the raw text, so an HTML error page

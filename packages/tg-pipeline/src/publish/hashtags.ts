@@ -62,7 +62,7 @@ export function buildHashtagLine(source: HashtagSource): string {
     ...splitTags(source.category),
     ...splitTags(source.location),
     ...splitTags(source.peoples),
-    ...splitTags(source.tags),
+    ...(source.tags ?? []),
     ...titleWords(source.title),
     `date_${source.date}`,
     `ts_${source.ts}`,

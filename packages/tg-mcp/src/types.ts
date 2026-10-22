@@ -38,9 +38,8 @@ export interface MessageContent {
   readonly country?: string;
   readonly location?: string;
   readonly peoples?: string;
-  readonly tags?: string;
+  readonly tags?: readonly string[];
   readonly image?: string;
-  readonly tgChannel?: string;
   readonly memberCount: number;
   readonly members: MemberEntry[];
 }

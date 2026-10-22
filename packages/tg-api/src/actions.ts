@@ -27,7 +27,7 @@ import { createOpenRouterDiagnoser } from "tg-ai/diagnoser";
 import type { Role } from "tg-enums/roles";
 import { sources, targets } from "tg-firebase/db";
 import type { Operator } from "tg-firebase/operators";
-import { openRouterKey } from "./secrets";
+import { mtprotoSession, openRouterKey } from "./secrets";
 
 type Action = (input: unknown, operator: Operator) => Promise<unknown>;
 
@@ -52,7 +52,7 @@ export const ACTIONS: Record<string, readonly [Role, Action]> = {
   exportTable: ["viewer", exportTable],
   upsertRecord: ["editor", upsertRecord],
   deleteRecords: ["editor", deleteRecords],
-  runScraper: ["admin", () => runScraper()],
+  runScraper: ["admin", () => runScraper(mtprotoSession.value())],
   emulateItem: ["admin", () => emulateItem()],
   resetIngest: ["admin", () => resetIngest()],
   resetSourceCursors: ["admin", () => resetSourceCursors()],

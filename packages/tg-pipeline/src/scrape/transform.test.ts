@@ -15,9 +15,8 @@ const makeSource = (overrides: Partial<Source> = {}): Source =>
   SourceSchema.parse({
     id: "yigal_levin",
     status: "ok",
-    target: "telegator_news",
     category: "geopolitics",
-    tags: "war,politics",
+    tags: ["war", "politics"],
     ...overrides,
   });
 
@@ -95,17 +94,15 @@ describe("transformPost — teaser stripping", () => {
 });
 
 describe("transformPost — stamped source fields", () => {
-  test("copies target, category and tags from the source", () => {
-    const item = transformPost(makePost(), makeSource({ target: "a, @b" }), DATE, NOW);
-    expect(item.target).toBe("a, @b");
+  test("copies category and tags from the source", () => {
+    const item = transformPost(makePost(), makeSource(), DATE, NOW);
     expect(item.category).toBe("geopolitics");
-    expect(item.tags).toBe("war,politics");
+    expect(item.tags).toEqual(["war", "politics"]);
   });
 
   test("leaves them absent when the source does not curate them", () => {
-    const source = makeSource({ target: undefined, category: undefined, tags: undefined });
+    const source = makeSource({ category: undefined, tags: undefined });
     const item = transformPost(makePost(), source, DATE, NOW);
-    expect(item.target).toBeUndefined();
     expect(item.category).toBeUndefined();
     expect(item.tags).toBeUndefined();
   });

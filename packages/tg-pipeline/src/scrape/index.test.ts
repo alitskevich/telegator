@@ -1,8 +1,8 @@
 import { type Source, SourceSchema } from "tg-domain/source";
+import type { ChannelPost, ChannelReader } from "tg-domain/types";
 import { sources } from "tg-firebase/db";
 import { metrics } from "tg-firebase/metrics";
 import { enqueue } from "tg-firebase/tasks";
-import type { ChannelPost, ChannelReader } from "tg-telegram/types";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { clearFirestore } from "../../../../test/support";
 import { runScrape } from "./index";
@@ -23,7 +23,7 @@ const post = (id: string, body = `post ${id}`): ChannelPost => ({
 });
 
 const reader = (pages: Record<string, ChannelPost[] | Error>): ChannelReader => ({
-  via: "web",
+  type: "telegram",
   read: async (channel) => {
     const page = pages[channel] ?? [];
     if (page instanceof Error) throw page;

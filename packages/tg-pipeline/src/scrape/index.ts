@@ -1,10 +1,12 @@
 import { toDateKey } from "tg-domain/date";
 import { SOURCE_STATUS_OK, type Source, type SourceCursor } from "tg-domain/source";
+import type { ChannelPost, ChannelReader } from "tg-domain/types";
 import { sources } from "tg-firebase/db";
 import { metrics } from "tg-firebase/metrics";
 import { enqueue } from "tg-firebase/tasks";
-import { parseTelegramPage } from "tg-telegram/parse";
-import type { ChannelPost, ChannelReader, HttpFetcher } from "tg-telegram/types";
+import { connectMtproto } from "tg-mtproto/client";
+import { parseMtprotoCredentials } from "tg-mtproto/credentials";
+import { createMtprotoReader } from "tg-mtproto/reader";
 import { log } from "tg-utils/logger";
 import { selectSources } from "./select";
 import { transformPost } from "./transform";
@@ -14,28 +16,8 @@ import { transformPost } from "./transform";
  * `post` for analyze and moves each source's cursor.
  */
 
-/** `t.me/s/` serves a reduced, unparseable page to clients it reads as bots. */
-export const SCRAPE_HEADERS: Readonly<Record<string, string>> = {
-  "User-Agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Accept-Language": "en-US,en;q=0.9,ru;q=0.8,be;q=0.7",
-};
-
 /** A source with this many zero-yield runs in a row, that once yielded, is stale. */
 export const STALE_ZERO_YIELD_RUNS = 3;
-
-/** The public preview page. `?after=` is added only for a real cursor: empty means "oldest posts". */
-export function webReader(fetcher: HttpFetcher): ChannelReader {
-  return {
-    via: "web",
-    async read(channel, afterId) {
-      const url = `https://t.me/s/${channel}${afterId ? `?after=${afterId}` : ""}`;
-      const html = await fetcher.get(url, SCRAPE_HEADERS);
-      return html === "" ? [] : parseTelegramPage(html);
-    },
-  };
-}
 
 /** The newest id seen, compared as numbers ("9" < "10"), over every post — dropped ones too. */
 function newestItemId(posts: readonly ChannelPost[]): string | undefined {
@@ -101,8 +83,8 @@ async function scrapeSource(reader: ChannelReader, source: Source, now: number, 
 export async function runScrape(reader: ChannelReader, now = Date.now()) {
   const date = toDateKey(now);
   const candidates = await sources.listByStatus(SOURCE_STATUS_OK);
-  const selected = selectSources(candidates, now, reader.via);
-  log.info("scrape run started", { via: reader.via, selected: selected.length });
+  const selected = selectSources(candidates, now, reader.type);
+  log.info("scrape run started", { type: reader.type, selected: selected.length });
 
   let processed = 0;
   let enqueued = 0;
@@ -116,6 +98,19 @@ export async function runScrape(reader: ChannelReader, now = Date.now()) {
     }
   }
 
-  log.info("scrape run finished", { via: reader.via, processed, enqueued });
+  log.info("scrape run finished", { type: reader.type, processed, enqueued });
   return { processed, enqueued };
+}
+
+/**
+ * One run over the Telegram sources, read through the account in `session`
+ * (the `MTPROTO_SESSION` JSON). The client is destroyed whatever the outcome.
+ */
+export async function scrapeTelegram(session: string) {
+  const client = await connectMtproto(parseMtprotoCredentials(session));
+  try {
+    return await runScrape(createMtprotoReader(client));
+  } finally {
+    await client.destroy();
+  }
 }

@@ -1,5 +1,5 @@
+import { chatIdFor, TELEGRAM_MESSAGE_LIMIT } from "tg-bot/types";
 import type { Message } from "tg-domain/message";
-import { chatIdFor, TELEGRAM_MESSAGE_LIMIT } from "tg-telegram/types";
 import { escapeHtml } from "./escape";
 import { buildHashtagLine } from "./hashtags";
 import { renderMembers } from "./render";

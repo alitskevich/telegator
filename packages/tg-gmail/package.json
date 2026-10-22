@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "tg-domain": "*",
-    "tg-telegram": "*",
     "zod": "^4.5.2"
   }
 }

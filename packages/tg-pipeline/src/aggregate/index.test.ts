@@ -23,7 +23,7 @@ const analyzed = (id: string, title = "Minsk bridge collapse"): AnalyzedItem =>
       category: "politics",
       importance: "high",
       properNames: "Minsk, Svislach",
-      tags: "bridge, collapse, infrastructure",
+      tags: ["bridge", "collapse", "infrastructure"],
     }),
   );
 

@@ -1,31 +1,31 @@
 <Component id="PipelineItem">
   <Signature purpose="One ingest item whole: where it stands, its payload, and a form over the payload's text"
-    description="Reads `@pipeline.detail`; opened from a row of the panel. Only an admin saves, and only a waiting or failed item; the API re-checks both and the stage's schema." />
+    description="Reads `@item.detail`; opened from a queue row of the Pipeline panel or a failed item of the Audit page. Only an admin saves, and only a waiting or failed item; the API re-checks both and the stage's schema." />
 
-  <Modal If="@pipeline.detail" title="{@pipeline.detailTitle}" close="-> @pipeline.closeItem()">
+  <Modal If="@item.detail" title="{@item.detailTitle}" close="-> @item.close()">
     <div class="p-4 flex flex-col gap-4">
       <dl class="flex flex-col gap-1 text-sm">
-        <div Each="fact of @pipeline.detailFacts" class="flex gap-3 min-w-0">
+        <div Each="fact of @item.detailFacts" class="flex gap-3 min-w-0">
           <dt class="w-20 shrink-0 text-base-content/60">{fact.label}</dt>
           <dd class="min-w-0 break-words {fact.id == 'error' ? 'text-error' : ''}">{fact.value}</dd>
         </div>
       </dl>
-      <details If="@pipeline.detail.cause" class="text-xs">
+      <details If="@item.detail.cause" class="text-xs">
         <summary class="cursor-pointer text-base-content/60">{R.pipeline.cause}</summary>
-        <pre class="mt-1 whitespace-pre-wrap break-all">{@pipeline.detail.cause}</pre>
+        <pre class="mt-1 whitespace-pre-wrap break-all">{@item.detail.cause}</pre>
       </details>
-      <Forma If="@pipeline.detailFields.length" metaId="{@pipeline.detail.stage}"
-        meta="{@pipeline.detailFields}" data="{@pipeline.detail.raw}"
-        disabled="{!@pipeline.canEditDetail}" change="-> @pipeline.setDraft(event)" />
+      <Forma If="@item.detailFields.length" metaId="{@item.detail.stage}"
+        meta="{@item.detailFields}" data="{@item.detail.raw}"
+        disabled="{!@item.canEditDetail}" change="-> @item.setDraft(event)" />
       <details class="text-xs">
         <summary class="cursor-pointer text-base-content/60">{R.pipeline.item.payload}</summary>
-        <pre class="mt-1 whitespace-pre-wrap break-all">{@pipeline.detailJson}</pre>
+        <pre class="mt-1 whitespace-pre-wrap break-all">{@item.detailJson}</pre>
       </details>
     </div>
     <Fragment Slot="footer">
-      <Btn If="@pipeline.canEditDetail" type="primary" class="sm:btn-sm" icon="save"
-        text="{R.common.save}" disabled="{!@pipeline.draft}" busy="{@api.busy.editItem}"
-        click="-> @pipeline.saveItem()" />
+      <Btn If="@item.canEditDetail" type="primary" class="sm:btn-sm" icon="save"
+        text="{R.common.save}" disabled="{!@item.draft}" busy="{@api.busy.editItem}"
+        click="-> @item.save()" />
     </Fragment>
   </Modal>
 </Component>

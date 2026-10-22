@@ -3,8 +3,8 @@ import { formatItemId } from "tg-domain/ids";
 import type { ScrapedItem } from "tg-domain/item";
 import { ScrapedItemSchema } from "tg-domain/item";
 import type { Source } from "tg-domain/source";
+import type { ChannelPost } from "tg-domain/types";
 import type { ItemKind } from "tg-enums/itemKind";
-import type { ChannelPost } from "tg-telegram/types";
 
 /**
  * The per-post transform: a parsed post plus its source become one item for
@@ -12,7 +12,7 @@ import type { ChannelPost } from "tg-telegram/types";
  * date, and sets `kind`.
  */
 
-/** Both readers (web and MTProto) produce `ChannelPost`, so this cannot tell them apart. */
+/** Every reader (MTProto, Gmail) produces `ChannelPost`, so this cannot tell them apart. */
 export type TransformInput = ChannelPost;
 
 /** Posts older than this are obsolete. */
@@ -99,9 +99,8 @@ export function transformPost(
     links: post.links,
     image: post.image,
     forwardedFrom: post.forwardedFrom,
-    // Stamped from the source. Analyze may overwrite `category` and merge
-    // `tags`; `target` passes through to publish.
-    target: source.target,
+    // Stamped from the source. Analyze may overwrite `category` and merges
+    // `tags`, which publish routes by.
     category: source.category,
     tags: source.tags,
     date,

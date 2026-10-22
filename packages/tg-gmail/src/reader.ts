@@ -1,9 +1,9 @@
-import type { ChannelPost, ChannelReader } from "tg-telegram/types";
+import type { ChannelPost, ChannelReader } from "tg-domain/types";
 import { mailContent } from "./mime";
 import type { GmailClient, GmailMessage } from "./types";
 
 /**
- * The `via: "gmail"` reader: `ChannelReader` over the Gmail API. A source's id
+ * The `type: "gmail"` reader: `ChannelReader` over the Gmail API. A source's id
  * is a sender's address, and its posts are that sender's inbox mails.
  *
  * A post's id is the mail's `internalDate` (epoch ms): item ids need digits,
@@ -55,7 +55,7 @@ export function toChannelPost(message: GmailMessage): ChannelPost {
  */
 export function createGmailReader(client: GmailClient): ChannelReader {
   return {
-    via: "gmail",
+    type: "gmail",
     async read(sender, afterId) {
       const query = gmailQuery(sender, afterId);
       const ids = afterId

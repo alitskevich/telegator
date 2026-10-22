@@ -14,7 +14,7 @@
     "tg-firebase": "*",
     "tg-pipeline": "*",
     "tg-rc": "*",
-    "tg-telegram": "*",
+    "tg-bot": "*",
     "tg-utils": "*"
   }
 }

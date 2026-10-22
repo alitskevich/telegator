@@ -13,7 +13,7 @@ import type { Overview } from "./types";
 
 export const DAY_MS = 86_400_000;
 export const WEEK_MS = 7 * DAY_MS;
-export const RECENT_MESSAGE_LIMIT = 10;
+export const RECENT_MESSAGE_LIMIT = 3;
 
 /** One value per task stage. */
 async function perStage<T>(read: (queue: QueueName) => Promise<T>): Promise<Record<QueueName, T>> {

@@ -1,0 +1,24 @@
+<Component id="RecordModal">
+  <Signature purpose="One source or target in a modal: every field, which an editor saves or deletes"
+    description="Opened from a row of a node's list; mounted once per `RecordService`. Mounted beside the panel, not in it: the panel is sticky, and the header would cover a modal inside it.">
+    <Prop id="metaId" type="string" required="true" description="Keys `Forma`'s cache: one per table" />
+    <Prop id="detail" type="object" description="The record; the modal is closed while it is empty" />
+    <Prop id="fields" type="array" required="true" description="`Forma` field metadata" />
+    <Prop id="dirty" type="boolean" description="A writable field changed" />
+    <Prop id="close" type="action" required="true" description="Closes the modal" />
+    <Prop id="change" type="action" required="true" description="Called with the edited record" />
+    <Prop id="save" type="action" required="true" description="Saves the changed fields" />
+    <Prop id="remove" type="action" required="true" description="Deletes the record, softly" />
+  </Signature>
+
+  <Modal If="detail" title="{detail.id}" close="{close}">
+    <Forma class="p-2" metaId="{metaId}" meta="{fields}" data="{detail}"
+      disabled="{!@api.canEdit}" change="{change}" />
+    <Fragment Slot="footer">
+      <Btn If="@api.canEdit" type="error" mode="soft" class="sm:btn-sm" icon="trash-2"
+        text="{R.records.delete}" busy="{@api.busy.deleteRecord}" click="{remove}" />
+      <Btn If="@api.canEdit" type="primary" class="sm:btn-sm" icon="save" text="{R.common.save}"
+        disabled="{!dirty}" busy="{@api.busy.saveRecord}" click="{save}" />
+    </Fragment>
+  </Modal>
+</Component>

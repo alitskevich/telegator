@@ -9,8 +9,8 @@ import type { LabelledKeyPair } from "./types";
  * easy to check by hand.
  */
 const pair = (properNamesA: string, properNamesB: string, same: boolean): LabelledKeyPair => ({
-  fields: { title: "Alpha Beta", properNames: properNamesA, tags: "fire" },
-  other: { title: "Gamma Delta", properNames: properNamesB, tags: "flood" },
+  fields: { title: "Alpha Beta", properNames: properNamesA, tags: ["fire"] },
+  other: { title: "Gamma Delta", properNames: properNamesB, tags: ["flood"] },
   same,
 });
 
@@ -134,8 +134,8 @@ describe("sweepBands", () => {
 
   /** Weights are compared one hand-picked candidate per call, not swept. */
   test("accepts a weight candidate other than the production default", () => {
-    const fields: MatchKeyFields = { title: "Alpha Beta", tags: "fire" };
-    const other: MatchKeyFields = { title: "Gamma Delta", tags: "flood" };
+    const fields: MatchKeyFields = { title: "Alpha Beta", tags: ["fire"] };
+    const other: MatchKeyFields = { title: "Gamma Delta", tags: ["flood"] };
     const differentPairs: LabelledKeyPair[] = [...labelledPairs(), { fields, other, same: false }];
 
     const withTagsIgnored = sweepBands(differentPairs, {

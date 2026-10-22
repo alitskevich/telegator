@@ -1,5 +1,6 @@
 import type { Overview } from "tg-actions/dashboard/types";
 import type { QueueName } from "tg-enums/queueName";
+import type { SourceType } from "tg-enums/sourceType";
 
 /** The `Overview` fields that are plain counts: the ones a stage can show. */
 export type OverviewCount = {
@@ -18,12 +19,14 @@ export interface StageSpec {
   readonly metricLabel?: string;
   /** The stage's lane in `ingest`; its queue shows on the node. */
   readonly queue?: QueueName;
+  /** Its panel lists the enabled sources of this reader. */
+  readonly sources?: SourceType;
 }
 
 export interface PipelineNode extends StageSpec {
-  /** An arrow leads into it: every node but the first and the Errors node. */
+  /** An arrow leads into it: every node but the first. */
   readonly arrow: boolean;
-  /** Whether the node has a headline number at all; Aggregate, the clock and Telegram do not. */
+  /** Whether the node has a headline number at all; Aggregate does not. */
   readonly hasValue: boolean;
   /** The headline number; `null` if unread. */
   readonly value: number | null;
@@ -32,7 +35,5 @@ export interface PipelineNode extends StageSpec {
   readonly queued: number | null;
   /** An operator paused the stage: it runs only what *Step* releases. */
   readonly paused: boolean;
-  /** Someone has to act: the Errors node holds items. An unreadable count does not alert. */
-  readonly alert: boolean;
   readonly selected: boolean;
 }

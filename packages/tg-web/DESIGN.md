@@ -20,9 +20,9 @@ figures and one diagram, read many times a day. It should feel like an
 instrument panel: calm until something needs a person.
 
 **The idea.** The pipeline *is* the interface: the chain of stages (docs/telegator.md §1)
-is drawn once, on the Pipeline page, and every manual trigger sits on the node
+is drawn once, on the Dashboard page, and every manual trigger sits on the node
 it acts on. **The memorable thing** is the error count: the one red figure
-in the console, on the Errors node below the chain.
+in the console, on the Dashboard's errors card and over the Audit page's failed items.
 
 ## Colors
 
@@ -30,7 +30,7 @@ in the console, on the Errors node below the chain.
 | --- | --- | --- |
 | Ground | `base-300` | The canvas behind everything |
 | Panel | `base-100` | Cards, the header, table bodies |
-| Zone | `base-200` | Inside a panel: table headers, toolbars, the selected node |
+| Zone | `base-200` | Inside a panel: table headers, toolbars, the pipeline nodes |
 | Ink | `base-content`, `/70` for secondary | All text |
 | Signal | `primary` | The primary action, the current nav item, a selected node's edge |
 | Alarm | `error` | Failed items and failure toasts only |
@@ -59,7 +59,7 @@ toasts and the user menu float (`shadow-overlay`). Fields round 6px, panels
 
 - **Stat card** — label, figure, note; the errors card turns `error` above zero.
 - **Donut** — a `conic-gradient` ring with a legend; empty reads "No data yet".
-- **Pipeline node** — icon, title, caption, figure; a stage with a queue adds its in-queue chip. The Errors node stands apart and turns red above zero.
+- **Pipeline node** — a zone with a `base-content/15` edge, `primary` when selected: icon, title, caption, figure; a stage with a queue adds its in-queue chip.
 - **Records table** — DaisyUI `table-sm`, sticky header with a filter row,
   inline inputs where the operator may write. A message with rejected sends
   carries a red count beside its expand button: the rejections no later

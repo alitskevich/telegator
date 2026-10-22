@@ -1,6 +1,6 @@
 import type { Message, MessageListItem } from "tg-domain/message";
 import { SOURCE_STATUS_OK, SourceConfigInput, SourceSchema } from "tg-domain/source";
-import { splitTags } from "tg-domain/tags";
+import { TagsSchema } from "tg-domain/tags";
 import { TargetSchema } from "tg-domain/target";
 import { TARGET_TYPES } from "tg-enums/targetType";
 import { z } from "zod";
@@ -44,6 +44,7 @@ export const AddTargetInput = z
     id: z.string().min(1),
     type: z.enum(TARGET_TYPES).optional(),
     messageTemplate: z.string().optional(),
+    tags: TagsSchema.optional(),
   })
   .strict();
 
@@ -85,7 +86,6 @@ function toMessageContent(message: Message): MessageContent {
     peoples: message.peoples,
     tags: message.tags,
     image: message.image,
-    tgChannel: message.tgChannel,
     memberCount: message.memberCount,
     members,
   };
@@ -106,7 +106,7 @@ export async function findMessagesByTags(raw: unknown, deps: McpDeps) {
   }
 
   const matches = candidates.filter((candidate) =>
-    splitTags(candidate.tags).some((tag) => wanted.has(tag.toLowerCase())),
+    (candidate.tags ?? []).some((tag) => wanted.has(tag.toLowerCase())),
   );
 
   matches.sort((a, b) => (b.ts !== a.ts ? b.ts - a.ts : a.id.localeCompare(b.id)));
@@ -135,7 +135,7 @@ export const TOOLS: readonly ToolDefinition[] = [
   {
     name: "add_target",
     description:
-      "Create a new Telegator target (a publish destination). Fails if the id already has a row, live or soft-deleted.",
+      "Create a new Telegator target (a publish destination). It receives every message carrying all of its tags, and nothing without tags. Fails if the id already has a row, live or soft-deleted.",
     inputSchema: AddTargetInput,
     run: addTarget,
   },

@@ -1,0 +1,47 @@
+<Component id="DashboardPanel">
+  <Signature purpose="Pipeline health at a glance: the 24 h figures, the two charts and the latest messages"
+    description="Reads `@pipeline`; the panel shown while no stage is selected. Its grids follow the panel's width, not the viewport's." />
+
+  <div class="flex flex-col gap-4">
+    <!-- <This-Stats /> -->
+    <div class="grid gap-4 @2xl:grid-cols-2">
+      <Donut title="{R.dashboard.status}" chart="{@pipeline.statusChart}" empty="{R.dashboard.noData}" />
+      <Donut title="{R.dashboard.categories}" chart="{@pipeline.categoryChart}" empty="{R.dashboard.noData}" />
+    </div>
+    <This-Recent />
+  </div>
+
+  <Subcomponent id="Stats">
+    <Signature purpose="The five headline figures; unread ones show a dash, the errors card turns red above zero" />
+    <div class="grid gap-4 grid-cols-2 @lg:grid-cols-3 @3xl:grid-cols-5 {@pipeline.data ? '' : 'animate-pulse'}">
+      <!-- <StatCard label="{R.dashboard.scraped}" value="{@pipeline.data.scraped}" note="{R.dashboard.last24h}" />
+      <StatCard label="{R.dashboard.analyzed}" value="{@pipeline.data.analyzed}" note="{R.dashboard.last24h}" />
+      <StatCard label="{R.dashboard.skipped}" value="{@pipeline.data.skipped.total}" note="{@pipeline.skipped || R.dashboard.last24h}" />
+      <StatCard label="{R.dashboard.published}" value="{@pipeline.data.published}" note="{R.dashboard.allTime}" /> -->
+      <div class="col-span-2 @lg:col-span-1">
+        <StatCard label="{R.dashboard.errors}" value="{@pipeline.data.errors}" note="{R.dashboard.allStages}"
+          alert="{@pipeline.data.errors GT 0}" />
+      </div>
+    </div>
+  </Subcomponent>
+
+  <Subcomponent id="Recent">
+    <Signature purpose="The ten most recent messages, newest first" />
+    <section class="bg-base-100 rounded-box p-4 flex flex-col gap-3 min-w-0">
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="text-lg font-semibold">{R.dashboard.recent}</h2>
+        <a href="#/messages" class="btn btn-xs btn-ghost text-base-content/70">{R.dashboard.allMessages}</a>
+      </div>
+      <ul If="@pipeline.data.recent.length" class="flex flex-col divide-y divide-base-200">
+        <li Each="message of @pipeline.data.recent" class="py-2 flex flex-col gap-1 min-w-0">
+          <div class="flex items-center gap-2 min-w-0">
+            <StatusBadge status="{message.status}" />
+            <span class="truncate text-sm" title="{message.title ?? message.id}">{message.title ?? message.id}</span>
+          </div>
+          <span class="text-xs text-base-content/60">{message.category ?? '—'} · {message.date}</span>
+        </li>
+      </ul>
+      <p If="{!@pipeline.data.recent.length}" class="text-sm text-base-content/60 py-10">{R.dashboard.noMessages}</p>
+    </section>
+  </Subcomponent>
+</Component>

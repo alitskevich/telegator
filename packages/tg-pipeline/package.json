@@ -15,7 +15,7 @@
     "tg-enums": "*",
     "tg-firebase": "*",
     "tg-mtproto": "*",
-    "tg-telegram": "*",
+    "tg-bot": "*",
     "tg-utils": "*"
   }
 }

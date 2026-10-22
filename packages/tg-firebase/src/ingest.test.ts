@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { clearFirestore } from "../../../test/support";
+import { listAudit } from "./audit";
 import {
   clearIngest,
   countInQueue,
@@ -109,12 +110,26 @@ describe("drain", () => {
     await drain("publish", options, fails, at(T0 + 30_000));
     expect(await read("a")).toMatchObject({ status: "pending", retryCount: 2, runAt: T0 + 90_000 });
 
+    expect(await listAudit(10)).toEqual([]);
+
     await drain("publish", options, fails, at(T0 + 90_000));
     expect(await read("a")).toMatchObject({
       status: "error",
       retryCount: 3,
       finishedAt: T0 + 90_000,
     });
+    expect(await listAudit(10)).toEqual([
+      {
+        id: expect.any(String),
+        kind: "item",
+        stage: "publish",
+        itemId: "a",
+        ref: "m1",
+        error: "telegram rejected",
+        cause: expect.stringContaining("telegram rejected"),
+        at: T0 + 90_000,
+      },
+    ]);
   });
 
   test("a second drain leaves the stage to the one holding it", async () => {

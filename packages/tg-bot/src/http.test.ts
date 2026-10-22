@@ -1,12 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { createTelegramBot } from "./bot";
 import type { FetchLike } from "./http";
-import {
-  BOT_API_TIMEOUT_MS,
-  createHttpFetcher,
-  createHttpPost,
-  SCRAPE_FETCH_TIMEOUT_MS,
-} from "./http";
+import { BOT_API_TIMEOUT_MS, createHttpPost } from "./http";
 import type { FetchInit } from "./types";
 
 interface Call {
@@ -35,112 +30,13 @@ function stubFetch(status: number, body: string): Stub {
   };
 }
 
-/** A `fetch` that never settles until its signal aborts — a hung `t.me`. */
+/** A `fetch` that never settles until its signal aborts — a hung Bot API call. */
 const hangingFetch: FetchLike = (_url, init) =>
   new Promise((_resolve, reject) => {
     init.signal.addEventListener("abort", () => {
       reject(init.signal.reason);
     });
   });
-
-const PAGE = '<div class="tgme_widget_message_wrap js-widget_message_wrap">post</div>';
-
-describe("createHttpFetcher — the scrape boundary", () => {
-  test("a 200 returns the body text", async () => {
-    const stub = stubFetch(200, PAGE);
-
-    const html = await createHttpFetcher({ fetch: stub.fetch }).get("https://t.me/s/chan");
-
-    expect(html).toBe(PAGE);
-  });
-
-  test("a 404 yields an empty string, not an exception", async () => {
-    const stub = stubFetch(404, "<html>Not found</html>");
-
-    await expect(createHttpFetcher({ fetch: stub.fetch }).get("https://t.me/s/gone")).resolves.toBe(
-      "",
-    );
-  });
-
-  test("a 500 yields an empty string, not an exception", async () => {
-    const stub = stubFetch(500, "<html>Bad gateway</html>");
-
-    await expect(createHttpFetcher({ fetch: stub.fetch }).get("https://t.me/s/chan")).resolves.toBe(
-      "",
-    );
-  });
-
-  test("a network error yields an empty string, so zeroYieldRuns can count it", async () => {
-    const failing: FetchLike = () => Promise.reject(new Error("ECONNRESET"));
-
-    await expect(createHttpFetcher({ fetch: failing }).get("https://t.me/s/chan")).resolves.toBe(
-      "",
-    );
-  });
-
-  test("a body that fails mid-read yields an empty string", async () => {
-    const truncating: FetchLike = () =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-        text: () => Promise.reject(new Error("terminated")),
-      });
-
-    await expect(createHttpFetcher({ fetch: truncating }).get("https://t.me/s/chan")).resolves.toBe(
-      "",
-    );
-  });
-
-  test("a hung request times out and yields an empty string", async () => {
-    const fetcher = createHttpFetcher({ fetch: hangingFetch, timeoutMs: 5 });
-
-    await expect(fetcher.get("https://t.me/s/chan")).resolves.toBe("");
-  });
-
-  test("browser-like headers reach fetch unchanged", async () => {
-    const stub = stubFetch(200, PAGE);
-    const headers = {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0",
-      "Accept-Language": "en-US,en;q=0.9,ru;q=0.8,be;q=0.7",
-    };
-
-    await createHttpFetcher({ fetch: stub.fetch }).get("https://t.me/s/chan", headers);
-
-    expect(stub.calls[0]?.init.headers).toEqual(headers);
-    expect(stub.calls[0]?.init.method).toBe("GET");
-  });
-
-  test("sends no headers of its own when the caller passes none", async () => {
-    const stub = stubFetch(200, PAGE);
-
-    await createHttpFetcher({ fetch: stub.fetch }).get("https://t.me/s/chan");
-
-    expect(stub.calls[0]?.init.headers).toEqual({});
-  });
-
-  test("the URL is used verbatim, cursor query included", async () => {
-    const stub = stubFetch(200, PAGE);
-
-    await createHttpFetcher({ fetch: stub.fetch }).get("https://t.me/s/chan?after=100674");
-
-    expect(stub.calls[0]?.url).toBe("https://t.me/s/chan?after=100674");
-  });
-
-  test("every request carries an abort signal", async () => {
-    const stub = stubFetch(200, PAGE);
-
-    await createHttpFetcher({ fetch: stub.fetch }).get("https://t.me/s/chan");
-
-    expect(stub.calls[0]?.init.signal.aborted).toBe(false);
-  });
-
-  test("ten hung sources still fit the scrape stage's 300 s budget", () => {
-    const SOURCES_PER_RUN = 10;
-    const SCRAPE_TIMEOUT_MS = 300_000;
-
-    expect(SCRAPE_FETCH_TIMEOUT_MS * SOURCES_PER_RUN).toBeLessThan(SCRAPE_TIMEOUT_MS);
-  });
-});
 
 describe("createHttpPost — the Bot API boundary", () => {
   test("a 200 returns the status and the parsed envelope", async () => {

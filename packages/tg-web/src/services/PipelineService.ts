@@ -1,38 +1,31 @@
 import { WebClientService } from "arrmatura-web";
-import type {
-  ErrorPreview,
-  ItemDetail,
-  Overview,
-  QueueItemPreview,
-  SourcePreview,
-} from "tg-actions/dashboard/types";
+import type { Overview, QueueItemPreview, SourcePreview } from "tg-actions/dashboard/types";
 import { MAX_PUBLISH_NOW } from "tg-configs/limits";
 import type { QueueName } from "tg-enums/queueName";
 import { resources } from "tg-rc/web";
+import { conicGradient, toPieSlices } from "tg-utils/ui/pie";
+import type { Slice } from "tg-utils/ui/types";
 import { clock } from "../functions";
 import { pipelineNodes, queueOf } from "../pipeline/nodes";
 import type { PipelineNode } from "../pipeline/types";
 import { fill } from "../text/fill";
 import type { ApiService } from "./ApiService";
 import { asRecord } from "./GridService";
-import type { ErrorRow, ItemFact, QueueRow, SourceRow } from "./types";
+import type { Donut, QueueRow, SourceRow } from "./types";
 
 /**
- * The Pipeline page: the whole chain as one diagram, with each stage's count and
- * queue, the Errors node, and each manual trigger on the node it acts on.
- * Mounted as `<PipelineService Ref="pipeline" api="@api" />`.
+ * The Dashboard page: the whole chain as one diagram, with each stage's count and
+ * queue, and each manual trigger on the node it acts on; with no node selected,
+ * the overview's figures and charts.
+ * Mounted as `<PipelineService Ref="pipeline" api="@api" nav="@nav" selectedId="{@nav.params.node}" />`.
  */
 
 /** Counts move by the minute while a backlog drains; this is the page an operator watches. */
 export const PIPELINE_REFRESH_MS = 30_000;
 
-const DEFAULT_REPLAY_MAX = "10";
 const DEFAULT_STEP_MAX = "1";
 
-/** Tailwind's `lg`, from which `Page.Pipeline.xml` puts the panel beside the diagram. */
-/** The stage whose panel lists the sources, not a queue. */
-const SCRAPE = "scrape";
-
+/** Tailwind's `lg`, from which `Page.Dashboard.xml` puts the panel beside the diagram. */
 const SIDE_LAYOUT = "(min-width: 64rem)";
 const PANEL_ID = "pipeline-panel";
 
@@ -66,78 +59,59 @@ const sourceRow = (source: SourcePreview, now: number): SourceRow => ({
   id: source.id,
   meta: [
     whenPolled(source, now),
-    source.via,
+    source.type,
     fill(resources.pipeline.lastCount, { count: source.lastCount }),
   ].join(" · "),
   next: source.next,
 });
 
-const itemFacts = (item: ItemDetail): ItemFact[] => {
-  const label = resources.pipeline.item;
-  return [
-    { id: "stage", label: label.stage, value: item.stage },
-    { id: "status", label: label.status, value: item.status },
-    { id: "failed", label: label.failed, value: String(item.retryCount) },
-    { id: "created", label: label.created, value: clock(item.createdAt) },
-    { id: "runAt", label: label.runAt, value: clock(item.runAt) },
-    {
-      id: "finished",
-      label: label.finished,
-      value: item.finishedAt === null ? "" : clock(item.finishedAt),
-    },
-    { id: "error", label: label.error, value: item.error ?? "" },
-  ].filter((fact) => fact.value !== "");
+const donut = (values: readonly Slice[] | undefined): Donut => {
+  const slices = toPieSlices(values ?? []);
+  return { slices, background: conicGradient(slices) };
 };
 
-const errorRow = (item: ErrorPreview): ErrorRow => ({
-  id: item.id,
-  ref: item.ref || item.id,
-  text: item.text,
-  meta: [
-    item.stage,
-    item.ref || item.id,
-    clock(item.failedAt),
-    fill(resources.pipeline.attempts, { count: item.retryCount }),
-  ].join(" · "),
-  error: item.error ?? "",
-  cause: item.cause ?? "",
-  diagnosis: item.diagnosis,
-  analyseLabel:
-    item.diagnosis === null ? resources.pipeline.analyse : resources.pipeline.analyseAgain,
-});
+/** The skip split by reason, e.g. "category 10 · low 14". */
+export const skipNote = (overview: Overview | null): string =>
+  Object.entries(overview?.skipped.byReason ?? {})
+    .filter(([, count]) => count > 0)
+    .map(([reason, count]) => `${reason} ${count}`)
+    .join(" · ");
 
 interface ValueEvent {
   readonly value?: string;
 }
 
+/** The one `NavigationService` method this service calls. */
+interface Nav {
+  updateParam(expr: string): void;
+}
+
 export class PipelineService extends WebClientService {
   declare api: ApiService;
+  declare nav: Nav;
 
   data: Overview | null = null;
   loading = false;
   error: string | null = null;
   updatedAt: number | null = null;
-  selectedId: string | null = null;
   /** The next items per stage: `undefined` until read. */
   next: Readonly<Partial<Record<QueueName, readonly QueueItemPreview[]>>> = {};
   /** The enabled sources, the next run's first: `null` until read. */
   sourceItems: readonly SourcePreview[] | null = null;
-  /** Every stage's failed items, oldest first: `null` until read. */
-  errorItems: readonly ErrorPreview[] | null = null;
-  replayMax = DEFAULT_REPLAY_MAX;
   publishMax = String(MAX_PUBLISH_NOW);
   stepMax = DEFAULT_STEP_MAX;
-  /** The error count a purge was armed at; see `purge`. */
-  purgeArmedAt: number | null = null;
   /** A first press of *Reset ingest*; see `resetIngest`. */
   resetArmed = false;
-  /** The item the modal shows, read whole: `null` while closed. */
-  detail: ItemDetail | null = null;
-  /** The payload as `Forma` last changed it: `null` until an edit. */
-  draft: Readonly<Record<string, unknown>> | null = null;
+  /** A first press of *Reset all cursors*; see `resetCursors`. */
+  cursorsArmed = false;
 
   declare nodes: readonly PipelineNode[];
   declare selected: PipelineNode | null;
+  declare statusChart: Donut;
+  declare categoryChart: Donut;
+  declare skipped: string;
+
+  #selectedId: string | null = null;
 
   constructor() {
     super();
@@ -146,25 +120,50 @@ export class PipelineService extends WebClientService {
         pipelineNodes(resources.stages, data, selectedId),
       "selected(data,selectedId)": (data: Overview | null, selectedId: string | null) =>
         pipelineNodes(resources.stages, data, selectedId).find((node) => node.selected) ?? null,
+      "statusChart(data)": (data: Overview | null) => donut(data?.statusSlices),
+      "categoryChart(data)": (data: Overview | null) => donut(data?.categorySlices),
+      "skipped(data)": skipNote,
     });
+  }
+
+  /** The selected node is `?node=`, so a reload or a shared link opens the same one. */
+  get selectedId(): string | null {
+    return this.#selectedId;
+  }
+
+  set selectedId(value: unknown) {
+    const next = typeof value === "string" && value !== "" ? value : null;
+    if (next === this.#selectedId) return;
+    this.#selectedId = next;
+    // Before the first overview, `load` reads it.
+    if (this.data !== null) void this.loadSelected();
   }
 
   get queue(): QueueName | undefined {
     return queueOf(this.selected ?? undefined);
   }
 
-  get errorRows(): readonly ErrorRow[] | null {
-    return this.errorItems?.map(errorRow) ?? null;
-  }
-
+  /** The sources the selected node lists: its reader's. */
   get sourceRows(): readonly SourceRow[] | null {
     const now = Date.now();
-    return this.sourceItems?.map((source) => sourceRow(source, now)) ?? null;
+    const type = this.selected?.sources;
+    return (
+      this.sourceItems
+        ?.filter((source) => source.type === type)
+        .map((source) => sourceRow(source, now)) ?? null
+    );
   }
 
-  /** How many sources *Scrape now*, a web run, would poll; `null` until read. */
+  /** What a source added on the selected node writes besides `NEW_ROW`: that node's reader. */
+  get sourceDefaults(): Readonly<Record<string, string>> {
+    return this.selected?.sources === undefined ? {} : { type: this.selected.sources };
+  }
+
+  /** How many sources *Scrape now*, a Telegram run, would poll; `null` until read. */
   get scrapeDue(): number | null {
-    return this.sourceItems?.filter((source) => source.next && source.via === "web").length ?? null;
+    return (
+      this.sourceItems?.filter((source) => source.next && source.type === "telegram").length ?? null
+    );
   }
 
   /** Messages waiting to be published; `null` until read. */
@@ -179,43 +178,14 @@ export class PipelineService extends WebClientService {
     return items === undefined ? null : items.map(queueRow);
   }
 
-  get armedPurge(): boolean {
-    return this.purgeArmedAt !== null && this.purgeArmedAt === this.selected?.value;
-  }
-
-  get purgeLabel(): string {
-    return this.armedPurge
-      ? fill(resources.pipeline.confirmCleanup, { count: this.selected?.value ?? 0 })
-      : resources.pipeline.cleanup;
-  }
-
-  /** The post or message the item carries, as its row names it. */
-  get detailTitle(): string {
-    const raw = this.detail?.raw;
-    const ref = raw?.id ?? raw?.messageId ?? this.detail?.id;
-    return typeof ref === "string" ? ref : "";
-  }
-
-  get detailFacts(): readonly ItemFact[] {
-    return this.detail === null ? [] : itemFacts(this.detail);
-  }
-
-  get detailFields(): readonly object[] {
-    return this.detail === null ? [] : resources.payloadFields[this.detail.stage];
-  }
-
-  get detailJson(): string {
-    return JSON.stringify(this.draft ?? this.detail?.raw ?? {}, null, 2);
-  }
-
-  /** A running or finished item belongs to its stage; the API refuses the edit regardless. */
-  get canEditDetail(): boolean {
-    const status = this.detail?.status;
-    return this.api.canAdmin && (status === "pending" || status === "error");
-  }
-
   get resetLabel(): string {
     return this.resetArmed ? resources.pipeline.confirmResetIngest : resources.pipeline.resetIngest;
+  }
+
+  get cursorsLabel(): string {
+    return this.cursorsArmed
+      ? resources.pipeline.confirmResetCursors
+      : resources.pipeline.resetCursors;
   }
 
   override __init(): void {
@@ -237,24 +207,20 @@ export class PipelineService extends WebClientService {
   }
 
   /**
-   * A second press on the same node closes its panel. Until `lg` the panel sits
-   * below the diagram, six rows down: it is scrolled into view.
+   * Writes `?node=`; a second press on the same node clears it and closes the panel.
+   * Until `lg` the panel sits below the diagram, six rows down: it is scrolled into view.
    */
   select(event: { readonly id?: string }): void {
-    const id = event.id ?? null;
-    const selectedId = id === this.selectedId ? null : id;
-    this.up({ selectedId, purgeArmedAt: null, resetArmed: false });
-    void this.loadSelected();
+    const id = event.id ?? "";
+    const node = id === this.selectedId ? "" : id;
+    this.up({ resetArmed: false, cursorsArmed: false });
+    this.nav.updateParam(`node=${node}`);
 
-    if (selectedId !== null && !window.matchMedia(SIDE_LAYOUT).matches) {
+    if (node !== "" && !window.matchMedia(SIDE_LAYOUT).matches) {
       requestAnimationFrame(() =>
         document.getElementById(PANEL_ID)?.scrollIntoView({ behavior: "smooth", block: "start" }),
       );
     }
-  }
-
-  setReplayMax(event: ValueEvent): void {
-    this.up({ replayMax: event.value ?? "" });
   }
 
   setPublishMax(event: ValueEvent): void {
@@ -265,10 +231,9 @@ export class PipelineService extends WebClientService {
     this.up({ stepMax: event.value ?? "" });
   }
 
-  /** Reads what the selected node lists: the sources, a stage's next items, or the errors. */
+  /** Reads what the selected node lists: the sources, or a stage's next items. */
   private async loadSelected(): Promise<void> {
-    if (this.selected?.kind === "errors") await this.loadErrors();
-    else if (this.selected?.id === SCRAPE) await this.loadSources();
+    if (this.selected?.sources !== undefined) await this.loadSources();
     else await this.loadNext();
   }
 
@@ -278,108 +243,12 @@ export class PipelineService extends WebClientService {
     if (Array.isArray(items)) this.up({ sourceItems: items });
   }
 
-  /** `viewer`. */
-  async loadErrors(): Promise<void> {
-    const items = await this.api.run("inspectErrors", undefined, { key: "errors" });
-    if (Array.isArray(items)) this.up({ errorItems: items });
-  }
-
   /** Reads the selected stage's next items; `viewer`. */
   async loadNext(): Promise<void> {
     const queue = this.queue;
     if (queue === undefined) return;
     const items = await this.api.run("inspectQueue", { queueName: queue }, { key: "next" });
     if (Array.isArray(items)) this.up({ next: { ...this.next, [queue]: items } });
-  }
-
-  /** Opens the item modal; `viewer`. */
-  async openItem(event: { readonly id?: string }): Promise<void> {
-    if (event.id === undefined) return;
-    const detail = await this.api.run("inspectItem", { id: event.id }, { key: "item" });
-    if (detail !== undefined) this.up({ detail: detail as ItemDetail, draft: null });
-  }
-
-  closeItem(): void {
-    this.up({ detail: null, draft: null });
-  }
-
-  setDraft(raw: Readonly<Record<string, unknown>>): void {
-    this.up({ draft: raw });
-  }
-
-  /** Saves the edited payload, then shows the item as stored. */
-  async saveItem(): Promise<void> {
-    const id = this.detail?.id;
-    if (id === undefined || this.draft === null) return;
-    const ref = this.detailTitle;
-    const done = await this.api.run(
-      "editItem",
-      { id, raw: this.draft },
-      { success: () => fill(resources.toasts.saved, { id: ref }) },
-    );
-    if (done === undefined) return;
-    await this.openItem({ id });
-    await this.load();
-  }
-
-  /** Asks the model why one error happened and how to fix it; the answer stays on the item. */
-  async diagnose(event: { readonly id?: string; readonly ref?: string }): Promise<void> {
-    if (event.id === undefined) return;
-    const ref = event.ref ?? event.id;
-    const done = await this.api.run(
-      "diagnoseError",
-      { id: event.id },
-      { key: "diagnose", success: () => fill(resources.toasts.diagnoseError, { ref }) },
-    );
-    if (done !== undefined) await this.loadErrors();
-  }
-
-  /** Runs one waiting or failed item next, even on a paused stage. */
-  async runItem(event: { readonly id?: string; readonly ref?: string }): Promise<void> {
-    if (event.id === undefined) return;
-    const ref = event.ref ?? event.id;
-    const done = await this.api.run(
-      "runItem",
-      { id: event.id },
-      {
-        success: (result) =>
-          fill(asRecord(result).started ? resources.toasts.runItem : resources.toasts.runItemGone, {
-            ref,
-          }),
-      },
-    );
-    if (done !== undefined) await this.load();
-  }
-
-  /** Sends up to `replayMax` errors, oldest first, back to their stages. */
-  async replay(): Promise<void> {
-    const max = Number(this.replayMax);
-    if (!Number.isInteger(max) || max <= 0) return;
-    const done = await this.api.run(
-      "retryErrors",
-      { max },
-      { key: "replay", success: (result) => fill(resources.toasts.retryErrors, asRecord(result)) },
-    );
-    if (done !== undefined) await this.load();
-  }
-
-  /**
-   * A purge cannot be undone: an error is a post's last copy. So it takes two
-   * presses, and the second label names the count. The armed count is held, so a
-   * refresh that changes it disarms the purge.
-   */
-  async purge(): Promise<void> {
-    if (!this.armedPurge) {
-      this.up({ purgeArmedAt: this.selected?.value ?? null });
-      return;
-    }
-
-    this.up({ purgeArmedAt: null });
-    const done = await this.api.run("purgeErrors", undefined, {
-      key: "purge",
-      success: (result) => fill(resources.toasts.purgeErrors, asRecord(result)),
-    });
-    if (done !== undefined) await this.load();
   }
 
   async scrapeNow(): Promise<void> {
@@ -397,7 +266,7 @@ export class PipelineService extends WebClientService {
     if (done !== undefined) await this.load();
   }
 
-  /** Deletes every `ingest` item. It cannot be undone, so it takes two presses, as `purge` does. */
+  /** Deletes every `ingest` item. It cannot be undone, so it takes two presses. */
   async resetIngest(): Promise<void> {
     if (!this.resetArmed) {
       this.up({ resetArmed: true });
@@ -407,6 +276,20 @@ export class PipelineService extends WebClientService {
     this.up({ resetArmed: false });
     const done = await this.api.run("resetIngest", undefined, {
       success: (result) => fill(resources.toasts.resetIngest, asRecord(result)),
+    });
+    if (done !== undefined) await this.load();
+  }
+
+  /** Drops every source's cursor, so the next scrape starts from each latest post; two presses. */
+  async resetCursors(): Promise<void> {
+    if (!this.cursorsArmed) {
+      this.up({ cursorsArmed: true });
+      return;
+    }
+
+    this.up({ cursorsArmed: false });
+    const done = await this.api.run("resetSourceCursors", undefined, {
+      success: (result) => fill(resources.toasts.resetSourceCursors, asRecord(result)),
     });
     if (done !== undefined) await this.load();
   }

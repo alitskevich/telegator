@@ -1,26 +1,30 @@
 import { ItemIdSchema } from "tg-domain/ids";
-import { SourceSchema } from "tg-domain/source";
+import { SourceConfigInput, SourceSchema } from "tg-domain/source";
 import { TargetConfigInput, TargetSchema } from "tg-domain/target";
 import { messages, sources, targets } from "tg-firebase/db";
-import { MESSAGE_WRITABLE_FIELDS, SOURCE_WRITABLE_FIELDS, TABLES } from "tg-rc/columns";
+import { MESSAGE_WRITABLE_FIELDS, TABLES } from "tg-rc/columns";
 import { z } from "zod";
 import type { MemberRow } from "./types";
 
 /** Operator edits to the three collections. Every write is attribute-level; a delete is soft. */
 
 /** A partial of string fields, closed to everything else, changing at least one. */
+const nonEmpty = <T extends object>(delta: T) => Object.keys(delta).length > 0;
+const NON_EMPTY = "delta must change at least one field";
+
 const writableDelta = (fields: readonly string[]) =>
   z
     .object(Object.fromEntries(fields.map((field) => [field, z.string()])))
     .partial()
     .strict()
-    .refine((delta) => Object.keys(delta).length > 0, "delta must change at least one field");
+    .refine(nonEmpty, NON_EMPTY);
 
 const UpsertInput = z.discriminatedUnion("table", [
   z.object({
     table: z.literal("sources"),
     id: z.string().min(1),
-    delta: writableDelta(SOURCE_WRITABLE_FIELDS),
+    // Parsed, so the console's comma-separated `tags` text is stored as an array.
+    delta: SourceConfigInput.refine(nonEmpty, NON_EMPTY),
   }),
   z.object({
     table: z.literal("messages"),

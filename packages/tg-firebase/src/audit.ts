@@ -1,13 +1,13 @@
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
-import { type AuditEntry, AuditEntrySchema } from "tg-domain/audit";
+import { AuditEntrySchema, RejectedSendSchema } from "tg-domain/audit";
 import type { z } from "zod";
 import { db } from "./app";
-import type { StoredAuditEntry } from "./types";
+import type { StoredAuditEntry, StoredRejectedSend } from "./types";
 
 /**
- * `audit`: an append-only record of what went wrong with each message. The
- * `ingest` error goes when an operator replays or discards it; this stays until
- * the TTL policy deletes it.
+ * `audit`: an append-only record of what went wrong: each rejected send and each
+ * item that used up its attempts. The `ingest` error goes when an operator
+ * replays or discards it; this stays until the TTL policy deletes it.
  */
 
 export const auditRef = db.collection("audit");
@@ -22,8 +22,9 @@ const parse = (snap: QueryDocumentSnapshot): StoredAuditEntry => ({
   id: snap.id,
 });
 
-export async function recordAudit(entry: AuditEntry): Promise<void> {
-  await auditRef.add({ ...entry, expireAt: new Date(entry.at + AUDIT_TTL_MS) });
+export async function recordAudit(entry: z.input<typeof AuditEntrySchema>): Promise<void> {
+  const parsed = AuditEntrySchema.parse(entry);
+  await auditRef.add({ ...parsed, expireAt: new Date(parsed.at + AUDIT_TTL_MS) });
 }
 
 /** Newest first. */
@@ -32,13 +33,13 @@ export async function listAudit(limit: number): Promise<StoredAuditEntry[]> {
   return snap.docs.map(parse);
 }
 
-/** One message's entries, newest first. */
-export async function listAuditFor(messageId: string): Promise<StoredAuditEntry[]> {
+/** One message's rejected sends, newest first. */
+export async function listAuditFor(messageId: string): Promise<StoredRejectedSend[]> {
   const snap = await auditRef.where("messageId", "==", messageId).orderBy("at", "desc").get();
-  return snap.docs.map(parse);
+  return snap.docs.map((doc) => ({ ...RejectedSendSchema.parse(doc.data()), id: doc.id }));
 }
 
-const AuditKeySchema = AuditEntrySchema.pick({ messageId: true, target: true, at: true });
+const AuditKeySchema = RejectedSendSchema.pick({ messageId: true, target: true, at: true });
 
 /** Every entry of these messages, with only where and when it failed. */
 export async function listAuditKeys(

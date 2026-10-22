@@ -1,7 +1,7 @@
 {
-  "name": "tg-telegram",
+  "name": "tg-bot",
   "version": "1.0.0",
-  "description": "Telegram HTML parser, Bot API client and HTTP adapters.",
+  "description": "The Telegram Bot API client and its HTTP adapter: the pipeline's only outbound sink.",
   "private": true,
   "type": "module",
   "exports": {

@@ -1,8 +1,9 @@
 <Component id="Page.Audit">
-  <Signature purpose="Every send Telegram rejected, newest first, across all messages"
-    description="Reads `audit` through the `loadAudit` action; entries go after 30 days by a TTL policy." />
+  <Signature purpose="What went wrong: the failed items an operator may still act on, and the record kept for 30 days"
+    description="Reads the `error` items through `inspectErrors` and `audit` through `loadAudit`; audit entries go after 30 days by a TTL policy." />
 
   <AuditService Ref="audit" api="@api" />
+  <ItemService Ref="item" api="@api" owner="@audit" />
 
   <PageTitle title="{R.audit.title}" subtitle="{R.audit.subtitle}">
     <Btn class="sm:btn-sm" mode="soft" icon="refresh-cw" text="{R.common.refresh}"
@@ -11,9 +12,19 @@
 
   <ErrorBanner If="@audit.error" text="{@audit.error}" />
 
-  <section class="bg-base-100 rounded-box p-4 min-w-0">
-    <Loading If="{@audit.loading AND !@audit.entries}" size="sm" />
-    <p If="{@audit.entries AND !@audit.entries.length}" class="text-sm text-base-content/60 py-10 text-center">{R.audit.empty}</p>
-    <AuditList If="@audit.entries.length" entries="{@audit.entries}" withMessage="{true}" />
-  </section>
+  <div class="flex flex-col gap-4">
+    <FailedItems />
+
+    <section class="bg-base-100 rounded-box p-4 sm:p-6 flex flex-col gap-4 min-w-0">
+      <div class="flex flex-col gap-1">
+        <h2 class="text-lg font-semibold">{R.audit.history}</h2>
+        <p class="text-sm text-base-content/70 max-w-[65ch]">{R.audit.historyHint}</p>
+      </div>
+      <Loading If="{@audit.loading AND !@audit.entries}" size="sm" />
+      <p If="{@audit.entries AND !@audit.entries.length}" class="text-sm text-base-content/60 py-10 text-center">{R.audit.empty}</p>
+      <AuditList If="@audit.entries.length" entries="{@audit.entries}" withMessage="{true}" />
+    </section>
+  </div>
+
+  <PipelineItem />
 </Component>

@@ -1,0 +1,78 @@
+<Component id="FailedItems">
+  <Signature purpose="Every stage's failed items: message, cause, the model's reading, and what an admin may do"
+    description="Reads `@audit`; a row opens in `@item`. Admin actions render only for an admin; the API re-checks the role regardless." />
+
+  <section class="bg-base-100 rounded-box p-4 sm:p-6 flex flex-col gap-4 min-w-0">
+    <div class="flex flex-col gap-1">
+      <h2 class="text-lg font-semibold flex items-baseline gap-2">
+        <span>{R.audit.failed}</span>
+        <span If="@audit.errors" class="text-sm tabular-nums {@audit.errors.total GT 0 ? 'text-error' : 'text-base-content/60'}">{@audit.errors.total | num}</span>
+      </h2>
+      <p class="text-sm text-base-content/70 max-w-[65ch]">{R.audit.failedHint}</p>
+    </div>
+    <div If="{@api.canAdmin AND @audit.errors.total GT 0}" class="flex flex-wrap items-center gap-2">
+      <This-Recovery />
+    </div>
+    <Fragment If="@audit.errorRows">
+      <p If="{!@audit.errorRows.length}" class="text-sm text-base-content/60">{R.audit.noErrors}</p>
+      <ul If="@audit.errorRows.length" class="flex flex-col gap-2">
+        <This-ErrorRow Each="row of @audit.errorRows" row="{row}" />
+      </ul>
+    </Fragment>
+  </section>
+
+  <Subcomponent id="Recovery">
+    <Signature purpose="Replay or discard the errors; the discard is armed by its first press" />
+    <label class="input sm:input-sm w-40">
+      <span class="text-base-content/60">{R.audit.replayMax}</span>
+      <input type="number" min="1" class="grow" value="{@audit.replayMax}"
+        input="-> @audit.setReplayMax(event)" />
+    </label>
+    <Btn class="sm:btn-sm" type="primary" icon="rotate-ccw" text="{R.audit.replay}"
+      busy="{@api.busy.replay}" click="-> @audit.replay()" />
+    <Btn class="sm:btn-sm" type="error" mode="{@audit.armedPurge ? null : 'soft'}" icon="trash-2"
+      text="{@audit.purgeLabel}" busy="{@api.busy.purge}" click="-> @audit.purge()" />
+  </Subcomponent>
+
+  <Subcomponent id="ErrorRow">
+    <Signature purpose="One failed item: where and why it failed, its cause, and the model's reading once asked">
+      <Prop id="row" type="object" required="true" description="An `ErrorRow` from `src/services/types.ts`" />
+    </Signature>
+    <li class="bg-base-200 rounded-box p-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-2">
+      <button type="button" data-id="{row.id}" click="-> @item.open(event)"
+        class="group flex flex-col gap-0.5 min-w-0 text-left cursor-pointer">
+        <span class="text-xs text-base-content/60 truncate">{row.meta}</span>
+        <span class="text-sm text-error break-words group-hover:underline">{row.error}</span>
+        <span If="row.text" class="text-xs text-base-content/70 line-clamp-2 break-words">{row.text}</span>
+      </button>
+      <div If="@api.canAdmin" class="flex flex-col gap-1">
+        <Btn class="btn-xs" mode="soft" icon="play" text="{R.pipeline.run}" data="{row}"
+          busy="{@api.busy.runItem}" click="-> @item.run(event)" />
+        <Btn class="btn-xs" mode="soft" icon="sparkles" text="{row.analyseLabel}" data="{row}"
+          busy="{@api.busy.diagnose}" click="-> @audit.diagnose(event)" />
+      </div>
+      <details If="row.cause" class="col-span-2 text-xs">
+        <summary class="cursor-pointer text-base-content/60">{R.pipeline.cause}</summary>
+        <pre class="mt-1 whitespace-pre-wrap break-all">{row.cause}</pre>
+      </details>
+      <This-Diagnosis If="row.diagnosis" diagnosis="{row.diagnosis}" />
+    </li>
+  </Subcomponent>
+
+  <Subcomponent id="Diagnosis">
+    <Signature purpose="The model's reading of a failed item: a summary, the likely cause and a proposed fix">
+      <Prop id="diagnosis" type="object" required="true" description="`summary`, `cause` and `fix`" />
+    </Signature>
+    <dl class="col-span-2 border-l-2 border-primary/60 pl-3 text-xs flex flex-col gap-1.5">
+      <dt class="text-sm font-medium">{diagnosis.summary}</dt>
+      <dd class="flex flex-col">
+        <span class="text-base-content/60">{R.audit.likelyCause}</span>
+        <span class="whitespace-pre-wrap">{diagnosis.cause}</span>
+      </dd>
+      <dd class="flex flex-col">
+        <span class="text-base-content/60">{R.audit.proposedFix}</span>
+        <span class="whitespace-pre-wrap">{diagnosis.fix}</span>
+      </dd>
+    </dl>
+  </Subcomponent>
+</Component>

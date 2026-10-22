@@ -45,4 +45,29 @@ describe("audit", () => {
     });
     expect(await listAuditKeys([])).toEqual([]);
   });
+
+  test("a failed item is listed with the sends, but counts against no message", async () => {
+    await recordAudit(entry("chan/1", 1));
+    await recordAudit({
+      kind: "item",
+      stage: "analyze",
+      itemId: "i1",
+      ref: "chan/1",
+      error: "model timed out",
+      at: 2,
+    });
+
+    expect(await listAudit(10)).toEqual([
+      expect.objectContaining({ kind: "item", stage: "analyze", itemId: "i1", ref: "chan/1" }),
+      expect.objectContaining({ kind: "send", messageId: "chan/1", at: 1 }),
+    ]);
+    expect(await listAuditFor("chan/1")).toHaveLength(1);
+    expect(await listAuditKeys(["chan/1"])).toHaveLength(1);
+  });
+
+  test("an entry written before `kind` reads as a send", async () => {
+    await auditRef.add(entry("chan/1", 1));
+
+    expect(await listAudit(10)).toEqual([expect.objectContaining({ kind: "send", at: 1 })]);
+  });
 });

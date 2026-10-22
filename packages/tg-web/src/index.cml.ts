@@ -14,15 +14,17 @@ import ErrorBanner from "../cml/components/ErrorBanner.xml";
 import PageTitle from "../cml/components/PageTitle.xml";
 import StatCard from "../cml/components/StatCard.xml";
 import StatusBadge from "../cml/components/StatusBadge.xml";
+import DashboardPanel from "../cml/dashboard/DashboardPanel.xml";
 import Page_Dashboard from "../cml/dashboard/Page.Dashboard.xml";
-import Page_Pipeline from "../cml/pipeline/Page.Pipeline.xml";
 import PipelineItem from "../cml/pipeline/PipelineItem.xml";
 import PipelineNode from "../cml/pipeline/PipelineNode.xml";
 import PipelinePanel from "../cml/pipeline/PipelinePanel.xml";
+import RecordModal from "../cml/pipeline/RecordModal.xml";
+import SourcesTable from "../cml/pipeline/SourcesTable.xml";
+import TelegramTargets from "../cml/pipeline/TelegramTargets.xml";
+import FailedItems from "../cml/records/FailedItems.xml";
 import Page_Audit from "../cml/records/Page.Audit.xml";
 import Page_Messages from "../cml/records/Page.Messages.xml";
-import Page_Sources from "../cml/records/Page.Sources.xml";
-import Page_Targets from "../cml/records/Page.Targets.xml";
 import RecordCell from "../cml/records/RecordCell.xml";
 import RecordsTable from "../cml/records/RecordsTable.xml";
 
@@ -42,15 +44,17 @@ export default [
   PageTitle,
   StatCard,
   StatusBadge,
+  DashboardPanel,
   Page_Dashboard,
-  Page_Pipeline,
   PipelineItem,
   PipelineNode,
   PipelinePanel,
+  RecordModal,
+  SourcesTable,
+  TelegramTargets,
+  FailedItems,
   Page_Audit,
   Page_Messages,
-  Page_Sources,
-  Page_Targets,
   RecordCell,
   RecordsTable,
 ];

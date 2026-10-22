@@ -70,7 +70,10 @@ export function normalizeCountry(country: string): string {
  * AI tags merged with source tags, AI tags first, each once. Aggregate merges
  * with the same `mergeTags`, so the two agree.
  */
-export function normalizeTags(aiTags: string | undefined, sourceTags: string | undefined): string {
+export function normalizeTags(
+  aiTags: readonly string[] | undefined,
+  sourceTags: readonly string[] | undefined,
+): string[] {
   return mergeTags(aiTags, sourceTags);
 }
 

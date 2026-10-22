@@ -2,6 +2,7 @@ import { ImportanceSchema, ItemKindSchema } from "tg-enums/itemKind";
 import { z } from "zod";
 import { DateKeySchema } from "./date";
 import { ItemIdSchema } from "./ids";
+import { TagsSchema } from "./tags";
 
 /**
  * The post in flight: the `raw` of an `ingest` item, not a record of its own
@@ -27,13 +28,12 @@ export const ScrapedItemSchema = z.object({
   links: z.array(LinkSchema).default([]),
   image: z.string().optional(),
   forwardedFrom: z.string().optional(),
-  /** The source's `target`, verbatim; aggregate falls back to `telegator_news` when absent. */
-  target: z.string().optional(),
   date: DateKeySchema,
   /** The source default, overwritten by AI. An open string, since an operator's
    * default need not be a known category. */
   category: z.string().optional(),
-  tags: z.string().optional(),
+  /** The source's tags; analyze merges the AI's in. */
+  tags: TagsSchema.optional(),
   kind: ItemKindSchema,
 });
 
@@ -55,7 +55,7 @@ const aiField = {
   importance: ImportanceSchema,
   peoples: z.string().optional(),
   properNames: z.string().optional(),
-  tags: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 } as const;
 
 /** The model's response shape. */

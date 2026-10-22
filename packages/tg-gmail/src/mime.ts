@@ -1,5 +1,5 @@
 import type { Link } from "tg-domain/item";
-import { tokeniseLinks, toPlainText } from "tg-telegram/parse";
+import { tokeniseLinks, toPlainText } from "./html";
 import type { MessagePart } from "./types";
 
 /**

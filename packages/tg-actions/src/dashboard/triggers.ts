@@ -4,18 +4,17 @@ import { MESSAGE_STATUSES } from "tg-enums/messageStatus";
 import { messages, sources, targets } from "tg-firebase/db";
 import { flushMetrics } from "tg-firebase/metrics";
 import { enqueue, enqueuePublish } from "tg-firebase/tasks";
-import { runScrape, webReader } from "tg-pipeline/scrape/index";
+import { scrapeTelegram } from "tg-pipeline/scrape/index";
 import { MESSAGE_COLUMNS, SOURCE_COLUMNS, TARGET_COLUMNS } from "tg-rc/columns";
-import { createHttpFetcher } from "tg-telegram/http";
 import { toCsv } from "tg-utils/ui/csv";
 import { z } from "zod";
 
 /** The console's buttons: scrape now, reset cursors, republish, publish now, export. */
 
-/** Runs one web scrape in this process, schedule or not. */
-export async function runScraper(): Promise<{ processed: number }> {
+/** Runs one Telegram scrape in this process, schedule or not; `session` is `MTPROTO_SESSION`. */
+export async function runScraper(session: string): Promise<{ processed: number }> {
   try {
-    const { processed } = await runScrape(webReader(createHttpFetcher()));
+    const { processed } = await scrapeTelegram(session);
     return { processed };
   } finally {
     await flushMetrics();

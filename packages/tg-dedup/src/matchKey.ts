@@ -27,7 +27,7 @@ export function buildMatchKey(fields: MatchKeyFields): MatchKey {
   return {
     entities: sortedSet([...splitCommas(fields.peoples), ...splitCommas(fields.properNames)]),
     titleTokens: sortedSet(splitWords(fields.title)),
-    tags: sortedSet(splitCommas(fields.tags)),
+    tags: sortedSet((fields.tags ?? []).map(canonical)),
   };
 }
 

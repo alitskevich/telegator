@@ -46,9 +46,8 @@ describe("addSource", () => {
       {
         id: "chan",
         status: "disabled",
-        target: "a,b",
         category: "geopolitics",
-        tags: "war",
+        tags: ["war"],
         teaser: "hi",
       },
       deps,
@@ -57,9 +56,8 @@ describe("addSource", () => {
     expect(result.created).toMatchObject({
       id: "chan",
       status: "disabled",
-      target: "a,b",
       category: "geopolitics",
-      tags: "war",
+      tags: ["war"],
       teaser: "hi",
     });
   });
@@ -155,8 +153,7 @@ async function seedMessage(overrides: Partial<Message> = {}): Promise<Message> {
     id: "c/1",
     status: "published",
     date: "2026-01-01",
-    tags: "Minsk, energy",
-    tgChannel: "telegator_news",
+    tags: ["Minsk", "energy"],
     ts: 1,
     ...overrides,
     members,
@@ -178,8 +175,8 @@ describe("findMessagesByTags", () => {
   });
 
   test("matches any-of, case-insensitively, on whole tokens", async () => {
-    await seedMessage({ id: "s/1", tags: "Minsk, energy", ts: 1 });
-    await seedMessage({ id: "s/2", tags: "other", ts: 2 });
+    await seedMessage({ id: "s/1", tags: ["Minsk", "energy"], ts: 1 });
+    await seedMessage({ id: "s/2", tags: ["other"], ts: 2 });
 
     const byMinsk = await findMessagesByTags({ tags: ["minsk"] }, deps);
     expect(byMinsk.messages.map((m) => m.id)).toEqual(["s/1"]);
@@ -195,9 +192,9 @@ describe("findMessagesByTags", () => {
   });
 
   test("orders by ts descending then id ascending, bounds returned by limit, and matched counts the whole window", async () => {
-    await seedMessage({ id: "s/3", tags: "x", ts: 5 });
-    await seedMessage({ id: "s/2", tags: "x", ts: 5 });
-    await seedMessage({ id: "s/1", tags: "x", ts: 9 });
+    await seedMessage({ id: "s/3", tags: ["x"], ts: 5 });
+    await seedMessage({ id: "s/2", tags: ["x"], ts: 5 });
+    await seedMessage({ id: "s/1", tags: ["x"], ts: 9 });
 
     const result = await findMessagesByTags({ tags: ["x"], limit: 2 }, deps);
 
@@ -209,7 +206,7 @@ describe("findMessagesByTags", () => {
   test("defaults limit to MESSAGE_RESULT_LIMIT", async () => {
     await Promise.all(
       Array.from({ length: MESSAGE_RESULT_LIMIT + 5 }, (_, i) =>
-        seedMessage({ id: `s/${i}`, tags: "x", ts: i }),
+        seedMessage({ id: `s/${i}`, tags: ["x"], ts: i }),
       ),
     );
 
@@ -221,7 +218,7 @@ describe("findMessagesByTags", () => {
   test("carries the message fields and flattens+orders members by ts ascending; absent fields are absent", async () => {
     await seedMessage({
       id: "s/1",
-      tags: "x",
+      tags: ["x"],
       ts: 5,
       members: { "c/1": member(2, "later"), "c/2": member(1, "earlier") },
     });
@@ -235,8 +232,8 @@ describe("findMessagesByTags", () => {
   });
 
   test("skips a selected message that vanished between the index query and the base read, without error", async () => {
-    await seedMessage({ id: "s/1", tags: "x", ts: 2 });
-    await seedMessage({ id: "s/2", tags: "x", ts: 1 });
+    await seedMessage({ id: "s/1", tags: ["x"], ts: 2 });
+    await seedMessage({ id: "s/2", tags: ["x"], ts: 1 });
     // `s/2` still matches the status query but is gone by the time it is read.
     const realGet = messages.get;
     vi.spyOn(messages, "get").mockImplementation((id) =>
@@ -261,7 +258,7 @@ describe("findMessagesByTags", () => {
 
   test("makes at most SEARCHED_STATUSES.length + limit Firestore requests", async () => {
     await Promise.all(
-      Array.from({ length: 20 }, (_, i) => seedMessage({ id: `s/${i}`, tags: "x", ts: i })),
+      Array.from({ length: 20 }, (_, i) => seedMessage({ id: `s/${i}`, tags: ["x"], ts: i })),
     );
     const queryByStatus = vi.spyOn(messages, "queryByStatus");
     const get = vi.spyOn(messages, "get");

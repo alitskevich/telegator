@@ -48,14 +48,14 @@ describe("parsePairsJsonl", () => {
 describe("parseItems", () => {
   test("reads the fields a match key is built from", () => {
     const items = parseItems([
-      { id: "x/1", title: "T", peoples: "A, B", properNames: "C", tags: "t1, t2" },
+      { id: "x/1", title: "T", peoples: "A, B", properNames: "C", tags: ["t1", "t2"] },
     ]);
 
     expect(items["x/1"]).toMatchObject({
       title: "T",
       peoples: "A, B",
       properNames: "C",
-      tags: "t1, t2",
+      tags: ["t1", "t2"],
     });
   });
 
@@ -188,15 +188,15 @@ describe("the harness end to end", () => {
         id: "x/1",
         title: "Minsk Factory Fire",
         properNames: "Minsk, Belaruskali",
-        tags: "fire, industry",
+        tags: ["fire", "industry"],
       },
       {
         id: "x/2",
         title: "Minsk Factory Blaze",
         properNames: "Minsk, Belaruskali",
-        tags: "fire, safety",
+        tags: ["fire", "safety"],
       },
-      { id: "x/3", title: "Cup Final Result", properNames: "Wembley", tags: "sports" },
+      { id: "x/3", title: "Cup Final Result", properNames: "Wembley", tags: ["sports"] },
     ]);
 
     const pairs = toKeyPairs(

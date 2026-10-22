@@ -9,10 +9,10 @@ import type {
   SendMessageArgs,
   SendPhotoArgs,
   TelegramBot,
+  TelegramBotOptions,
   TelegramResponse,
-} from "tg-telegram/types";
-import { chatIdFor } from "tg-telegram/types";
-import type { TelegramBotOptions } from "./types";
+} from "./types";
+import { chatIdFor } from "./types";
 
 /** Requests go to `{base}/bot{token}/{method}`. */
 export const TELEGRAM_API_BASE = "https://api.telegram.org";

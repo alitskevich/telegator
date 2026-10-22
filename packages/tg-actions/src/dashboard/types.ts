@@ -3,7 +3,7 @@ import type { MemberBlock, MessageListItem } from "tg-domain/message";
 import type { IngestStatus } from "tg-enums/ingestStatus";
 import type { SkipReason } from "tg-enums/metrics";
 import type { QueueName } from "tg-enums/queueName";
-import type { SourceVia } from "tg-enums/sourceVia";
+import type { SourceType } from "tg-enums/sourceType";
 import type { Slice } from "tg-utils/ui/types";
 
 export interface Overview {
@@ -35,7 +35,7 @@ export interface QueueItemPreview {
   readonly text: string;
 }
 
-/** One failed item for the Errors panel: why it failed and the model's reading, without its payload. */
+/** One failed item for the Audit page: why it failed and the model's reading, without its payload. */
 export interface ErrorPreview extends QueueItemPreview {
   readonly stage: QueueName;
   readonly cause: string | null;
@@ -43,10 +43,16 @@ export interface ErrorPreview extends QueueItemPreview {
   readonly diagnosis: (ErrorDiagnosis & { readonly at: number }) | null;
 }
 
+/** The oldest failed items, and how many there are in all. */
+export interface ErrorsPage {
+  readonly items: readonly ErrorPreview[];
+  readonly total: number;
+}
+
 /** One enabled source, as a scrape candidate: when it is due and whether its reader's next run polls it. */
 export interface SourcePreview {
   readonly id: string;
-  readonly via: SourceVia;
+  readonly type: SourceType;
   readonly dueAt: number;
   /** Its reader's next run polls it: it is due and within that run's cap. */
   readonly next: boolean;

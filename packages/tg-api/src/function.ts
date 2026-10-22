@@ -6,7 +6,7 @@ import { operatorFrom } from "tg-firebase/operators";
 import { log } from "tg-utils/logger";
 import { ZodError, z } from "zod";
 import { ACTIONS } from "./actions";
-import { openRouterKey } from "./secrets";
+import { mtprotoSession, openRouterKey } from "./secrets";
 
 /**
  * The console's one endpoint: `POST {data: {action, input}}` answers
@@ -57,7 +57,7 @@ export async function dispatch(body: unknown, authorization: string | undefined)
 }
 
 export const api = onRequest(
-  { region: REGION, timeoutSeconds: 300, secrets: [openRouterKey] },
+  { region: REGION, timeoutSeconds: 300, secrets: [openRouterKey, mtprotoSession] },
   async (req, res) => {
     const origin = req.get("Origin");
     if (origin !== undefined && (ORIGINS.has(origin) || (isEmulator && DEV_ORIGIN.test(origin)))) {

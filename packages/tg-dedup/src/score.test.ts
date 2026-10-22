@@ -6,14 +6,14 @@ const key = (fields: Parameters<typeof buildMatchKey>[0]) => buildMatchKey(field
 
 describe("matchScore", () => {
   test("scores an identical key at 1", () => {
-    const a = key({ title: "Minsk Factory Fire", properNames: "Minsk", tags: "fire" });
+    const a = key({ title: "Minsk Factory Fire", properNames: "Minsk", tags: ["fire"] });
 
     expect(matchScore(a, a)).toBeCloseTo(1);
   });
 
   test("scores disjoint keys at 0", () => {
-    const a = key({ title: "Minsk Factory Fire", properNames: "Minsk", tags: "fire" });
-    const b = key({ title: "Brest Border Queue", properNames: "Brest", tags: "transport" });
+    const a = key({ title: "Minsk Factory Fire", properNames: "Minsk", tags: ["fire"] });
+    const b = key({ title: "Brest Border Queue", properNames: "Brest", tags: ["transport"] });
 
     expect(matchScore(a, b)).toBe(0);
   });
@@ -35,18 +35,18 @@ describe("matchScore", () => {
    * so each score is that component's weight alone and all three are ordered.
    */
   test("weights entities above title above tags", () => {
-    const base = key({ title: "Alpha Beta", properNames: "Minsk", tags: "fire" });
-    const sharedEntity = key({ title: "Gamma Delta", properNames: "Minsk", tags: "safety" });
-    const sharedTitle = key({ title: "Alpha Beta", properNames: "Brest", tags: "safety" });
-    const sharedTag = key({ title: "Gamma Delta", properNames: "Brest", tags: "fire" });
+    const base = key({ title: "Alpha Beta", properNames: "Minsk", tags: ["fire"] });
+    const sharedEntity = key({ title: "Gamma Delta", properNames: "Minsk", tags: ["safety"] });
+    const sharedTitle = key({ title: "Alpha Beta", properNames: "Brest", tags: ["safety"] });
+    const sharedTag = key({ title: "Gamma Delta", properNames: "Brest", tags: ["fire"] });
 
     expect(matchScore(base, sharedEntity)).toBeGreaterThan(matchScore(base, sharedTitle));
     expect(matchScore(base, sharedTitle)).toBeGreaterThan(matchScore(base, sharedTag));
   });
 
   test("is symmetric, so candidate ordering cannot change a verdict", () => {
-    const a = key({ title: "Minsk Fire", properNames: "Minsk, Belaruskali", tags: "fire" });
-    const b = key({ title: "Minsk Blaze", properNames: "Minsk", tags: "fire, safety" });
+    const a = key({ title: "Minsk Fire", properNames: "Minsk, Belaruskali", tags: ["fire"] });
+    const b = key({ title: "Minsk Blaze", properNames: "Minsk", tags: ["fire", "safety"] });
 
     expect(matchScore(a, b)).toBe(matchScore(b, a));
   });

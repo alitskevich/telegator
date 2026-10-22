@@ -21,13 +21,13 @@ import { fill } from "../text/fill";
 import type { ApiService } from "./ApiService";
 
 /**
- * One table page's state: Sources, Targets or Messages, chosen by `table`.
+ * One table page's state: Sources or Messages, chosen by `table`.
  * Mounted as `<GridService Ref="grid" table="sources" api="@api" canEdit="{@api.canEdit}" />`.
  * `src/grid/view.ts` derives the view; this holds the state, calls the API,
  * and reloads after every write so the table shows what was stored.
  */
 
-const SPECS: Readonly<Record<TableName, GridSpec>> = {
+export const SPECS: Readonly<Record<TableName, GridSpec>> = {
   sources: {
     columns: resources.tables.sources.columns,
     editable: SOURCE_WRITABLE_FIELDS,
@@ -47,12 +47,12 @@ const SPECS: Readonly<Record<TableName, GridSpec>> = {
 };
 
 /** What "add" writes besides the id: `ok` enables polling; a target needs a type. */
-const NEW_ROW: Readonly<Partial<Record<TableName, Record<string, string>>>> = {
+export const NEW_ROW: Readonly<Partial<Record<TableName, Record<string, string>>>> = {
   sources: { status: "ok" },
   targets: { type: DEFAULT_TARGET_TYPE },
 };
 
-const LIST_ACTION: Readonly<Record<TableName, string>> = {
+export const LIST_ACTION: Readonly<Record<TableName, string>> = {
   sources: "listSources",
   targets: "listTargets",
   messages: "listMessages",
@@ -84,8 +84,6 @@ export class GridService extends WebClientService {
   expanded: Expanded = {};
   newId = "";
   publishMax = String(MAX_PUBLISH_NOW);
-  /** "Reset all" is armed by one press and fired by a second; see `resetAll`. */
-  resetArmedAt: number | null = null;
 
   declare view: GridView;
 
@@ -134,16 +132,6 @@ export class GridService extends WebClientService {
     if (next === this.#status) return;
     this.#status = next;
     if (this.#ready) void this.load();
-  }
-
-  get armedReset(): boolean {
-    return this.resetArmedAt !== null && this.resetArmedAt === (this.rows?.length ?? 0);
-  }
-
-  get resetLabel(): string {
-    return this.armedReset
-      ? fill(resources.records.confirmReset, { count: this.rows?.length ?? 0 })
-      : resources.records.resetAll;
   }
 
   override __init(): void {
@@ -274,15 +262,8 @@ export class GridService extends WebClientService {
     await this.load();
   }
 
-  /** The CSV comes back as a download. */
-  async exportCsv(): Promise<void> {
-    const file = exportFilename(this.table, new Date());
-    const csv = await this.api.run(
-      "exportTable",
-      { table: this.table },
-      { key: "export", success: () => fill(resources.toasts.exported, { file }) },
-    );
-    if (typeof csv === "string") downloadText(file, csv);
+  exportCsv(): Promise<void> {
+    return exportTable(this.api, this.table);
   }
 
   /** A story's members and audit are loaded when its panel opens, and only then. */
@@ -330,33 +311,18 @@ export class GridService extends WebClientService {
     );
     if (done !== undefined) await this.load();
   }
-
-  /** Runs a scrape and waits for its summary. */
-  async scrapeNow(): Promise<void> {
-    const done = await this.api.run("runScraper", undefined, {
-      success: (result) => fill(resources.toasts.runScraper, asRecord(result)),
-    });
-    if (done !== undefined) await this.load();
-  }
-
-  /**
-   * A reset drops every cursor and cannot be undone, so it takes two presses.
-   * The armed row count is held, not a flag, so a reload to a different count disarms it.
-   */
-  async resetAll(): Promise<void> {
-    if (!this.armedReset) {
-      this.up({ resetArmedAt: this.rows?.length ?? 0 });
-      return;
-    }
-
-    // Disarmed on the firing press: a reset that failed must be armed again.
-    this.up({ resetArmedAt: null });
-    const done = await this.api.run("resetSourceCursors", undefined, {
-      success: (result) => fill(resources.toasts.resetSourceCursors, asRecord(result)),
-    });
-    if (done !== undefined) await this.load();
-  }
 }
+
+/** The CSV comes back as a download. */
+export const exportTable = async (api: ApiService, table: TableName): Promise<void> => {
+  const file = exportFilename(table, new Date());
+  const csv = await api.run(
+    "exportTable",
+    { table },
+    { key: "export", success: () => fill(resources.toasts.exported, { file }) },
+  );
+  if (typeof csv === "string") downloadText(file, csv);
+};
 
 export const asRecord = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};

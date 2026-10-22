@@ -1,6 +1,6 @@
 <Component id="Donut">
   <Signature purpose="A donut chart with its legend, drawn as one CSS conic-gradient"
-    description="`chart` is `{ slices, background }` from `OverviewService`; an empty chart says so rather than drawing a hole.">
+    description="`chart` is `{ slices, background }` from `PipelineService`; an empty chart says so rather than drawing a hole.">
     <Prop id="title" type="string" required="true" />
     <Prop id="chart" type="object" required="true" />
     <Prop id="empty" type="string" description="What an empty chart says" />

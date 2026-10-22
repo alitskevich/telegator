@@ -1,11 +1,17 @@
 import type { Diagnoser } from "tg-ai/types";
-import type { ErrorDiagnosis } from "tg-domain/ingest";
+import { type ErrorDiagnosis, refOf } from "tg-domain/ingest";
 import { AnalyzedItemSchema, ScrapedItemSchema } from "tg-domain/item";
-import { SOURCE_STATUS_OK, sourceVia } from "tg-domain/source";
+import { SOURCE_STATUS_OK, sourceType } from "tg-domain/source";
 import { QUEUES, type QueueName } from "tg-enums/queueName";
-import { SOURCE_VIAS } from "tg-enums/sourceVia";
+import { SOURCE_TYPES } from "tg-enums/sourceType";
 import { sources } from "tg-firebase/db";
-import { discardErrors, listErrors, replayErrors, saveDiagnosis } from "tg-firebase/errors";
+import {
+  countErrors,
+  discardErrors,
+  listErrors,
+  replayErrors,
+  saveDiagnosis,
+} from "tg-firebase/errors";
 import {
   clearIngest,
   getItem,
@@ -18,14 +24,20 @@ import {
 import type { StoredIngestItem } from "tg-firebase/types";
 import { dueAt, selectSources } from "tg-pipeline/scrape/select";
 import { z } from "zod";
-import type { ErrorPreview, ItemDetail, QueueItemPreview, SourcePreview } from "./types";
+import type {
+  ErrorPreview,
+  ErrorsPage,
+  ItemDetail,
+  QueueItemPreview,
+  SourcePreview,
+} from "./types";
 
 /**
- * The Pipeline page: the sources scrape would poll; run, pause and step each
- * task stage; and handle the items that failed.
+ * The Dashboard page: the sources scrape would poll; run, pause and step each
+ * task stage. The Audit page: handle the items that failed.
  */
 
-/** The most errors the Errors panel lists. */
+/** The most errors the Audit page lists. */
 export const ERROR_PAGE = 50;
 /** How much of a payload the diagnoser reads. */
 const DIAGNOSIS_PAYLOAD = 4000;
@@ -71,7 +83,7 @@ export const preview = (item: StoredIngestItem): QueueItemPreview => ({
   runAt: item.runAt,
   retryCount: item.retryCount,
   error: item.error ?? null,
-  ref: field(item.raw, "id") || field(item.raw, "messageId"),
+  ref: refOf(item.raw),
   text: (field(item.raw, "title") || field(item.raw, "body")).slice(0, PREVIEW_TEXT),
 });
 
@@ -84,12 +96,12 @@ export async function inspectQueue(input: unknown): Promise<QueueItemPreview[]> 
 export async function inspectSources(now = Date.now()): Promise<SourcePreview[]> {
   const enabled = await sources.listByStatus(SOURCE_STATUS_OK);
   const next = new Set(
-    SOURCE_VIAS.flatMap((via) => selectSources(enabled, now, via)).map((source) => source.id),
+    SOURCE_TYPES.flatMap((type) => selectSources(enabled, now, type)).map((source) => source.id),
   );
   return enabled
     .map((source) => ({
       id: source.id,
-      via: sourceVia(source),
+      type: sourceType(source),
       dueAt: dueAt(source),
       next: next.has(source.id),
       lastCount: source.lastCount,
@@ -141,8 +153,9 @@ export const errorPreview = (item: StoredIngestItem): ErrorPreview => ({
 });
 
 /** Every stage's errors, oldest first, without their payloads. */
-export async function inspectErrors(): Promise<ErrorPreview[]> {
-  return (await listErrors(ERROR_PAGE)).map(errorPreview);
+export async function inspectErrors(): Promise<ErrorsPage> {
+  const [items, total] = await Promise.all([listErrors(ERROR_PAGE), countErrors()]);
+  return { items: items.map(errorPreview), total };
 }
 
 /** Sends up to `max` errors back to their stages, oldest first. */

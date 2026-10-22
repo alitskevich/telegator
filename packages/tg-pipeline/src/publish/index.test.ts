@@ -1,7 +1,8 @@
+import type { TelegramBot, TelegramResponse } from "tg-bot/types";
 import { type Message, MessageSchema } from "tg-domain/message";
+import { TargetSchema } from "tg-domain/target";
 import { listAuditFor } from "tg-firebase/audit";
 import { messages, targets } from "tg-firebase/db";
-import type { TelegramBot, TelegramResponse } from "tg-telegram/types";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { clearFirestore } from "../../../../test/support";
 import { runPublish } from "./index";
@@ -20,7 +21,7 @@ function message(fields: Partial<Message> = {}): Message {
     date: "2026-08-29",
     title: "Capital explosions",
     category: "geopolitics",
-    tgChannel: "news_a,news_b",
+    tags: ["Belarus", "war"],
     ts: 1,
     members,
     memberCount: 1,
@@ -43,10 +44,25 @@ function fakeBot(ok = true) {
   return { bot, calls };
 }
 
-beforeEach(clearFirestore);
+/** `news_a` and `news_b` receive the message; the other three do not. */
+async function seedTargets() {
+  const rows = [
+    { id: "news_a", tags: ["belarus"] },
+    { id: "news_b", tags: ["war", "belarus"] },
+    { id: "news_c", tags: ["belarus", "sports"] },
+    { id: "news_d" },
+    { id: "news_e", tags: ["war"], deleted: true },
+  ];
+  for (const row of rows) await targets.put(TargetSchema.parse(row));
+}
+
+beforeEach(async () => {
+  await clearFirestore();
+  await seedTargets();
+});
 
 describe("runPublish", () => {
-  test("sends to every target, records each post and marks the message published", async () => {
+  test("sends to every live target whose tags it carries, records each post and marks it published", async () => {
     await messages.putNew(message());
     const { bot, calls } = fakeBot();
     await runPublish("chan_a/1", bot, () => NOW);
@@ -83,6 +99,17 @@ describe("runPublish", () => {
     await runPublish("chan_a/1", bot, () => NOW);
 
     expect(calls.map((c) => c.chatId)).toEqual(["@news_b"]);
+  });
+
+  test("a message no target receives is marked published with no post", async () => {
+    await messages.putNew(message({ tags: ["sports"] }));
+    const { bot, calls } = fakeBot();
+    await runPublish("chan_a/1", bot, () => NOW);
+
+    expect(calls).toEqual([]);
+    const stored = await messages.get("chan_a/1");
+    expect(stored?.status).toBe("published");
+    expect(stored?.posts).toEqual({});
   });
 
   test("a deleted or already published message is skipped", async () => {

@@ -1,18 +1,19 @@
+import type { TelegramBot, TelegramResponse } from "tg-bot/types";
 import { toIsoTimestamp } from "tg-domain/date";
 import type { Post } from "tg-domain/message";
-import { resolveTargets, type Target } from "tg-domain/target";
+import { receives } from "tg-domain/target";
 import { recordAudit } from "tg-firebase/audit";
 import { messages, targets } from "tg-firebase/db";
 import { metrics } from "tg-firebase/metrics";
-import type { TelegramBot, TelegramResponse } from "tg-telegram/types";
 import { log } from "tg-utils/logger";
 import { assembleMessage } from "./assemble";
 import { isCurrent, postFor } from "./posts";
 import type { AssembledMessage } from "./types";
 
 /**
- * Stage 4 — publish one message to each of its targets: send it the first
- * time, edit it in place after that.
+ * Stage 4 — publish one message to each target whose tags it carries: send it
+ * the first time, edit it in place after that. A message no target receives is
+ * marked `published` with no post.
  *
  * `posts` is recorded after every send, so a retry skips the targets already
  * current and never posts twice. A rejected send is recorded in `audit`, and
@@ -31,12 +32,6 @@ function send(bot: TelegramBot, assembled: AssembledMessage, tgId: string | unde
   return bot.sendMessage({ chatId, text, disableWebPagePreview });
 }
 
-/** The target's row, or undefined when it has none or it is deleted: the defaults apply. */
-async function readTarget(target: string): Promise<Target | undefined> {
-  const row = await targets.get(target).catch(() => undefined);
-  return row?.deleted === true ? undefined : row;
-}
-
 export async function runPublish(
   messageId: string,
   bot: TelegramBot,
@@ -51,12 +46,13 @@ export async function runPublish(
   const posts: Record<string, Post> = { ...stored.posts };
   const rejected: string[] = [];
 
-  for (const target of resolveTargets(stored.tgChannel)) {
+  const receivers = (await targets.listAll()).filter((row) => receives(row, stored.tags));
+
+  for (const { id: target, messageTemplate } of receivers) {
     const existing = postFor(stored, posts, target);
     if (existing !== undefined && isCurrent(existing, stored)) continue;
 
-    const row = await readTarget(target);
-    const assembled = assembleMessage(stored, target, existing?.tgId, row?.messageTemplate);
+    const assembled = assembleMessage(stored, target, existing?.tgId, messageTemplate);
     const response: TelegramResponse = await send(bot, assembled, existing?.tgId);
 
     if (!response.ok) {

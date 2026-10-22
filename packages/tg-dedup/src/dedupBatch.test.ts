@@ -31,17 +31,20 @@ const DATE = "2026-08-29";
 const SAME_EVENT = {
   title: "Minsk Factory Fire",
   properNames: "Minsk, Belaruskali",
-  tags: "fire,safety",
+  tags: ["fire", "safety"],
 } as const;
 
 /** Disjoint from `SAME_EVENT` in all three components, so the pair scores 0. */
 const OTHER_EVENT = {
   title: "Brest Border Queue",
   properNames: "Brest",
-  tags: "transport",
+  tags: ["transport"],
 } as const;
 
-function item(id: string, overrides: Partial<AnalyzedItem> = {}): AnalyzedItem {
+/** `tags` readonly, so the `as const` fixtures above spread in. */
+type ItemOverrides = Partial<Omit<AnalyzedItem, "tags">> & { readonly tags?: readonly string[] };
+
+function item(id: string, overrides: ItemOverrides = {}): AnalyzedItem {
   return AnalyzedItemSchema.parse({
     id,
     body: `body of ${id}`,
@@ -70,7 +73,6 @@ function storedMessage(over: Partial<Message> & Pick<Message, "id">): Message {
   return MessageSchema.parse({
     status: "topublish",
     date: DATE,
-    tgChannel: "telegator_news",
     ts: 1,
     // `toWrite` derives `memberIds` from `members`, so the fixture does too. A
     // caller that wants them out of step says so explicitly.
@@ -94,7 +96,7 @@ function replayable(source: AnalyzedItem, over: Partial<Message> = {}): Message 
     category: source.category,
     country: source.country,
     location: source.location,
-    tags: source.tags ?? "",
+    tags: source.tags ?? [],
     members: {
       [source.id]: {
         summary: source.summary,
@@ -184,9 +186,9 @@ const twoUnrelatedItems = () => [item("src_a/1", SAME_EVENT), item("src_b/2", OT
  * `MERGE_THRESHOLD`.
  */
 const AMBIGUOUS = [
-  { title: "Alpha Beta", properNames: "Minsk, Belaruskali", tags: "fire,safety" },
-  { title: "Alpha Gamma", properNames: "Minsk, Belaruskali, Naftan", tags: "fire,industry" },
-  { title: "Alpha Delta", properNames: "Minsk, Belaruskali, Grodno", tags: "fire,transport" },
+  { title: "Alpha Beta", properNames: "Minsk, Belaruskali", tags: ["fire", "safety"] },
+  { title: "Alpha Gamma", properNames: "Minsk, Belaruskali, Naftan", tags: ["fire", "industry"] },
+  { title: "Alpha Delta", properNames: "Minsk, Belaruskali, Grodno", tags: ["fire", "transport"] },
 ] as const;
 
 const twoAmbiguousItems = () => [item("src_a/1", AMBIGUOUS[0]), item("src_b/2", AMBIGUOUS[1])];
@@ -205,16 +207,20 @@ const threeAmbiguousItems = () => [...twoAmbiguousItems(), item("src_c/3", AMBIG
  * may ever reach the model.
  */
 const oneItemTwoCandidates = () => [
-  item("src_a/1", { title: "Alpha Beta", properNames: "Minsk, Belaruskali", tags: "fire,safety" }),
+  item("src_a/1", {
+    title: "Alpha Beta",
+    properNames: "Minsk, Belaruskali",
+    tags: ["fire", "safety"],
+  }),
   item("src_b/2", {
     title: "Gamma Delta",
     properNames: "Brest, Naftan, Minsk",
-    tags: "transport,border",
+    tags: ["transport", "border"],
   }),
   item("src_c/3", {
     title: "Alpha Gamma",
     properNames: "Minsk, Belaruskali, Brest",
-    tags: "fire,transport",
+    tags: ["fire", "transport"],
   }),
 ];
 
@@ -296,22 +302,13 @@ describe("create branch", () => {
     });
   });
 
-  test("defaults tgChannel to telegator_news, and keeps an explicit one", async () => {
+  test("a create carries an empty post map and no tgChannel: publish routes by tags", async () => {
     const a = item("chan_a/1", SAME_EVENT);
-    const b = item("chan_b/2", { ...OTHER_EVENT, target: "other_news" });
-    const result = await dedupBatch([a, b], deps());
-
-    const channels = result.writes.map((w) => (w.kind === "create" ? w.message.tgChannel : ""));
-    expect(channels).toEqual(["telegator_news", "other_news"]);
-  });
-
-  test("a create carries the item's target as tgChannel and an empty post map", async () => {
-    const a = item("chan_a/1", { ...SAME_EVENT, target: "a, @b" });
     const b = item("chan_b/2", OTHER_EVENT);
     const result = await dedupBatch([a, b], deps());
 
     const creates = result.writes.flatMap((w) => (w.kind === "create" ? [w.message] : []));
-    expect(creates.map((m) => m.tgChannel)).toEqual(["a, @b", "telegator_news"]);
+    expect(creates.map((m) => m.tgChannel)).toEqual([undefined, undefined]);
     expect(creates.map((m) => m.posts)).toEqual([{}, {}]);
   });
 
@@ -425,14 +422,14 @@ describe("Pass 1 — intra-batch matching", () => {
   });
 
   test("tags are merged, not replaced", async () => {
-    const a = item("chan_a/1", { ...SAME_EVENT, tags: "war,politics" });
-    const b = item("chan_b/2", { ...SAME_EVENT, tags: "politics,drones" });
+    const a = item("chan_a/1", { ...SAME_EVENT, tags: ["war", "politics"] });
+    const b = item("chan_b/2", { ...SAME_EVENT, tags: ["politics", "drones"] });
 
     const result = await dedupBatch([a, b], deps());
 
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
-    expect(write.message.tags).toBe("politics,drones,war");
+    expect(write.message.tags).toEqual(["politics", "drones", "war"]);
   });
 
   /** `??` preserves an empty-string image. */
@@ -453,7 +450,7 @@ describe("Pass 1 — intra-batch matching", () => {
     const b = item("chan_b/2", {
       ...SAME_EVENT,
       properNames: "Minsk, Belaruskali, Naftan",
-      tags: "fire,safety,industry",
+      tags: ["fire", "safety", "industry"],
     });
 
     const result = await dedupBatch([a, b], deps());
@@ -1095,7 +1092,7 @@ describe("replay idempotency", () => {
 
     expect(after?.members).toEqual(before?.members);
     expect(after?.memberCount).toBe(before?.memberCount);
-    expect(after?.tags).toBe(before?.tags);
+    expect(after?.tags).toEqual(before?.tags);
   });
 
   /** `unionMatchKeys` is idempotent, so this holds for a multi-member message too. */

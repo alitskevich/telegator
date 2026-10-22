@@ -1,5 +1,6 @@
-import { DEFAULT_SOURCE_VIA, SOURCE_VIAS, type SourceVia } from "tg-enums/sourceVia";
+import { DEFAULT_SOURCE_TYPE, SOURCE_TYPES, type SourceType } from "tg-enums/sourceType";
 import { z } from "zod";
+import { TagsSchema } from "./tags";
 
 /**
  * `sources`: the Telegram channels to poll (docs/telegator.md §2.1).
@@ -25,17 +26,13 @@ const field = {
   /** `ok` enables polling; any other value, or none, disables the source. An open string. */
   status: z.string().optional(),
 
-  // Operator-curated.
-  /**
-   * The targets this source publishes to: ids joined by `TARGET_SEPARATOR`,
-   * carried verbatim. A stored legacy `tgChannel` is stripped on parse.
-   */
-  target: z.string().optional(),
+  // Operator-curated. A stored legacy `target` or `tgChannel` is stripped on parse.
   category: z.string().optional(),
-  tags: z.string().optional(),
+  /** Copied onto every item of this source; publish routes by them (`tg-domain/target`). */
+  tags: TagsSchema.optional(),
   teaser: z.string().optional(),
-  /** Which reader polls this source; absent means `web` (`sourceVia`). */
-  via: z.enum(SOURCE_VIAS).optional(),
+  /** Which reader polls this source; absent means `telegram` (`sourceType`). */
+  type: z.enum(SOURCE_TYPES).optional(),
 
   // Written by scrape.
   /** The `?after=` cursor, and the only duplicate guard on the way in. */
@@ -73,11 +70,10 @@ export type Source = z.infer<typeof SourceSchema>;
 export const SourceConfigInput = z
   .object({
     status: field.status,
-    target: field.target,
     category: field.category,
     tags: field.tags,
     teaser: field.teaser,
-    via: field.via,
+    type: field.type,
   })
   .partial()
   .strict();
@@ -106,6 +102,6 @@ export const SourceCursorUpdate = z
 export type SourceCursor = z.infer<typeof SourceCursorUpdate>;
 
 /** The reader a source belongs to, with the default applied. */
-export function sourceVia(source: Pick<Source, "via">): SourceVia {
-  return source.via ?? DEFAULT_SOURCE_VIA;
+export function sourceType(source: Pick<Source, "type">): SourceType {
+  return source.type ?? DEFAULT_SOURCE_TYPE;
 }

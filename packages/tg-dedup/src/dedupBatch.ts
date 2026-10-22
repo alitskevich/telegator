@@ -2,12 +2,11 @@ import type { AdjudicationFields, AdjudicationPair } from "tg-ai/types";
 import { MAX_MEMBERS } from "tg-configs/dedup";
 import { sourceIdOf } from "tg-domain/ids";
 import type { AnalyzedItem } from "tg-domain/item";
-import {
-  DEFAULT_TG_CHANNEL,
-  type DedupCandidate,
-  type MemberBlock,
-  type Message,
-  type MessageMergeAttributes,
+import type {
+  DedupCandidate,
+  MemberBlock,
+  Message,
+  MessageMergeAttributes,
 } from "tg-domain/message";
 import { mergeTags } from "tg-domain/tags";
 import { buildMatchKey, matchKeyAttributes, matchKeyOf, unionMatchKeys } from "./matchKey";
@@ -54,14 +53,13 @@ interface Pending {
    * middle state can differ while the final state is identical.
    */
   readonly origin: PublishedContent | undefined;
-  tags: string;
+  tags: string[];
   image: string | undefined;
   title: string | undefined;
   category: string | undefined;
   country: string | undefined;
   location: string | undefined;
   peoples: string | undefined;
-  tgChannel: string;
 }
 
 /** An item whose best candidate fell in the band, held until the verdicts arrive. */
@@ -178,8 +176,6 @@ export async function dedupBatch(
             country: item.country,
             location: item.location,
             peoples: item.peoples,
-            // The item's target list, verbatim.
-            tgChannel: item.target ?? DEFAULT_TG_CHANNEL,
           }
         : {
             ...state,
@@ -196,7 +192,6 @@ export async function dedupBatch(
             country: item.country,
             location: item.location,
             peoples: item.peoples,
-            tgChannel: item.target ?? DEFAULT_TG_CHANNEL,
           };
 
     deps.metrics.count(state === undefined ? "MessagesCreated" : "MessagesMerged", 1);
@@ -421,14 +416,13 @@ async function load(id: string, deps: DedupDeps): Promise<Pending | undefined> {
     key: matchKeyOf(message),
     members: message.members,
     addedMembers: {},
-    tags: message.tags ?? "",
+    tags: message.tags ?? [],
     image: message.image,
     title: message.title,
     category: message.category,
     country: message.country,
     location: message.location,
     peoples: message.peoples,
-    tgChannel: message.tgChannel,
   };
 }
 
@@ -443,6 +437,7 @@ interface PublishedContent {
   readonly country: string | undefined;
   readonly location: string | undefined;
   readonly peoples: string | undefined;
+  /** Serialised, so the comparison is by value. */
   readonly tags: string;
   readonly image: string | undefined;
 }
@@ -454,7 +449,7 @@ const publishedContentOf = (message: {
   country?: string;
   location?: string;
   peoples?: string;
-  tags?: string;
+  tags?: readonly string[];
   image?: string;
 }): PublishedContent => ({
   members: JSON.stringify(message.members),
@@ -463,7 +458,7 @@ const publishedContentOf = (message: {
   country: message.country,
   location: message.location,
   peoples: message.peoples,
-  tags: message.tags ?? "",
+  tags: JSON.stringify(message.tags ?? []),
   image: message.image,
 });
 
@@ -494,7 +489,6 @@ function toWrite(state: Pending, ts: number): DedupWrite {
     peoples: state.peoples,
     tags: state.tags,
     image: state.image,
-    tgChannel: state.tgChannel,
     ts,
     // Omitted when the merge changes nothing rendered, so a replayed message
     // stays `published` instead of being edited with its own text.

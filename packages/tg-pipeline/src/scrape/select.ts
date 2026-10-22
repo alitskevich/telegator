@@ -1,6 +1,6 @@
 import type { Source } from "tg-domain/source";
-import { SOURCE_STATUS_OK, sourceVia } from "tg-domain/source";
-import type { SourceVia } from "tg-enums/sourceVia";
+import { SOURCE_STATUS_OK, sourceType } from "tg-domain/source";
+import type { SourceType } from "tg-enums/sourceType";
 
 const MINUTE_MS = 60_000;
 
@@ -26,16 +26,16 @@ export function dueAt(source: Source): number {
 
 /**
  * The sources this run should poll: enabled, not deleted, of this reader's
- * `via`, and due. Status is checked again so any input list is safe.
+ * `type`, and due. Status is checked again so any input list is safe.
  *
  * Each transport has its own schedule; a source read by both would be enqueued
  * twice and have its one cursor moved by two readers.
  */
-export function selectSources(sources: readonly Source[], now: number, via: SourceVia): Source[] {
+export function selectSources(sources: readonly Source[], now: number, type: SourceType): Source[] {
   return (
     sources
       .filter((source) => source.status === SOURCE_STATUS_OK && source.deleted !== true)
-      .filter((source) => sourceVia(source) === via)
+      .filter((source) => sourceType(source) === type)
       .filter((source) => dueAt(source) <= now)
       // Most overdue first, so fresher sources cannot starve one.
       .sort((a, b) => a.lastUpdated - b.lastUpdated)

@@ -4,15 +4,14 @@ import {
   SourceConfigInput,
   SourceCursorUpdate,
   SourceSchema,
-  sourceVia,
+  sourceType,
 } from "./source";
 
 const seedRecord = {
   id: "yigal_levin",
   status: "ok",
-  target: "telegator_news",
   category: "geopolitics",
-  tags: "war,politics",
+  tags: ["war", "politics"],
   teaser: "Subscribe to our channel",
 };
 
@@ -116,31 +115,38 @@ describe("SourceCursorUpdate", () => {
   });
 });
 
-describe("target and via", () => {
-  test("a stored tgChannel is stripped and does not become target", () => {
-    const parsed = SourceSchema.parse({ id: "yigal_levin", tgChannel: "x" });
+describe("tags and type", () => {
+  test("a stored legacy target or tgChannel is stripped", () => {
+    const parsed = SourceSchema.parse({ id: "yigal_levin", target: "a", tgChannel: "x" });
 
+    expect(parsed).not.toHaveProperty("target");
     expect(parsed).not.toHaveProperty("tgChannel");
-    expect(parsed.target).toBeUndefined();
   });
 
-  /** An operator chooses the reader; only the two known ones are accepted. */
-  test("SourceConfigInput accepts a known via and rejects an unknown one", () => {
-    expect(SourceConfigInput.parse({ via: "mtproto" })).toEqual({ via: "mtproto" });
-    expect(SourceConfigInput.safeParse({ via: "rss" }).success).toBe(false);
+  /** An operator chooses the reader; only the known ones are accepted. */
+  test("SourceConfigInput accepts a known type and rejects an unknown one", () => {
+    expect(SourceConfigInput.parse({ type: "gmail" })).toEqual({ type: "gmail" });
+    expect(SourceConfigInput.safeParse({ type: "telegram_channel" }).success).toBe(false);
+    expect(SourceConfigInput.safeParse({ type: "rss" }).success).toBe(false);
   });
 
-  test("sourceVia reads an absent via as web", () => {
-    expect(sourceVia(SourceSchema.parse(seedRecord))).toBe("web");
-    expect(sourceVia(SourceSchema.parse({ ...seedRecord, via: "mtproto" }))).toBe("mtproto");
+  test("sourceType reads an absent type as telegram", () => {
+    expect(sourceType(SourceSchema.parse(seedRecord))).toBe("telegram");
+    expect(sourceType(SourceSchema.parse({ ...seedRecord, type: "gmail" }))).toBe("gmail");
   });
 
-  test("SourceConfigInput accepts target and rejects tgChannel", () => {
-    expect(SourceConfigInput.parse({ target: "a, @b" })).toEqual({ target: "a, @b" });
+  test("SourceConfigInput accepts tags and rejects target and tgChannel", () => {
+    expect(SourceConfigInput.parse({ tags: ["a", "b"] })).toEqual({ tags: ["a", "b"] });
+    expect(SourceConfigInput.safeParse({ target: "a" }).success).toBe(false);
     expect(SourceConfigInput.safeParse({ tgChannel: "a" }).success).toBe(false);
   });
 
-  test("target is carried verbatim — a list is not parsed here", () => {
-    expect(SourceSchema.parse({ ...seedRecord, target: "a, @b" }).target).toBe("a, @b");
+  /** Rows stored before tags were arrays, and the console's text input, carry a string. */
+  test("a comma-separated tags string parses to an array", () => {
+    expect(SourceSchema.parse({ ...seedRecord, tags: "war, politics" }).tags).toEqual([
+      "war",
+      "politics",
+    ]);
+    expect(SourceConfigInput.parse({ tags: "a, ,b" })).toEqual({ tags: ["a", "b"] });
   });
 });

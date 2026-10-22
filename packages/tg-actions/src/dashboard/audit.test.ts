@@ -52,9 +52,9 @@ describe("audit actions", () => {
     await rejected("chan/2", 2);
 
     expect((await loadAudit({ messageId: "chan/1" })).map((entry) => entry.at)).toEqual([1]);
-    expect((await loadAudit(undefined)).map((entry) => entry.messageId)).toEqual([
-      "chan/2",
-      "chan/1",
+    expect(await loadAudit(undefined)).toMatchObject([
+      { messageId: "chan/2" },
+      { messageId: "chan/1" },
     ]);
     await expect(loadAudit({ messageId: "not an id" })).rejects.toThrow();
   });

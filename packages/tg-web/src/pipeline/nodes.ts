@@ -3,9 +3,8 @@ import type { QueueName } from "tg-enums/queueName";
 import type { PipelineNode, StageSpec } from "./types";
 
 /**
- * The Pipeline page's diagram as data: the chain of stages, top to bottom, with
- * the current numbers on it, and the Errors node apart. Pure, so it is tested
- * without drawing it.
+ * The Dashboard page's diagram as data: the chain of stages, top to bottom, with
+ * the current numbers on it. Pure, so it is tested without drawing it.
  */
 export function pipelineNodes(
   stages: readonly StageSpec[],
@@ -18,13 +17,12 @@ export function pipelineNodes(
 
     return {
       ...stage,
-      arrow: index > 0 && stage.kind !== "errors",
+      arrow: index > 0,
       hasValue: stage.metric !== undefined,
       value,
       valueLabel: stage.metricLabel ?? "",
       queued: unread ? null : overview.inQueue[stage.queue],
       paused: unread ? false : overview.paused[stage.queue],
-      alert: stage.kind === "errors" && value !== null && value > 0,
       selected: stage.id === selected,
     };
   });

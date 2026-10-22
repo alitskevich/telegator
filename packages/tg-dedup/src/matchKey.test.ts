@@ -9,7 +9,7 @@ describe("buildMatchKey", () => {
       title: "Minsk Factory Fire",
       peoples: "Ivan Petrov, Maria Ivanova",
       properNames: "Minsk, Belaruskali",
-      tags: "fire, industry, safety",
+      tags: ["fire", "industry", "safety"],
     });
 
     expect(key.entities).toEqual(["belaruskali", "ivan petrov", "maria ivanova", "minsk"]);
@@ -46,8 +46,8 @@ describe("buildMatchKey", () => {
 describe("unionMatchKeys", () => {
   test("is the sorted union", () => {
     const merged = unionMatchKeys(
-      buildMatchKey({ properNames: "Minsk", tags: "fire" }),
-      buildMatchKey({ properNames: "Gomel", tags: "fire, safety" }),
+      buildMatchKey({ properNames: "Minsk", tags: ["fire"] }),
+      buildMatchKey({ properNames: "Gomel", tags: ["fire", "safety"] }),
     );
 
     expect(merged.entities).toEqual(["gomel", "minsk"]);

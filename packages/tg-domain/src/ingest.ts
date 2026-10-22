@@ -16,6 +16,14 @@ export const ErrorDiagnosisSchema = z.object({
 
 export type ErrorDiagnosis = z.infer<typeof ErrorDiagnosisSchema>;
 
+const text = (value: unknown): string => (typeof value === "string" ? value : "");
+
+/** The post or message an item's payload carries: its `id`, else its `messageId`, else empty. */
+export function refOf(raw: unknown): string {
+  const record = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  return text(record.id) || text(record.messageId);
+}
+
 export const IngestItemSchema = z.object({
   stage: z.enum(QUEUES),
   status: IngestStatusSchema,

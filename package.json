@@ -21,6 +21,7 @@
     "format": "biome check --write .",
     "deploy": "npm run build && firebase deploy",
     "cursors:now": "tsx scripts/set-cursors-now.ts --write",
+    "migrate:source-type": "tsx scripts/migrate-source-type.ts",
     "autofix": "tsx scripts/autofix.ts",
     "mcp": "tsx scripts/mcp.ts",
     "mtproto:login": "export TG_API_ID=$(cat $HOME/.keys/tg-api-id.key) TG_API_HASH=$(cat $HOME/.keys/tg-api-hash.key) && tsx scripts/mtproto-login.ts",

@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { DEFAULT_TG_CHANNEL } from "./message";
 import {
   parseTargets,
+  receives,
   resolveTargets,
   TARGET_SEPARATOR,
   TargetConfigInput,
@@ -79,6 +80,11 @@ describe("TargetSchema", () => {
     expect(row.deleted).toBe(true);
   });
 
+  test("tags parse from an array or a comma-separated string", () => {
+    expect(TargetSchema.parse({ id: "a", tags: ["by", " war "] }).tags).toEqual(["by", "war"]);
+    expect(TargetSchema.parse({ id: "a", tags: "by, war" }).tags).toEqual(["by", "war"]);
+  });
+
   test("an empty id is not a target anything can address", () => {
     expect(() => TargetSchema.parse({ id: "" })).toThrow();
   });
@@ -108,5 +114,29 @@ describe("TargetConfigInput", () => {
 
   test("rejects a type outside the enum", () => {
     expect(() => TargetConfigInput.parse({ type: "sms" })).toThrow();
+  });
+
+  test("accepts tags, and reads the console's text as a list", () => {
+    expect(TargetConfigInput.parse({ tags: "by, war" })).toEqual({ tags: ["by", "war"] });
+  });
+});
+
+describe("receives", () => {
+  test("a message carrying every tag of the target is received", () => {
+    expect(receives({ tags: ["by", "war"] }, ["war", "economy", "by"])).toBe(true);
+  });
+
+  test("a message missing any one of them is not", () => {
+    expect(receives({ tags: ["by", "war"] }, ["war", "economy"])).toBe(false);
+    expect(receives({ tags: ["by"] }, undefined)).toBe(false);
+  });
+
+  test("matching ignores case", () => {
+    expect(receives({ tags: ["Belarus"] }, ["belarus"])).toBe(true);
+  });
+
+  test("a target with no tags receives nothing", () => {
+    expect(receives({ tags: [] }, ["war"])).toBe(false);
+    expect(receives({}, ["war"])).toBe(false);
   });
 });

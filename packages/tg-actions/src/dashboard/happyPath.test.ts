@@ -1,16 +1,16 @@
+import type { TelegramBot } from "tg-bot/types";
 import { SETTLE_DELAY_SECONDS } from "tg-configs/dedup";
 import { toDateKey } from "tg-domain/date";
 import { ScrapedItemSchema } from "tg-domain/item";
-import { DEFAULT_TG_CHANNEL } from "tg-domain/message";
 import { NewsItemSchema } from "tg-domain/newsItemSchema";
-import { messages } from "tg-firebase/db";
+import { TargetSchema } from "tg-domain/target";
+import { messages, targets } from "tg-firebase/db";
 import { countErrors } from "tg-firebase/errors";
 import { drain, ingestRef } from "tg-firebase/ingest";
 import { enqueue } from "tg-firebase/tasks";
 import { runAggregate } from "tg-pipeline/aggregate/index";
 import { runAnalyze } from "tg-pipeline/analyze/index";
 import { runPublish } from "tg-pipeline/publish/index";
-import type { TelegramBot } from "tg-telegram/types";
 import { beforeEach, expect, test, vi } from "vitest";
 import { clearFirestore, fakeAdjudicator } from "../../../../test/support";
 import { emulateItem } from "./emulate";
@@ -38,7 +38,7 @@ const classifier = {
       category: "culture&history",
       importance: "high",
       properNames: "Grodno",
-      tags: "theatre, culture",
+      tags: ["theatre", "culture"],
     }),
 };
 
@@ -76,7 +76,9 @@ const statuses = async () => (await ingestRef.get()).docs.map((doc) => doc.get("
 
 beforeEach(clearFirestore);
 
-test("two emulated posts of one story merge, and the story is sent to the default channel", async () => {
+test("two emulated posts of one story merge, and the story is sent to the target its tags match", async () => {
+  await targets.put(TargetSchema.parse({ id: "news_a", tags: ["culture"] }));
+  await targets.put(TargetSchema.parse({ id: "news_b", tags: ["sports"] }));
   const now = Date.now();
   const first = await emulateItem(now);
   const second = await emulateItem(now + 1);
@@ -90,16 +92,18 @@ test("two emulated posts of one story merge, and the story is sent to the defaul
   const story = await messages.get(stories[0]?.id ?? "");
   expect(Object.keys(story?.members ?? {}).sort()).toEqual([first.id, second.id]);
   expect(story?.status).toBe("published");
-  expect(sent).toEqual([`@${DEFAULT_TG_CHANNEL}`]);
+  expect(sent).toEqual(["@news_a"]);
   expect(await statuses()).toEqual(["done", "done", "done", "done", "done"]);
   expect(await countErrors()).toBe(0);
 });
 
-test("a scraped post is analysed, aggregated and sent to its target", async () => {
+test("a scraped post is sent to a target matching its source tags and the AI's together", async () => {
+  await targets.put(TargetSchema.parse({ id: "news_a", tags: ["grodno", "theatre"] }));
+  await targets.put(TargetSchema.parse({ id: "news_b", tags: ["grodno", "sports"] }));
   const item = ScrapedItemSchema.parse({
     id: "chan/1",
     body: "В Гродно открылся театр.",
-    target: "news_a",
+    tags: ["grodno"],
     date: toDateKey(Date.now()),
     kind: "post",
   });

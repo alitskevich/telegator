@@ -46,7 +46,7 @@ export interface ItemFact {
   readonly value: string;
 }
 
-/** One failed item, worded for the Errors panel. */
+/** One failed item, worded for the Audit page. */
 export interface ErrorRow {
   readonly id: string;
   readonly ref: string;

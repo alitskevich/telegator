@@ -67,7 +67,7 @@ export interface MatchKeyFields {
   readonly title?: string | undefined;
   readonly peoples?: string | undefined;
   readonly properNames?: string | undefined;
-  readonly tags?: string | undefined;
+  readonly tags?: readonly string[] | undefined;
 }
 
 export interface ScoreWeights {

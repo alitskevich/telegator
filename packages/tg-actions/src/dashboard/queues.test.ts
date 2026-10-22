@@ -3,7 +3,15 @@ import { ingestRef } from "tg-firebase/ingest";
 import { COLD_INTERVAL_MS, WARM_INTERVAL_MS } from "tg-pipeline/scrape/select";
 import { beforeEach, describe, expect, test } from "vitest";
 import { clearFirestore } from "../../../../test/support";
-import { diagnoseError, editItem, inspectItem, inspectSources, preview } from "./queues";
+import {
+  diagnoseError,
+  ERROR_PAGE,
+  editItem,
+  inspectErrors,
+  inspectItem,
+  inspectSources,
+  preview,
+} from "./queues";
 
 const item = (raw: unknown) => ({
   id: "x1",
@@ -44,13 +52,19 @@ describe("inspectSources", () => {
     const now = 1_700_000_000_000;
     await sources.patch("warm", { status: "ok", lastCount: 3, lastUpdated: now });
     await sources.patch("hot", { status: "ok", lastCount: 25, lastUpdated: now });
-    await sources.patch("mail", { status: "ok", via: "gmail" });
+    await sources.patch("mail", { status: "ok", type: "gmail" });
     await sources.patch("off", { status: "off" });
 
     expect(await inspectSources(now)).toEqual([
-      { id: "mail", via: "gmail", dueAt: COLD_INTERVAL_MS, next: true, lastCount: 0 },
-      { id: "hot", via: "web", dueAt: now, next: true, lastCount: 25 },
-      { id: "warm", via: "web", dueAt: now + WARM_INTERVAL_MS, next: false, lastCount: 3 },
+      { id: "mail", type: "gmail", dueAt: COLD_INTERVAL_MS, next: true, lastCount: 0 },
+      { id: "hot", type: "telegram", dueAt: now, next: true, lastCount: 25 },
+      {
+        id: "warm",
+        type: "telegram",
+        dueAt: now + WARM_INTERVAL_MS,
+        next: false,
+        lastCount: 3,
+      },
     ]);
   });
 });
@@ -122,6 +136,28 @@ describe("diagnoseError", () => {
       payload: '{"messageId":"m1"}',
     });
     expect((await ingestRef.doc("e1").get()).data()?.diagnosis).toMatchObject(diagnosis);
+  });
+
+  test("lists a page of the oldest errors, and counts them all", async () => {
+    await Promise.all(
+      Array.from({ length: ERROR_PAGE + 1 }, (_, i) =>
+        ingestRef.doc(`e${i}`).set({
+          stage: "analyze",
+          status: "error",
+          raw: { id: `chan/${i}` },
+          retryCount: 3,
+          runAt: 0,
+          createdAt: 0,
+          finishedAt: i,
+          error: "timeout",
+        }),
+      ),
+    );
+
+    const { items, total } = await inspectErrors();
+    expect(total).toBe(ERROR_PAGE + 1);
+    expect(items).toHaveLength(ERROR_PAGE);
+    expect(items[0]).toMatchObject({ id: "e0", ref: "chan/0", stage: "analyze", failedAt: 0 });
   });
 
   test("refuses an item that has not failed", async () => {

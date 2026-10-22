@@ -1,9 +1,9 @@
+import { TELEGRAM_MESSAGE_LIMIT } from "tg-bot/types";
 import { MEMBER_RENDER_LIMIT } from "tg-configs/dedup";
 import { SUMMARY_MAX_LENGTH } from "tg-domain/item";
 import type { MemberBlock, Message } from "tg-domain/message";
 import { DEFAULT_TG_CHANNEL, MemberBlockSchema, MessageSchema } from "tg-domain/message";
 import { resolveTargets } from "tg-domain/target";
-import { TELEGRAM_MESSAGE_LIMIT } from "tg-telegram/types";
 import { describe, expect, test } from "vitest";
 import { assembleMessage, buildHeader, PHOTO_SUPPRESSION_LIMIT } from "./assemble";
 import { buildHashtagLine } from "./hashtags";
@@ -22,7 +22,7 @@ interface MessageOverrides {
   readonly country?: string;
   readonly location?: string;
   readonly peoples?: string;
-  readonly tags?: string;
+  readonly tags?: readonly string[];
   readonly image?: string;
   readonly tgId?: string;
   readonly tgChannel?: string;
@@ -154,10 +154,10 @@ describe("assembleMessage — layout", () => {
   });
 
   test("the hashtag line is appended after the members, behind a blank line", () => {
-    const record = message({ category: "politics", tags: "minsk" });
+    const record = message({ category: "politics", tags: ["minsk"] });
     const line = buildHashtagLine({
       category: "politics",
-      tags: "minsk",
+      tags: ["minsk"],
       date: DEFAULT_DATE,
       ts: DEFAULT_TS,
     });
@@ -239,7 +239,7 @@ describe("assembleMessage — send mode", () => {
 
 describe("assembleMessage — overflow", () => {
   /** 80 distinct tokens, enough hashtag line to push a full message over 4096. */
-  const MANY_TAGS = Array.from({ length: 80 }, (_, i) => `overflowtag${i}`).join(",");
+  const MANY_TAGS = Array.from({ length: 80 }, (_, i) => `overflowtag${i}`);
 
   function fullMembers(): Record<string, MemberBlock> {
     const members: Record<string, MemberBlock> = {};
@@ -293,7 +293,7 @@ describe("assembleMessage with a template", () => {
   const TEMPLATE = "<b>LIVE</b>\n{header}\n\n{body}\n\n{hashtags}";
 
   /** Enough tokens that the hashtag line alone overflows a full body. */
-  const MANY_TAGS = Array.from({ length: 200 }, (_, i) => `templatetag${i}`).join(",");
+  const MANY_TAGS = Array.from({ length: 200 }, (_, i) => `templatetag${i}`);
 
   function fullMembers(): Record<string, MemberBlock> {
     const members: Record<string, MemberBlock> = {};

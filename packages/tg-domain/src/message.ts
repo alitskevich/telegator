@@ -3,6 +3,7 @@ import { z } from "zod";
 import { DateKeySchema } from "./date";
 import { ItemIdSchema } from "./ids";
 import { LinkSchema, SUMMARY_MAX_LENGTH } from "./item";
+import { TagsSchema } from "./tags";
 
 /**
  * `messages`: aggregated, publishable stories (docs/telegator.md §2.3). The only
@@ -10,7 +11,7 @@ import { LinkSchema, SUMMARY_MAX_LENGTH } from "./item";
  * *inside* the message that absorbs it.
  */
 
-/** The target channel a message falls back to. */
+/** The target a legacy message with no `tgChannel` was published to. */
 export const DEFAULT_TG_CHANNEL = "telegator_news";
 
 /**
@@ -74,10 +75,15 @@ const messageFields = z.object({
   country: z.string().optional(),
   location: z.string().optional(),
   peoples: z.string().optional(),
-  tags: z.string().optional(),
+  /** Publish sends the message to every target whose tags it carries (`tg-domain/target`). */
+  tags: TagsSchema.optional(),
   image: z.string().optional(),
 
-  tgChannel: z.string().default(DEFAULT_TG_CHANNEL),
+  /**
+   * The legacy target list. No longer written; publish reads it to find the
+   * legacy `tgId` below.
+   */
+  tgChannel: z.string().optional(),
 
   /**
    * `{canonicalTargetId → Post}`, written by publish only. Defaulted so a
@@ -121,6 +127,7 @@ export const MessageListItemSchema = messageFields.omit({
   keyTags: true,
   memberIds: true,
   posts: true,
+  tgChannel: true,
 });
 
 export type MessageListItem = z.infer<typeof MessageListItemSchema>;
@@ -164,7 +171,6 @@ export const MessageMergeAttributesSchema = messageFields
     peoples: true,
     tags: true,
     image: true,
-    tgChannel: true,
     status: true,
     ts: true,
   })

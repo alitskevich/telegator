@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { TagsSchema } from "tg-domain/tags";
 import { z } from "zod";
 import type { MatchKeyFields } from "../types";
 import type { BandRow, LabelledKeyPair, LabelledPair } from "./types";
@@ -42,7 +43,7 @@ const CalibrationItemSchema = z.object({
   title: z.string().optional(),
   peoples: z.string().optional(),
   properNames: z.string().optional(),
-  tags: z.string().optional(),
+  tags: TagsSchema.optional(),
 });
 
 export type CalibrationItem = z.infer<typeof CalibrationItemSchema>;

@@ -123,7 +123,7 @@ describe("pageAfter", () => {
 
 describe("createMtprotoReader", () => {
   test("serves the mtproto sources", () => {
-    expect(createMtprotoReader(fakeClient()).via).toBe("mtproto");
+    expect(createMtprotoReader(fakeClient()).type).toBe("telegram");
   });
 
   test("reads a username as is, without loading dialogs", async () => {

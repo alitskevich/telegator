@@ -1,7 +1,7 @@
 <Component id="RecordsTable">
   <Signature purpose="The records table: search, per-column filters, sort, selection, inline edit and export"
     description="On a phone each record is a card with the id as its title; from `md` the same markup is a table with a header and a filter row. Reads the page's `@grid`. The empty state renders inside the table, so the filters stay reachable.">
-    <Prop id="table" type="enum" enum="sources,targets,messages" required="true" />
+    <Prop id="table" type="enum" enum="sources,messages" required="true" />
   </Signature>
 
   <section class="bg-base-100 rounded-box flex flex-col min-w-0">

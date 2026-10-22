@@ -3,6 +3,8 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { createOpenRouterAdjudicator } from "tg-ai/adjudicator";
 import { createOpenRouterClassifier } from "tg-ai/openrouter";
+import { createTelegramBot } from "tg-bot/bot";
+import { createHttpPost } from "tg-bot/http";
 import { REGION } from "tg-configs/firebase";
 import { IngestItemSchema } from "tg-domain/ingest";
 import { QUEUES, type QueueName } from "tg-enums/queueName";
@@ -11,15 +13,10 @@ import { flushMetrics } from "tg-firebase/metrics";
 import { createGmailClient } from "tg-gmail/client";
 import { parseGmailCredentials } from "tg-gmail/credentials";
 import { createGmailReader } from "tg-gmail/reader";
-import { connectMtproto } from "tg-mtproto/client";
-import { parseMtprotoCredentials } from "tg-mtproto/credentials";
-import { createMtprotoReader } from "tg-mtproto/reader";
 import { runAggregate } from "tg-pipeline/aggregate/index";
 import { runAnalyze } from "tg-pipeline/analyze/index";
 import { runPublish } from "tg-pipeline/publish/index";
-import { runScrape, webReader } from "tg-pipeline/scrape/index";
-import { createTelegramBot } from "tg-telegram/bot";
-import { createHttpFetcher, createHttpPost } from "tg-telegram/http";
+import { runScrape, scrapeTelegram } from "tg-pipeline/scrape/index";
 import { log } from "tg-utils/logger";
 import { parseYoutubeCredentials } from "tg-youtube/credentials";
 import { runYoutube } from "tg-youtube/index";
@@ -64,14 +61,6 @@ async function settle<T>(work: () => Promise<T>): Promise<T> {
 }
 
 export const scrape = onSchedule(
-  { region: REGION, schedule: "every 30 minutes", timeoutSeconds: TIMEOUT_SECONDS },
-  async () => {
-    if (!scrapeEnabled.value()) return;
-    await settle(() => runScrape(webReader(createHttpFetcher())));
-  },
-);
-
-export const scrapeMtproto = onSchedule(
   {
     region: REGION,
     schedule: "every 30 minutes",
@@ -80,12 +69,7 @@ export const scrapeMtproto = onSchedule(
   },
   async () => {
     if (!scrapeEnabled.value()) return;
-    const client = await connectMtproto(parseMtprotoCredentials(mtprotoSession.value()));
-    try {
-      await settle(() => runScrape(createMtprotoReader(client)));
-    } finally {
-      await client.destroy();
-    }
+    await settle(() => scrapeTelegram(mtprotoSession.value()));
   },
 );
 

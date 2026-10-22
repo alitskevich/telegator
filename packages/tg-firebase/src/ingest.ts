@@ -1,15 +1,17 @@
 import { FieldValue, type QueryDocumentSnapshot } from "firebase-admin/firestore";
-import { type IngestControl, IngestControlSchema, IngestItemSchema } from "tg-domain/ingest";
+import { type IngestControl, IngestControlSchema, IngestItemSchema, refOf } from "tg-domain/ingest";
 import type { QueueName } from "tg-enums/queueName";
 import { log } from "tg-utils/logger";
 import { db } from "./app";
+import { recordAudit } from "./audit";
 import type { StoredIngestItem } from "./types";
 
 /**
  * `ingest`: the work in flight. A stage drains its own due items under a lease,
  * so one drain per stage runs at a time and it runs at most `concurrency` items
  * at once. A failure goes back to `pending` with backoff, or to `error` on its
- * last attempt, with its message and cause, where the console can run it again. An operator may pause a stage
+ * last attempt, with its message and cause, where the console can run it again;
+ * that last failure is also written to `audit`. An operator may pause a stage
  * and step it, or run its waiting items now (`ingestControls/{stage}`).
  */
 
@@ -101,7 +103,7 @@ export const restart = (runAt: number) => ({
   finishedAt: FieldValue.delete(),
 });
 
-/** A failed attempt: back to `pending` after the backoff, or `error` on the last one. */
+/** A failed attempt: back to `pending` after the backoff, or `error` and an `audit` entry on the last one. */
 async function fail(
   item: StoredIngestItem,
   thrown: unknown,
@@ -120,6 +122,16 @@ async function fail(
     leaseUntil: FieldValue.delete(),
     ...(failed ? { finishedAt: now } : { runAt: now + MIN_BACKOFF_MS * 2 ** (retryCount - 1) }),
   });
+  if (!failed) return;
+  await recordAudit({
+    kind: "item",
+    stage: item.stage,
+    itemId: item.id,
+    ref: refOf(item.raw),
+    error: message,
+    cause,
+    at: now,
+  }).catch((failure) => log.warn("audit not recorded", { id: item.id, error: String(failure) }));
 }
 
 async function runOne(

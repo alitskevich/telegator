@@ -15,7 +15,7 @@ export interface HashtagSource {
   readonly category?: string | undefined;
   readonly location?: string | undefined;
   readonly peoples?: string | undefined;
-  readonly tags?: string | undefined;
+  readonly tags?: readonly string[] | undefined;
   readonly title?: string | undefined;
   /** A `YYYY-MM-DD` key. */
   readonly date: string;

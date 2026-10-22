@@ -1,0 +1,36 @@
+<Component id="TelegramTargets">
+  <Signature purpose="The Publish node's target channels: a table to add to, delete from in bulk and export; a click on an id opens `RecordModal`"
+    description="Reads `@targets` and reloads it each time the node is selected. Only an editor adds, ticks and deletes; the API re-checks the role regardless." />
+
+  <Connector trigger="1" change="-> @targets.load()" />
+
+  <ErrorBanner If="@targets.error" text="{@targets.error}" />
+  <div class="flex flex-wrap items-center gap-2">
+    <Fragment If="@api.canEdit">
+      <input class="input grow sm:input-sm sm:w-48 sm:grow-0" placeholder="{R.common.newId}"
+        aria-label="{R.common.newId}" value="{@targets.newId}" input="-> @targets.setNewId(event)"
+        enter="-> @targets.add()" />
+      <Btn class="sm:btn-sm" mode="soft" icon="plus" text="{R.common.add}" busy="{@api.busy.addRecord}"
+        disabled="{!@targets.newId}" click="-> @targets.add()" />
+      <Btn class="sm:btn-sm" type="error" mode="soft" icon="trash-2" text="{R.common.delete}"
+        disabled="{!@targets.selected.length}" busy="{@api.busy.deleteRecord}"
+        click="-> @targets.removeSelected()" />
+    </Fragment>
+    <Btn class="sm:btn-sm" mode="soft" icon="file-down" text="{R.common.export}" busy="{@api.busy.export}"
+      click="-> @targets.exportCsv()" />
+  </div>
+  <p If="{@targets.rows AND !@targets.rows.length}" class="text-sm text-base-content/60">{R.telegram.empty}</p>
+  <This-List If="{@targets.rows.length AND @api.canEdit}" select="-> @targets.select(event)" />
+  <This-List If="{@targets.rows.length AND !@api.canEdit}" />
+
+  <Subcomponent id="List">
+    <Signature purpose="The targets table; a checkbox column only when `select` is passed">
+      <Prop id="select" type="action" description="Called with the ticked ids; turns the checkbox column on" />
+    </Signature>
+    <Table class="rounded-box border border-base-300 max-h-96" data="{@targets.rows}"
+      columns="{R.telegram.columns}" activeId="{@targets.detail.id}" value="{@targets.selected}"
+      onItem="-> @targets.open(event)" onMultiSelectItem="{select}">
+      <span class="text-sm font-medium">{R.telegram.columns.0.name}</span>
+    </Table>
+  </Subcomponent>
+</Component>

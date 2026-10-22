@@ -64,11 +64,17 @@ describe("buildHashtagLine", () => {
   });
 
   test("takes tags from tags", () => {
-    expect(buildHashtagLine({ ...empty, tags: "war" })).toBe(`#war ${DATE_TS}`);
+    expect(buildHashtagLine({ ...empty, tags: ["war"] })).toBe(`#war ${DATE_TS}`);
   });
 
-  test("splits every source field on commas", () => {
-    expect(buildHashtagLine({ ...empty, tags: "war, politics ,sanctions" })).toBe(
+  test("splits every comma-separated source field on commas", () => {
+    expect(buildHashtagLine({ ...empty, peoples: "Lukashenko, Tsikhanouskaya ,Putin" })).toBe(
+      `#lukashenko #tsikhanouskaya #putin ${DATE_TS}`,
+    );
+  });
+
+  test("takes each tag as one token", () => {
+    expect(buildHashtagLine({ ...empty, tags: ["war", "politics", "sanctions"] })).toBe(
       `#war #politics #sanctions ${DATE_TS}`,
     );
   });
@@ -79,7 +85,7 @@ describe("buildHashtagLine", () => {
       category: "geopolitics",
       location: "Minsk",
       peoples: "Lukashenko",
-      tags: "war",
+      tags: ["war"],
     });
     expect(line).toBe(`#geopolitics #minsk #lukashenko #war ${DATE_TS}`);
   });
@@ -103,33 +109,33 @@ describe("buildHashtagLine", () => {
   });
 
   test("drops empty and whitespace-only tokens", () => {
-    expect(buildHashtagLine({ ...empty, tags: " , ,,war,   " })).toBe(`#war ${DATE_TS}`);
+    expect(buildHashtagLine({ ...empty, tags: [" ", "", "war", "   "] })).toBe(`#war ${DATE_TS}`);
   });
 
   test("drops a token that normalises to nothing", () => {
-    expect(buildHashtagLine({ ...empty, tags: "(...)" })).toBe(DATE_TS);
+    expect(buildHashtagLine({ ...empty, tags: ["(...)"] })).toBe(DATE_TS);
   });
 
   test("deduplicates across source fields", () => {
-    expect(buildHashtagLine({ ...empty, category: "war", tags: "war,peace,war" })).toBe(
+    expect(buildHashtagLine({ ...empty, category: "war", tags: ["war", "peace", "war"] })).toBe(
       `#war #peace ${DATE_TS}`,
     );
   });
 
   test("deduplicates after normalisation, so one hashtag never repeats", () => {
-    expect(buildHashtagLine({ ...empty, category: "real-estate", tags: "Real Estate" })).toBe(
+    expect(buildHashtagLine({ ...empty, category: "real-estate", tags: ["Real Estate"] })).toBe(
       `#real_estate ${DATE_TS}`,
     );
   });
 
   test("deduplicates a title word against a tag", () => {
     expect(
-      buildHashtagLine({ ...empty, tags: "sanctions", title: "New sanctions announced" }),
+      buildHashtagLine({ ...empty, tags: ["sanctions"], title: "New sanctions announced" }),
     ).toBe(`#sanctions #announced ${DATE_TS}`);
   });
 
   test("keeps first-seen order when deduplicating", () => {
-    expect(buildHashtagLine({ ...empty, category: "war", location: "Minsk", tags: "war" })).toBe(
+    expect(buildHashtagLine({ ...empty, category: "war", location: "Minsk", tags: ["war"] })).toBe(
       `#war #minsk ${DATE_TS}`,
     );
   });
@@ -148,7 +154,7 @@ describe("buildHashtagLine", () => {
 
   test("yields only the date and ts tags when every field is empty", () => {
     expect(
-      buildHashtagLine({ ...empty, category: "", location: "", peoples: "", tags: "", title: "" }),
+      buildHashtagLine({ ...empty, category: "", location: "", peoples: "", tags: [], title: "" }),
     ).toBe(DATE_TS);
   });
 
@@ -158,7 +164,7 @@ describe("buildHashtagLine", () => {
       category: "geopolitics",
       location: "Minsk",
       peoples: "Lukashenko",
-      tags: "war",
+      tags: ["war"],
       title: "Explosions reported",
     });
     for (const token of line.split(" ")) {
@@ -167,7 +173,7 @@ describe("buildHashtagLine", () => {
   });
 
   test("joins with a single space and neither leads nor trails with one", () => {
-    const line = buildHashtagLine({ ...empty, category: "a b", tags: "war,peace" });
+    const line = buildHashtagLine({ ...empty, category: "a b", tags: ["war", "peace"] });
     expect(line).toBe(line.trim());
     expect(line).not.toContain("  ");
   });
@@ -179,7 +185,7 @@ describe("buildHashtagLine", () => {
       category: "geopolitics",
       location: "Minsk, Belarus",
       peoples: "Lukashenko",
-      tags: "war,politics",
+      tags: ["war", "politics"],
       title: "Explosions reported overnight",
     };
     expect(buildHashtagLine(source)).toBe(buildHashtagLine(source));

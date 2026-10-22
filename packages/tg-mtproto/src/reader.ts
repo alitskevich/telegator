@@ -1,19 +1,16 @@
 import bigInt, { type BigInteger } from "big-integer";
 import { Api, utils } from "telegram";
 import type { Link } from "tg-domain/item";
-import type { ChannelPost, ChannelReader } from "tg-telegram/types";
+import type { ChannelPost, ChannelReader } from "tg-domain/types";
 import type { MessageClient, MessagePage } from "./types";
 
 /**
- * The `via: "mtproto"` reader: `ChannelReader` over a logged-in GramJS client.
- * It maps each message to the shape the web parser produces, so `transformPost`
- * cannot tell the two transports apart.
+ * The `type: "telegram"` reader: `ChannelReader` over a logged-in GramJS client.
+ * It maps each message to the `ChannelPost` every reader produces, so
+ * `transformPost` cannot tell the transports apart.
  */
 
-/**
- * One run reads at most a `t.me/s/` page's worth of posts, like the web reader:
- * a busy chat catches up over successive runs, not in one.
- */
+/** One run reads at most this many posts: a busy chat catches up over successive runs, not in one. */
 export const MTPROTO_PAGE_SIZE = 20;
 
 /** Link tokens are numbered from 1. */
@@ -42,7 +39,7 @@ export function pageAfter(afterId: string | undefined): MessagePage {
 }
 
 /**
- * The `[text](#N)` link tokens, from MTProto entities instead of `<a>` tags.
+ * The `[text](#N)` link tokens, from MTProto entities.
  *
  * A `MessageEntityUrl` is a bare link, a `MessageEntityTextUrl` a labelled one.
  * Offsets count UTF-16 code units, as JavaScript strings do. An entity
@@ -116,7 +113,7 @@ export function createMtprotoReader(client: MessageClient): ChannelReader {
   let dialogs: Promise<unknown> | undefined;
 
   return {
-    via: "mtproto",
+    type: "telegram",
     async read(channel, afterId) {
       if (NUMERIC_PEER_PATTERN.test(channel)) {
         dialogs ??= client.getDialogs();

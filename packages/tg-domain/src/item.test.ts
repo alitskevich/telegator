@@ -12,10 +12,9 @@ const scraped = {
   id: "yigal_levin/12345",
   body: "Explosions reported in [the capital](#1)",
   links: [{ id: 1, href: "https://example.test/a" }],
-  target: "telegator_news",
   date: "2026-08-29",
   category: "geopolitics",
-  tags: "war,politics",
+  tags: ["war", "politics"],
   kind: "post",
 };
 
@@ -72,11 +71,8 @@ describe("ScrapedItemSchema", () => {
     expect(ScrapedItemSchema.parse({ ...scraped, status: "legacy" })).not.toHaveProperty("status");
   });
 
-  /** Aggregate reads `item.target ?? "telegator_news"`, so absence is expected. */
-  test("allows an absent target", () => {
-    const { target: _omitted, ...rest } = scraped;
-
-    expect(ScrapedItemSchema.safeParse(rest).success).toBe(true);
+  test("strips a legacy target", () => {
+    expect(ScrapedItemSchema.parse({ ...scraped, target: "a" })).not.toHaveProperty("target");
   });
 });
 
@@ -145,6 +141,6 @@ describe("AnalyzedItemSchema", () => {
   });
 
   test("keeps the scraped tags rather than the AI's optional ones", () => {
-    expect(AnalyzedItemSchema.parse(analyzed).tags).toBe("war,politics");
+    expect(AnalyzedItemSchema.parse(analyzed).tags).toEqual(["war", "politics"]);
   });
 });

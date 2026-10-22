@@ -38,12 +38,16 @@ describe("route — outcomes", () => {
   });
 
   test("source tags survive alongside AI tags, with no duplicates", () => {
-    expect(normalizeTags("war,economy", "belarus,war")).toBe("war,economy,belarus");
+    expect(normalizeTags(["war", "economy"], ["belarus", "war"])).toEqual([
+      "war",
+      "economy",
+      "belarus",
+    ]);
   });
 
   test("source-only and AI-only tags both survive an absent counterpart", () => {
-    expect(normalizeTags(undefined, "belarus,minsk")).toBe("belarus,minsk");
-    expect(normalizeTags("war", undefined)).toBe("war");
+    expect(normalizeTags(undefined, ["belarus", "minsk"])).toEqual(["belarus", "minsk"]);
+    expect(normalizeTags(["war"], undefined)).toEqual(["war"]);
   });
 
   test("country is always uppercase or empty", () => {
@@ -55,12 +59,12 @@ describe("route — outcomes", () => {
 
   test("normalizeAnalyzed produces a payload AnalyzedItemSchema accepts", () => {
     const analyzed = normalizeAnalyzed(
-      scraped({ tags: "belarus,war" }),
-      classified({ country: "by", tags: "war,economy" }),
+      scraped({ tags: ["belarus", "war"] }),
+      classified({ country: "by", tags: ["war", "economy"] }),
     );
 
     expect(analyzed.country).toBe("BY");
-    expect(analyzed.tags).toBe("war,economy,belarus");
+    expect(analyzed.tags).toEqual(["war", "economy", "belarus"]);
     expect(() => AnalyzedItemSchema.parse(analyzed)).not.toThrow();
   });
 });
@@ -166,31 +170,30 @@ describe("route — the crime&law branch is currently dead", () => {
 });
 
 describe("normalizeAnalyzed", () => {
-  test("AI fields overwrite the scrape defaults, scrape identity fields (target included) survive", () => {
+  test("AI fields overwrite the scrape defaults, scrape identity fields survive", () => {
     const analyzed = normalizeAnalyzed(
-      scraped({ id: "chan/7", category: "operator-default", target: "a,b" }),
+      scraped({ id: "chan/7", category: "operator-default" }),
       classified({ category: "war", title: "Front line moves" }),
     );
 
     expect(analyzed.id).toBe("chan/7");
-    expect(analyzed.target).toBe("a,b");
     expect(analyzed.category).toBe("war");
     expect(analyzed.title).toBe("Front line moves");
   });
 
-  test("an empty merge yields an empty tag string, never undefined", () => {
+  test("an empty merge yields an empty tag list, never undefined", () => {
     const analyzed = normalizeAnalyzed(scraped({}), classified({}));
 
-    expect(analyzed.tags).toBe("");
+    expect(analyzed.tags).toEqual([]);
   });
 
   test("it does not mutate its inputs", () => {
-    const source = scraped({ tags: "belarus", category: "other" });
+    const source = scraped({ tags: ["belarus"], category: "other" });
     const ai = classified({ country: "by" });
 
     normalizeAnalyzed(source, ai);
 
-    expect(source.tags).toBe("belarus");
+    expect(source.tags).toEqual(["belarus"]);
     expect(source.category).toBe("other");
     expect(ai.country).toBe("by");
   });

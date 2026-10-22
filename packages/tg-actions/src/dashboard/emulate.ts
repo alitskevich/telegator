@@ -6,7 +6,7 @@ import { enqueue } from "tg-firebase/tasks";
 /**
  * *Emulate*: one fake post, queued for analyze as scrape would queue it, so the
  * pipeline can be watched without a live source. It is published like any
- * post: with no `target`, to `DEFAULT_TG_CHANNEL`.
+ * post: to the targets its AI tags match.
  */
 
 /** Plausible, weighty posts: the model reads them as important news, so they pass analyze. */

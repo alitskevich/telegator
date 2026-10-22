@@ -1,3 +1,5 @@
+import { SOURCE_TYPES, type SourceType } from "tg-enums/sourceType";
+import { TARGET_TYPES } from "tg-enums/targetType";
 import { MESSAGE_COLUMNS, SOURCE_COLUMNS, TARGET_COLUMNS } from "./columns";
 
 /**
@@ -11,9 +13,6 @@ const app = { name: "Telegator", tagline: "Telegram news pipeline" };
 /** The hash routes, in nav order. `page` is `@nav.page`. */
 const nav = [
   { id: "dashboard", name: "Dashboard", icon: "layout-dashboard" },
-  { id: "pipeline", name: "Pipeline", icon: "workflow" },
-  { id: "sources", name: "Sources", icon: "radio-tower" },
-  { id: "targets", name: "Targets", icon: "send" },
   { id: "messages", name: "Messages", icon: "newspaper" },
   { id: "audit", name: "Audit", icon: "scroll-text" },
 ];
@@ -22,16 +21,14 @@ const nav = [
 const labels: Record<string, string> = {
   id: "Id",
   status: "Status",
-  target: "Target",
+  tags: "Tags",
   category: "Category",
   teaser: "Teaser",
-  via: "Via",
   lastCount: "Last count",
   lastResult: "Last result",
   zeroYieldRuns: "Empty runs",
   title: "Title",
   date: "Date",
-  tgChannel: "Channel",
   memberCount: "Members",
   type: "Type",
   lastPostedDate: "Last posted",
@@ -47,17 +44,15 @@ const columnsOf = (ids: readonly string[]) =>
 
 const tables = {
   sources: {
-    title: "Sources",
-    subtitle: "Telegram channels the scraper polls",
+    title: "All sources",
+    subtitle: "Every reader's sources, in any status",
     noun: "source",
     empty: "No sources match",
     columns: columnsOf(SOURCE_COLUMNS),
   },
+  // No page of its own: the Publish node lists the targets.
   targets: {
-    title: "Targets",
-    subtitle: "Where aggregated messages are published",
     noun: "target",
-    empty: "No targets match",
     columns: columnsOf(TARGET_COLUMNS),
   },
   messages: {
@@ -113,6 +108,7 @@ const auth = {
 
 const dashboard = {
   title: "Pipeline health",
+  subtitle: "Every stage and its queue. Select one to act on it.",
   scraped: "Items scraped",
   analyzed: "Items analysed",
   skipped: "Items skipped",
@@ -130,24 +126,14 @@ const dashboard = {
 };
 
 const pipeline = {
-  title: "Pipeline",
-  subtitle: "Every stage, its queue and the items that failed. Select one to act on it.",
   inQueue: "in queue",
-  replay: "Replay",
-  replayMax: "Replay at most",
-  cleanup: "Discard all",
-  confirmCleanup: "Confirm: discard {count}",
-  noErrors: "No errors",
-  attempts: "{count} attempts",
   cause: "Cause",
-  analyse: "Analyse",
-  analyseAgain: "Analyse again",
-  likelyCause: "Likely cause",
-  proposedFix: "Proposed fix",
   scrapeNow: "Scrape now",
   emulate: "Emulate a post",
   resetIngest: "Reset ingest",
   confirmResetIngest: "Confirm: delete every item",
+  resetCursors: "Reset all cursors",
+  confirmResetCursors: "Confirm: reset every source",
   publishNow: "Publish now",
   publishMax: "Publish at most",
   runNow: "Run now",
@@ -169,7 +155,6 @@ const pipeline = {
   running: "running",
   failedTimes: "{count} failed",
   openMessages: "Open the publish backlog",
-  selectHint: "Select a stage to see what it does and what you can do.",
   item: {
     stage: "Stage",
     status: "Status",
@@ -182,12 +167,17 @@ const pipeline = {
   },
 };
 
+/** The Scrape node's tabs: `?tab=`, so a reload or a shared link shows the same one. */
+const sourceTabs = [
+  { id: "next", name: pipeline.sources },
+  { id: "all", name: tables.sources.title },
+];
+
 /** The text fields of the scraped payload; `id`, `links` and `kind` show only in the JSON. */
 const scrapedFields = [
   { id: "body", name: "Body", type: "textarea" },
   { id: "category", name: "Category", type: "text" },
-  { id: "tags", name: "Tags", type: "text" },
-  { id: "target", name: "Targets", type: "text" },
+  { id: "tags", name: labels.tags, type: "text" },
   { id: "image", name: "Image", type: "text" },
   { id: "date", name: "Date", type: "text" },
 ];
@@ -208,29 +198,87 @@ const payloadFields = {
   publish: [],
 };
 
+const sourceTypeNames: Record<SourceType, string> = {
+  telegram: "Telegram, user account",
+  gmail: "Gmail sender",
+};
+
+/** The option lists `Field.Enum` reads as `R.enums[typeSpec]`. */
+const enums = {
+  targetType: TARGET_TYPES.map((id) => ({ id, name: "Telegram channel" })),
+  sourceType: SOURCE_TYPES.map((id) => ({ id, name: sourceTypeNames[id] })),
+};
+
+/** The Publish node's target channels: the `Table` columns and the edit modal's `Forma` fields. */
+const telegram = {
+  empty: "No target channels yet",
+  // `Table` renders nothing with fewer than two columns.
+  columns: [
+    { id: "id", name: labels.id, width: "minmax(8rem, 1fr)" },
+    { id: "type", name: labels.type, width: "minmax(8rem, 1fr)" },
+    { id: "tags", name: labels.tags, width: "minmax(8rem, 1fr)" },
+    { id: "lastPostedDate", name: labels.lastPostedDate, width: "minmax(8rem, 1fr)" },
+    { id: "lastPostedMessageId", name: labels.lastPostedMessageId, width: "minmax(8rem, 1fr)" },
+  ],
+  // Every field; the ones publish owns are read-only.
+  fields: [
+    { id: "id", name: labels.id, type: "text", disabled: true },
+    { id: "type", name: labels.type, type: "enum", typeSpec: "targetType" },
+    {
+      id: "tags",
+      name: labels.tags,
+      type: "text",
+      placeholder: "Comma-separated. Empty: receives nothing",
+    },
+    { id: "lastPostedDate", name: labels.lastPostedDate, type: "text", disabled: true },
+    { id: "lastPostedMessageId", name: labels.lastPostedMessageId, type: "text", disabled: true },
+    {
+      id: "messageTemplate",
+      name: labels.messageTemplate,
+      type: "textarea",
+      placeholder: "Empty: the built-in layout",
+    },
+  ],
+};
+
+/** A source in the Dashboard page's edit modal: every field; the ones scrape owns are read-only. */
+/** The Scrape node's All sources `Table`: the columns to scan by; the modal shows the rest. */
+const sourceColumns = [
+  { id: "id", name: labels.id, width: "minmax(10rem, 2fr)" },
+  { id: "type", name: labels.type, width: "minmax(6rem, 1fr)" },
+  { id: "status", name: labels.status, width: "minmax(5rem, 1fr)" },
+  { id: "lastCount", name: labels.lastCount, width: "minmax(6rem, 1fr)" },
+];
+
+const sourceFields = [
+  { id: "id", name: labels.id, type: "text", disabled: true },
+  { id: "status", name: labels.status, type: "text", placeholder: "ok enables polling" },
+  { id: "type", name: labels.type, type: "enum", typeSpec: "sourceType" },
+  { id: "category", name: labels.category, type: "text" },
+  { id: "tags", name: labels.tags, type: "text", placeholder: "Comma-separated" },
+  { id: "teaser", name: labels.teaser, type: "text" },
+  { id: "lastCount", name: labels.lastCount, type: "text", disabled: true },
+  { id: "lastResult", name: labels.lastResult, type: "text", disabled: true },
+  { id: "zeroYieldRuns", name: labels.zeroYieldRuns, type: "text", disabled: true },
+];
+
 /**
- * The pipeline as the Pipeline page draws it (docs/telegator.md §1): the clock,
- * four stages, then Telegram; the Errors node stands apart. `metric` names an `Overview` field; `queue` names
- * the stage's lane in `ingest`.
+ * The pipeline as the Dashboard page draws it (docs/telegator.md §1): scrape, then
+ * three stages; failed items live on the Audit page. `metric`
+ * names an `Overview` field; `queue` names the stage's lane in `ingest`; `sources` names the sources its panel lists.
  */
 const stages = [
-  {
-    id: "schedule",
-    kind: "trigger",
-    icon: "timer",
-    title: "Schedule",
-    caption: "Cloud Scheduler, every 30 min",
-    detail: "Starts a scrape on a clock. Deployed disabled; a deploy opts in.",
-  },
   {
     id: "scrape",
     kind: "function",
     icon: "download",
     title: "Scrape",
-    caption: "Polls each source",
+    caption: "Via a user account",
     metric: "scraped",
     metricLabel: "scraped, 24 h",
-    detail: "Reads new posts from every enabled source and queues each one for analysis.",
+    detail:
+      "Reads new posts from the Telegram sources (channels, groups and chats) through a logged-in Telegram account, and queues each one for analysis.",
+    sources: "telegram",
   },
   {
     id: "analyze",
@@ -259,44 +307,39 @@ const stages = [
     kind: "function",
     icon: "send",
     title: "Publish",
-    caption: "Posts to every target",
+    caption: "Posts to every Telegram target",
     metric: "published",
     metricLabel: "published, all time",
     queue: "publish",
     detail:
-      "Sends each settled story to its target channels and records every post. Runs 5 minutes after the last merge, one at a time.",
-  },
-  {
-    id: "telegram",
-    kind: "sink",
-    icon: "message-circle",
-    title: "Telegram",
-    caption: "Target channels",
-    detail: "Where the stories land. The Targets page lists them.",
-  },
-  {
-    id: "errors",
-    kind: "errors",
-    icon: "triangle-alert",
-    title: "Errors",
-    caption: "Items that used up their attempts",
-    metric: "errors",
-    metricLabel: "across all stages",
-    detail:
-      "Every stage's failed items, with the error and its cause. Analyse asks the model for the likely cause and a fix; Run sends one item back to its stage.",
+      "Sends each settled story to every channel whose tags it carries, and records every post. Runs 5 minutes after the last merge, one at a time. Add a channel below, or select one to edit its tags or template.",
   },
 ] as const;
 
 const records = {
-  resetAll: "Reset all cursors",
-  confirmReset: "Confirm: reset {count} sources",
   republish: "Re-publish",
+  delete: "Delete",
 };
 
 const audit = {
   title: "Audit",
-  subtitle: "Every send Telegram rejected, newest first. Kept for 30 days.",
-  empty: "No rejected sends",
+  subtitle: "The items that used up their attempts, and the record of what went wrong.",
+  failed: "Failed items",
+  failedHint:
+    "Every stage's failed items, oldest first, with the error and its cause. Analyse asks the model for the likely cause and a fix; Run sends one item back to its stage.",
+  noErrors: "No errors",
+  attempts: "{count} attempts",
+  analyse: "Analyse",
+  analyseAgain: "Analyse again",
+  likelyCause: "Likely cause",
+  proposedFix: "Proposed fix",
+  replay: "Replay",
+  replayMax: "Replay at most",
+  cleanup: "Discard all",
+  confirmCleanup: "Confirm: discard {count}",
+  history: "History",
+  historyHint: "Every rejected send and every failed item, newest first. Kept for 30 days.",
+  empty: "Nothing went wrong in the last 30 days",
   rejected: "Rejected sends",
   open: "Rejected sends not yet followed by a successful post",
 };
@@ -330,12 +373,17 @@ export const resources = {
   nav,
   tables,
   messageTabs,
+  sourceTabs,
   common,
   auth,
   dashboard,
   pipeline,
   stages,
   payloadFields,
+  enums,
+  telegram,
+  sourceColumns,
+  sourceFields,
   records,
   audit,
   toasts,

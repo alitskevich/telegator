@@ -20,19 +20,11 @@ const byId = (nodes: ReturnType<typeof pipelineNodes>) =>
   Object.fromEntries(nodes.map((node) => [node.id, node]));
 
 describe("pipelineNodes", () => {
-  test("draws the chain schedule to Telegram, arrows between, and the Errors node apart", () => {
+  test("draws the chain scrape to publish, an arrow into every node but the first", () => {
     const nodes = pipelineNodes(resources.stages, null, null);
 
-    expect(nodes.map((node) => node.id)).toEqual([
-      "schedule",
-      "scrape",
-      "analyze",
-      "aggregate",
-      "publish",
-      "telegram",
-      "errors",
-    ]);
-    expect(nodes.map((node) => node.arrow)).toEqual([false, true, true, true, true, true, false]);
+    expect(nodes.map((node) => node.id)).toEqual(["scrape", "analyze", "aggregate", "publish"]);
+    expect(nodes.map((node) => node.arrow)).toEqual([false, true, true, true]);
   });
 
   test("a stage shows its count, and its queue and pause when it has a lane", () => {
@@ -44,23 +36,11 @@ describe("pipelineNodes", () => {
     expect(nodes.publish).toMatchObject({ value: 40, queued: 2 });
   });
 
-  test("errors show on the Errors node alone, and raise its alert", () => {
-    const nodes = byId(pipelineNodes(resources.stages, overview, null));
-
-    expect(nodes.errors).toMatchObject({ value: 3, valueLabel: "across all stages", alert: true });
-    expect(nodes.publish?.alert).toBe(false);
-    expect(
-      byId(pipelineNodes(resources.stages, { ...overview, errors: 0 }, null)).errors?.alert,
-    ).toBe(false);
-  });
-
   /** An unread count is not an empty one, and must not render as `0`. */
-  test("before the first load every number is unknown and nothing alerts", () => {
+  test("before the first load every number is unknown", () => {
     const nodes = pipelineNodes(resources.stages, null, null);
 
-    expect(nodes.every((node) => node.value === null && node.queued === null && !node.alert)).toBe(
-      true,
-    );
+    expect(nodes.every((node) => node.value === null && node.queued === null)).toBe(true);
   });
 
   test("marks the selected node", () => {
