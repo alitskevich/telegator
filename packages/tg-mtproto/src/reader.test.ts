@@ -1,5 +1,6 @@
 import bigInt, { type BigInteger } from "big-integer";
 import { Api } from "telegram";
+import { BinaryReader } from "telegram/extensions";
 import { describe, expect, test } from "vitest";
 import {
   createMtprotoReader,
@@ -88,6 +89,12 @@ describe("toChannelPost", () => {
       forwardedFrom: undefined,
       postedAt: "2026-10-20T12:00:00.000Z",
     });
+  });
+
+  test("maps a message as decoded from the wire, where absent fields are null", () => {
+    const decoded = new BinaryReader(message({}).getBytes()).tgReadObject();
+
+    expect(toChannelPost(decoded)).toMatchObject({ body: "hello", forwardedFrom: undefined });
   });
 
   test("marks a forward by origin name, else by peer id, else as unknown", () => {

@@ -1,0 +1,13 @@
+{
+  "name": "tg-seed",
+  "version": "1.0.0",
+  "description": "Snapshots of the operator-curated collections: download to JSON, upload back.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "tg-firebase": "*"
+  }
+}

@@ -25,7 +25,7 @@ graphify-out/
 # os
 .DS_Store
 
-# operational exports for scripts/seed.ts; data, not source
+# Firestore snapshots of `npm run seed:*` (packages/tg-seed/data); data, not source
 data/
 
 # Browser-check scratch (Playwright MCP screenshots and harnesses).

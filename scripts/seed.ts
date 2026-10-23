@@ -1,70 +1,51 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { SourceSchema } from "tg-domain/source";
-import { TargetSchema } from "tg-domain/target";
-import { sources, targets } from "tg-firebase/db";
 
 /**
- * `npm run seed -- <dir>` — loads `sources` and `targets` from the DynamoDB
- * scan exports in `<dir>` (`sources.dynamodb.json`, `targets.dynamodb.json`).
- * Messages are not carried over. Dry run unless `--write`.
+ * Snapshots of the operator-curated collections (`tg-seed`), one JSON file per
+ * collection in `packages/tg-seed/data/<env>/` (git-ignored).
  *
- * Firestore is the emulator when FIRESTORE_EMULATOR_HOST is set, else production.
+ *   npm run seed:download -- dev|prod
+ *   npm run seed:upload -- dev|prod [--write]   # dry run unless --write
+ *
+ * `dev` is the emulator `npm run dev` holds; `prod` is production through
+ * `gcloud auth application-default login`. An upload replaces each collection:
+ * documents missing from its file are deleted; a collection with no file is skipped.
+ * `npm run dev` uploads the dev snapshot once the emulators are ready.
  */
 
-type AttributeValue = Record<string, unknown>;
-
-/** DynamoDB's typed JSON (`{"S": "x"}`, `{"N": "1"}`, …) to a plain value. */
-function unmarshal(value: AttributeValue): unknown {
-  const [type, inner] = Object.entries(value)[0] ?? [];
-  switch (type) {
-    case "S":
-    case "BOOL":
-      return inner;
-    case "N":
-      return Number(inner);
-    case "NULL":
-      return null;
-    case "L":
-      return (inner as AttributeValue[]).map(unmarshal);
-    case "M":
-      return unmarshalItem(inner as Record<string, AttributeValue>);
-    case "SS":
-      return inner;
-    case "NS":
-      return (inner as string[]).map(Number);
-    default:
-      throw new Error(`unsupported DynamoDB type: ${type}`);
-  }
-}
-
-function unmarshalItem(item: Record<string, AttributeValue>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(item).map(([key, value]) => [key, unmarshal(value)]));
-}
-
-function readScan(dir: string, table: string): Record<string, unknown>[] {
-  const scan = JSON.parse(readFileSync(join(dir, `${table}.dynamodb.json`), "utf8"));
-  return (scan.Items as Record<string, AttributeValue>[]).map(unmarshalItem);
-}
+const DEV_FIRESTORE_HOST = "127.0.0.1:8180";
+const USAGE = "usage: tsx scripts/seed.ts download|upload dev|prod [--write]";
 
 async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-  const dir = args.find((arg) => !arg.startsWith("--"));
-  if (dir === undefined) throw new Error("usage: npm run seed -- <export dir> [--write]");
-  const write = args.includes("--write");
+  const [command, env] = process.argv.slice(2);
+  const write = process.argv.includes("--write");
+  if (command !== "download" && command !== "upload") throw new Error(USAGE);
+  if (env !== "dev" && env !== "prod") throw new Error(USAGE);
 
-  const sourceRows = readScan(dir, "sources").map((row) => SourceSchema.parse(row));
-  const targetRows = readScan(dir, "targets").map((row) => TargetSchema.parse(row));
-  console.log(`firestore=${process.env.FIRESTORE_EMULATOR_HOST ?? "production"}`);
-  console.log(`${sourceRows.length} sources, ${targetRows.length} targets`);
+  // Set before `tg-firebase` loads: the Admin SDK reads it once, at start.
+  if (env === "dev") process.env.FIRESTORE_EMULATOR_HOST = DEV_FIRESTORE_HOST;
+  else delete process.env.FIRESTORE_EMULATOR_HOST;
+  const { SEED_COLLECTIONS, download, load, store, upload } = await import("tg-seed/seed");
 
-  if (!write) {
-    console.log("dry run — pass --write to apply");
-    return;
+  const dir = join(import.meta.dirname, "../packages/tg-seed/data", env);
+  console.log(`${command} ${env} (${process.env.FIRESTORE_EMULATOR_HOST ?? "production"})`);
+
+  for (const name of SEED_COLLECTIONS) {
+    if (command === "download") {
+      const docs = await download(name);
+      await store(dir, name, docs);
+      console.log(`${name}: ${Object.keys(docs).length} downloaded`);
+    } else {
+      const docs = await load(dir, name);
+      if (docs === undefined) {
+        console.log(`${name}: no snapshot, skipped`);
+        continue;
+      }
+      const { written, deleted } = await upload(name, docs, write);
+      console.log(`${name}: ${written} to write, ${deleted} to delete`);
+    }
   }
-  for (const row of sourceRows) await sources.put(row);
-  for (const row of targetRows) await targets.put(row);
-  console.log("written");
+  if (command === "upload") console.log(write ? "written" : "dry run — pass --write to apply");
 }
 
 await main().catch((error: unknown) => {

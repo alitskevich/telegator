@@ -32,10 +32,13 @@
     "postinstall": "./scripts/link-packages.sh arrmatura arrmatura-web ultimus",
     "dev:functions": "npm -w tg-functions run watch",
     "dev:emulators": "./scripts/emulators.sh",
-    "dev:web": "tsx scripts/web.ts --serve && npm run open",
+    "dev:web": "tsx scripts/web.ts --serve",
+    "dev:open": "npx --yes wait-on http-get://127.0.0.1:4000 && npm run seed:upload -- dev --write && npm run open",
     "open": "npx --yes wait-on http://localhost:${PORT:-8080} && open http://localhost:${PORT:-8080}",
     "stop": "lsof -t -sTCP:LISTEN -i tcp:${PORT:-8080},9099,9199,5000,5001,8180,4000 | xargs -r kill -9",
-    "seed": "tsx scripts/seed.ts"
+    "seed:download:prod": "tsx scripts/seed.ts download prod --write",
+    "seed:download:dev": "tsx scripts/seed.ts download dev --write",
+    "seed:upload:dev": "tsx scripts/seed.ts upload dev"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

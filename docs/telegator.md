@@ -193,15 +193,16 @@ npm run dev              # emulators + functions watch + console on :8080
 - the **emulators**: Auth 9099, Functions 5001, Firestore 8180, Tasks 9499, UI 4000. Data persists in `.emulator/`.
 - an esbuild **watch** of `tg-functions`. The Functions emulator reloads on every rebuild.
 - the **console** with live reload at `http://localhost:8080`.
+- once the emulators are ready, `seed:upload -- dev --write` restores the dev snapshot (if any), then the console opens.
 
 | Need | Do |
 | --- | --- |
 | Secrets for the emulator | `packages/tg-functions/.secret.local` (git-ignored), linked from `~/.keys/telegator-functions-secrets.env`. `TELEGRAM_BOT_TOKEN` there is a placeholder, so local runs never post to live channels. Put a test bot's token there to try publishing. |
 | Sign in locally | Press *Sign in*. The Auth emulator signs in `dev@example.com`, and the first emulator sign-in is an enabled admin. |
-| Data | `FIRESTORE_EMULATOR_HOST=127.0.0.1:8180 npm run seed -- <dir> --write` loads `sources` and `targets` from DynamoDB scan exports. |
+| Data | `npm run seed:download -- dev\|prod` saves `sources`, `targets` and `users` to `packages/tg-seed/data/<env>/<collection>.json` (git-ignored). `npm run seed:upload -- dev\|prod --write` makes each collection match its file, deleting documents missing from it; dry run without `--write`. |
 | A scrape | *Scrape now* on the Dashboard page's Scrape node. Scheduled functions do not fire in the emulator, so neither does `sweep`: drive the flow from the Dashboard page instead. *Run now* runs a stage's delayed and retried items, *Pause* and *Step* walk items through one at a time, *Run* on a failed item of the Audit page re-runs it. |
 
-Scripts (`seed`, `mcp`, `cursors:now`, `autofix`) use the emulator when `FIRESTORE_EMULATOR_HOST` is set. Otherwise they use production through `gcloud auth application-default login`.
+Scripts (`mcp`, `cursors:now`, `autofix`) use the emulator when `FIRESTORE_EMULATOR_HOST` is set; `seed:*` picks it by its `dev|prod` argument. Otherwise they use production through `gcloud auth application-default login`.
 
 `npm run autofix` reads the `ingest` errors, groups them by stage and message, and asks Claude Code (`claude -p`, in this repo) for each group's root cause: `data` (corrected payloads), `code` (a code fix) or `none`. Dry run unless `--apply`; then Claude may edit code (edit tools and the four gates only), corrected payloads are saved through `editItem` and run again, and Claude's reading is kept as each item's diagnosis. A code fix needs a deploy, then *Replay*.
 

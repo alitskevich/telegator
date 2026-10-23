@@ -73,11 +73,16 @@ export function tokeniseLinks(
   return { body: body + text.slice(cursor), links };
 }
 
-/** The origin's display name, else its peer id: either is a non-empty marker. */
+/**
+ * The origin's display name, else its peer id: either is a non-empty marker.
+ *
+ * GramJS decodes an absent optional field as `null`, though its types say
+ * `undefined`, so every check here is a falsy one.
+ */
 function forwardOrigin(header: Api.TypeMessageFwdHeader | undefined): string | undefined {
-  if (header === undefined) return undefined;
-  if (header.fromName !== undefined && header.fromName !== "") return header.fromName;
-  return header.fromId === undefined ? UNKNOWN_FORWARD_ORIGIN : utils.getPeerId(header.fromId);
+  if (!header) return undefined;
+  if (header.fromName) return header.fromName;
+  return header.fromId ? utils.getPeerId(header.fromId) : UNKNOWN_FORWARD_ORIGIN;
 }
 
 /**
