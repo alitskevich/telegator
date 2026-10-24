@@ -197,7 +197,7 @@ npm run dev              # emulators + functions watch + console on :8080
 
 | Need | Do |
 | --- | --- |
-| Secrets for the emulator | `packages/tg-functions/.secret.local` (git-ignored), linked from `~/.keys/telegator-functions-secrets.env`. `TELEGRAM_BOT_TOKEN` there is a placeholder, so local runs never post to live channels. Put a test bot's token there to try publishing. |
+| Secrets for the emulator | `packages/tg-functions/.secret.local` (git-ignored), linked from `~/.keys/.env` (shared by all projects). `TELEGRAM_BOT_TOKEN` there is a placeholder, so local runs never post to live channels. Put a test bot's token there to try publishing. |
 | Sign in locally | Press *Sign in*. The Auth emulator signs in `dev@example.com`, and the first emulator sign-in is an enabled admin. |
 | Data | `npm run seed:download -- dev\|prod` saves `sources`, `targets` and `users` to `packages/tg-seed/data/<env>/<collection>.json` (git-ignored). `npm run seed:upload -- dev\|prod --write` makes each collection match its file, deleting documents missing from it; dry run without `--write`. |
 | A scrape | *Scrape now* on the Dashboard page's Scrape node. Scheduled functions do not fire in the emulator, so neither does `sweep`: drive the flow from the Dashboard page instead. *Run now* runs a stage's delayed and retried items, *Pause* and *Step* walk items through one at a time, *Run* on a failed item of the Audit page re-runs it. |
@@ -254,7 +254,7 @@ Turns YouTube videos into knowledge in a docs repo. You save a video to one play
 
 **Setup**, once:
 
-1. In the Google Cloud console of `telegator-581db`, enable the *YouTube Data API v3*. Create an OAuth client of type *Desktop app*, and put its id and secret in `~/.keys/yt-client-id.key` and `~/.keys/yt-client-secret.key`.
+1. In the Google Cloud console of `telegator-581db`, enable the *YouTube Data API v3*. Create an OAuth client of type *Desktop app*, and put its id and secret in `~/.keys/.env` as `YT_CLIENT_ID` and `YT_CLIENT_SECRET`.
 2. Set the OAuth consent screen to **In production**. In *Testing*, the refresh token expires after 7 days.
 3. `npm run youtube:login`: sign in as the playlist owner. This stores `YOUTUBE_OAUTH`.
 4. Set `YOUTUBE_PLAYLIST_ID` in `packages/tg-functions/.env` and redeploy the functions.
