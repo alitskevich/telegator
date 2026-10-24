@@ -29,7 +29,7 @@
     "youtube:absorb": "tsx scripts/youtube-absorb.ts",
     "gmail:login": "export GOOGLE_CLIENT_ID=$(cat $HOME/.keys/yt-client-id.key) GOOGLE_CLIENT_SECRET=$(cat $HOME/.keys/yt-client-secret.key) && tsx scripts/gmail-login.ts",
     "smoke:openrouter": "export OPENROUTER_API_KEY=$(cat $HOME/.keys/openrouter-api.key) && tsx scripts/smoke-openrouter.ts",
-    "postinstall": "./scripts/link-packages.sh arrmatura arrmatura-web ultimus",
+    "postinstall": "../proton/ops/link-modules.sh arrmatura arrmatura-web ultimus",
     "dev:functions": "npm -w tg-functions run watch",
     "dev:emulators": "./scripts/emulators.sh",
     "dev:web": "tsx scripts/web.ts --serve",

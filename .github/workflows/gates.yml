@@ -21,6 +21,12 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Check out proton
+        # Shared scripts, run as ../proton/ops by `postinstall`. Public: no token.
+        run: |
+          git clone --depth 1 https://github.com/alitskevich/proton.git ../proton
+          cd ../proton && npm ci
+
       - run: npm ci
 
       # ── The four gates, in CLAUDE.md's order. All four, never three. ────────
