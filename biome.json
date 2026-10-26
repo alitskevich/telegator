@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/node_modules", "!package-lock.json", "!**/dist", "!.emulator"]
+    "includes": ["**", "!**/*.md", "!**/node_modules", "!package-lock.json", "!**/dist", "!.emulator"]
   },
   "formatter": {
     "enabled": true,
