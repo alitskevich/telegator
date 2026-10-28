@@ -21,7 +21,6 @@ const NEW_TYPE: Readonly<Record<string, SourceType>> = {
   mtproto: "telegram",
   telegram_channel: "telegram",
   telegram_mtproto: "telegram",
-  gmail: "gmail",
 };
 
 const isStale = (doc: QueryDocumentSnapshot): boolean =>

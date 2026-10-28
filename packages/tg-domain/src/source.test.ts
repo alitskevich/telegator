@@ -125,14 +125,14 @@ describe("tags and type", () => {
 
   /** An operator chooses the reader; only the known ones are accepted. */
   test("SourceConfigInput accepts a known type and rejects an unknown one", () => {
-    expect(SourceConfigInput.parse({ type: "gmail" })).toEqual({ type: "gmail" });
+    expect(SourceConfigInput.parse({ type: "telegram" })).toEqual({ type: "telegram" });
     expect(SourceConfigInput.safeParse({ type: "telegram_channel" }).success).toBe(false);
+    expect(SourceConfigInput.safeParse({ type: "gmail" }).success).toBe(false);
     expect(SourceConfigInput.safeParse({ type: "rss" }).success).toBe(false);
   });
 
   test("sourceType reads an absent type as telegram", () => {
     expect(sourceType(SourceSchema.parse(seedRecord))).toBe("telegram");
-    expect(sourceType(SourceSchema.parse({ ...seedRecord, type: "gmail" }))).toBe("gmail");
   });
 
   test("SourceConfigInput accepts tags and rejects target and tgChannel", () => {

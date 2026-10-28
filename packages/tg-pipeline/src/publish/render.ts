@@ -22,17 +22,11 @@ function substituteLinks(escapedSummary: string, links: MemberBlock["links"]): s
   });
 }
 
-/** A Gmail source's id is the sender's address; a Telegram username cannot hold `@`. */
-const isMailSender = (channel: string): boolean => channel.includes("@");
-
 /**
  * One member block: `🔘 {summary} - <a href="https://t.me/{itemId}">@{channel}</a>`.
- * A mail has no public link, so its block ends `- ✉ {sender}`.
  */
 export function renderMember(itemId: string, block: MemberBlock): string {
   const content = substituteLinks(escapeHtml(block.summary), block.links);
-  if (isMailSender(block.channel)) return `🔘 ${content} - ✉ ${escapeHtml(block.channel)}`;
-
   const href = `https://t.me/${escapeHtml(itemId)}`;
 
   return `🔘 ${content} - <a href="${href}">@${escapeHtml(block.channel)}</a>`;

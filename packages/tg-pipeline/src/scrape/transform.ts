@@ -12,7 +12,7 @@ import type { ItemKind } from "tg-enums/itemKind";
  * date, and sets `kind`.
  */
 
-/** Every reader (MTProto, Gmail) produces `ChannelPost`, so this cannot tell them apart. */
+/** What the MTProto reader produces. */
 export type TransformInput = ChannelPost;
 
 /** Posts older than this are obsolete. */

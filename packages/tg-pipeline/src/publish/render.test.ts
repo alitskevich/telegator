@@ -61,15 +61,6 @@ describe("renderMember", () => {
     expect(rendered.match(/<a /g)).toHaveLength(1);
   });
 
-  test("a mail member names its sender without a link", () => {
-    const rendered = renderMember(
-      "news@e.by/1792500000000",
-      member({ summary: "Выбух", channel: "news@e.by" }),
-    );
-
-    expect(rendered).toBe("🔘 Выбух - ✉ news@e.by");
-  });
-
   test("degrades every token when the member has no links at all", () => {
     const rendered = renderMember("chan/7", member({ summary: "[a](#1) [b](#2)", links: [] }));
 

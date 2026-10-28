@@ -1,9 +1,8 @@
 /**
  * How a source is read. `telegram` reads through a logged-in user account
- * (MTProto, GramJS), so it reaches channels, groups and chats alike. `gmail`
- * reads one sender's inbox mails; the source id is that address.
+ * (MTProto, GramJS), so it reaches channels, groups and chats alike.
  */
-export const SOURCE_TYPES = ["telegram", "gmail"] as const;
+export const SOURCE_TYPES = ["telegram"] as const;
 
 export type SourceType = (typeof SOURCE_TYPES)[number];
 

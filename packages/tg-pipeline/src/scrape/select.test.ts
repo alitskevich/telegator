@@ -165,13 +165,8 @@ describe("selectSources — cap and ordering", () => {
   test("selects only the calling reader's sources", () => {
     const legacy = source({ id: "legacy" });
     const telegram = source({ id: "telegram", type: "telegram" });
-    const gmail = source({ id: "gmail", type: "gmail" });
 
-    expect(ids(selectSources([legacy, telegram, gmail], NOW, "telegram"))).toEqual([
-      "legacy",
-      "telegram",
-    ]);
-    expect(ids(selectSources([legacy, telegram, gmail], NOW, "gmail"))).toEqual(["gmail"]);
+    expect(ids(selectSources([legacy, telegram], NOW, "telegram"))).toEqual(["legacy", "telegram"]);
   });
 
   test("does not mutate or reorder the caller's array", () => {

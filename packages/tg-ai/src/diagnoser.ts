@@ -19,7 +19,7 @@ export const parseDiagnosis = (response: unknown): ErrorDiagnosis =>
 
 const SYSTEM_PROMPT =
   "You support the operator of Telegator, a news pipeline on Firebase: scrape " +
-  "(Telegram over MTProto, Gmail) feeds analyze (a model classifies each post), " +
+  "(Telegram over MTProto) feeds analyze (a model classifies each post), " +
   "which feeds aggregate (dedup into stories in Firestore), which feeds publish (the " +
   "Telegram Bot API posts to target channels). One item failed every attempt of a stage. " +
   "From its stage, error, cause and payload, say what went wrong, the most likely root " +

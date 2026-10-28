@@ -1,6 +1,6 @@
 import { sources } from "tg-firebase/db";
 import { ingestRef } from "tg-firebase/ingest";
-import { COLD_INTERVAL_MS, WARM_INTERVAL_MS } from "tg-pipeline/scrape/select";
+import { WARM_INTERVAL_MS } from "tg-pipeline/scrape/select";
 import { beforeEach, describe, expect, test } from "vitest";
 import { clearFirestore } from "../../../../test/support";
 import {
@@ -52,11 +52,9 @@ describe("inspectSources", () => {
     const now = 1_700_000_000_000;
     await sources.patch("warm", { status: "ok", lastCount: 3, lastUpdated: now });
     await sources.patch("hot", { status: "ok", lastCount: 25, lastUpdated: now });
-    await sources.patch("mail", { status: "ok", type: "gmail" });
     await sources.patch("off", { status: "off" });
 
     expect(await inspectSources(now)).toEqual([
-      { id: "mail", type: "gmail", dueAt: COLD_INTERVAL_MS, next: true, lastCount: 0 },
       { id: "hot", type: "telegram", dueAt: now, next: true, lastCount: 25 },
       {
         id: "warm",

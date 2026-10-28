@@ -4,9 +4,7 @@ description: "How the Telegram news pipeline works on Firebase: data, stages, AI
 keywords: [telegator, firebase, firestore, cloud-functions, openrouter, telegram]
 ---
 
-# Telegator
-
-Telegator collects posts from Telegram channels and groups, and from Gmail senders, and asks an AI model to classify each one. It groups the posts that report the same story into one message and publishes that message to target channels. When more sources report the story, the message is **edited in place**. Operators use a web console to watch the pipeline and step in.
+Telegator collects posts from Telegram channels and groups and asks an AI model to classify each one. It groups the posts that report the same story into one message and publishes that message to target channels. When more sources report the story, the message is **edited in place**. Operators use a web console to watch the pipeline and step in.
 
 The behaviour, stated precisely enough to rebuild the system, is in the [functional spec](spec/README.md).
 
@@ -51,7 +49,7 @@ All ids that contain `/` (`channel/12345`) are stored with `~` in the document i
 | `id` | Channel username; also the scrape URL segment. |
 | `status` | `ok` enables polling. Any other value disables it. |
 | `category`, `tags`, `teaser` | Operator settings stamped onto every post. `tags` is an array; publish routes by it (§3.4). `teaser` is boilerplate stripped from the body. |
-| `type` | The reader: `telegram` (a logged-in account over MTProto, default) or `gmail` (one sender's mail; the id is the sender's address). Was `via` (`web`, `mtproto`, `gmail`), then `telegram_channel` / `telegram_mtproto`; `npm run migrate:source-type` folds stored docs into `telegram`. |
+| `type` | The reader: `telegram` (a logged-in account over MTProto, default). Was `via` (`web`, `mtproto`), then `telegram_channel` / `telegram_mtproto`; `npm run migrate:source-type` folds stored docs into `telegram`. |
 | `lastItemId` | Newest post id seen. The `?after=` cursor and **the only duplicate guard** on the way in. |
 | `lastCount`, `lastUpdated`, `lastResult` | Last poll: post count, epoch ms, ISO time of success. |
 | `zeroYieldRuns`, `lastNonZeroCount` | Empty polls in a row, and the last non-empty count. Together they detect a stale source. |
@@ -104,7 +102,7 @@ Each task stage drains its own `ingest` items. A drain holds the stage's lease (
 
 | Function | Trigger | Attempts | Concurrency |
 | --- | --- | --- | --- |
-| `scrape`, `scrapeGmail` | every 30 min, if `SCRAPE_ENABLED` | — | — |
+| `scrape` | every 30 min, if `SCRAPE_ENABLED` | — | — |
 | `ingest`, `sweep` → analyze | `ingest`, stage `analyze` | 3 | 5 |
 | `ingest`, `sweep` → aggregate | `ingest`, stage `aggregate` | 3 | **1** |
 | `ingest`, `sweep` → publish | `ingest`, stage `publish` | 5 | **1** |
@@ -118,7 +116,6 @@ Each task stage drains its own `ingest` items. A drain holds the stage's lease (
 - **Kinds.** `forward`, `empty`, and `obsolete` (posted more than 3 days ago, or with no date) are dropped with a counter. Only `post` is enqueued.
 - **Cursor.** Written only when every enqueue succeeded, so a failure retries the window next run.
 - **Stale source.** 3 empty runs on a source that once yielded counts `SourceStale`.
-- **Gmail** (`tg-gmail/`). The Gmail API searches `in:inbox from:{id}`, read-only. A post is one mail: the subject, then the plain-text part (else the HTML part), capped at 10,000 characters. Its id is the mail's `internalDate` in ms, which is also the cursor (`after:`). Mail is never marked read or moved. A published mail member reads `✉ {sender}`, with no link.
 
 ### 3.2 analyze
 
@@ -222,7 +219,7 @@ Tests never touch the network. Pure logic is unit-tested, and Firestore code run
 One Firebase project, `telegator-581db`. Functions run in `us-central1`, next to Firestore (`nam5`).
 
 1. The project must be on the **Blaze** plan: Functions and Scheduler need it.
-2. Set the secrets once: `firebase functions:secrets:set OPENROUTER_API_KEY`, the same for `TELEGRAM_BOT_TOKEN`, `npm run mtproto:login` for `MTPROTO_SESSION`, `npm run youtube:login` for `YOUTUBE_OAUTH` (§10), and `npm run gmail:login` for `GMAIL_OAUTH`. The Gmail login reuses the YouTube Desktop OAuth client (§10, setup steps 1–2); enable the *Gmail API* in the same project first.
+2. Set the secrets once: `firebase functions:secrets:set OPENROUTER_API_KEY`, the same for `TELEGRAM_BOT_TOKEN`, `npm run mtproto:login` for `MTPROTO_SESSION`, and `npm run youtube:login` for `YOUTUBE_OAUTH` (§10).
 3. Enable the Google provider in Firebase Auth. Add its OAuth web client id to `firebaseConfig.googleClientId` in `tg-configs/firebase.ts`, and list the site's origins on that client.
 4. `npm run deploy`: builds both bundles, then deploys hosting, functions, Firestore rules, indexes and the `ingest.expireAt` and `audit.expireAt` TTL policies.
 5. Sign in once, then set your `users/{uid}` to `{enabled: true, roles: ["admin"]}` in the Firestore console.

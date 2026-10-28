@@ -45,7 +45,6 @@ These look like bugs but are deliberate or pinned. A rebuild MUST keep them, or 
 - The classification prompt keeps its odd wording ("according responseSchema", trailing semicolons).
 - The hashtag line ends with `#ts_{ts}`, so every merge changes the text and forces a real edit.
 - `markPublished` sets `ts = now`, later than the posts' `tgAt`. This is harmless because publish runs only on `topublish`, and every path back to `topublish` writes a newer `ts`.
-- The Gmail post id is a millisecond time, so two mails in one millisecond collide.
 
 ## 3. Scale assumptions
 

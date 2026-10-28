@@ -40,7 +40,6 @@ All text uses Telegram **HTML** parse mode. `escape(s)` replaces `&`, `<`, `>`, 
 
 ```text
 🔘 {summary} - <a href="https://t.me/{itemId}">@{channel}</a>
-🔘 {summary} - ✉ {channel}            ← when channel contains "@" (a mail sender)
 ```
 
 `summary` is escaped, then each `[text](#N)` becomes `<a href="{escape(href)}">text</a>` when the member has link N, else just `text`. `itemId` and `channel` are escaped.

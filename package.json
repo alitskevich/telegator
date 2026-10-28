@@ -27,7 +27,6 @@
     "mtproto:login": "export TG_API_ID=$(. ~/.keys/.env; echo $TG_API_ID) TG_API_HASH=$(. ~/.keys/.env; echo $TG_API_HASH) && tsx scripts/mtproto-login.ts",
     "youtube:login": "export YT_CLIENT_ID=$(. ~/.keys/.env; echo $YT_CLIENT_ID) YT_CLIENT_SECRET=$(. ~/.keys/.env; echo $YT_CLIENT_SECRET) && tsx scripts/youtube-login.ts",
     "youtube:absorb": "tsx scripts/youtube-absorb.ts",
-    "gmail:login": "export GOOGLE_CLIENT_ID=$(. ~/.keys/.env; echo $YT_CLIENT_ID) GOOGLE_CLIENT_SECRET=$(. ~/.keys/.env; echo $YT_CLIENT_SECRET) && tsx scripts/gmail-login.ts",
     "smoke:openrouter": "export OPENROUTER_API_KEY=$(. ~/.keys/.env; echo $OPENROUTER_API_KEY) && tsx scripts/smoke-openrouter.ts",
     "postinstall": "../proton/ops/link-modules.sh arrmatura arrmatura-web ultimus",
     "dev:functions": "npm -w tg-functions run watch",

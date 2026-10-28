@@ -200,7 +200,6 @@ const payloadFields = {
 
 const sourceTypeNames: Record<SourceType, string> = {
   telegram: "Telegram, user account",
-  gmail: "Gmail sender",
 };
 
 /** The option lists `Field.Enum` reads as `R.enums[typeSpec]`. */

@@ -4,7 +4,7 @@ Scrape polls due sources, turns each post into an item, queues the useful ones f
 
 ## 1. Runs
 
-- **IN-1** There is one scheduled run per reader type: `telegram` and `gmail`, each every **30 minutes**. A run does nothing unless `SCRAPE_ENABLED` is true (G-4).
+- **IN-1** There is one scheduled run of the `telegram` reader every **30 minutes**. A run does nothing unless `SCRAPE_ENABLED` is true (G-4).
 - **IN-2** An admin MAY start a Telegram run at any time (*Scrape now*), whatever the flag.
 - **IN-3** A run reads the clock once. Every item of the run gets the date key of that instant, even if the run crosses midnight.
 - **IN-4** A run polls its sources one after another. A failure on one source MUST be logged and MUST NOT stop the others.
@@ -34,19 +34,6 @@ Reads through a logged-in user account (MTProto), so channels, groups and privat
 - **IN-8** Link tokens come from the message's URL entities: a bare URL (href = its text) and a labelled link (href = the entity's URL). Spans sort by offset; a span that overlaps an earlier one is skipped. Each span's text becomes `[text](#N)`, N counting from 1. Offsets count UTF-16 code units. The body is then trimmed.
 - **IN-9** `forwardedFrom` is the forward's display name, else its peer id, else the literal `unknown`. Absent when the message is not a forward.
 - **IN-10** The reader sets no `image`. A service message (join, pin) has empty text and becomes `empty`, but still moves the cursor.
-
-### 3.2 Gmail (`type = gmail`)
-
-The source id is a sender's address. A post is one inbox mail from that sender. The reader is read-only: it MUST NOT mark, move or change mail.
-
-- **IN-11** The search is `in:inbox from:{sender}`, plus ` after:{floor(cursor / 1000)}` when a cursor exists.
-- **IN-12** With no cursor, read the newest **20** matching mails. With a cursor, list every match, take the **oldest 20**, and keep only mails whose id is greater than the cursor.
-- **IN-13** A post id is the mail's `internalDate` in ms. It is also the cursor. (Two mails from one sender in the same millisecond collide; the second counts as a replay.)
-- **IN-14** The body is the `Subject`, a blank line, then the text: the first `text/plain` part (depth first), else the first `text/html` part. Parts are base64url-decoded as UTF-8. Blank pieces are left out.
-  - Plain text: each bare `http(s)://` URL becomes a link token; trailing `.,;:!?` stays outside the URL. CRLF becomes LF; three or more newlines become two.
-  - HTML: remove comments and `<head>`, `<style>`, `<script>` blocks; each closing `p`, `div`, `tr`, `li`, `h1`–`h6`, `table` becomes a line break; anchors become link tokens; the rest becomes plain text; tokens with empty text are removed.
-  - The body is cut to **10,000** characters and trimmed.
-- **IN-15** The reader sets no `image` and no `forwardedFrom`.
 
 ## 4. From post to item
 

@@ -23,8 +23,8 @@ Every record shape here is the source of truth. A stored record that fails its s
 
 | Field | Written by | Meaning |
 | --- | --- | --- |
-| `id` | operator | Telegram username or numeric peer id (`-100…`), or a sender's mail address for `gmail`. |
-| `type` | operator | `telegram` (default when absent) or `gmail`. |
+| `id` | operator | Telegram username or numeric peer id (`-100…`). |
+| `type` | operator | `telegram` (default when absent). |
 | `status` | operator | `ok` enables polling. Any other value, or none, disables it. |
 | `category` | operator | Default category stamped on every item. Any string. |
 | `tags` | operator | Stamped on every item. Publishing routes by tags. |

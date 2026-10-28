@@ -6,7 +6,7 @@ keywords: [telegator, specification, news-aggregation, telegram, deduplication]
 
 # Telegator — functional specification
 
-Telegator reads news posts from Telegram chats and Gmail senders and asks an AI model to classify each one. It groups the posts that report one story into one **message** and posts that message to Telegram channels (**targets**). When more sources report the story, it **edits the post in place** instead of posting again. Operators watch and steer the pipeline from a web console.
+Telegator reads news posts from Telegram chats and asks an AI model to classify each one. It groups the posts that report one story into one **message** and posts that message to Telegram channels (**targets**). When more sources report the story, it **edits the post in place** instead of posting again. Operators watch and steer the pipeline from a web console.
 
 This spec defines *behaviour*: inputs, outputs, rules, numbers and failure handling. A rebuild that follows it gives the same posts, the same records and the same console actions. For how the current build maps onto Firebase, see [../telegator.md](../telegator.md).
 
@@ -23,7 +23,6 @@ This spec defines *behaviour*: inputs, outputs, rules, numbers and failure handl
 | Actor / system | Role |
 | --- | --- |
 | **Telegram user account** (MTProto) | Reads posts from channels, groups and chats. |
-| **Gmail mailbox** (Gmail API, read-only) | Reads mails from chosen senders. |
 | **AI model** (Claude Haiku 4.5 via OpenRouter) | Classifies posts, judges unclear duplicates, explains failures. |
 | **Telegram bot** (Bot API) | The only outbound sink: sends and edits posts on targets. |
 | **Operator** | A signed-in console user with role `viewer`, `editor` or `admin`. |
@@ -51,8 +50,8 @@ A post moves through four stages. Between stages it waits as an item in a **work
 
 | Term | Meaning |
 | --- | --- |
-| **Source** | A Telegram chat or a Gmail sender that the system polls. |
-| **Post** | One Telegram message or one mail, as a reader returns it. |
+| **Source** | A Telegram chat that the system polls. |
+| **Post** | One Telegram message, as the reader returns it. |
 | **Item** | A post in flight between stages. Its id is `{sourceId}/{postId}`. |
 | **Message** | One story: up to 20 items (its **members**) that report the same event. |
 | **Target** | A Telegram channel that receives the messages whose tags it wants. |
@@ -67,7 +66,7 @@ A post moves through four stages. Between stages it waits as an item in a **work
 | File | Covers |
 | --- | --- |
 | [01-data.md](01-data.md) | Records, ids, field rules, invariants, store operations. |
-| [02-intake.md](02-intake.md) | Stage 1: choosing sources, reading Telegram and Gmail, building items. |
+| [02-intake.md](02-intake.md) | Stage 1: choosing sources, reading Telegram, building items. |
 | [03-queue.md](03-queue.md) | The work queue: retries, leases, sweep, operator controls. |
 | [04-classify.md](04-classify.md) | Stage 2: pre-filter, the AI contract, routing. |
 | [05-dedup.md](05-dedup.md) | Stage 3: match key, score, merge or create, adjudication. |
@@ -90,6 +89,5 @@ A post moves through four stages. Between stages it waits as an item in a **work
 ## 7. Out of scope
 
 - Reading Telegram photos for publishing: an MTProto photo has no public URL, so a photo post publishes as text.
-- Marking mail as read, moving it, or replying.
 - Alerts. The console shows failures; nothing pages anyone.
 - Any target kind other than a Telegram channel.
