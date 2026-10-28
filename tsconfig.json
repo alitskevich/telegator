@@ -25,6 +25,9 @@
     "paths": {
       "arrmatura-web": [
         "./packages/tg-web/src/types/arrmatura-web.d.ts"
+      ],
+      "arrmatura-vibe": [
+        "./packages/tg-web/src/types/arrmatura-vibe.d.ts"
       ]
     }
   },

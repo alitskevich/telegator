@@ -185,11 +185,12 @@ npm install              # also links the private arrmatura checkouts
 npm run dev              # emulators + functions watch + console on :8080
 ```
 
-`npm run dev` builds the functions bundle, then runs three things in parallel:
+`npm run dev` builds the functions bundle, then runs these in parallel:
 
 - the **emulators**: Auth 9099, Functions 5001, Firestore 8180, Tasks 9499, UI 4000. Data persists in `.emulator/`.
 - an esbuild **watch** of `tg-functions`. The Functions emulator reloads on every rebuild.
 - the **console** with live reload at `http://localhost:8080`.
+- the **vibe server** on 127.0.0.1:8091: Cmd+I in the console opens the DevTools drawer, whose agent edits this repo.
 - once the emulators are ready, `seed:upload -- dev --write` restores the dev snapshot (if any), then the console opens.
 
 | Need | Do |

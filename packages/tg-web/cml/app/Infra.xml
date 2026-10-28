@@ -11,4 +11,8 @@
   <!-- Bottom right, clear of every page's title-row actions. Inline style:
        ToastList's own `top-16` would otherwise win over a class. -->
   <ToastList style="top: auto; bottom: 1.5rem" />
+
+  <!-- Cmd+I on localhost; inert anywhere else. The port is `dev:vibe`'s:
+       vibe's default 8090 belongs to bombarbia. -->
+  <DevTools scope="{appCatalog()}" port="{8091}" />
 </Component>

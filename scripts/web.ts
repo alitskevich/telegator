@@ -17,7 +17,8 @@ import { cmlIndexSource } from "./cmlIndexSource";
  * type-checker at a declaration file (`src/types/arrmatura-web.d.ts`).
  */
 
-const WEB = resolve(import.meta.dirname, "../packages/tg-web");
+const ROOT = resolve(import.meta.dirname, "..");
+const WEB = join(ROOT, "packages/tg-web");
 const WWW = join(WEB, "www");
 const DIST = join(WWW, "dist");
 const INDEX = join(WEB, "src/index.cml.ts");
@@ -67,6 +68,9 @@ const options: esbuild.BuildOptions = {
   keepNames: true,
   sourcemap: serve ? "linked" : "external",
   loader: { ".xml": "text" },
+  // `zod` is a peer of the linked `arrmatura-vibe`, which resolves its own
+  // installed copy otherwise: a second ~450 KB zod in the bundle.
+  alias: { zod: join(ROOT, "node_modules/zod") },
   tsconfigRaw: "{}",
   logLevel: "info",
   // Dev only: esbuild's change stream reloads the page on every rebuild.

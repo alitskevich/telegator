@@ -6,6 +6,7 @@
 @source "./cml/**/*.xml";
 @source "./src/**/*.ts";
 @source "../../node_modules/arrmatura-web/**/*.xml";
+@source "../../node_modules/arrmatura-vibe/cml/**/*.xml";
 
 @plugin "daisyui" {
   themes: false;

@@ -1,4 +1,5 @@
 import type { SortState } from "tg-utils/ui/types";
+import catalog from "../../../catalog.json";
 
 /**
  * Helpers templates call by name, e.g. `{value | num}`, on top of `ultimus`.
@@ -53,3 +54,6 @@ export const ariaSort = (sort: unknown, column: unknown): string | null => {
   const direction = sortOf(sort, column);
   return direction === "asc" ? "ascending" : direction === "desc" ? "descending" : null;
 };
+
+/** The console's own components with their source files (`npm run codegen:cml-catalog`): the `DevTools` scope. */
+export const appCatalog = () => catalog;

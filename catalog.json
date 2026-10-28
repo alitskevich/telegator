@@ -1,0 +1,198 @@
+[
+  {
+    "id": "App",
+    "description": "`@api.access` is the API's answer to `whoami`, not the token's: only the API can read whether the account is still enabled.",
+    "purpose": "Signs the operator in, then switches between sign-in, access check, refusal and the console",
+    "name": "App",
+    "file": "packages/tg-web/cml/app/App.xml"
+  },
+  {
+    "id": "AppHeader",
+    "description": "AppHeader",
+    "purpose": "Sticky header: brand, the five routes, and the signed-in operator",
+    "name": "AppHeader",
+    "file": "packages/tg-web/cml/app/AppHeader.xml"
+  },
+  {
+    "id": "AppShell",
+    "description": "An unknown route renders `Page`, the not-found screen, by CML's dotted-prefix fallback.",
+    "purpose": "The signed-in console: header, then the page the hash route names",
+    "name": "AppShell",
+    "file": "packages/tg-web/cml/app/AppShell.xml"
+  },
+  {
+    "id": "Infra",
+    "description": "Wraps the whole app, so `@toaster`, `@nav` and `@browser` resolve from anywhere below it.",
+    "purpose": "Platform services every screen relies on: toasts, hash routing and the browser bridge",
+    "name": "Infra",
+    "file": "packages/tg-web/cml/app/Infra.xml"
+  },
+  {
+    "id": "Page.Checking",
+    "description": "Page.Checking",
+    "purpose": "Between the token and the API's answer: nothing to show yet but that it is working",
+    "name": "Page.Checking",
+    "file": "packages/tg-web/cml/app/Page.Checking.xml"
+  },
+  {
+    "id": "Page.Denied",
+    "description": "Page.Denied",
+    "purpose": "Signed in, and the API said no: a disabled account, no role, or the API unreachable",
+    "name": "Page.Denied",
+    "file": "packages/tg-web/cml/app/Page.Denied.xml"
+  },
+  {
+    "id": "Page.SignIn",
+    "description": "Page.SignIn",
+    "purpose": "The signed-out screen: what this is, and the one way in",
+    "name": "Page.SignIn",
+    "file": "packages/tg-web/cml/app/Page.SignIn.xml"
+  },
+  {
+    "id": "Page",
+    "description": "Page",
+    "purpose": "Not found: what any unknown hash route renders, by dotted-prefix fallback",
+    "name": "Page",
+    "file": "packages/tg-web/cml/app/Page.xml"
+  },
+  {
+    "id": "UserMenu",
+    "description": "UserMenu",
+    "purpose": "Who is signed in, with which roles, and the way out",
+    "name": "UserMenu",
+    "file": "packages/tg-web/cml/app/UserMenu.xml"
+  },
+  {
+    "id": "AuditList",
+    "description": "AuditList",
+    "purpose": "What went wrong, one per line: when and where, then the reason. A rejected send names its target and method; a failed item, its stage and post",
+    "name": "AuditList",
+    "file": "packages/tg-web/cml/components/AuditList.xml"
+  },
+  {
+    "id": "Donut",
+    "description": "`chart` is `{ slices, background }` from `PipelineService`; an empty chart says so rather than drawing a hole.",
+    "purpose": "A donut chart with its legend, drawn as one CSS conic-gradient",
+    "name": "Donut",
+    "file": "packages/tg-web/cml/components/Donut.xml"
+  },
+  {
+    "id": "ErrorBanner",
+    "description": "ErrorBanner",
+    "purpose": "An inline failure, in plain words, beside the block it belongs to",
+    "name": "ErrorBanner",
+    "file": "packages/tg-web/cml/components/ErrorBanner.xml"
+  },
+  {
+    "id": "PageTitle",
+    "description": "PageTitle",
+    "purpose": "A page's title row: title, one line of context, and its actions on the right",
+    "name": "PageTitle",
+    "file": "packages/tg-web/cml/components/PageTitle.xml"
+  },
+  {
+    "id": "StatCard",
+    "description": "StatCard",
+    "purpose": "One headline figure with its label and a short note",
+    "name": "StatCard",
+    "file": "packages/tg-web/cml/components/StatCard.xml"
+  },
+  {
+    "id": "StatusBadge",
+    "description": "StatusBadge",
+    "purpose": "A record's status as a coloured pill; unknown values are neutral",
+    "name": "StatusBadge",
+    "file": "packages/tg-web/cml/components/StatusBadge.xml"
+  },
+  {
+    "id": "DashboardPanel",
+    "description": "Reads `@pipeline`; the panel shown while no stage is selected. Its grids follow the panel's width, not the viewport's.",
+    "purpose": "Pipeline health at a glance: the 24 h figures, the two charts and the latest messages",
+    "name": "DashboardPanel",
+    "file": "packages/tg-web/cml/dashboard/DashboardPanel.xml"
+  },
+  {
+    "id": "Page.Dashboard",
+    "description": "With no stage selected, the panel holds the overview: the 24 h figures, the two charts and the latest messages. Select a stage; the panel then holds its figures and its actions. The selected stage is `?node=` on the hash route, so a reload or a shared link opens the same one. Figures refresh every 30 s.",
+    "purpose": "The whole pipeline as one live diagram beside the overview, with every manual trigger on the node it acts on",
+    "name": "Page.Dashboard",
+    "file": "packages/tg-web/cml/dashboard/Page.Dashboard.xml"
+  },
+  {
+    "id": "PipelineItem",
+    "description": "Reads `@item.detail`; opened from a queue row of the Pipeline panel or a failed item of the Audit page. Only an admin saves, and only a waiting or failed item; the API re-checks both and the stage's schema.",
+    "purpose": "One ingest item whole: where it stands, its payload, and a form over the payload's text",
+    "name": "PipelineItem",
+    "file": "packages/tg-web/cml/pipeline/PipelineItem.xml"
+  },
+  {
+    "id": "PipelineNode",
+    "description": "A stage shows its count, and its queue count on its top-right corner when it has one. Pressing it selects it. The caption is cut at one line; the panel shows it whole.",
+    "purpose": "One node of the pipeline diagram: a stage",
+    "name": "PipelineNode",
+    "file": "packages/tg-web/cml/pipeline/PipelineNode.xml"
+  },
+  {
+    "id": "PipelinePanel",
+    "description": "Reads `@pipeline`. Admin actions render only for an admin; the API re-checks the role regardless.",
+    "purpose": "What the selected node holds and what an operator may do to it; with none selected, the overview",
+    "name": "PipelinePanel",
+    "file": "packages/tg-web/cml/pipeline/PipelinePanel.xml"
+  },
+  {
+    "id": "RecordModal",
+    "description": "Opened from a row of a node's list; mounted once per `RecordService`. Mounted beside the panel, not in it: the panel is sticky, and the header would cover a modal inside it.",
+    "purpose": "One source or target in a modal: every field, which an editor saves or deletes",
+    "name": "RecordModal",
+    "file": "packages/tg-web/cml/pipeline/RecordModal.xml"
+  },
+  {
+    "id": "SourcesTable",
+    "description": "Reads `@sources` and reloads it each time the tab opens. Its actions sit on the tabs' right, in `PipelinePanel`. Only an editor ticks rows; the API re-checks the role regardless.",
+    "purpose": "The Scrape node's All sources tab: every reader and status in a table; a click on an id opens `RecordModal`",
+    "name": "SourcesTable",
+    "file": "packages/tg-web/cml/pipeline/SourcesTable.xml"
+  },
+  {
+    "id": "TelegramTargets",
+    "description": "Reads `@targets` and reloads it each time the node is selected. Only an editor adds, ticks and deletes; the API re-checks the role regardless.",
+    "purpose": "The Publish node's target channels: a table to add to, delete from in bulk and export; a click on an id opens `RecordModal`",
+    "name": "TelegramTargets",
+    "file": "packages/tg-web/cml/pipeline/TelegramTargets.xml"
+  },
+  {
+    "id": "FailedItems",
+    "description": "Reads `@audit`; a row opens in `@item`. Admin actions render only for an admin; the API re-checks the role regardless.",
+    "purpose": "Every stage's failed items: message, cause, the model's reading, and what an admin may do",
+    "name": "FailedItems",
+    "file": "packages/tg-web/cml/records/FailedItems.xml"
+  },
+  {
+    "id": "Page.Audit",
+    "description": "Reads the `error` items through `inspectErrors` and `audit` through `loadAudit`; audit entries go after 30 days by a TTL policy.",
+    "purpose": "What went wrong: the failed items an operator may still act on, and the record kept for 30 days",
+    "name": "Page.Audit",
+    "file": "packages/tg-web/cml/records/Page.Audit.xml"
+  },
+  {
+    "id": "Page.Messages",
+    "description": "The tab is `?status=` on the hash route, so a reload or a shared link shows the same one.",
+    "purpose": "The Messages table by status tab, with Publish now on the backlog for an admin",
+    "name": "Page.Messages",
+    "file": "packages/tg-web/cml/records/Page.Messages.xml"
+  },
+  {
+    "id": "RecordCell",
+    "description": "On a phone the cell carries its column's name, since there is no header row; the row's first cell is the card's title and needs none. Edits go to `@grid.edit` on every keystroke; nothing is sent until the row's Save.",
+    "purpose": "One table cell: an input where the operator may write, a badge for a status, text otherwise",
+    "name": "RecordCell",
+    "file": "packages/tg-web/cml/records/RecordCell.xml"
+  },
+  {
+    "id": "RecordsTable",
+    "description": "On a phone each record is a card with the id as its title; from `md` the same markup is a table with a header and a filter row. Reads the page's `@grid`. The empty state renders inside the table, so the filters stay reachable.",
+    "purpose": "The records table: search, per-column filters, sort, selection, inline edit and export",
+    "name": "RecordsTable",
+    "file": "packages/tg-web/cml/records/RecordsTable.xml"
+  }
+]
