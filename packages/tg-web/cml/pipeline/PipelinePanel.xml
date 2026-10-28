@@ -39,12 +39,12 @@
     </div>
     <p If="@pipeline.selected.detail" class="text-sm text-base-content/70 max-w-[65ch]">{@pipeline.selected.detail}</p>
     <Fragment If="@pipeline.selected.sources">
-      <Tabs class="flex-wrap gap-2" items="{R.sourceTabs}" value="{@nav.params.tab == 'all' ? 'all' : 'next'}"
-        change="-> @nav.updateParam('tab=' + event.value)">
-        <This-SourcesToolbar If="{@nav.params.tab == 'all'}" />
+      <Tabs class="flex-wrap gap-2" items="{R.sourceTabs}" value="{@browser.params.tab == 'all' ? 'all' : 'next'}"
+        change="-> @browser.setParam('tab', event.value)">
+        <This-SourcesToolbar If="{@browser.params.tab == 'all'}" />
       </Tabs>
-      <SourcesTable If="{@nav.params.tab == 'all'}" />
-      <This-Sources If="{@nav.params.tab != 'all'}" />
+      <SourcesTable If="{@browser.params.tab == 'all'}" />
+      <This-Sources If="{@browser.params.tab != 'all'}" />
     </Fragment>
     <div If="{@pipeline.selected.id == 'publish'}" class="flex flex-wrap items-center gap-2">
       <Fragment If="@api.canAdmin">
@@ -57,7 +57,7 @@
           busy="{@api.busy.publishPending}" disabled="{@pipeline.toPublish == 0}"
           click="-> @pipeline.publishNow()" />
       </Fragment>
-      <a href="#/messages?status=topublish" class="btn btn-sm btn-ghost">{R.pipeline.openMessages}</a>
+      <a href="/messages?status=topublish" class="btn btn-sm btn-ghost">{R.pipeline.openMessages}</a>
     </div>
     <TelegramTargets If="{@pipeline.selected.id == 'publish'}" />
     <This-Queue If="@pipeline.selected.queue" />

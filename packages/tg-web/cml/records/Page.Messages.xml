@@ -1,8 +1,8 @@
 <Component id="Page.Messages">
   <Signature purpose="The Messages table by status tab, with Publish now on the backlog for an admin"
-    description="The tab is `?status=` on the hash route, so a reload or a shared link shows the same one." />
+    description="The tab is `?status=` in the url, so a reload or a shared link shows the same one." />
 
-  <GridService Ref="grid" table="messages" status="{@nav.params.status}" api="@api"
+  <GridService Ref="grid" table="messages" status="{@browser.params.status}" api="@api"
     canEdit="{@api.canEdit}" />
 
   <PageTitle title="{R.tables.messages.title}" subtitle="{R.tables.messages.subtitle}">
@@ -18,7 +18,7 @@
   </PageTitle>
 
   <Tabs items="{R.messageTabs}" value="{@grid.status}"
-    change="-> @nav.updateParam('status=' + event.value)" />
+    change="-> @browser.setParam('status', event.value || null)" />
 
   <RecordsTable table="messages" />
 </Component>

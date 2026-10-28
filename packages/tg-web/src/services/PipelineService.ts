@@ -17,7 +17,7 @@ import type { Donut, QueueRow, SourceRow } from "./types";
  * The Dashboard page: the whole chain as one diagram, with each stage's count and
  * queue, and each manual trigger on the node it acts on; with no node selected,
  * the overview's figures and charts.
- * Mounted as `<PipelineService Ref="pipeline" api="@api" nav="@nav" selectedId="{@nav.params.node}" />`.
+ * Mounted as `<PipelineService Ref="pipeline" api="@api" browser="@browser" selectedId="{@browser.params.node}" />`.
  */
 
 /** Counts move by the minute while a backlog drains; this is the page an operator watches. */
@@ -81,14 +81,14 @@ interface ValueEvent {
   readonly value?: string;
 }
 
-/** The one `NavigationService` method this service calls. */
-interface Nav {
-  updateParam(expr: string): void;
+/** The one `BrowserService` method this service calls. */
+interface Browser {
+  setParam(key: string, value: string | null): void;
 }
 
 export class PipelineService extends WebClientService {
   declare api: ApiService;
-  declare nav: Nav;
+  declare browser: Browser;
 
   data: Overview | null = null;
   loading = false;
@@ -214,7 +214,7 @@ export class PipelineService extends WebClientService {
     const id = event.id ?? "";
     const node = id === this.selectedId ? "" : id;
     this.up({ resetArmed: false, cursorsArmed: false });
-    this.nav.updateParam(`node=${node}`);
+    this.browser.setParam("node", node || null);
 
     if (node !== "" && !window.matchMedia(SIDE_LAYOUT).matches) {
       requestAnimationFrame(() =>

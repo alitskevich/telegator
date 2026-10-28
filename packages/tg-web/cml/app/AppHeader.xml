@@ -3,16 +3,16 @@
 
   <header class="sticky top-0 z-30 bg-base-100 border-b border-base-200">
     <div class="max-w-[1400px] mx-auto px-4 sm:px-6 h-14 flex items-center gap-4 sm:gap-6">
-      <a href="#/" class="flex items-center gap-2 font-semibold text-lg shrink-0">
+      <a href="/" class="flex items-center gap-2 font-semibold text-lg shrink-0">
         <span class="icon icon-radio-tower text-primary" aria-hidden="true"></span>
         <span class="hidden sm:inline">{R.app.name}</span>
       </a>
       <nav class="flex-1 min-w-0 overflow-x-auto" aria-label="{R.app.name}">
         <ul class="flex gap-1">
           <li Each="item of R.nav">
-            <a href="#/{item.id}"
-              aria-current="{item.id == (@nav.page || 'dashboard') ? 'page' : null}"
-              class="btn btn-ghost sm:btn-sm gap-2 px-3 font-normal transition-colors duration-150 {item.id == (@nav.page || 'dashboard') ? 'bg-base-200 text-primary' : 'text-base-content/70'}">
+            <a href="/{item.id}"
+              aria-current="{item.id == (@browser.path || 'dashboard') ? 'page' : null}"
+              class="btn btn-ghost sm:btn-sm gap-2 px-3 font-normal transition-colors duration-150 {item.id == (@browser.path || 'dashboard') ? 'bg-base-200 text-primary' : 'text-base-content/70'}">
               <span class="icon icon-{item.icon}" aria-hidden="true"></span>
               <span class="hidden md:inline">{item.name}</span>
             </a>

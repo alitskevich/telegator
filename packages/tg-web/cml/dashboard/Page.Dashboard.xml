@@ -1,8 +1,8 @@
 <Component id="Page.Dashboard">
   <Signature purpose="The whole pipeline as one live diagram beside the overview, with every manual trigger on the node it acts on"
-    description="With no stage selected, the panel holds the overview: the 24 h figures, the two charts and the latest messages. Select a stage; the panel then holds its figures and its actions. The selected stage is `?node=` on the hash route, so a reload or a shared link opens the same one. Figures refresh every 30 s." />
+    description="With no stage selected, the panel holds the overview: the 24 h figures, the two charts and the latest messages. Select a stage; the panel then holds its figures and its actions. The selected stage is `?node=` in the url, so a reload or a shared link opens the same one. Figures refresh every 30 s." />
 
-  <PipelineService Ref="pipeline" api="@api" nav="@nav" selectedId="{@nav.params.node}" />
+  <PipelineService Ref="pipeline" api="@api" browser="@browser" selectedId="{@browser.params.node}" />
   <ItemService Ref="item" api="@api" owner="@pipeline" />
   <RecordService Ref="targets" table="targets" api="@api" owner="@pipeline" />
   <RecordService Ref="sources" table="sources" api="@api" owner="@pipeline"

@@ -33,12 +33,7 @@ describe("the console's CML registry", () => {
         [...readFileSync(file, "utf8").matchAll(/<(\w+Service)\b/g)].map((match) => match[1]),
       ),
     );
-    const platform = new Set([
-      "ToastService",
-      "NavigationService",
-      "BrowserService",
-      "FirebaseService",
-    ]);
+    const platform = new Set(["ToastService", "BrowserService", "FirebaseService"]);
 
     for (const service of mounted) {
       if (service !== undefined && !platform.has(service)) expect(registry).toContain(service);

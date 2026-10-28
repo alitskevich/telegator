@@ -30,7 +30,7 @@
     <section class="bg-base-100 rounded-box p-4 flex flex-col gap-3 min-w-0">
       <div class="flex items-center justify-between gap-2">
         <h2 class="text-lg font-semibold">{R.dashboard.recent}</h2>
-        <a href="#/messages" class="btn btn-xs btn-ghost text-base-content/70">{R.dashboard.allMessages}</a>
+        <a href="/messages" class="btn btn-xs btn-ghost text-base-content/70">{R.dashboard.allMessages}</a>
       </div>
       <ul If="@pipeline.data.recent.length" class="flex flex-col divide-y divide-base-200">
         <li Each="message of @pipeline.data.recent" class="py-2 flex flex-col gap-1 min-w-0">

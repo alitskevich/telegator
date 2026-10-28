@@ -1,9 +1,8 @@
 <Component id="Infra">
-  <Signature purpose="Platform services every screen relies on: toasts, hash routing and the browser bridge"
-    description="Wraps the whole app, so `@toaster`, `@nav` and `@browser` resolve from anywhere below it." />
+  <Signature purpose="Platform services every screen relies on: toasts, and the browser bridge that also routes"
+    description="Wraps the whole app, so `@toaster` and `@browser` resolve from anywhere below it. `@browser` also routes: the page is its `path`, the filters its `params`." />
 
   <ToastService Ref="toaster" />
-  <NavigationService Ref="nav" />
   <BrowserService Ref="browser" title="{R.app.name}" />
 
   <Slot />

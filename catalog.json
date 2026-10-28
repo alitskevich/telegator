@@ -16,14 +16,14 @@
   {
     "id": "AppShell",
     "description": "An unknown route renders `Page`, the not-found screen, by CML's dotted-prefix fallback.",
-    "purpose": "The signed-in console: header, then the page the hash route names",
+    "purpose": "The signed-in console: header, then the page the url path names",
     "name": "AppShell",
     "file": "packages/tg-web/cml/app/AppShell.xml"
   },
   {
     "id": "Infra",
-    "description": "Wraps the whole app, so `@toaster`, `@nav` and `@browser` resolve from anywhere below it.",
-    "purpose": "Platform services every screen relies on: toasts, hash routing and the browser bridge",
+    "description": "Wraps the whole app, so `@toaster` and `@browser` resolve from anywhere below it. `@browser` also routes: the page is its `path`, the filters its `params`.",
+    "purpose": "Platform services every screen relies on: toasts, and the browser bridge that also routes",
     "name": "Infra",
     "file": "packages/tg-web/cml/app/Infra.xml"
   },
@@ -51,7 +51,7 @@
   {
     "id": "Page",
     "description": "Page",
-    "purpose": "Not found: what any unknown hash route renders, by dotted-prefix fallback",
+    "purpose": "Not found: what any unknown url path renders, by dotted-prefix fallback",
     "name": "Page",
     "file": "packages/tg-web/cml/app/Page.xml"
   },
@@ -113,7 +113,7 @@
   },
   {
     "id": "Page.Dashboard",
-    "description": "With no stage selected, the panel holds the overview: the 24 h figures, the two charts and the latest messages. Select a stage; the panel then holds its figures and its actions. The selected stage is `?node=` on the hash route, so a reload or a shared link opens the same one. Figures refresh every 30 s.",
+    "description": "With no stage selected, the panel holds the overview: the 24 h figures, the two charts and the latest messages. Select a stage; the panel then holds its figures and its actions. The selected stage is `?node=` in the url, so a reload or a shared link opens the same one. Figures refresh every 30 s.",
     "purpose": "The whole pipeline as one live diagram beside the overview, with every manual trigger on the node it acts on",
     "name": "Page.Dashboard",
     "file": "packages/tg-web/cml/dashboard/Page.Dashboard.xml"
@@ -176,7 +176,7 @@
   },
   {
     "id": "Page.Messages",
-    "description": "The tab is `?status=` on the hash route, so a reload or a shared link shows the same one.",
+    "description": "The tab is `?status=` in the url, so a reload or a shared link shows the same one.",
     "purpose": "The Messages table by status tab, with Publish now on the backlog for an admin",
     "name": "Page.Messages",
     "file": "packages/tg-web/cml/records/Page.Messages.xml"

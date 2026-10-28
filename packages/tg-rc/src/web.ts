@@ -10,7 +10,7 @@ import { MESSAGE_COLUMNS, SOURCE_COLUMNS, TARGET_COLUMNS } from "./columns";
 
 const app = { name: "Telegator", tagline: "Telegram news pipeline" };
 
-/** The hash routes, in nav order. `page` is `@nav.page`. */
+/** The routes, in nav order. `id` is the url path, `@browser.path`. */
 const nav = [
   { id: "dashboard", name: "Dashboard", icon: "layout-dashboard" },
   { id: "messages", name: "Messages", icon: "newspaper" },
