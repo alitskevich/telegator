@@ -152,6 +152,8 @@ async function runOne(
     finishedAt,
     expireAt: new Date(finishedAt + DONE_TTL_MS),
     leaseUntil: FieldValue.delete(),
+    error: FieldValue.delete(),
+    cause: FieldValue.delete(),
   });
 }
 

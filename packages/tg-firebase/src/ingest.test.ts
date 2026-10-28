@@ -80,6 +80,17 @@ describe("drain", () => {
     expect(item?.leaseUntil).toBeUndefined();
   });
 
+  test("a success after a failed attempt forgets that failure", async () => {
+    await enqueue("publish", { messageId: "m1" }, { id: "a" }, T0);
+    await drain("publish", options, fails, at(T0));
+    await drain("publish", options, async () => {}, at(T0 + 30_000));
+
+    const item = await read("a");
+    expect(item).toMatchObject({ status: "done", retryCount: 1 });
+    expect(item?.error).toBeUndefined();
+    expect(item?.cause).toBeUndefined();
+  });
+
   test("runs at most `concurrency` items at once", async () => {
     for (const id of ["a", "b", "c", "d", "e"]) await enqueue("publish", { messageId: id }, {}, T0);
     let running = 0;
