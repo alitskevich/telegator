@@ -34,7 +34,7 @@
     "dev:emulators": "./scripts/emulators.sh",
     "dev:web": "tsx scripts/web.ts --serve",
     "dev:vibe": "bun node_modules/arrmatura-vibe/src/server/main.ts . 8091",
-    "dev:open": "npx --yes wait-on http-get://127.0.0.1:4000 && npm run seed:upload -- dev --write && npm run open",
+    "dev:open": "npx --yes wait-on http-get://127.0.0.1:4000 && npm run seed:upload:dev -- --write && npm run open",
     "open": "npx --yes wait-on http://localhost:${PORT:-8080} && open http://localhost:${PORT:-8080}",
     "stop": "lsof -t -sTCP:LISTEN -i tcp:${PORT:-8080},8091,9099,9199,5000,5001,8180,4000 | xargs -r kill -9",
     "seed:download:prod": "tsx scripts/seed.ts download prod --write",
