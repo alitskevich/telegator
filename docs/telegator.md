@@ -252,7 +252,7 @@ Turns YouTube videos into knowledge in a docs repo. You save a video to one play
 
 **Setup**, once:
 
-1. In the Google Cloud console of `telegator-581db`, enable the *YouTube Data API v3*. Create an OAuth client of type *Desktop app*, and put its id and secret in `~/.keys/.env` as `YT_CLIENT_ID` and `YT_CLIENT_SECRET`.
+1. In the Google Cloud console of `telegator-581db`, enable the *YouTube Data API v3*. Create an OAuth client of type *Desktop app*, and put its id and secret in `~/.keys/.env` as `TELEGATOR_OAUTH_DESKTOP_CLIENT_KEY` and `TELEGATOR_OAUTH_DESKTOP_CLIENT_SECRET`.
 2. Set the OAuth consent screen to **In production**. In *Testing*, the refresh token expires after 7 days.
 3. `npm run youtube:login`: sign in as the playlist owner. This stores `YOUTUBE_OAUTH`.
 4. Set `YOUTUBE_PLAYLIST_ID` in `packages/tg-functions/.env` and redeploy the functions.

@@ -26,7 +26,7 @@
     "mcp": "tsx scripts/mcp.ts",
     "codegen:cml-catalog": "bun ../proton/ops/generate-catalog.ts packages/tg-web/cml",
     "mtproto:login": "export TG_API_ID=$(. ~/.keys/.env; echo $TG_API_ID) TG_API_HASH=$(. ~/.keys/.env; echo $TG_API_HASH) && tsx scripts/mtproto-login.ts",
-    "youtube:login": "export YT_CLIENT_ID=$(. ~/.keys/.env; echo $YT_CLIENT_ID) YT_CLIENT_SECRET=$(. ~/.keys/.env; echo $YT_CLIENT_SECRET) && tsx scripts/youtube-login.ts",
+    "youtube:login": "export YT_CLIENT_ID=$(. ~/.keys/.env; echo $TELEGATOR_OAUTH_DESKTOP_CLIENT_KEY) YT_CLIENT_SECRET=$(. ~/.keys/.env; echo $TELEGATOR_OAUTH_DESKTOP_CLIENT_SECRET) && tsx scripts/youtube-login.ts",
     "youtube:absorb": "tsx scripts/youtube-absorb.ts",
     "smoke:openrouter": "export OPENROUTER_API_KEY=$(. ~/.keys/.env; echo $OPENROUTER_API_KEY) && tsx scripts/smoke-openrouter.ts",
     "postinstall": "../proton/ops/link-modules.sh arrmatura arrmatura-web arrmatura-vibe ultimus",
