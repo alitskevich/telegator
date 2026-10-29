@@ -2,7 +2,7 @@
   <Signature purpose="Signs the operator in, then switches between sign-in, access check, refusal and the console"
     description="`@api.access` is the API's answer to `whoami`, not the token's: only the API can read whether the account is still enabled." />
 
-  <FirebaseService Ref="auth" config="{R.firebaseConfig}" emulatorsPorts="{R.firebaseEmulatorsPorts}" />
+  <FirebaseService Ref="auth" config="{R.firebaseConfig}" emulatorsPorts="{R.firebaseEmulatorsPorts}" prodAuth="{true}" />
   <ApiService Ref="api" auth="@auth" />
 
   <Selector On="{@api.access}">

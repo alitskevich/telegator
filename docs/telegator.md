@@ -165,7 +165,7 @@ Code: `tg-dedup/`. Constants: `tg-configs/dedup.ts`.
 
 - **Audit**: a Messages row carries a red count of its open `audit` entries, those no later successful post on that target has resolved; its expanded panel lists them under the members. The Audit page lists every stage's failed items (§3), then its History: the newest 200 entries of both kinds.
 
-- **Sign-in**: the platform's `FirebaseService`, with Google in production and the Auth emulator locally. The browser holds no Firestore access; `firestore.rules` denies everything.
+- **Sign-in**: the platform's `FirebaseService`, always with Google against the production project, locally too (`prodAuth`). The browser holds no Firestore access; `firestore.rules` denies everything.
 - **API**: `POST {data: {action, input}}` to `api`. The answer is `{data: {ok, result}}`, or an error with 400 / 401 / 403 / 500.
 - **Roles**: `viewer` < `editor` < `admin`, kept in `users/{uid}.roles`. A first sign-in creates the user **disabled with no roles**, and an admin enables it in Firestore. `users` is read on every call, so disabling takes effect at once.
 - **Actions** (`tg-api/actions.ts` maps each to its least role):
@@ -187,7 +187,7 @@ npm run dev              # emulators + functions watch + console on :8080
 
 `npm run dev` builds the functions bundle, then runs these in parallel:
 
-- the **emulators**: Auth 9099, Functions 5001, Firestore 8180, Tasks 9499, UI 4000. Data persists in `.emulator/`.
+- the **emulators**: Functions 5001, Firestore 8180, Tasks 9499, UI 4000. Data persists in `.emulator/`.
 - an esbuild **watch** of `tg-functions`. The Functions emulator reloads on every rebuild.
 - the **console** with live reload at `http://localhost:8080`.
 - the **vibe server** on 127.0.0.1:8091: Cmd+I in the console opens the DevTools drawer, whose agent edits this repo.
@@ -196,7 +196,7 @@ npm run dev              # emulators + functions watch + console on :8080
 | Need | Do |
 | --- | --- |
 | Secrets for the emulator | `packages/tg-functions/.secret.local` (git-ignored), linked from `~/.keys/.env` (shared by all projects). `TELEGRAM_BOT_TOKEN` there is a placeholder, so local runs never post to live channels. Put a test bot's token there to try publishing. |
-| Sign in locally | Press *Sign in*. The Auth emulator signs in `dev@example.com`, and the first emulator sign-in is an enabled admin. |
+| Sign in locally | Press *Sign in* and pick your real Google account. Its token is real; the first sign-in under the emulator is an enabled admin in the local `users`. `http://localhost:8080` must be an authorized JavaScript origin of the `googleClientId` OAuth client. |
 | Data | `npm run seed:download:dev` or `seed:download:prod` saves `sources`, `targets` and `users` to `packages/tg-seed/data/<env>/<collection>.json` (git-ignored). `npm run seed:upload:dev -- --write` makes each dev collection match its file, deleting documents missing from it; dry run without `--write`. |
 | A scrape | *Scrape now* on the Dashboard page's Scrape node. Scheduled functions do not fire in the emulator, so neither does `sweep`: drive the flow from the Dashboard page instead. *Run now* runs a stage's delayed and retried items, *Pause* and *Step* walk items through one at a time, *Run* on a failed item of the Audit page re-runs it. |
 
