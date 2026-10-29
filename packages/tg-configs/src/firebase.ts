@@ -12,4 +12,5 @@ export const firebaseConfig = {
   messagingSenderId: "614392599326",
   appId: "1:614392599326:web:e5ecf979843a0fcb02ef0f",
   functionsRegion: REGION,
+  googleClientId: "614392599326-12qifqfl05u6okofn3tgu339u89aahdh.apps.googleusercontent.com",
 };
