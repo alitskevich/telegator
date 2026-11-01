@@ -1,0 +1,118 @@
+{
+  "art&fashion": {
+    "id": "art&fashion",
+    "keywords": []
+  },
+  "crime": {
+    "id": "crime",
+    "keywords": []
+  },
+  "culture&history": {
+    "id": "culture&history",
+    "keywords": []
+  },
+  "economics&finance": {
+    "id": "economics&finance",
+    "keywords": []
+  },
+  "education": {
+    "id": "education",
+    "keywords": []
+  },
+  "energy": {
+    "id": "energy",
+    "keywords": []
+  },
+  "entertainment": {
+    "id": "entertainment",
+    "keywords": []
+  },
+  "environmental": {
+    "id": "environmental",
+    "keywords": []
+  },
+  "geopolitics": {
+    "id": "geopolitics",
+    "keywords": []
+  },
+  "health": {
+    "id": "health",
+    "keywords": []
+  },
+  "human-rights": {
+    "id": "human-rights",
+    "keywords": []
+  },
+  "incidents": {
+    "id": "incidents",
+    "keywords": []
+  },
+  "infrastructure": {
+    "id": "infrastructure",
+    "keywords": []
+  },
+  "international": {
+    "id": "international",
+    "keywords": []
+  },
+  "internet": {
+    "id": "internet",
+    "keywords": []
+  },
+  "media": {
+    "id": "media",
+    "keywords": []
+  },
+  "nature": {
+    "id": "nature",
+    "keywords": []
+  },
+  "news-digest": {
+    "id": "news-digest",
+    "keywords": []
+  },
+  "other": {
+    "id": "other",
+    "keywords": []
+  },
+  "politics": {
+    "id": "politics",
+    "keywords": []
+  },
+  "real-estate": {
+    "id": "real-estate",
+    "keywords": []
+  },
+  "science": {
+    "id": "science",
+    "keywords": []
+  },
+  "social": {
+    "id": "social",
+    "keywords": []
+  },
+  "sports": {
+    "id": "sports",
+    "keywords": []
+  },
+  "technology": {
+    "id": "technology",
+    "keywords": []
+  },
+  "tourism": {
+    "id": "tourism",
+    "keywords": []
+  },
+  "traditions": {
+    "id": "traditions",
+    "keywords": []
+  },
+  "traffic": {
+    "id": "traffic",
+    "keywords": []
+  },
+  "war": {
+    "id": "war",
+    "keywords": []
+  }
+}

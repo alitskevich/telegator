@@ -7,6 +7,11 @@
   "exports": {
     "./*": "./src/*.ts"
   },
+  "scripts": {
+    "download:prod": "tsx scripts/seed.ts download prod --write",
+    "download:dev": "tsx scripts/seed.ts download dev --write",
+    "upload:dev": "tsx scripts/seed.ts upload dev"
+  },
   "dependencies": {
     "tg-firebase": "*"
   }

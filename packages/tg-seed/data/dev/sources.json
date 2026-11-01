@@ -1,0 +1,63 @@
+{
+  "nederlandstalig": {
+    "id": "nederlandstalig",
+    "status": "ok",
+    "type": "telegram",
+    "zeroYieldRuns": 0,
+    "lastNonZeroCount": 20,
+    "lastUpdated": 1793541699542,
+    "lastError": "",
+    "lastItemId": "2830",
+    "lastResult": "2026-11-01T14:01:39.542Z",
+    "lastCount": 20
+  },
+  "netherfor": {
+    "id": "netherfor",
+    "status": "ok",
+    "type": "telegram",
+    "zeroYieldRuns": 0,
+    "lastNonZeroCount": 20,
+    "lastUpdated": 1793541699542,
+    "lastError": "",
+    "lastItemId": "5229",
+    "lastResult": "2026-11-01T14:01:39.542Z",
+    "lastCount": 20
+  },
+  "nevzorovtv": {
+    "id": "nevzorovtv",
+    "status": "ok",
+    "type": "telegram",
+    "zeroYieldRuns": 0,
+    "lastNonZeroCount": 20,
+    "lastCount": 20,
+    "lastUpdated": 1793536721588,
+    "lastError": "",
+    "lastItemId": "37794",
+    "lastResult": "2026-11-01T12:38:41.588Z",
+    "deleted": true
+  },
+  "nexta_live": {
+    "id": "nexta_live",
+    "status": "ok",
+    "type": "telegram",
+    "zeroYieldRuns": 0,
+    "lastNonZeroCount": 20,
+    "lastUpdated": 1793541699542,
+    "lastError": "",
+    "lastItemId": "125938",
+    "lastResult": "2026-11-01T14:01:39.542Z",
+    "lastCount": 20
+  },
+  "traliukai": {
+    "id": "traliukai",
+    "status": "ok",
+    "type": "telegram",
+    "zeroYieldRuns": 0,
+    "lastNonZeroCount": 20,
+    "lastUpdated": 1793541699542,
+    "lastError": "",
+    "lastItemId": "5036",
+    "lastResult": "2026-11-01T14:01:39.542Z",
+    "lastCount": 20
+  }
+}

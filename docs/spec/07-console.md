@@ -107,8 +107,6 @@ A local MCP server exposes exactly three tools over the same store:
 | Script | Does |
 | --- | --- |
 | `seed` | Load sources and targets from export files. |
-| `cursors:now` | Move cursors to now. |
-| `autofix` | Group `error` items by stage and message, ask a coding agent for each group's root cause (`data`, `code` or `none`); dry run unless `--apply`, which saves corrected payloads through `editItem`, runs them, and keeps the reading as the item's diagnosis. |
 | `smoke:openrouter` | The only check that calls the real model. |
 
 Scripts use the local emulator when one is configured, otherwise production.

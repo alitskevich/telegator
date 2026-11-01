@@ -1,0 +1,20 @@
+{
+  "5DZO8vYgUjVjZnyFQ4O4pZpfch42": {
+    "uid": "5DZO8vYgUjVjZnyFQ4O4pZpfch42",
+    "email": "alitskevich@gmail.com",
+    "roles": ["admin"],
+    "enabled": true
+  },
+  "DFbGw5Pjq7gWf369s1NZSbQnYK1D": {
+    "uid": "DFbGw5Pjq7gWf369s1NZSbQnYK1D",
+    "email": "dev@example.com",
+    "roles": ["admin"],
+    "enabled": true
+  },
+  "XYFQS7JkpHitTrSUbG2vnE5PZeUk": {
+    "uid": "XYFQS7JkpHitTrSUbG2vnE5PZeUk",
+    "email": "probe@example.com",
+    "roles": ["admin"],
+    "enabled": true
+  }
+}

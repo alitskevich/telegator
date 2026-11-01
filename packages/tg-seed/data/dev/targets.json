@@ -1,0 +1,16 @@
+{
+  "belarus_daily": {
+    "id": "belarus_daily",
+    "type": "telegram_channel",
+    "lastPostedMessageId": "bel_gvozdoder/900534",
+    "messageTemplate": "",
+    "tags": ["belarus"],
+    "lastPostedDate": "2026-11-01T14:16:07.796Z"
+  },
+  "telegator_news": {
+    "id": "telegator_news",
+    "lastPostedMessageId": "emulated/1792659179471",
+    "lastPostedDate": "2026-10-22T08:54:03.212Z",
+    "tags": ["geopolitics", "politics", "news"]
+  }
+}

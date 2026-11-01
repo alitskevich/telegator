@@ -57,7 +57,7 @@
       }
     },
     {
-      "includes": ["scripts/**"],
+      "includes": ["scripts/**", "packages/tg-seed/scripts/**"],
       "linter": {
         "rules": {
           "suspicious": {

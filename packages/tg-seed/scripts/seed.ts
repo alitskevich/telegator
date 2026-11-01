@@ -2,10 +2,10 @@ import { join } from "node:path";
 
 /**
  * Snapshots of the operator-curated collections (`tg-seed`), one JSON file per
- * collection in `packages/tg-seed/data/<env>/` (git-ignored).
+ * collection in `packages/tg-seed/data/<env>/`.
  *
- *   npm run seed:download -- dev|prod
- *   npm run seed:upload -- dev|prod [--write]   # dry run unless --write
+ *   npm -w tg-seed run download:dev|download:prod
+ *   npm -w tg-seed run upload:dev [-- --write]   # dry run unless --write
  *
  * `dev` is the emulator `npm run dev` holds; `prod` is production through
  * `gcloud auth application-default login`. An upload replaces each collection:
@@ -25,9 +25,9 @@ async function main(): Promise<void> {
   // Set before `tg-firebase` loads: the Admin SDK reads it once, at start.
   if (env === "dev") process.env.FIRESTORE_EMULATOR_HOST = DEV_FIRESTORE_HOST;
   else delete process.env.FIRESTORE_EMULATOR_HOST;
-  const { SEED_COLLECTIONS, download, load, store, upload } = await import("tg-seed/seed");
+  const { SEED_COLLECTIONS, download, load, store, upload } = await import("../src/seed");
 
-  const dir = join(import.meta.dirname, "../packages/tg-seed/data", env);
+  const dir = join(import.meta.dirname, "../data", env);
   console.log(`${command} ${env} (${process.env.FIRESTORE_EMULATOR_HOST ?? "production"})`);
 
   for (const name of SEED_COLLECTIONS) {
