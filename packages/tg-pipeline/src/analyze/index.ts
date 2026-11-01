@@ -39,6 +39,9 @@ export async function runAnalyze(payload: unknown, classifier: Classifier): Prom
     return;
   }
 
-  await enqueue("aggregate", normalizeAnalyzed(item, classified, await tags.listAll()));
+  const analyzed = normalizeAnalyzed(item, classified, await tags.listAll());
+  // Before the enqueue: a failure here retries without queuing the item twice.
+  await tags.recordEncounters(analyzed.tags ?? [], analyzed.date);
+  await enqueue("aggregate", analyzed);
   metrics.count("ItemsAnalyzed");
 }

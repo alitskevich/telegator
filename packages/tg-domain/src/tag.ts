@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { DateKeySchema } from "./date";
 import { mergeTags, normalizeTag, TagsSchema } from "./tags";
 
 /**
  * A tag in the `tags` collection: its id is the tag as stored on items and
- * messages, and `keywords` are the raw tags analyze replaces with it.
+ * messages, and `keywords` are the raw tags analyze replaces with it. `count`
+ * and `lastDate` are analyze's: how many posts carried it, and the latest one's day.
  */
 
 /** A normalised tag, without the comma that would split it in a list. */
@@ -15,6 +17,8 @@ export const TagIdSchema = z
 export const TagSchema = z.object({
   id: z.string().min(1),
   keywords: TagsSchema.default([]),
+  count: z.number().int().nonnegative().default(0),
+  lastDate: DateKeySchema.optional(),
   deleted: z.boolean().optional(),
 });
 

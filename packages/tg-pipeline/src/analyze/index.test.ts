@@ -1,9 +1,10 @@
 import { type ScrapedItem, ScrapedItemSchema } from "tg-domain/item";
 import { type NewsItem, NewsItemSchema } from "tg-domain/newsItemSchema";
+import { tags } from "tg-firebase/db";
 import { metrics } from "tg-firebase/metrics";
 import { enqueue } from "tg-firebase/tasks";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { stubClassifier } from "../../../../test/support";
+import { clearFirestore, stubClassifier } from "../../../../test/support";
 import { runAnalyze } from "./index";
 
 vi.mock("tg-firebase/tasks", () => ({ enqueue: vi.fn(async () => true) }));
@@ -23,7 +24,10 @@ const classification = (fields: Partial<NewsItem> = {}): NewsItem =>
     ...fields,
   });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(async () => {
+  vi.clearAllMocks();
+  await clearFirestore();
+});
 
 describe("runAnalyze", () => {
   test("enqueues an important item for aggregate", async () => {
@@ -37,15 +41,39 @@ describe("runAnalyze", () => {
     expect(metrics.count).toHaveBeenCalledWith("ItemsAnalyzed");
   });
 
+  test("counts each mapped tag and stamps its last date, creating the unknown ones", async () => {
+    await tags.put({ id: "minsk", keywords: ["мінск"], count: 2, lastDate: "2026-08-01" });
+    const body = "Something happened in Minsk.";
+    const classifier = stubClassifier({ [body]: classification({ tags: ["мінск", "news"] }) });
+
+    await runAnalyze(scraped(body), classifier);
+    await runAnalyze(scraped(body), classifier);
+
+    expect(await tags.get("minsk")).toEqual({
+      id: "minsk",
+      keywords: ["мінск"],
+      count: 4,
+      lastDate: "2026-08-29",
+    });
+    expect(await tags.get("news")).toEqual({
+      id: "news",
+      keywords: [],
+      count: 2,
+      lastDate: "2026-08-29",
+    });
+    expect(await tags.get("мінск")).toBeUndefined();
+  });
+
   test("drops a low-importance item", async () => {
     const body = "A local fair.";
     await runAnalyze(
       scraped(body),
-      stubClassifier({ [body]: classification({ importance: "low" }) }),
+      stubClassifier({ [body]: classification({ importance: "low", tags: ["fair"] }) }),
     );
 
     expect(enqueue).not.toHaveBeenCalled();
     expect(metrics.count).toHaveBeenCalledWith("ItemsSkipped", 1, "low");
+    expect(await tags.get("fair")).toBeUndefined();
   });
 
   test("drops a bare link before paying for a model call", async () => {

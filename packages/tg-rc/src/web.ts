@@ -25,6 +25,8 @@ const labels: Record<string, string> = {
   status: "Status",
   tags: "Tags",
   keywords: "Keywords",
+  count: "Count",
+  lastDate: "Last seen",
   category: "Category",
   teaser: "Teaser",
   lastCount: "Last count",
@@ -41,7 +43,7 @@ const labels: Record<string, string> = {
 };
 
 /** Right-aligned, tabular, and sorted as numbers. */
-const NUMERIC = new Set(["lastCount", "zeroYieldRuns", "memberCount"]);
+const NUMERIC = new Set(["lastCount", "zeroYieldRuns", "memberCount", "count"]);
 
 const columnsOf = (ids: readonly string[]) =>
   ids.map((id) => ({ id, name: labels[id] ?? id, numeric: NUMERIC.has(id) }));
@@ -122,6 +124,8 @@ const tagsPage = {
   columns: [
     { id: "id", name: labels.id, width: "minmax(8rem, 1fr)" },
     { id: "keywords", name: labels.keywords, width: "minmax(8rem, 2fr)" },
+    { id: "count", name: labels.count, width: "minmax(4rem, auto)" },
+    { id: "lastDate", name: labels.lastDate, width: "minmax(6rem, auto)" },
   ],
 };
 

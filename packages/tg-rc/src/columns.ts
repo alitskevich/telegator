@@ -30,7 +30,7 @@ export const TARGET_COLUMNS = [
 ] as const;
 
 /** The Tags page's list. */
-export const TAG_COLUMNS = ["id", "keywords"] as const;
+export const TAG_COLUMNS = ["id", "keywords", "count", "lastDate"] as const;
 
 /** The collections the console edits. */
 export const TABLES = ["sources", "messages", "targets", "tags"] as const;

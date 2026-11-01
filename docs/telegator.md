@@ -79,7 +79,7 @@ The map makes replay free: writing `members.{itemId}` again writes the same valu
 
 `id` (channel), `type`, `tags`, optional `messageTemplate`, and `lastPostedDate` / `lastPostedMessageId`, which publish writes. A target receives every message whose `tags` include all of its own, case-insensitively; a target with no tags receives nothing.
 
-The `tags` collection holds the operator's vocabulary: `id` (the tag, normalised) and `keywords` (the raw tags analyze replaces with it). Edited on the Tags page; a change applies to posts analyzed after it, not to stored messages.
+The `tags` collection holds the operator's vocabulary: `id` (the tag, normalised) and `keywords` (the raw tags analyze replaces with it). Edited on the Tags page; a change applies to posts analyzed after it, not to stored messages. Analyze also writes `count` (posts that passed routing with this tag) and `lastDate` (the latest one's scrape day), and creates the row of a tag not yet in the collection. A redelivered post counts again, and a deleted tag added again restarts at zero.
 
 ### 2.5 `audit` — what went wrong
 
@@ -124,7 +124,7 @@ Each task stage drains its own `ingest` items. A drain holds the stage's lease (
 
 ### 3.2 analyze
 
-An empty body or a bare link is dropped before the model call. Otherwise one classification (§4). Routing: no category → throw (retry); `importance = low` → drop; otherwise enqueue to `aggregate`. `country` is uppercased, and AI tags are merged with source tags (array, AI first, each once), then mapped through the `tags` collection (§2.4): a keyword becomes its tag, and any other tag stays.
+An empty body or a bare link is dropped before the model call. Otherwise one classification (§4). Routing: no category → throw (retry); `importance = low` → drop; otherwise enqueue to `aggregate`. `country` is uppercased, and AI tags are merged with source tags (array, AI first, each once), then mapped through the `tags` collection (§2.4): a keyword becomes its tag, and any other tag stays. Each resulting tag's `count` and `lastDate` are updated before the enqueue.
 
 ### 3.3 aggregate
 

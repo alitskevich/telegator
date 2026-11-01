@@ -1,4 +1,4 @@
-import { FieldPath, type QueryDocumentSnapshot } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import {
   type DedupCandidate,
   DedupCandidateSchema,
@@ -85,7 +85,23 @@ export const targets = {
     targetRows.patch(id, post),
 };
 
-export const tags = collection("tags", TagSchema);
+const tagRows = collection("tags", TagSchema);
+
+export const tags = {
+  ...tagRows,
+  /** Counts one encounter of each tag; creates the row of a tag the collection lacks. */
+  async recordEncounters(ids: readonly string[], date: string): Promise<void> {
+    const batch = db.batch();
+    for (const id of ids) {
+      batch.set(
+        tagRows.doc(id),
+        { id, count: FieldValue.increment(1), lastDate: date },
+        { merge: true },
+      );
+    }
+    await batch.commit();
+  },
+};
 
 /** Everything a list or a card shows; `members` is the one large field and stays out. */
 const LIST_FIELDS = Object.keys(MessageListItemSchema.shape);
