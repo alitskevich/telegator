@@ -1,5 +1,5 @@
 <Component id="Page.Messages">
-  <Signature purpose="The Messages table by status, picked from a dropdown with each status's count, with Publish now on the backlog for an admin"
+  <Signature purpose="The Messages table by status, picked from a radio group with each status's count, with Publish now on the backlog for an admin"
     description="The status is `?status=` in the url, so a reload or a shared link shows the same one." />
 
   <GridService Ref="grid" table="messages" status="{@browser.params.status}" api="@api"
@@ -17,11 +17,8 @@
     </Fragment>
   </PageTitle>
 
-  <select class="select sm:select-sm w-full sm:w-56" aria-label="{R.dashboard.status}"
-    change="-> @browser.setParam('status', event.value || null)">
-    <option Each="option of @grid.statusOptions" value="{option.id}"
-      selected="{@grid.status == option.id}">{option.name}</option>
-  </select>
+  <RadioGroup class="flex-wrap" size="sm" name="status" options="{@grid.statusOptions}" value="{@grid.status}"
+    change="-> @browser.setParam('status', event.value || null)" />
 
   <RecordsTable table="messages" />
 </Component>
