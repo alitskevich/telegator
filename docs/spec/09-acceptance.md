@@ -14,7 +14,7 @@ A rebuild is correct when it passes these scenarios. Each one names the rules it
 | A4 | A2 done | the same item `s1/101` reaches aggregate again | no status change, no publish request; only `ts` moves | dedup §4 step 3, DD-22, G-2 |
 | A5 | analyze answers `importance: low` | analyze | dropped; `ItemsSkipped.low` +1; nothing queued | route row 2 |
 | A6 | body is `[link](#1)` only | analyze | dropped as `nobody`; no model call | pre-filter |
-| A7 | analyze answers no category | analyze | throws; retried after 30 s, then 60 s; third failure → `error` + `item` audit entry | CL-1, QU-10 |
+| A7 | analyze answers no category | analyze | throws, an `item` audit entry each time; retried after 30 s, then 60 s; third failure → `error` | CL-1, QU-10 |
 | A8 | post is a forward | scrape | `ItemsDropped.forward` +1; not queued; cursor still moves to its id | IN-16, IN-18 |
 | A9 | post posted 3 days + 1 ms ago | scrape | `obsolete`; dropped | kind table |
 | A10 | the queue write of one post fails | scrape | `lastItemId` unchanged | IN-19 |

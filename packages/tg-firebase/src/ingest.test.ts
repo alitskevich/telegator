@@ -121,7 +121,7 @@ describe("drain", () => {
     await drain("publish", options, fails, at(T0 + 30_000));
     expect(await read("a")).toMatchObject({ status: "pending", retryCount: 2, runAt: T0 + 90_000 });
 
-    expect(await listAudit(10)).toEqual([]);
+    expect((await listAudit(10)).map((entry) => entry.at)).toEqual([T0 + 30_000, T0]);
 
     await drain("publish", options, fails, at(T0 + 90_000));
     expect(await read("a")).toMatchObject({
@@ -129,18 +129,18 @@ describe("drain", () => {
       retryCount: 3,
       finishedAt: T0 + 90_000,
     });
-    expect(await listAudit(10)).toEqual([
-      {
-        id: expect.any(String),
-        kind: "item",
-        stage: "publish",
-        itemId: "a",
-        ref: "m1",
-        error: "telegram rejected",
-        cause: expect.stringContaining("telegram rejected"),
-        at: T0 + 90_000,
-      },
-    ]);
+    const audit = await listAudit(10);
+    expect(audit).toHaveLength(3);
+    expect(audit[0]).toEqual({
+      id: expect.any(String),
+      kind: "item",
+      stage: "publish",
+      itemId: "a",
+      ref: "m1",
+      error: "telegram rejected",
+      cause: expect.stringContaining("telegram rejected"),
+      at: T0 + 90_000,
+    });
   });
 
   test("a second drain leaves the stage to the one holding it", async () => {

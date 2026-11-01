@@ -86,13 +86,13 @@ The `tags` collection holds the operator's vocabulary: `id` (the tag, normalised
 Append-only, two kinds of entry, each with `error` and `at`:
 
 - `send`: publish writes one per send Telegram rejected, with `messageId`, `target`, `method`, and Telegram's reason as `error`. Entries older than `kind` are all sends.
-- `item`: an item's last failed attempt (§3) writes one, with `stage`, `itemId`, `ref` (the post or message it carries) and `cause`.
+- `item`: each failed attempt of an item (§3) writes one, with `stage`, `itemId`, `ref` (the post or message it carries) and `cause`.
 
-Both outlive the `ingest` error, which goes on replay or discard. A TTL policy on `expireAt` deletes an entry after 30 days.
+Both outlive the `ingest` error, which goes on retry, replay or discard. A TTL policy on `expireAt` deletes an entry after 30 days.
 
 ## 3. Stages
 
-Each task stage drains its own `ingest` items. A drain holds the stage's lease (`ingestLeases/{stage}`), so one drain runs per stage, and it runs at most *concurrency* items at once, oldest `runAt` first. A thrown error sets the item back to `pending` with a backoff of 30 s, doubling per attempt; the last attempt sets it `error` and writes an `item` entry to `audit` (§2.5). Every failure records the message in `error` and its `cause` chain, or else its stack, in `cause`.
+Each task stage drains its own `ingest` items. A drain holds the stage's lease (`ingestLeases/{stage}`), so one drain runs per stage, and it runs at most *concurrency* items at once, oldest `runAt` first. A thrown error writes an `item` entry to `audit` (§2.5) and sets the item back to `pending` with a backoff of 30 s, doubling per attempt; the last attempt sets it `error`. Every failure records the message in `error` and its `cause` chain, or else its stack, in `cause`.
 
 - **Trigger.** `ingest` (`onDocumentWritten`) drains a stage as soon as one of its items is `pending` and due: on enqueue and on replay.
 - **Sweep.** `sweep` runs every minute. It runs what came due later (the publish delay, a retry's backoff) and fails the items of a drain that died: `running` past their lease counts as one attempt.

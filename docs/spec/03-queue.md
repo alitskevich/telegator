@@ -48,8 +48,8 @@ A **drain** runs the stage's due items. It starts when:
 ## 5. Running one item
 
 - **QU-9** **Success**: `status = done`, `finishedAt = now`, `expireAt = finishedAt + 7 days`, remove `leaseUntil`.
-- **QU-10** **Failure** (the stage threw): `retryCount += 1`; record `error` (the message) and `cause`; remove `leaseUntil`.
-  - If `retryCount ≥ attempts`: `status = error`, `finishedAt = now`, and write an `item` audit entry ([01-data.md](01-data.md) §7). A failed audit write is logged, never thrown.
+- **QU-10** **Failure** (the stage threw): `retryCount += 1`; record `error` (the message) and `cause`; remove `leaseUntil`; write an `item` audit entry ([01-data.md](01-data.md) §7). A failed audit write is logged, never thrown.
+  - If `retryCount ≥ attempts`: `status = error`, `finishedAt = now`.
   - Else: `status = pending`, `runAt = now + 30 s × 2^(retryCount − 1)` (30 s, 60 s, 120 s, 240 s).
 - **QU-11** `cause` is the error's cause chain, at most 5 links, each `Name: message`, joined by newlines. With no chain, it is the stack. It is cut to **2000** characters.
 - **QU-12** A stage decides "skip" by returning normally. Only a throw counts as a failure.

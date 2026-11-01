@@ -104,7 +104,7 @@ export const restart = (runAt: number) => ({
   finishedAt: FieldValue.delete(),
 });
 
-/** A failed attempt: back to `pending` after the backoff, or `error` and an `audit` entry on the last one. */
+/** A failed attempt: an `audit` entry, and back to `pending` after the backoff, or `error` on the last one. */
 async function fail(
   item: StoredIngestItem,
   thrown: unknown,
@@ -123,7 +123,6 @@ async function fail(
     leaseUntil: FieldValue.delete(),
     ...(failed ? { finishedAt: now } : { runAt: now + MIN_BACKOFF_MS * 2 ** (retryCount - 1) }),
   });
-  if (!failed) return;
   await recordAudit({
     kind: "item",
     stage: item.stage,
