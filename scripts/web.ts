@@ -25,6 +25,8 @@ const INDEX = join(WEB, "src/index.cml.ts");
 
 /** The dev origin; the api function allows any localhost origin in the emulator. */
 const DEV_PORT = 8080;
+/** Batches a burst of file changes into one rebuild, and so one page reload. */
+const RELOAD_DELAY_MS = 2000;
 
 const serve = process.argv.includes("--serve");
 
@@ -88,7 +90,7 @@ writeCmlIndex();
 if (serve) {
   spawn("npx", tailwind(true), { stdio: "inherit" });
   const context = await esbuild.context(options);
-  await context.watch();
+  await context.watch({ delay: RELOAD_DELAY_MS });
   await context.serve({ servedir: WWW, port: DEV_PORT, fallback: join(WWW, "index.html") });
   console.log(`serving  http://localhost:${DEV_PORT}`);
 } else {
