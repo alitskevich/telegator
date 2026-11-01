@@ -1,3 +1,4 @@
+import { clampSummary } from "tg-domain/item";
 import { describe, expect, it } from "vitest";
 
 import { buildClassificationRequest } from "./classificationRequest";
@@ -98,6 +99,18 @@ describe("createOpenRouterClassifier", () => {
     const classifier = createOpenRouterClassifier({ client: fake.client });
 
     await expect(classifier.classify(ITEM_BODY)).resolves.toEqual(VALID_ITEM);
+  });
+
+  /** Structured output does not enforce `maxLength`: an overrun must not retry into `error`. */
+  it("clamps a summary over the cap instead of failing", async () => {
+    const summary = "слова ".repeat(60).trim();
+    const fake = fakeClassifierClient(async () => textResponse({ ...VALID_ITEM, summary }));
+    const classifier = createOpenRouterClassifier({ client: fake.client });
+
+    await expect(classifier.classify(ITEM_BODY)).resolves.toEqual({
+      ...VALID_ITEM,
+      summary: clampSummary(summary),
+    });
   });
 
   it("throws when the response violates NewsItemSchema", async () => {

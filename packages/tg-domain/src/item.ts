@@ -13,6 +13,27 @@ import { TagsSchema } from "./tags";
 /** The summary length cap. */
 export const SUMMARY_MAX_LENGTH = 220;
 
+/** The `[text](#N)` link token. */
+const LINK_TOKEN = /\[[^\]]*\]\(#\d+\)/g;
+
+/**
+ * Fits a summary to the cap: cuts at the last space, backs off to the start of a
+ * link token the cut would split, and marks the cut with `…`.
+ */
+export function clampSummary(summary: string): string {
+  if (summary.length <= SUMMARY_MAX_LENGTH) return summary;
+
+  const room = SUMMARY_MAX_LENGTH - 1;
+  const space = summary.lastIndexOf(" ", room);
+  let end = space > 0 ? space : room;
+
+  for (const token of summary.matchAll(LINK_TOKEN)) {
+    if (token.index < end && end < token.index + token[0].length) end = token.index;
+  }
+
+  return `${summary.slice(0, end).trimEnd()}…`;
+}
+
 /** Resolves a `[text](#N)` token in the body. */
 export const LinkSchema = z.object({
   id: z.number().int().positive(),

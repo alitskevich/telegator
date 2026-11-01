@@ -1,5 +1,7 @@
 import type { Classifier } from "tg-ai/types";
+import { clampSummary } from "tg-domain/item";
 import { type NewsItem, NewsItemSchema } from "tg-domain/newsItemSchema";
+import { z } from "zod";
 import { buildClassificationRequest } from "./classificationRequest";
 import { extractText } from "./messagesContent";
 import { createMessagesClient, missingApiKey } from "./openrouterClient";
@@ -9,6 +11,14 @@ import type { OpenRouterClassifierOptions } from "./types";
  * The OpenRouter classifier. The client is injectable and built lazily, so
  * constructing the adapter never fetches a secret and tests can import it.
  */
+
+/**
+ * The model can overrun the summary cap even when told it, and a retry costs a
+ * paid call and may overrun again, so an overrun is clamped rather than rejected.
+ */
+const ResponseSchema = NewsItemSchema.extend({
+  summary: z.string().transform(clampSummary),
+});
 
 export function createOpenRouterClassifier(options: OpenRouterClassifierOptions = {}): Classifier {
   let client = options.client;
@@ -29,7 +39,7 @@ export function createOpenRouterClassifier(options: OpenRouterClassifierOptions 
 
       // Validated here, so a bad response retries like a provider error instead
       // of putting an unvalidated category on the aggregate queue.
-      return NewsItemSchema.parse(JSON.parse(extractText(response, "openrouter")));
+      return ResponseSchema.parse(JSON.parse(extractText(response, "openrouter")));
     },
   };
 }

@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   AiFieldsSchema,
   AnalyzedItemSchema,
+  clampSummary,
   LinkSchema,
   ScrapedItemSchema,
   SUMMARY_MAX_LENGTH,
@@ -108,6 +109,37 @@ describe("AiFieldsSchema", () => {
     expect(SUMMARY_MAX_LENGTH).toBe(220);
     expect(AiFieldsSchema.safeParse({ ...aiFields, summary: "x".repeat(220) }).success).toBe(true);
     expect(AiFieldsSchema.safeParse({ ...aiFields, summary: "x".repeat(221) }).success).toBe(false);
+  });
+
+  describe("clampSummary", () => {
+    test("leaves a summary within the cap unchanged", () => {
+      const summary = "x".repeat(SUMMARY_MAX_LENGTH);
+      expect(clampSummary(summary)).toBe(summary);
+    });
+
+    test("cuts at a word boundary and marks the cut", () => {
+      const clamped = clampSummary("слова ".repeat(60));
+      expect(clamped.length).toBeLessThanOrEqual(SUMMARY_MAX_LENGTH);
+      expect(clamped.endsWith("слова…")).toBe(true);
+    });
+
+    test("cuts a summary with no spaces at the cap", () => {
+      const clamped = clampSummary("x".repeat(SUMMARY_MAX_LENGTH + 1));
+      expect(clamped).toBe(`${"x".repeat(SUMMARY_MAX_LENGTH - 1)}…`);
+    });
+
+    /** A split `[text](#N)` token would publish as literal markup. */
+    test("drops a link token the cut would split", () => {
+      const before = "x".repeat(200);
+      const clamped = clampSummary(`${before} [доўгі тэкст спасылкі ў канцы](#1) і яшчэ`);
+      expect(clamped).toBe(`${before}…`);
+    });
+
+    test("keeps a link token that fits whole", () => {
+      const clamped = clampSummary(`[тэкст](#1) ${"слова ".repeat(60)}`);
+      expect(clamped.startsWith("[тэкст](#1) ")).toBe(true);
+      expect(clamped.length).toBeLessThanOrEqual(SUMMARY_MAX_LENGTH);
+    });
   });
 
   /** The model returns whatever case it likes; analyze uppercases it. */

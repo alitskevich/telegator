@@ -147,7 +147,7 @@ The bot pauses at least 3 s after each send and retries once on `429`. Telegram 
 
 All three calls go to Claude through OpenRouter's Anthropic-compatible Messages API (`https://openrouter.ai/api`, no `/v1`; the SDK adds it). The model is `anthropic/claude-haiku-4.5`, defined once in `tg-configs/ai.ts`.
 
-- **Classify** (`tg-ai/openrouter.ts`): JSON-schema output with `title`, `summary` (Belarusian, at most 220 characters, stated in the field description), `country`, `location`, `category` (enum in `tg-enums/categories.ts`), `importance`, `peoples`, `properNames`, `tags`. The system prompt keeps `[text](#N)` tokens intact.
+- **Classify** (`tg-ai/openrouter.ts`): JSON-schema output with `title`, `summary` (Belarusian, at most 220 characters, stated in the field description; an overrun is clamped, not rejected), `country`, `location`, `category` (enum in `tg-enums/categories.ts`), `importance`, `peoples`, `properNames`, `tags`. The system prompt keeps `[text](#N)` tokens intact.
 - **Adjudicate** (`tg-ai/adjudicator.ts`): ambiguous dedup pairs, using English fields only. Verdicts are keyed by pair id, and a set that does not cover every pair is an error.
 - **Diagnose** (`tg-ai/diagnoser.ts`): on an admin's *Analyse* of an `error` item, the `api` function sends its stage, message, cause, attempts and the first 4000 characters of its payload. The answer, `{summary, cause, fix}`, is stored on the item as `diagnosis`, so a second look costs nothing. The `api` function therefore holds `OPENROUTER_API_KEY` too, and `MTPROTO_SESSION` for *Scrape now*.
 - `npm run smoke:openrouter` is the only check that calls the real model.
