@@ -37,11 +37,15 @@ export const TARGET_COLUMNS = [
   "messageTemplate",
 ] as const;
 
+/** The Tags page's list. */
+export const TAG_COLUMNS = ["id", "keywords"] as const;
+
 /** The collections the console edits. */
-export const TABLES = ["sources", "messages", "targets"] as const;
+export const TABLES = ["sources", "messages", "targets", "tags"] as const;
 export type TableName = (typeof TABLES)[number];
 
 /** The fields an operator may edit, per collection. Everything else is the pipeline's. */
 export const SOURCE_WRITABLE_FIELDS = ["status", "category", "tags", "teaser", "type"] as const;
-export const MESSAGE_WRITABLE_FIELDS = ["title", "category"] as const;
+export const MESSAGE_WRITABLE_FIELDS = ["title", "category", "tags"] as const;
 export const TARGET_WRITABLE_FIELDS = ["type", "messageTemplate", "tags"] as const;
+export const TAG_WRITABLE_FIELDS = ["keywords"] as const;

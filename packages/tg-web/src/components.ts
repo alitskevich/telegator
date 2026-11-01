@@ -4,8 +4,10 @@ import { ApiService } from "./services/ApiService";
 import { AuditService } from "./services/AuditService";
 import { GridService } from "./services/GridService";
 import { ItemService } from "./services/ItemService";
+import { ItemsService } from "./services/ItemsService";
 import { PipelineService } from "./services/PipelineService";
 import { RecordService } from "./services/RecordService";
+import { TroubleshootService } from "./services/TroubleshootService";
 
 /**
  * The console's registry: every template (generated, `./index.cml.ts`), every
@@ -18,6 +20,8 @@ export const components = [
   AuditService,
   GridService,
   ItemService,
+  ItemsService,
   PipelineService,
   RecordService,
+  TroubleshootService,
 ];

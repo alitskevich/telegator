@@ -142,7 +142,7 @@
   </Subcomponent>
 
   <Subcomponent id="Panel">
-    <Signature purpose="A message's expanded panel: its members, then the sends Telegram rejected">
+    <Signature purpose="A message's expanded panel: its members with links to their source posts, the target channels it matched with links to its posts, then the sends Telegram rejected">
       <Prop id="row" type="object" required="true" description="A `ViewRow` from `src/grid/types.ts`" />
     </Signature>
     <tr class="block md:table-row bg-base-200">
@@ -151,10 +151,22 @@
         <p If="{!row.membersLoading AND !row.members.length}" class="text-sm text-base-content/60">{R.common.noMembers}</p>
         <ul If="row.members.length" class="flex flex-col gap-2 text-sm max-w-[80ch]">
           <li Each="member of row.members" class="flex flex-col sm:flex-row gap-x-3">
-            <span class="text-primary shrink-0">@{member.channel}</span>
+            <a If="member.url" href="{member.url}" target="_blank" rel="noopener noreferrer" class="link link-primary shrink-0">@{member.channel}</a>
+            <span If="{!member.url}" class="text-primary shrink-0">@{member.channel}</span>
             <span class="text-base-content/80">{member.summary}</span>
           </li>
         </ul>
+        <div If="{!row.membersLoading}" class="mt-4 flex flex-col gap-2 max-w-[80ch]">
+          <h3 class="text-sm font-medium">{R.records.targets}</h3>
+          <p If="{!row.posts.length}" class="text-sm text-base-content/60">{R.records.noTargets}</p>
+          <ul If="row.posts.length" class="flex flex-col gap-1 text-sm">
+            <li Each="post of row.posts" class="flex gap-x-3">
+              <a If="post.url" href="{post.url}" target="_blank" rel="noopener noreferrer" class="link link-primary">t.me/{post.target}/{post.tgId}</a>
+              <span If="{!post.url}">@{post.target}</span>
+              <span If="{!post.url}" class="text-base-content/60">{R.records.notPosted}</span>
+            </li>
+          </ul>
+        </div>
         <div If="row.audit.length" class="mt-4 flex flex-col gap-2 max-w-[80ch]">
           <h3 class="text-sm font-medium">{R.audit.rejected}</h3>
           <AuditList entries="{row.audit}" />

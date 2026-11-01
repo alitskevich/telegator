@@ -29,7 +29,11 @@ const TONES: Readonly<Record<string, string>> = {
   ok: "badge-success",
   published: "badge-success",
   topublish: "badge-warning",
+  no_target: "badge-ghost",
   paused: "badge-ghost",
+  pending: "badge-warning",
+  running: "badge-info",
+  done: "badge-success",
   error: "badge-error",
 };
 

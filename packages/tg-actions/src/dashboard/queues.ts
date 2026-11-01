@@ -2,6 +2,7 @@ import type { Diagnoser } from "tg-ai/types";
 import { type ErrorDiagnosis, refOf } from "tg-domain/ingest";
 import { AnalyzedItemSchema, ScrapedItemSchema } from "tg-domain/item";
 import { SOURCE_STATUS_OK, sourceType } from "tg-domain/source";
+import { IngestStatusSchema } from "tg-enums/ingestStatus";
 import { QUEUES, type QueueName } from "tg-enums/queueName";
 import { SOURCE_TYPES } from "tg-enums/sourceType";
 import { sources } from "tg-firebase/db";
@@ -15,6 +16,7 @@ import {
 import {
   clearIngest,
   getItem,
+  listItems,
   listQueue,
   runItemNow,
   runNow,
@@ -28,6 +30,7 @@ import type {
   ErrorPreview,
   ErrorsPage,
   ItemDetail,
+  ItemPreview,
   QueueItemPreview,
   SourcePreview,
 } from "./types";
@@ -43,9 +46,15 @@ export const ERROR_PAGE = 50;
 const DIAGNOSIS_PAYLOAD = 4000;
 /** How many of a stage's next items the panel lists. */
 export const QUEUE_PREVIEW = 10;
+/** The most items the Items page lists. */
+export const ITEMS_PAGE = 100;
 const PREVIEW_TEXT = 140;
 
 const QueueInput = z.object({ queueName: z.enum(QUEUES) });
+const ItemsInput = z.object({
+  queueName: z.enum(QUEUES).optional(),
+  status: IngestStatusSchema.optional(),
+});
 const ReplayInput = z.object({ max: z.number().int().positive() });
 const IdInput = z.object({ id: z.string().min(1) });
 const RunInput = QueueInput.extend({ max: z.number().int().positive().optional() });
@@ -92,6 +101,17 @@ export async function inspectQueue(input: unknown): Promise<QueueItemPreview[]> 
   return (await listQueue(QueueInput.parse(input).queueName, QUEUE_PREVIEW)).map(preview);
 }
 
+/** One stage's items, or every stage's, in one status, or in any, newest first, without their payloads. */
+export async function listIngestItems(input: unknown): Promise<ItemPreview[]> {
+  const { queueName, status } = ItemsInput.parse(input);
+  return (await listItems(queueName, status, ITEMS_PAGE)).map((item) => ({
+    ...preview(item),
+    stage: item.stage,
+    createdAt: item.createdAt,
+    finishedAt: item.finishedAt ?? null,
+  }));
+}
+
 /** Every enabled source: those its reader's next run polls first, then soonest due. */
 export async function inspectSources(now = Date.now()): Promise<SourcePreview[]> {
   const enabled = await sources.listByStatus(SOURCE_STATUS_OK);
@@ -105,6 +125,7 @@ export async function inspectSources(now = Date.now()): Promise<SourcePreview[]>
       dueAt: dueAt(source),
       next: next.has(source.id),
       lastCount: source.lastCount,
+      lastError: source.lastError || null,
     }))
     .sort((a, b) => Number(b.next) - Number(a.next) || a.dueAt - b.dueAt);
 }

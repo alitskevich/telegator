@@ -1,6 +1,6 @@
 import type { Message, MessageListItem } from "tg-domain/message";
 import { SOURCE_STATUS_OK, SourceConfigInput, SourceSchema } from "tg-domain/source";
-import { TagsSchema } from "tg-domain/tags";
+import { mergeTags, TagsSchema } from "tg-domain/tags";
 import { TargetSchema } from "tg-domain/target";
 import { TARGET_TYPES } from "tg-enums/targetType";
 import { z } from "zod";
@@ -95,7 +95,7 @@ function toMessageContent(message: Message): MessageContent {
 export async function findMessagesByTags(raw: unknown, deps: McpDeps) {
   const { tags, limit } = FindMessagesInput.parse(raw);
 
-  const wanted = new Set(tags.map((tag) => tag.trim().toLowerCase()).filter((tag) => tag !== ""));
+  const wanted = new Set(mergeTags(tags));
   if (wanted.size === 0) {
     throw new Error("tags must contain at least one non-blank tag");
   }

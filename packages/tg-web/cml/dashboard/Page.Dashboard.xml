@@ -2,22 +2,11 @@
   <Signature purpose="The whole pipeline as one live diagram beside the overview, with every manual trigger on the node it acts on"
     description="With no stage selected, the panel holds the overview: the 24 h figures, the two charts and the latest messages. Select a stage; the panel then holds its figures and its actions. The selected stage is `?node=` in the url, so a reload or a shared link opens the same one. Figures refresh every 30 s." />
 
-  <PipelineService Ref="pipeline" api="@api" browser="@browser" selectedId="{@browser.params.node}" />
   <ItemService Ref="item" api="@api" owner="@pipeline" />
   <RecordService Ref="targets" table="targets" api="@api" owner="@pipeline" />
   <RecordService Ref="sources" table="sources" api="@api" owner="@pipeline"
-    defaults="{@pipeline.sourceDefaults}" />
+    defaults="{@pipeline.sourceDefaults}" previews="{@pipeline.sourceItems}" />
 
-  <PageTitle title="{R.dashboard.title}" subtitle="{R.dashboard.subtitle}">
-    <span class="text-xs text-base-content/60">{R.common.updated} {@pipeline.updatedAt | clock}</span>
-    <Btn class="sm:btn-sm" mode="soft" icon="refresh-cw" text="{R.common.refresh}"
-      busy="{@pipeline.loading}" click="-> @pipeline.load()" />
-    <Btn If="@api.canAdmin" class="sm:btn-sm" type="error" mode="{@pipeline.resetArmed ? null : 'soft'}"
-      icon="eraser" text="{@pipeline.resetLabel}" busy="{@api.busy.resetIngest}"
-      click="-> @pipeline.resetIngest()" />
-  </PageTitle>
-
-  <ErrorBanner If="@pipeline.error" text="{@pipeline.error}" />
 
   <div class="flex flex-col lg:flex-row gap-2 lg:items-start">
     <section class="bg-base-100 rounded-box p-4 sm:p-6 min-w-0 lg:w-48">

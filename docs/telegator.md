@@ -48,11 +48,12 @@ All ids that contain `/` (`channel/12345`) are stored with `~` in the document i
 | --- | --- |
 | `id` | Channel username; also the scrape URL segment. |
 | `status` | `ok` enables polling. Any other value disables it. |
-| `category`, `tags`, `teaser` | Operator settings stamped onto every post. `tags` is an array; publish routes by it (§3.4). `teaser` is boilerplate stripped from the body. |
+| `category`, `tags`, `teaser` | Operator settings stamped onto every post. `tags` is an array of lowercase, dash-joined tags (`real-estate`), normalised on read and write; publish routes by it (§3.4). `teaser` is boilerplate stripped from the body. |
 | `type` | The reader: `telegram` (a logged-in account over MTProto, default). Was `via` (`web`, `mtproto`), then `telegram_channel` / `telegram_mtproto`; `npm run migrate:source-type` folds stored docs into `telegram`. |
 | `lastItemId` | Newest post id seen. The `?after=` cursor and **the only duplicate guard** on the way in. |
 | `lastCount`, `lastUpdated`, `lastResult` | Last poll: post count, epoch ms, ISO time of success. |
 | `zeroYieldRuns`, `lastNonZeroCount` | Empty polls in a row, and the last non-empty count. Together they detect a stale source. |
+| `lastError` | Why the last poll failed; empty once one succeeds. |
 
 ### 2.2 The post in flight
 
@@ -63,7 +64,7 @@ All ids that contain `/` (`channel/12345`) are stored with `~` in the document i
 | Field | Meaning |
 | --- | --- |
 | `id` | The first item's id. |
-| `status` | `topublish` → `published`. A merge sets it back to `topublish`. |
+| `status` | `topublish` → `published`, or `no_target` when it has no post. A merge sets it back to `topublish`. |
 | `members` | Map `itemId → {summary, links, channel, ts}`: all that publish renders. At most **20**. |
 | `memberCount`, `memberIds` | Size of the map, and its keys (for the replay check). |
 | `keyEntities`, `keyTitle`, `keyTags` | The dedup match key (§5). |
@@ -77,6 +78,8 @@ The map makes replay free: writing `members.{itemId}` again writes the same valu
 ### 2.4 `targets`
 
 `id` (channel), `type`, `tags`, optional `messageTemplate`, and `lastPostedDate` / `lastPostedMessageId`, which publish writes. A target receives every message whose `tags` include all of its own, case-insensitively; a target with no tags receives nothing.
+
+The `tags` collection holds the operator's vocabulary: `id` (the tag, normalised) and `keywords` (the raw tags analyze replaces with it). Edited on the Tags page; a change applies to posts analyzed after it, not to stored messages.
 
 ### 2.5 `audit` — what went wrong
 
@@ -96,7 +99,9 @@ Each task stage drains its own `ingest` items. A drain holds the stage's lease (
 - **Ids.** `enqueue` with an `id` is a create-if-absent write, so a second request with that id is refused.
 - **Scrape node** (Dashboard page). Lists the enabled `telegram` sources and when each is due. The sources the next run polls come first. A click on one opens a modal with all its fields, where an editor may change or delete it (soft). *Scrape now* is off when none is due. A second tab (`?tab=all`) lists every source, any reader and status, by id, type, status and last count; a click opens the same modal. An editor adds an enabled `telegram` source by id, and ticks and deletes in bulk; anyone exports CSV, an admin resets every cursor (two presses). *Emulate a post* queues one canned fake post from the source `emulated` for analyze. It is published like any post: to the targets its AI tags match.
 - **Publish node** (Dashboard page). Besides its queue and *Publish now*, lists the targets in a table. An editor adds one by id; a click on its id opens a modal with all its fields, where its type, tags and message template may change, or it may be deleted (soft). An editor may also tick several and delete them at once; anyone may export them as CSV. There is no Targets page.
-- **Item modal** (Dashboard and Audit pages). A row of a stage's queue or a failed item opens its item whole: status, error, cause and payload. An admin may edit the payload's text fields of a waiting or failed item; the edit must pass the stage's schema.
+- **Item modal** (Dashboard, Items and Audit pages). A row of a stage's queue or a failed item opens its item whole: status, error, cause and payload. An admin may edit the payload's text fields of a waiting or failed item; the edit must pass the stage's schema.
+- **Scrape node.** Under its sources, lists the newest 100 items in `analyze`, with the 24 h count of posts dropped per kind (§3.1); a dropped post is counted, never stored.
+- **Items page.** Lists one stage's `ingest` items or every stage's (`?stage=`), in one status or all (`?status=`), newest 100 first. A row opens the item modal; an admin may *Run* a waiting or failed one.
 - **Failed items** (Audit page). Lists every stage's `error` items, oldest first, with message and cause. *Run* starts one afresh at the head of its stage; *Analyse* asks the model (§4); *Replay* and *Discard all* act on all of them.
 - **Operator control** (`ingestControls/{stage}`, Dashboard page, admin). *Run now* makes a stage's waiting items due at once, skipping delay and backoff. *Pause* holds the stage: trigger and sweep run nothing of it but its budget. *Step N* makes the oldest N waiting items due and adds N to the budget. *Run now*, *Step* and *Publish now* are off when nothing waits. Each control write wakes the stage through the `ingestControl` trigger. *Reset ingest* (two presses) deletes every `ingest` item, whatever its status; pause settings stay.
 
@@ -119,7 +124,7 @@ Each task stage drains its own `ingest` items. A drain holds the stage's lease (
 
 ### 3.2 analyze
 
-An empty body or a bare link is dropped before the model call. Otherwise one classification (§4). Routing: no category → throw (retry); `importance = low` → drop; otherwise enqueue to `aggregate`. `country` is uppercased, and AI tags are merged with source tags (array, AI first, each once).
+An empty body or a bare link is dropped before the model call. Otherwise one classification (§4). Routing: no category → throw (retry); `importance = low` → drop; otherwise enqueue to `aggregate`. `country` is uppercased, and AI tags are merged with source tags (array, AI first, each once), then mapped through the `tags` collection (§2.4): a keyword becomes its tag, and any other tag stays.
 
 ### 3.3 aggregate
 
@@ -130,11 +135,11 @@ The stage runs **one item at a time**. Two items of the same day therefore can n
 ### 3.4 publish
 
 1. Skip the message if it is gone, deleted, or no longer `topublish`.
-2. For each live target that receives the message (§2.4) and has no current post: assemble the text and send it, or edit it when `posts[target]` exists. A message no target receives is marked `published` with no post.
+2. For each live target that receives the message (§2.4) and has no current post: assemble the text and send it, or edit it when `posts[target]` exists. A message that ends with no post is marked `no_target`.
    - Assembly: a header, up to 12 member blocks, then hashtags. The limit is 4096 characters: hashtags are dropped first, then member blocks.
    - A photo is used only for a first send and only when the text fits in 1012 characters.
 3. Record `posts` after **every** send, so a retry never posts twice.
-4. Write `published` only when every target succeeded. A rejected send is recorded in `audit` (§2.5) and throws, naming each target, method and Telegram's reason; the console shows it on the `error` item.
+4. Write `published` only when every target succeeded and `posts` holds at least one post with an id. A rejected send is recorded in `audit` (§2.5) and throws, naming each target, method and Telegram's reason; the console shows it on the `error` item.
 
 The bot pauses at least 3 s after each send and retries once on `429`. Telegram answers errors with HTTP 200 and `ok: false`.
 
@@ -161,9 +166,9 @@ Code: `tg-dedup/`. Constants: `tg-configs/dedup.ts`.
 
 ## 6. Console
 
-`packages/tg-web`: Arrmatura app with these pages: Dashboard (the pipeline diagram; the selected stage is `?node=`, so a link opens it; with none, the overview; sources live on its Scrape node, targets on its Publish node), Messages, Audit.
+`packages/tg-web`: Arrmatura app with these pages: Dashboard (the pipeline diagram; the selected stage is `?node=`, so a link opens it; with none, the overview; sources live on its Scrape node, targets on its Publish node), Messages, Items, Tags, Audit.
 
-- **Audit**: a Messages row carries a red count of its open `audit` entries, those no later successful post on that target has resolved; its expanded panel lists them under the members. The Audit page lists every stage's failed items (§3), then its History: the newest 200 entries of both kinds.
+- **Audit**: a Messages row carries a red count of its open `audit` entries, those no later successful post on that target has resolved; its expanded panel lists them under the members, linked to their source posts, and the target channels it matched, linked to its posts. The Audit page lists every stage's failed items (§3), then its History: the newest 200 entries of both kinds.
 
 - **Sign-in**: the platform's `FirebaseService`, always with Google against the production project, locally too (`prodAuth`). The browser holds no Firestore access; `firestore.rules` denies everything.
 - **API**: `POST {data: {action, input}}` to `api`. The answer is `{data: {ok, result}}`, or an error with 400 / 401 / 403 / 500.
@@ -172,7 +177,7 @@ Code: `tg-dedup/`. Constants: `tg-configs/dedup.ts`.
 
 | Role | Actions |
 | --- | --- |
-| viewer | whoami, overview, list sources/targets/messages, members, audit, inspect queues and errors, export CSV |
+| viewer | whoami, overview, list sources/targets/tags/messages, members, audit, inspect queues, items and errors, export CSV |
 | editor | upsert and soft-delete records |
 | admin | scrape now, emulate a post, reset ingest, reset cursors, republish, publish now, run, pause or step a stage, run one item, analyse, replay or discard errors |
 
@@ -232,7 +237,7 @@ One Firebase project, `telegator-581db`. Functions run in `us-central1`, next to
 - **Publish dedup** is an item id per message per 5-minute window. A request in a new window is a new publish, which is harmless because publish skips current posts.
 - **Send then record.** If writing `posts` fails right after a successful send, the retry posts again. This is rare and is accepted.
 - **A hand-made queue.** `ingest` replaced Cloud Tasks on 2026-10-21, to show every item in flight. A delayed or retried item runs on the next `sweep`, up to a minute late; an item enqueued just as a drain ends may wait for it too.
-- **Counters live in Firestore**, not a metrics service. There are no alarms; the dashboard and the Audit page show failed items, and the Scrape node's Sources table stale sources.
+- **Counters live in Firestore**, not a metrics service. There are no alarms; the header's Audit link counts failed items and failing sources on every page, and the Audit page lists them, then its History, where a scheduled run that failed as a whole is also recorded.
 - **AWS history.** The AWS build (DynamoDB, SQS, Lambda, Cognito, CDK) ran until 2026-10-20 and lives in git history before this rewrite.
 
 ## 10. YouTube absorber

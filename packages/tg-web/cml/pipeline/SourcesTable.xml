@@ -1,11 +1,11 @@
 <Component id="SourcesTable">
-  <Signature purpose="The Scrape node's All sources tab: every reader and status in a table; a click on an id opens `RecordModal`"
-    description="Reads `@sources` and reloads it each time the tab opens. Its actions sit on the tabs' right, in `PipelinePanel`. Only an editor ticks rows; the API re-checks the role regardless." />
+  <Signature purpose="The Scrape node's sources: every reader and status in a table, the next run's first, then soonest due; a click on an id opens `RecordModal`"
+    description="Reads `@sources` and reloads it each time the node opens. Export and cursor reset sit above it, in `PipelinePanel`; add and delete are the table's children. Only an editor ticks rows; the API re-checks the role regardless." />
 
   <Connector trigger="1" change="-> @sources.load()" />
 
   <ErrorBanner If="@sources.error" text="{@sources.error}" />
-  <span class="text-xs text-base-content/60">{R.tables.sources.subtitle}</span>
+  <ErrorBanner Each="row of @sources.failing" text="{row.id}: {row.lastError}" />
   <p If="{@sources.rows AND !@sources.rows.length}" class="text-sm text-base-content/60">{R.tables.sources.empty}</p>
   <This-List If="{@sources.rows.length AND @api.canEdit}" select="-> @sources.select(event)" />
   <This-List If="{@sources.rows.length AND !@api.canEdit}" />
@@ -14,10 +14,20 @@
     <Signature purpose="The sources table; a checkbox column only when `select` is passed">
       <Prop id="select" type="action" description="Called with the ticked ids; turns the checkbox column on" />
     </Signature>
-    <Table class="rounded-box border border-base-300 max-h-96" data="{@sources.rows}"
+    <Table class="rounded-box border border-base-300 max-h-96" data="{@sources.ranked}"
       columns="{R.sourceColumns}" activeId="{@sources.detail.id}" value="{@sources.selected}"
       onItem="-> @sources.open(event)" onMultiSelectItem="{select}">
-      <span class="text-sm font-medium">{R.sourceColumns.0.name}</span>
+      <div If="select" class="flex flex-wrap items-center gap-2">
+        <input class="input grow sm:input-sm sm:w-40 sm:grow-0" placeholder="{R.common.newId}"
+          aria-label="{R.common.newId}" value="{@sources.newId}" input="-> @sources.setNewId(event)"
+          enter="-> @sources.add()" />
+        <Btn class="sm:btn-sm" mode="soft" icon="plus" busy="{@api.busy.addRecord}"
+          disabled="{!@sources.newId}" click="-> @sources.add()" />
+        <ConfirmButton class="sm:btn-sm" icon="trash-2"
+          text="" confirmText="{R.common.confirmDelete}"
+          disabled="{!@sources.selected.length}" busy="{@api.busy.deleteRecord}"
+          click="-> @sources.removeSelected()" />
+      </div>
     </Table>
   </Subcomponent>
 </Component>

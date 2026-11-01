@@ -5,10 +5,12 @@ import { pipelineNodes, queueOf } from "./nodes";
 
 const overview: Overview = {
   scraped: 120,
+  dropped: {},
   analyzed: 96,
   skipped: { total: 24, byReason: { category: 10, low: 14, nobody: 0 } },
   published: 40,
   errors: 3,
+  failingSources: 2,
   statusSlices: [],
   categorySlices: [],
   inQueue: { analyze: 5, aggregate: 0, publish: 2 },
@@ -30,8 +32,13 @@ describe("pipelineNodes", () => {
   test("a stage shows its count, and its queue and pause when it has a lane", () => {
     const nodes = byId(pipelineNodes(resources.stages, overview, null));
 
-    expect(nodes.scrape).toMatchObject({ value: 120, valueLabel: "scraped, 24 h", queued: null });
-    expect(nodes.analyze).toMatchObject({ value: 96, queued: 5, paused: false });
+    expect(nodes.scrape).toMatchObject({
+      value: 120,
+      valueLabel: "scraped, 24 h",
+      queued: null,
+      failing: 2,
+    });
+    expect(nodes.analyze).toMatchObject({ value: 96, queued: 5, paused: false, failing: 0 });
     expect(nodes.aggregate).toMatchObject({ hasValue: false, queued: 0, paused: true });
     expect(nodes.publish).toMatchObject({ value: 40, queued: 2 });
   });

@@ -105,7 +105,8 @@ describe("gridView", () => {
   test("an expanded row is loading until its members and audit arrive", () => {
     const member = { itemId: "x/1", channel: "x", summary: "s" } as never;
     const entry = { id: "e1", messageId: "x/1", error: "Not Found" } as never;
-    const panel = { members: [member], audit: [entry] };
+    const post = { target: "news", tgId: "7", url: "https://t.me/news/7" };
+    const panel = { members: [member], posts: [post], audit: [entry] };
     const loading = gridView(rows, state({ expanded: { a: "loading" } }), spec).rows[0];
     const loaded = gridView(rows, state({ expanded: { a: panel } }), spec).rows[0];
 
@@ -114,6 +115,7 @@ describe("gridView", () => {
       expanded: true,
       membersLoading: false,
       members: [{ id: "x/1", itemId: "x/1" }],
+      posts: [{ id: "news", url: "https://t.me/news/7" }],
       audit: [entry],
     });
   });

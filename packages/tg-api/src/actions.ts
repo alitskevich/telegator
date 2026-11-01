@@ -8,6 +8,7 @@ import {
   inspectItem,
   inspectQueue,
   inspectSources,
+  listIngestItems,
   pauseStage,
   purgeErrors,
   resetIngest,
@@ -15,7 +16,7 @@ import {
   runItem,
   runStage,
 } from "tg-actions/dashboard/queues";
-import { deleteRecords, loadMembers, upsertRecord } from "tg-actions/dashboard/records";
+import { deleteRecords, loadMembers, loadPosts, upsertRecord } from "tg-actions/dashboard/records";
 import {
   exportTable,
   publishPending,
@@ -25,7 +26,7 @@ import {
 } from "tg-actions/dashboard/triggers";
 import { createOpenRouterDiagnoser } from "tg-ai/diagnoser";
 import type { Role } from "tg-enums/roles";
-import { sources, targets } from "tg-firebase/db";
+import { sources, tags, targets } from "tg-firebase/db";
 import type { Operator } from "tg-firebase/operators";
 import { mtprotoSession, openRouterKey } from "./secrets";
 
@@ -42,12 +43,15 @@ export const ACTIONS: Record<string, readonly [Role, Action]> = {
   overview: ["viewer", () => loadOverview()],
   listSources: ["viewer", () => sources.listAll()],
   listTargets: ["viewer", () => targets.listAll()],
+  listTags: ["viewer", () => tags.listAll()],
   listMessages: ["viewer", listMessages],
   loadMembers: ["viewer", loadMembers],
+  loadPosts: ["viewer", loadPosts],
   loadAudit: ["viewer", loadAudit],
   inspectErrors: ["viewer", () => inspectErrors()],
   inspectQueue: ["viewer", inspectQueue],
   inspectItem: ["viewer", inspectItem],
+  listItems: ["viewer", listIngestItems],
   inspectSources: ["viewer", () => inspectSources()],
   exportTable: ["viewer", exportTable],
   upsertRecord: ["editor", upsertRecord],

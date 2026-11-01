@@ -1,10 +1,13 @@
 <Component id="AppShell">
   <Signature purpose="The signed-in console: header, then the page the url path names"
-    description="An unknown route renders `Page`, the not-found screen, by CML's dotted-prefix fallback." />
+    description="An unknown route renders `Page`, the not-found screen, by CML's dotted-prefix fallback. `@pipeline` lives here, not in `Page.Dashboard`, so the header's `PageActions.Dashboard` can reach it." />
+
+  <PipelineService Ref="pipeline" api="@api" browser="@browser" selectedId="{@browser.params.node}" />
 
   <div class="min-h-screen flex flex-col">
     <AppHeader />
     <main class="w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-6 flex flex-col gap-4">
+      <ErrorBanner If="@pipeline.error" text="{@pipeline.error}" />
       <Dynamic As="Page.{capitalize(@browser.path || 'dashboard')}" />
     </main>
   </div>

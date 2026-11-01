@@ -1,11 +1,11 @@
 <Component id="Page.Messages">
-  <Signature purpose="The Messages table by status tab, with Publish now on the backlog for an admin"
-    description="The tab is `?status=` in the url, so a reload or a shared link shows the same one." />
+  <Signature purpose="The Messages table by status, picked from a dropdown with each status's count, with Publish now on the backlog for an admin"
+    description="The status is `?status=` in the url, so a reload or a shared link shows the same one." />
 
   <GridService Ref="grid" table="messages" status="{@browser.params.status}" api="@api"
     canEdit="{@api.canEdit}" />
 
-  <PageTitle title="{R.tables.messages.title}" subtitle="{R.tables.messages.subtitle}">
+  <PageTitle title="{R.tables.messages.title}">
     <Fragment If="{@api.canAdmin AND @grid.status == 'topublish'}">
       <label class="input sm:input-sm w-44">
         <span class="text-base-content/60">{R.pipeline.publishMax}</span>
@@ -17,8 +17,11 @@
     </Fragment>
   </PageTitle>
 
-  <Tabs items="{R.messageTabs}" value="{@grid.status}"
-    change="-> @browser.setParam('status', event.value || null)" />
+  <select class="select sm:select-sm w-full sm:w-56" aria-label="{R.dashboard.status}"
+    change="-> @browser.setParam('status', event.value || null)">
+    <option Each="option of @grid.statusOptions" value="{option.id}"
+      selected="{@grid.status == option.id}">{option.name}</option>
+  </select>
 
   <RecordsTable table="messages" />
 </Component>

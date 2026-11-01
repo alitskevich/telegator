@@ -4,8 +4,8 @@ import { ItemIdSchema } from "./ids";
 
 /**
  * `audit`: what went wrong, kept after the queue has moved on (docs/telegator.md
- * §2.5). One entry per send Telegram rejected, and one per item that used up its
- * attempts.
+ * §2.5). One entry per send Telegram rejected, one per item that used up its
+ * attempts, and one per scheduled run that failed.
  */
 
 /** A send Telegram rejected. Entries older than `kind` have none: they are all sends. */
@@ -32,6 +32,14 @@ export const FailedItemSchema = z.object({
   at: z.number().int().nonnegative(),
 });
 
-export const AuditEntrySchema = z.union([RejectedSendSchema, FailedItemSchema]);
+/** A scheduled function that failed as a whole, so nothing else records it. */
+export const FailedJobSchema = z.object({
+  kind: z.literal("job"),
+  job: z.string(),
+  error: z.string(),
+  at: z.number().int().nonnegative(),
+});
+
+export const AuditEntrySchema = z.union([RejectedSendSchema, FailedItemSchema, FailedJobSchema]);
 
 export type AuditEntry = z.infer<typeof AuditEntrySchema>;

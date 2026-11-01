@@ -11,6 +11,7 @@ import {
   type Post,
 } from "tg-domain/message";
 import { type Source, type SourceCursor, SourceSchema } from "tg-domain/source";
+import { TagSchema } from "tg-domain/tag";
 import { type Target, TargetSchema } from "tg-domain/target";
 import { type Video, VideoSchema } from "tg-domain/video";
 import type { MessageStatus } from "tg-enums/messageStatus";
@@ -84,6 +85,8 @@ export const targets = {
     targetRows.patch(id, post),
 };
 
+export const tags = collection("tags", TagSchema);
+
 /** Everything a list or a card shows; `members` is the one large field and stays out. */
 const LIST_FIELDS = Object.keys(MessageListItemSchema.shape);
 
@@ -143,6 +146,9 @@ export const messages = {
   },
   async markPublished(id: string, ts: number): Promise<void> {
     await messageRows.doc(id).update({ status: "published", ts });
+  },
+  async markNoTarget(id: string, ts: number): Promise<void> {
+    await messageRows.doc(id).update({ status: "no_target", ts });
   },
   /** These messages' post maps, which the list type leaves out; one read of that field alone. */
   async postsOf(ids: readonly string[]): Promise<Record<string, Post>[]> {

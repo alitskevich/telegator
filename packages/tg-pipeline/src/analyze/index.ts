@@ -1,5 +1,6 @@
 import type { Classifier } from "tg-ai/types";
 import { type ScrapedItem, ScrapedItemSchema } from "tg-domain/item";
+import { tags } from "tg-firebase/db";
 import { metrics } from "tg-firebase/metrics";
 import { enqueue } from "tg-firebase/tasks";
 import { log } from "tg-utils/logger";
@@ -38,6 +39,6 @@ export async function runAnalyze(payload: unknown, classifier: Classifier): Prom
     return;
   }
 
-  await enqueue("aggregate", normalizeAnalyzed(item, classified));
+  await enqueue("aggregate", normalizeAnalyzed(item, classified, await tags.listAll()));
   metrics.count("ItemsAnalyzed");
 }

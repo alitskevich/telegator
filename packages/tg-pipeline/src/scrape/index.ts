@@ -28,10 +28,37 @@ function newestItemId(posts: readonly ChannelPost[]): string | undefined {
   return newest;
 }
 
+/** Some posts were not enqueued: the source failed, though the others still count. */
+class PartialEnqueue extends Error {
+  readonly processed: number;
+  readonly enqueued: number;
+
+  constructor(processed: number, enqueued: number, expected: number) {
+    super(`enqueued ${enqueued} of ${expected} posts; the next run sends them again`);
+    this.processed = processed;
+    this.enqueued = enqueued;
+  }
+}
+
+/** Kept on the source for the console; a failed write must not stop the run. */
+async function recordFailure(source: Source, error: unknown): Promise<void> {
+  const lastError = error instanceof Error ? error.message : String(error);
+  await sources
+    .updateCursor(source.id, { lastError })
+    .catch((cause) =>
+      log.error("source error not recorded", { source: source.id, error: String(cause) }),
+    );
+}
+
 async function recordZeroYield(source: Source, now: number): Promise<void> {
   const zeroYieldRuns = source.zeroYieldRuns + 1;
   // `lastNonZeroCount` is left alone: it is the evidence the stale check needs.
-  await sources.updateCursor(source.id, { zeroYieldRuns, lastCount: 0, lastUpdated: now });
+  await sources.updateCursor(source.id, {
+    zeroYieldRuns,
+    lastCount: 0,
+    lastUpdated: now,
+    lastError: "",
+  });
   log.warn("scrape yielded nothing", { source: source.id, zeroYieldRuns });
 
   if (zeroYieldRuns >= STALE_ZERO_YIELD_RUNS && source.lastNonZeroCount > 0) {
@@ -60,7 +87,7 @@ async function scrapeSource(reader: ChannelReader, source: Source, now: number, 
   // window; the message's `members` map absorbs the repeats.
   if (enqueued < toSend.length) {
     log.error("enqueue failed; cursor not advanced", { source: source.id, enqueued });
-    return { processed: items.length, enqueued };
+    throw new PartialEnqueue(items.length, enqueued, toSend.length);
   }
 
   const cursor: SourceCursor = {
@@ -70,6 +97,7 @@ async function scrapeSource(reader: ChannelReader, source: Source, now: number, 
     lastResult: new Date(now).toISOString(),
     zeroYieldRuns: 0,
     lastNonZeroCount: items.length,
+    lastError: "",
   };
   await sources.updateCursor(source.id, cursor);
   return { processed: items.length, enqueued };
@@ -88,18 +116,25 @@ export async function runScrape(reader: ChannelReader, now = Date.now()) {
 
   let processed = 0;
   let enqueued = 0;
+  let failed = 0;
   for (const source of selected) {
     try {
       const outcome = await scrapeSource(reader, source, now, date);
       processed += outcome.processed;
       enqueued += outcome.enqueued;
     } catch (error) {
+      failed += 1;
+      if (error instanceof PartialEnqueue) {
+        processed += error.processed;
+        enqueued += error.enqueued;
+      }
       log.error("source failed", { source: source.id, error: String(error) });
+      await recordFailure(source, error);
     }
   }
 
-  log.info("scrape run finished", { type: reader.type, processed, enqueued });
-  return { processed, enqueued };
+  log.info("scrape run finished", { type: reader.type, processed, enqueued, failed });
+  return { processed, enqueued, failed };
 }
 
 /**

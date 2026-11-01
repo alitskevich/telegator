@@ -1,0 +1,20 @@
+<Component id="ConfirmButton">
+  <Signature purpose="A button for an action that cannot be undone: the first press arms it, the second runs it"
+    description="Stateless: its owner keeps `armed`. Armed, it turns solid, says `confirmText` and shows a Cancel button beside it.">
+    <Prop id="text" type="string" required="true" />
+    <Prop id="confirmText" type="string" required="true" description="The label while armed" />
+    <Prop id="armed" type="boolean" />
+    <Prop id="icon" type="string" />
+    <Prop id="busy" type="boolean" />
+    <Prop id="disabled" type="boolean" />
+    <Prop id="class" type="string" />
+    <Prop id="click" type="action" required="true" description="Arms it, or runs the action once armed" />
+    <Prop id="cancel" type="action" required="true" description="Disarms it" />
+  </Signature>
+
+  <div class="flex flex-wrap items-center gap-2">
+    <Btn class="{class}" type="error" mode="{armed ? null : 'soft'}" icon="{icon}"
+      text="{armed ? confirmText : text}" busy="{busy}" disabled="{disabled}" click="{click}" />
+    <Btn If="armed" class="{class}" mode="ghost" icon="x" text="{R.common.cancel}" click="{cancel}" />
+  </div>
+</Component>

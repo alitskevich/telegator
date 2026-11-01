@@ -18,7 +18,7 @@ Publish sends one message to every target that wants it. The first time it **sen
    5. **Rejected** → count `TelegramApiErrors` split by method; write a `send` audit entry `{messageId, target, method, error, at}` (a failed audit write is logged only); remember `"{target} ({method}): {error}"`; continue with the next target.
    6. **Accepted** → `posts[target] = {tgId: existing tgId, else the returned message_id as a string; tgAt: now}`, and **save `posts` at once** (so a retry never posts twice). Best-effort: set the target's `lastPostedDate` (ISO now) and `lastPostedMessageId` (the message id). Count `MessagesPublished` for a send, `MessagesEdited` for an edit.
 3. If any target rejected, **throw** (retry) with the message `telegram rejected {part1}; {part2}; …`.
-4. Otherwise set `status = published`, `ts = now`. A message that no target receives is marked `published` with no post.
+4. Otherwise, when `posts` holds a post with a non-empty `tgId`, set `status = published`, `ts = now`. With none, as when no target receives the message, set `status = no_target`, `ts = now`.
 
 - **PB-3** **Republish** (admin): for an existing, non-deleted message, set `status = topublish`, `ts = now`, then `requestPublish`. The new `ts` makes every post non-current, so every target is edited.
 - **PB-4** **Publish now** (admin, `max` 1–10): queue a publish with **no delay** and no fixed id for each of the newest `max` `topublish` messages (by `ts` descending).

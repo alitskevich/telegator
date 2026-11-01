@@ -35,5 +35,7 @@ export interface PipelineNode extends StageSpec {
   readonly queued: number | null;
   /** An operator paused the stage: it runs only what *Step* releases. */
   readonly paused: boolean;
+  /** Sources stages only: how many failed their last poll. */
+  readonly failing: number;
   readonly selected: boolean;
 }

@@ -12,8 +12,8 @@ import type { AssembledMessage } from "./types";
 
 /**
  * Stage 4 — publish one message to each target whose tags it carries: send it
- * the first time, edit it in place after that. A message no target receives is
- * marked `published` with no post.
+ * the first time, edit it in place after that. A message that ends with a post
+ * is marked `published`; one with none, as no target receives it, `no_target`.
  *
  * `posts` is recorded after every send, so a retry skips the targets already
  * current and never posts twice. A rejected send is recorded in `audit`, and
@@ -83,5 +83,6 @@ export async function runPublish(
   }
 
   if (rejected.length > 0) throw new Error(`telegram rejected ${rejected.join("; ")}`);
-  await messages.markPublished(messageId, now());
+  const posted = Object.values(posts).some((post) => post.tgId !== "");
+  await (posted ? messages.markPublished : messages.markNoTarget)(messageId, now());
 }

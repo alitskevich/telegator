@@ -1,9 +1,14 @@
 import { z } from "zod";
 
 /**
- * Tags are an array of trimmed, non-empty strings, each once, in first-seen
+ * Tags are an array of normalised, non-empty strings, each once, in first-seen
  * order. Sources and targets carry them; items and messages too.
  */
+
+/** Trimmed, lowercased, with each run of whitespace turned into a dash. */
+export function normalizeTag(tag: string): string {
+  return tag.trim().toLowerCase().replace(/\s+/g, "-");
+}
 
 /** Comma-split, trimmed, with empty tokens dropped. */
 export function splitTags(tags: string | undefined | null): string[] {
@@ -15,19 +20,18 @@ export function splitTags(tags: string | undefined | null): string[] {
 }
 
 /**
- * Merges tag lists, keeping the first occurrence of each tag.
+ * Merges tag lists, normalising each tag and keeping its first occurrence.
  *
  * First-seen order makes a replay a fixed point: merging an item into a message
- * that already holds its tags leaves `tags` unchanged. Matching is exact, so the
- * stored case is kept; publish lowercases when it builds hashtags.
+ * that already holds its tags leaves `tags` unchanged.
  */
 export function mergeTags(...lists: Array<readonly string[] | undefined>): string[] {
   const seen = new Set<string>();
 
   for (const list of lists) {
     for (const tag of list ?? []) {
-      const trimmed = tag.trim();
-      if (trimmed !== "") seen.add(trimmed);
+      const normalized = normalizeTag(tag);
+      if (normalized !== "") seen.add(normalized);
     }
   }
 

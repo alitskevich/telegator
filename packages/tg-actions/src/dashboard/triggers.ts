@@ -12,10 +12,10 @@ import { z } from "zod";
 /** The console's buttons: scrape now, reset cursors, republish, publish now, export. */
 
 /** Runs one Telegram scrape in this process, schedule or not; `session` is `MTPROTO_SESSION`. */
-export async function runScraper(session: string): Promise<{ processed: number }> {
+export async function runScraper(session: string): Promise<{ processed: number; failed: number }> {
   try {
-    const { processed } = await scrapeTelegram(session);
-    return { processed };
+    const { processed, failed } = await scrapeTelegram(session);
+    return { processed, failed };
   } finally {
     await flushMetrics();
   }

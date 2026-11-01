@@ -1,12 +1,13 @@
 import { WebClientService } from "arrmatura-web";
-import type { MemberRow } from "tg-actions/dashboard/types";
+import type { MemberRow, Overview, PostRow } from "tg-actions/dashboard/types";
 import { MAX_PUBLISH_NOW } from "tg-configs/limits";
-import { MessageStatusSchema } from "tg-enums/messageStatus";
+import { MESSAGE_STATUSES, MessageStatusSchema } from "tg-enums/messageStatus";
 import { DEFAULT_TARGET_TYPE } from "tg-enums/targetType";
 import type { StoredAuditEntry } from "tg-firebase/types";
 import {
   MESSAGE_WRITABLE_FIELDS,
   SOURCE_WRITABLE_FIELDS,
+  TAG_WRITABLE_FIELDS,
   TARGET_WRITABLE_FIELDS,
   type TableName,
 } from "tg-rc/columns";
@@ -39,6 +40,11 @@ export const SPECS: Readonly<Record<TableName, GridSpec>> = {
     // Templates contain newlines, which a single-line control cannot enter.
     multiline: ["messageTemplate"],
   },
+  tags: {
+    columns: resources.tables.tags.columns,
+    editable: TAG_WRITABLE_FIELDS,
+    multiline: ["keywords"],
+  },
   messages: {
     columns: resources.tables.messages.columns,
     editable: MESSAGE_WRITABLE_FIELDS,
@@ -46,15 +52,17 @@ export const SPECS: Readonly<Record<TableName, GridSpec>> = {
   },
 };
 
-/** What "add" writes besides the id: `ok` enables polling; a target needs a type. */
+/** What "add" writes besides the id: `ok` enables polling; a target needs a type; a tag starts with no keywords. */
 export const NEW_ROW: Readonly<Partial<Record<TableName, Record<string, string>>>> = {
   sources: { status: "ok" },
   targets: { type: DEFAULT_TARGET_TYPE },
+  tags: {},
 };
 
 export const LIST_ACTION: Readonly<Record<TableName, string>> = {
   sources: "listSources",
   targets: "listTargets",
+  tags: "listTags",
   messages: "listMessages",
 };
 
@@ -65,6 +73,9 @@ interface FieldEvent {
   readonly field?: string;
   readonly value?: string;
 }
+
+/** The Messages filter's value for every status at once; not a stored status. */
+const ALL_STATUSES = "all";
 
 const toRows = (result: unknown): Row[] => (Array.isArray(result) ? (result as Row[]) : []);
 
@@ -84,6 +95,8 @@ export class GridService extends WebClientService {
   expanded: Expanded = {};
   newId = "";
   publishMax = String(MAX_PUBLISH_NOW);
+  /** Messages per status, from the overview; empty until read. */
+  statusCounts: Readonly<Record<string, number>> = {};
 
   declare view: GridView;
 
@@ -128,10 +141,20 @@ export class GridService extends WebClientService {
   set status(value: unknown) {
     const parsed = MessageStatusSchema.safeParse(value);
     // A mistyped URL falls back to the backlog rather than to an error page.
-    const next = parsed.success ? parsed.data : "topublish";
+    const next = value === ALL_STATUSES ? ALL_STATUSES : parsed.success ? parsed.data : "topublish";
     if (next === this.#status) return;
     this.#status = next;
     if (this.#ready) void this.load();
+  }
+
+  /** The status filter's options, each with its count once read, e.g. "To publish (12)". */
+  get statusOptions(): readonly { id: string; name: string }[] {
+    const counts = Object.values(this.statusCounts);
+    const total = counts.length === 0 ? undefined : counts.reduce((a, b) => a + b, 0);
+    return resources.messageTabs.map(({ id, name }) => {
+      const count = id === ALL_STATUSES ? total : this.statusCounts[id];
+      return { id, name: count === undefined ? name : `${name} (${count})` };
+    });
   }
 
   override __init(): void {
@@ -142,13 +165,37 @@ export class GridService extends WebClientService {
   async load(): Promise<void> {
     this.up({ loading: true, error: null });
     try {
-      const input = this.table === "messages" ? { status: this.#status } : undefined;
-      const rows = toRows(await this.api.call(LIST_ACTION[this.table], input));
+      const rows =
+        this.table === "messages" && this.#status === ALL_STATUSES
+          ? await this.loadAllMessages()
+          : toRows(
+              await this.api.call(
+                LIST_ACTION[this.table],
+                this.table === "messages" ? { status: this.#status } : undefined,
+              ),
+            );
       this.up({ rows, loading: false, expanded: {} });
+      if (this.table === "messages") await this.loadStatusCounts();
     } catch (error) {
       this.logError(error);
       this.up({ loading: false, error: error instanceof Error ? error.message : String(error) });
     }
+  }
+
+  /** `listMessages` takes one status, so "all" is one call per status, newest first. */
+  private async loadAllMessages(): Promise<Row[]> {
+    const lists = await Promise.all(
+      MESSAGE_STATUSES.map((status) => this.api.call("listMessages", { status })),
+    );
+    return lists.flatMap(toRows).sort((a, b) => Number(b.ts ?? 0) - Number(a.ts ?? 0));
+  }
+
+  /** Every status's total, not just the loaded one's: the overview counts them. */
+  async loadStatusCounts(): Promise<void> {
+    const overview = (await this.api.call("overview")) as Overview;
+    this.up({
+      statusCounts: Object.fromEntries(overview.statusSlices.map((s) => [s.label, s.value])),
+    });
   }
 
   search(event: FieldEvent): void {
@@ -266,7 +313,7 @@ export class GridService extends WebClientService {
     return exportTable(this.api, this.table);
   }
 
-  /** A story's members and audit are loaded when its panel opens, and only then. */
+  /** A story's members, posts and audit are loaded when its panel opens, and only then. */
   async expand(id: string): Promise<void> {
     if (this.expanded[id] !== undefined) {
       const { [id]: _closed, ...rest } = this.expanded;
@@ -276,11 +323,12 @@ export class GridService extends WebClientService {
 
     this.up({ expanded: { ...this.expanded, [id]: "loading" } });
     try {
-      const [members, audit] = await Promise.all([
+      const [members, posts, audit] = await Promise.all([
         this.api.call("loadMembers", { messageId: id }) as Promise<MemberRow[]>,
+        this.api.call("loadPosts", { messageId: id }) as Promise<PostRow[]>,
         this.api.call("loadAudit", { messageId: id }) as Promise<StoredAuditEntry[]>,
       ]);
-      this.up({ expanded: { ...this.expanded, [id]: { members, audit } } });
+      this.up({ expanded: { ...this.expanded, [id]: { members, posts, audit } } });
     } catch (error) {
       this.logError(error);
       const { [id]: _failed, ...rest } = this.expanded;

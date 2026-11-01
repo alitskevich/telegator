@@ -1,5 +1,5 @@
 <Component id="AuditList">
-  <Signature purpose="What went wrong, one per line: when and where, then the reason. A rejected send names its target and method; a failed item, its stage and post">
+  <Signature purpose="What went wrong, one per line: when and where, then the reason. A rejected send names its target and method; a failed item, its stage and post; a failed scheduled run, its job">
     <Prop id="entries" type="array" required="true" description="`StoredAuditEntry` rows from `tg-firebase`, newest first" />
     <Prop id="withMessage" type="boolean" default="false" description="Also names each rejected send's message, for a list across messages" />
   </Signature>
@@ -11,8 +11,13 @@
         <Fragment If="{entry.kind == 'item'}">
           <Then><span>{entry.stage} · {entry.ref}</span></Then>
           <Else>
-            @{entry.target} · {entry.method}
-            <span If="withMessage"> · {entry.messageId}</span>
+            <Fragment If="{entry.kind == 'job'}">
+              <Then><span>{entry.job}</span></Then>
+              <Else>
+                @{entry.target} · {entry.method}
+                <span If="withMessage"> · {entry.messageId}</span>
+              </Else>
+            </Fragment>
           </Else>
         </Fragment>
       </span>

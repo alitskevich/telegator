@@ -29,86 +29,69 @@
     <Signature purpose="A stage: what it does, its trigger and its queue when it has them" />
     <div class="flex flex-wrap items-center justify-between gap-3">
       <This-Heading />
-      <div If="{@api.canAdmin AND @pipeline.selected.id == 'scrape'}" class="flex flex-wrap gap-2">
-        <Btn type="primary" class="sm:btn-sm" icon="play" text="{R.pipeline.scrapeNow}"
-          busy="{@api.busy.runScraper}" disabled="{@pipeline.scrapeDue == 0}"
-          click="-> @pipeline.scrapeNow()" />
-        <Btn class="sm:btn-sm" mode="soft" icon="flask-conical" text="{R.pipeline.emulate}"
-          busy="{@api.busy.emulateItem}" click="-> @pipeline.emulate()" />
+      <div If="{@pipeline.selected.id == 'scrape'}" class="flex flex-wrap items-center gap-2">
+        <Fragment If="@api.canAdmin">
+          <Btn type="primary" class="sm:btn-sm" icon="play" text="{R.pipeline.scrapeNow}"
+            busy="{@api.busy.runScraper}" disabled="{@pipeline.scrapeDue == 0}"
+            click="-> @pipeline.scrapeNow()" />
+          <Btn class="sm:btn-sm" mode="soft" icon="flask-conical" text="{R.pipeline.emulate}"
+            busy="{@api.busy.emulateItem}" click="-> @pipeline.emulate()" />
+        </Fragment>
+        <This-SourcesToolbar />
       </div>
     </div>
     <p If="@pipeline.selected.detail" class="text-sm text-base-content/70 max-w-[65ch]">{@pipeline.selected.detail}</p>
-    <Fragment If="@pipeline.selected.sources">
-      <Tabs class="flex-wrap gap-2" items="{R.sourceTabs}" value="{@browser.params.tab == 'all' ? 'all' : 'next'}"
-        change="-> @browser.setParam('tab', event.value)">
-        <This-SourcesToolbar If="{@browser.params.tab == 'all'}" />
-      </Tabs>
-      <SourcesTable If="{@browser.params.tab == 'all'}" />
-      <This-Sources If="{@browser.params.tab != 'all'}" />
-    </Fragment>
-    <div If="{@pipeline.selected.id == 'publish'}" class="flex flex-wrap items-center gap-2">
-      <Fragment If="@api.canAdmin">
-        <label class="input sm:input-sm w-44">
-          <span class="text-base-content/60">{R.pipeline.publishMax}</span>
-          <input type="number" min="1" max="10" class="grow" value="{@pipeline.publishMax}"
-            input="-> @pipeline.setPublishMax(event)" />
-        </label>
-        <Btn type="primary" class="sm:btn-sm" icon="send" text="{R.pipeline.publishNow}"
-          busy="{@api.busy.publishPending}" disabled="{@pipeline.toPublish == 0}"
-          click="-> @pipeline.publishNow()" />
-      </Fragment>
-      <a href="/messages?status=topublish" class="btn btn-sm btn-ghost">{R.pipeline.openMessages}</a>
+    <SourcesTable If="@pipeline.selected.sources" />
+    <This-Scraped If="@pipeline.selected.sources" />
+    <div If="{@api.canAdmin AND @pipeline.selected.id == 'publish'}" class="flex flex-wrap items-center gap-2">
+      <label class="input sm:input-sm w-44">
+        <span class="text-base-content/60">{R.pipeline.publishMax}</span>
+        <input type="number" min="1" max="10" class="grow" value="{@pipeline.publishMax}"
+          input="-> @pipeline.setPublishMax(event)" />
+      </label>
+      <Btn type="primary" class="sm:btn-sm" icon="send" text="{R.pipeline.publishNow}"
+        busy="{@api.busy.publishPending}" disabled="{@pipeline.toPublish == 0}"
+        click="-> @pipeline.publishNow()" />
+      <This-Control If="@pipeline.selected.queue" />
     </div>
     <TelegramTargets If="{@pipeline.selected.id == 'publish'}" />
     <This-Queue If="@pipeline.selected.queue" />
   </Subcomponent>
 
-  <Subcomponent id="SourcesToolbar">
-    <Signature purpose="The All sources tab's actions, on the tabs' right: add, bulk delete and export for an editor, the armed cursor reset for an admin" />
-    <div class="flex flex-wrap items-center gap-2">
-      <Fragment If="@api.canEdit">
-        <input class="input grow sm:input-sm sm:w-40 sm:grow-0" placeholder="{R.common.newId}"
-          aria-label="{R.common.newId}" value="{@sources.newId}" input="-> @sources.setNewId(event)"
-          enter="-> @sources.add()" />
-        <Btn class="sm:btn-sm" mode="soft" icon="plus" text="{R.common.add}" busy="{@api.busy.addRecord}"
-          disabled="{!@sources.newId}" click="-> @sources.add()" />
-        <Btn class="sm:btn-sm" type="error" mode="soft" icon="trash-2" text="{R.common.delete}"
-          disabled="{!@sources.selected.length}" busy="{@api.busy.deleteRecord}"
-          click="-> @sources.removeSelected()" />
-      </Fragment>
-      <Btn class="sm:btn-sm" mode="soft" icon="file-down" text="{R.common.export}" busy="{@api.busy.export}"
-        click="-> @sources.exportCsv()" />
-      <Btn If="@api.canAdmin" class="sm:btn-sm" type="{@pipeline.cursorsArmed ? 'error' : 'neutral'}" mode="soft"
-        icon="rotate-ccw" text="{@pipeline.cursorsLabel}" busy="{@api.busy.resetSourceCursors}"
-        click="-> @pipeline.resetCursors()" />
+  <Subcomponent id="Scraped">
+    <Signature purpose="What scrape sent to analyze, newest first, and how many posts it dropped instead" />
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h3 class="text-sm font-medium">{R.pipeline.scrapedItems}</h3>
+      <a href="/items?stage=analyze" class="btn btn-sm btn-ghost">{R.pipeline.openItems}</a>
     </div>
+    <p If="@pipeline.droppedNote" class="text-sm text-base-content/70">{@pipeline.droppedNote}</p>
+    <p If="{!@pipeline.scrapedRows.length}" class="text-sm text-base-content/60">{R.pipeline.scrapedEmpty}</p>
+    <ol If="@pipeline.scrapedRows.length" class="flex flex-col gap-2">
+      <li Each="row of @pipeline.scrapedRows" class="bg-base-200 rounded-box p-3 flex items-start gap-3">
+        <button type="button" data-id="{row.id}" click="-> @item.open(event)"
+          class="group flex flex-col gap-0.5 min-w-0 grow text-left cursor-pointer">
+          <span class="text-xs text-base-content/60 truncate">{row.ref} · {row.created}</span>
+          <span If="row.text" class="text-sm line-clamp-2 break-words group-hover:underline">{row.text}</span>
+          <span If="row.error" class="text-xs text-error truncate" title="{row.error}">{row.error}</span>
+        </button>
+        <StatusBadge status="{row.status}" />
+      </li>
+    </ol>
   </Subcomponent>
 
-  <Subcomponent id="Sources">
-    <Signature purpose="The enabled sources of the node's reader: the next run's first, then soonest due; a click opens one in `RecordModal`" />
-    <Connector trigger="1" change="-> @sources.load()" />
-    <Fragment If="@pipeline.sourceRows">
-      <ErrorBanner If="@sources.error" text="{@sources.error}" />
-      <p If="{!@pipeline.sourceRows.length}" class="text-sm text-base-content/60">{R.pipeline.noSources}</p>
-      <ol If="@pipeline.sourceRows.length" class="flex flex-col gap-2">
-        <li Each="source of @pipeline.sourceRows"
-          class="bg-base-200 rounded-box min-w-0 border-l-2 {source.next ? 'border-primary' : 'border-transparent'}">
-          <button type="button" data-id="{source.id}" click="-> @sources.open(event)"
-            class="group w-full px-3 py-2 flex flex-col gap-0.5 min-w-0 text-left cursor-pointer">
-            <span class="text-sm font-medium truncate group-hover:underline">{source.id}</span>
-            <span class="text-xs text-base-content/60 truncate">{source.meta}</span>
-          </button>
-        </li>
-      </ol>
-    </Fragment>
+  <Subcomponent id="SourcesToolbar">
+    <Signature purpose="The sources table's actions, in the stage's top right corner: export, and the armed cursor reset for an admin" />
+    <Btn class="sm:btn-sm" mode="soft" icon="file-down" busy="{@api.busy.export}"
+      click="-> @sources.exportCsv()" />
+    <Btn If="@api.canAdmin" class="sm:btn-sm" type="{@pipeline.cursorsArmed ? 'error' : 'neutral'}" mode="soft"
+      icon="rotate-ccw" busy="{@api.busy.resetSourceCursors}"
+      click="-> @pipeline.resetCursors()" />
   </Subcomponent>
 
   <Subcomponent id="Queue">
-    <Signature purpose="A stage's queue: its count, run, pause and step, and its next items" />
-    <div class="grid grid-cols-2 gap-4 max-w-md">
-      <StatCard label="{R.pipeline.inQueue}" value="{@pipeline.selected.queued}" surface="zone" />
-    </div>
-    <div If="@api.canAdmin" class="flex flex-wrap items-center gap-2">
+    <Signature purpose="A stage's queue: run, pause and step, and its next items" />
+    <!-- Publish keeps its controls beside `Publish now`. -->
+    <div If="{@api.canAdmin AND @pipeline.selected.id != 'publish'}" class="flex flex-wrap items-center gap-2">
       <This-Control />
     </div>
     <This-Next />
@@ -142,7 +125,10 @@
   <Subcomponent id="Next">
     <Signature purpose="The stage's next items, soonest first; an admin may run any waiting one next" />
     <Fragment If="@pipeline.nextItems">
-      <h3 class="text-sm font-medium">{R.pipeline.next}</h3>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="text-sm font-medium">{R.pipeline.next}</h3>
+        <a If="{@pipeline.selected.id == 'publish'}" href="/messages?status=topublish" class="btn btn-sm btn-ghost">{R.pipeline.openMessages}</a>
+      </div>
       <p If="{!@pipeline.nextItems.length}" class="text-sm text-base-content/60">{R.pipeline.emptyQueue}</p>
       <ol If="@pipeline.nextItems.length" class="flex flex-col gap-2">
         <li Each="item of @pipeline.nextItems" class="bg-base-200 rounded-box p-3 flex items-start gap-3">

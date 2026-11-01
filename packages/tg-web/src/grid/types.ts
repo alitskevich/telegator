@@ -1,4 +1,4 @@
-import type { MemberRow } from "tg-actions/dashboard/types";
+import type { MemberRow, PostRow } from "tg-actions/dashboard/types";
 import type { StoredAuditEntry } from "tg-firebase/types";
 import type { SortState } from "tg-utils/ui/types";
 import type { Drafts, Expanded } from "./view";
@@ -53,6 +53,8 @@ export interface ViewRow {
   readonly membersLoading: boolean;
   /** Keyed by `id` for the template's `Each`, which drops rows without one. */
   readonly members: readonly (MemberRow & { readonly id: string })[];
+  /** A message's posts on its targets, keyed by `id` like `members`. */
+  readonly posts: readonly (PostRow & { readonly id: string })[];
   /** A message's rejected sends, newest first. */
   readonly audit: readonly StoredAuditEntry[];
 }

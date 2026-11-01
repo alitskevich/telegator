@@ -55,9 +55,18 @@ describe("mergeTags", () => {
     expect(mergeTags([" ", " war "], ["  ", "war"])).toEqual(["war"]);
   });
 
-  /** On purpose: folding would discard the stored form, and publish lowercases hashtags anyway. */
-  test("deduplicates by exact match, so War and war both survive", () => {
-    expect(mergeTags(["War"], ["war"])).toEqual(["War", "war"]);
+  test("lowercases tags and turns spaces into dashes", () => {
+    expect(mergeTags(["Poland politics", "real  estate"])).toEqual([
+      "poland-politics",
+      "real-estate",
+    ]);
+  });
+
+  test("deduplicates after normalising", () => {
+    expect(mergeTags(["War", "Real Estate"], ["war", "real-estate"])).toEqual([
+      "war",
+      "real-estate",
+    ]);
   });
 });
 
@@ -70,6 +79,11 @@ describe("TagsSchema", () => {
   test("reads a comma-separated string as a list", () => {
     expect(TagsSchema.parse("war, politics ,,war")).toEqual(["war", "politics"]);
     expect(TagsSchema.parse("")).toEqual([]);
+  });
+
+  /** Rows stored before tags were normalised read back in the new form. */
+  test("normalises a stored tag on read", () => {
+    expect(TagsSchema.parse(["Security breach"])).toEqual(["security-breach"]);
   });
 
   test("rejects anything else", () => {

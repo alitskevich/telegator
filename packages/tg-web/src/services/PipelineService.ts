@@ -1,5 +1,10 @@
 import { WebClientService } from "arrmatura-web";
-import type { Overview, QueueItemPreview, SourcePreview } from "tg-actions/dashboard/types";
+import type {
+  ItemPreview,
+  Overview,
+  QueueItemPreview,
+  SourcePreview,
+} from "tg-actions/dashboard/types";
 import { MAX_PUBLISH_NOW } from "tg-configs/limits";
 import type { QueueName } from "tg-enums/queueName";
 import { resources } from "tg-rc/web";
@@ -11,7 +16,8 @@ import type { PipelineNode } from "../pipeline/types";
 import { fill } from "../text/fill";
 import type { ApiService } from "./ApiService";
 import { asRecord } from "./GridService";
-import type { Donut, QueueRow, SourceRow } from "./types";
+import { itemRow } from "./ItemsService";
+import type { Donut, ItemRow, QueueRow } from "./types";
 
 /**
  * The Dashboard page: the whole chain as one diagram, with each stage's count and
@@ -49,33 +55,27 @@ const queueRow = (item: QueueItemPreview): QueueRow => ({
   canRun: item.status === "pending",
 });
 
-const whenPolled = (source: SourcePreview, now: number): string => {
+/** When a source is polled: by the next run, after it, or at a clock time. */
+export const whenPolled = (source: SourcePreview, now: number): string => {
   if (source.next) return resources.pipeline.nextRun;
   if (source.dueAt <= now) return resources.pipeline.afterNextRun;
   return fill(resources.pipeline.due, { time: clock(source.dueAt) });
 };
-
-const sourceRow = (source: SourcePreview, now: number): SourceRow => ({
-  id: source.id,
-  meta: [
-    whenPolled(source, now),
-    source.type,
-    fill(resources.pipeline.lastCount, { count: source.lastCount }),
-  ].join(" · "),
-  next: source.next,
-});
 
 const donut = (values: readonly Slice[] | undefined): Donut => {
   const slices = toPieSlices(values ?? []);
   return { slices, background: conicGradient(slices) };
 };
 
-/** The skip split by reason, e.g. "category 10 · low 14". */
-export const skipNote = (overview: Overview | null): string =>
-  Object.entries(overview?.skipped.byReason ?? {})
+const splitNote = (split: Readonly<Record<string, number>>): string =>
+  Object.entries(split)
     .filter(([, count]) => count > 0)
     .map(([reason, count]) => `${reason} ${count}`)
     .join(" · ");
+
+/** The skip split by reason, e.g. "category 10 · low 14". */
+export const skipNote = (overview: Overview | null): string =>
+  splitNote(overview?.skipped.byReason ?? {});
 
 interface ValueEvent {
   readonly value?: string;
@@ -98,6 +98,8 @@ export class PipelineService extends WebClientService {
   next: Readonly<Partial<Record<QueueName, readonly QueueItemPreview[]>>> = {};
   /** The enabled sources, the next run's first: `null` until read. */
   sourceItems: readonly SourcePreview[] | null = null;
+  /** What scrape sent to analyze, newest first: `null` until read. */
+  scrapedItems: readonly ItemPreview[] | null = null;
   publishMax = String(MAX_PUBLISH_NOW);
   stepMax = DEFAULT_STEP_MAX;
   /** A first press of *Reset ingest*; see `resetIngest`. */
@@ -143,17 +145,6 @@ export class PipelineService extends WebClientService {
     return queueOf(this.selected ?? undefined);
   }
 
-  /** The sources the selected node lists: its reader's. */
-  get sourceRows(): readonly SourceRow[] | null {
-    const now = Date.now();
-    const type = this.selected?.sources;
-    return (
-      this.sourceItems
-        ?.filter((source) => source.type === type)
-        .map((source) => sourceRow(source, now)) ?? null
-    );
-  }
-
   /** What a source added on the selected node writes besides `NEW_ROW`: that node's reader. */
   get sourceDefaults(): Readonly<Record<string, string>> {
     return this.selected?.sources === undefined ? {} : { type: this.selected.sources };
@@ -164,6 +155,11 @@ export class PipelineService extends WebClientService {
     return (
       this.sourceItems?.filter((source) => source.next && source.type === "telegram").length ?? null
     );
+  }
+
+  /** Everything the Audit page asks an operator to look at; the header's count. */
+  get failures(): number {
+    return (this.data?.errors ?? 0) + (this.data?.failingSources ?? 0);
   }
 
   /** Messages waiting to be published; `null` until read. */
@@ -178,8 +174,14 @@ export class PipelineService extends WebClientService {
     return items === undefined ? null : items.map(queueRow);
   }
 
-  get resetLabel(): string {
-    return this.resetArmed ? resources.pipeline.confirmResetIngest : resources.pipeline.resetIngest;
+  get scrapedRows(): readonly ItemRow[] | null {
+    return this.scrapedItems?.map(itemRow) ?? null;
+  }
+
+  /** Why scraped posts are missing from `scrapedRows`; empty when none were dropped. */
+  get droppedNote(): string {
+    const reasons = splitNote(this.data?.dropped ?? {});
+    return reasons === "" ? "" : fill(resources.pipeline.droppedNote, { reasons });
   }
 
   get cursorsLabel(): string {
@@ -239,8 +241,12 @@ export class PipelineService extends WebClientService {
 
   /** `viewer`. */
   async loadSources(): Promise<void> {
-    const items = await this.api.run("inspectSources", undefined, { key: "sources" });
+    const [items, scrapedItems] = await Promise.all([
+      this.api.run("inspectSources", undefined, { key: "sources" }),
+      this.api.run("listItems", { queueName: "analyze" }, { key: "scrapedItems" }),
+    ]);
     if (Array.isArray(items)) this.up({ sourceItems: items });
+    if (Array.isArray(scrapedItems)) this.up({ scrapedItems });
   }
 
   /** Reads the selected stage's next items; `viewer`. */
@@ -251,11 +257,17 @@ export class PipelineService extends WebClientService {
     if (Array.isArray(items)) this.up({ next: { ...this.next, [queue]: items } });
   }
 
+  /** A run that lost a source still lands, so its toast says so rather than `api.run`'s. */
   async scrapeNow(): Promise<void> {
-    const done = await this.api.run("runScraper", undefined, {
-      success: (result) => fill(resources.toasts.runScraper, asRecord(result)),
+    const done = await this.api.run("runScraper");
+    if (done === undefined) return;
+    const result = asRecord(done);
+    const lost = Number(result.failed) > 0;
+    this.toast({
+      message: fill(lost ? resources.toasts.runScraperFailed : resources.toasts.runScraper, result),
+      level: lost ? "error" : "info",
     });
-    if (done !== undefined) await this.load();
+    await this.load();
   }
 
   /** Queues one fake post for analyze; it is published like any post. */
@@ -278,6 +290,10 @@ export class PipelineService extends WebClientService {
       success: (result) => fill(resources.toasts.resetIngest, asRecord(result)),
     });
     if (done !== undefined) await this.load();
+  }
+
+  cancelReset(): void {
+    this.up({ resetArmed: false });
   }
 
   /** Drops every source's cursor, so the next scrape starts from each latest post; two presses. */

@@ -1,0 +1,51 @@
+<Component id="Page.Tags">
+  <Signature purpose="The `tags` collection, master and detail: a list to add to, and the selected tag's keywords to save or delete"
+    description="Analyze reads these keywords to map the tags of each new post. Only an editor adds, saves and deletes; the API re-checks the role regardless." />
+
+  <RecordService Ref="tags" table="tags" api="@api" />
+  <Connector trigger="1" change="-> @tags.load()" />
+
+  <PageTitle title="{R.tags.title}" subtitle="{R.tags.subtitle}">
+    <Btn class="sm:btn-sm" mode="soft" icon="refresh-cw" text="{R.common.refresh}"
+      click="-> @tags.load()" />
+  </PageTitle>
+
+  <ErrorBanner If="@tags.error" text="{@tags.error}" />
+
+  <div class="grid gap-4 md:grid-cols-2 items-start">
+    <section class="bg-base-100 rounded-box p-3 flex flex-col gap-3 min-w-0">
+      <div If="@api.canEdit" class="flex flex-wrap items-center gap-2">
+        <input class="input grow sm:input-sm sm:w-48 sm:grow-0" placeholder="{R.common.newId}"
+          aria-label="{R.common.newId}" value="{@tags.newId}" input="-> @tags.setNewId(event)"
+          enter="-> @tags.add()" />
+        <Btn class="sm:btn-sm" mode="soft" icon="plus" text="{R.common.add}" busy="{@api.busy.addRecord}"
+          disabled="{!@tags.newId}" click="-> @tags.add()" />
+      </div>
+      <p If="{@tags.rows AND !@tags.rows.length}" class="text-sm text-base-content/60">{R.tags.empty}</p>
+      <Table If="@tags.rows.length" class="rounded-box border border-base-300 max-h-[70vh]" data="{@tags.rows}"
+        columns="{R.tags.columns}" activeId="{@tags.detail.id}" onItem="-> @tags.open(event)">
+        <span class="text-sm font-medium">{R.tags.columns.0.name}</span>
+      </Table>
+    </section>
+
+    <section class="bg-base-100 rounded-box p-4 flex flex-col gap-3 min-w-0">
+      <p If="{!@tags.detail}" class="text-sm text-base-content/60">{R.tags.pick}</p>
+      <Fragment If="@tags.detail">
+        <h2 class="text-lg font-semibold break-all">{@tags.detail.id}</h2>
+        <label class="flex flex-col gap-1">
+          <span class="text-sm text-base-content/70">{R.tags.keywords}</span>
+          <textarea class="textarea w-full" rows="6" placeholder="{R.tags.keywordsHint}"
+            aria-label="{R.tags.keywords}" disabled="{!@api.canEdit}"
+            value="{@tags.draft.keywords ?? @tags.detail.keywords}"
+            input="-> @tags.setKeywords(event)"></textarea>
+        </label>
+        <div If="@api.canEdit" class="flex flex-wrap justify-end gap-2">
+          <Btn type="error" mode="soft" class="sm:btn-sm" icon="trash-2" text="{R.records.delete}"
+            busy="{@api.busy.deleteRecord}" click="-> @tags.remove()" />
+          <Btn type="primary" class="sm:btn-sm" icon="save" text="{R.common.save}"
+            disabled="{!@tags.dirty}" busy="{@api.busy.saveRecord}" click="-> @tags.save()" />
+        </div>
+      </Fragment>
+    </section>
+  </div>
+</Component>

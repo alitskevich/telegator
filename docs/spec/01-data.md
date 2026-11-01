@@ -14,7 +14,7 @@ Every record shape here is the source of truth. A stored record that fails its s
 | Value | Rule |
 | --- | --- |
 | **Date key** | `YYYY-MM-DD`, UTC, a real calendar date (`2026-02-30` is invalid). Computed from the clock in one place only. |
-| **Tags** | An array of trimmed, non-empty strings, each once, in first-seen order. Matching is exact; the stored case is kept. A comma-separated string on input is read as a list. |
+| **Tags** | An array of normalised, non-empty strings, each once, in first-seen order. Normalised means trimmed, lowercased, and each run of whitespace turned into `-`, on read as well as on write. A comma-separated string on input is read as a list. |
 | **Tag merge** `mergeTags(a, b, …)` | Concatenate the lists in order, trim each, drop empty ones, keep the first occurrence. |
 | **Link** | `{id: positive integer, href: string}`. Link ids in one post start at 1 and rise by 1. |
 | **Summary** | At most **220** characters (`SUMMARY_MAX_LENGTH`). |
@@ -34,6 +34,7 @@ Every record shape here is the source of truth. A stored record that fails its s
 | `lastUpdated` | scrape | Time of the last poll. Default 0. |
 | `lastResult` | scrape | ISO time of the last successful poll. |
 | `zeroYieldRuns` | scrape | Empty polls in a row. Default 0. |
+| `lastError` | scrape | Why the last poll failed; empty once one succeeds. |
 | `lastNonZeroCount` | scrape | Count of the last non-empty poll. Default 0. |
 | `deleted` | operator | Soft delete. |
 
@@ -62,7 +63,7 @@ Every record shape here is the source of truth. A stored record that fails its s
 | Field | Meaning |
 | --- | --- |
 | `id` | Id of the item that created the message. |
-| `status` | `topublish` or `published`. (`error` exists in the enum but nothing writes it.) |
+| `status` | `topublish`, `published` (has at least one post) or `no_target` (publish left no post). (`error` exists in the enum but nothing writes it.) |
 | `members` | Map `itemId → member block`. At most **20** entries. |
 | `memberCount` | MUST equal the number of keys in `members`. |
 | `memberIds` | The keys of `members`, kept as a list so the date query can return them. |
@@ -78,7 +79,7 @@ Every record shape here is the source of truth. A stored record that fails its s
 
 **Member block**: `summary` (≤ 220, link tokens kept), `links`, `channel` (the item's source id), `ts` (when this member joined).
 
-- **DA-7** An operator MAY edit only a message's `title` and `category`.
+- **DA-7** An operator MAY edit only a message's `title`, `category` and `tags`.
 - **DA-8** The default legacy target is `telegator_news`: a legacy message with an empty `tgChannel` was posted there.
 
 ## 6. `targets` — where to publish

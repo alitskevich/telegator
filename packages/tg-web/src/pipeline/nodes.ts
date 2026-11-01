@@ -23,6 +23,7 @@ export function pipelineNodes(
       valueLabel: stage.metricLabel ?? "",
       queued: unread ? null : overview.inQueue[stage.queue],
       paused: unread ? false : overview.paused[stage.queue],
+      failing: stage.sources === undefined ? 0 : (overview?.failingSources ?? 0),
       selected: stage.id === selected,
     };
   });

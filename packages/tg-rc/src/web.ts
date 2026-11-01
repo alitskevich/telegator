@@ -1,6 +1,6 @@
 import { SOURCE_TYPES, type SourceType } from "tg-enums/sourceType";
 import { TARGET_TYPES } from "tg-enums/targetType";
-import { MESSAGE_COLUMNS, SOURCE_COLUMNS, TARGET_COLUMNS } from "./columns";
+import { MESSAGE_COLUMNS, SOURCE_COLUMNS, TAG_COLUMNS, TARGET_COLUMNS } from "./columns";
 
 /**
  * Everything the console's templates read as `R.…`: its words, its nav
@@ -14,6 +14,8 @@ const app = { name: "Telegator", tagline: "Telegram news pipeline" };
 const nav = [
   { id: "dashboard", name: "Dashboard", icon: "layout-dashboard" },
   { id: "messages", name: "Messages", icon: "newspaper" },
+  { id: "items", name: "Items", icon: "list" },
+  { id: "tags", name: "Tags", icon: "tags" },
   { id: "audit", name: "Audit", icon: "scroll-text" },
 ];
 
@@ -22,11 +24,13 @@ const labels: Record<string, string> = {
   id: "Id",
   status: "Status",
   tags: "Tags",
+  keywords: "Keywords",
   category: "Category",
   teaser: "Teaser",
   lastCount: "Last count",
   lastResult: "Last result",
   zeroYieldRuns: "Empty runs",
+  lastError: "Last error",
   title: "Title",
   date: "Date",
   memberCount: "Members",
@@ -45,7 +49,6 @@ const columnsOf = (ids: readonly string[]) =>
 const tables = {
   sources: {
     title: "All sources",
-    subtitle: "Every reader's sources, in any status",
     noun: "source",
     empty: "No sources match",
     columns: columnsOf(SOURCE_COLUMNS),
@@ -55,9 +58,12 @@ const tables = {
     noun: "target",
     columns: columnsOf(TARGET_COLUMNS),
   },
+  tags: {
+    noun: "tag",
+    columns: columnsOf(TAG_COLUMNS),
+  },
   messages: {
     title: "Messages",
-    subtitle: "Aggregated stories, by publishing status",
     noun: "message",
     empty: "No messages match",
     columns: columnsOf(MESSAGE_COLUMNS),
@@ -66,10 +72,58 @@ const tables = {
 
 /** The Messages tabs, in the order an operator works through them. */
 const messageTabs = [
+  { id: "all", name: "All statuses" },
   { id: "topublish", name: "To publish" },
   { id: "published", name: "Published" },
+  { id: "no_target", name: "No target" },
   { id: "error", name: "Failed" },
 ];
+
+/** The Items page: the `ingest` items of one stage or all, picked like the Messages status. */
+const items = {
+  title: "Items",
+  subtitle: "Ingest items by stage, newest first, at most 100. Done items go after 7 days.",
+  stage: "Stage",
+  status: "Status",
+  empty: "No items match",
+  stages: [
+    { id: "all", name: "All stages" },
+    { id: "analyze", name: "Analyze" },
+    { id: "aggregate", name: "Aggregate" },
+    { id: "publish", name: "Publish" },
+  ],
+  statuses: [
+    { id: "all", name: "All statuses" },
+    { id: "pending", name: "Waiting" },
+    { id: "running", name: "Running" },
+    { id: "done", name: "Done" },
+    { id: "error", name: "Failed" },
+  ],
+  columns: {
+    ref: "Item",
+    stage: "Stage",
+    text: "Text",
+    status: "Status",
+    failed: "Failed",
+    created: "Created",
+    runAt: "Runs at",
+  },
+};
+
+/** The Tags page: the list, and the selected tag's keywords. */
+const tagsPage = {
+  title: "Tags",
+  subtitle:
+    "Analyze replaces each keyword on a new post with its tag. Other tags stay as they are.",
+  empty: "No tags yet",
+  pick: "Select a tag to edit its keywords",
+  keywords: labels.keywords,
+  keywordsHint: "Comma-separated, e.g. rent, real estate",
+  columns: [
+    { id: "id", name: labels.id, width: "minmax(8rem, 1fr)" },
+    { id: "keywords", name: labels.keywords, width: "minmax(8rem, 2fr)" },
+  ],
+};
 
 const common = {
   search: "Search visible columns",
@@ -80,7 +134,9 @@ const common = {
   export: "Export CSV",
   add: "Add",
   save: "Save",
+  cancel: "Cancel",
   delete: "Delete selected",
+  confirmDelete: "Confirm: delete selected",
   selectAll: "Select all",
   clearSelection: "Clear selection",
   loading: "Loading…",
@@ -91,6 +147,10 @@ const common = {
   updated: "Updated",
   notFound: "Nothing at this address",
   backHome: "Back to the dashboard",
+  dismiss: "Dismiss",
+  troubleshoot: "Fix with Vibe",
+  troubleshootPrompt:
+    "This error is showing on this page:\n\n{error}\n\nFind its root cause in the code and fix it. If the code is right and the data or configuration is at fault, say what to change instead.",
 };
 
 const auth = {
@@ -107,8 +167,6 @@ const auth = {
 };
 
 const dashboard = {
-  title: "Pipeline health",
-  subtitle: "Every stage and its queue. Select one to act on it.",
   scraped: "Items scraped",
   analyzed: "Items analysed",
   skipped: "Items skipped",
@@ -144,14 +202,16 @@ const pipeline = {
   stepMax: "Run next",
   next: "Next in queue",
   emptyQueue: "Nothing waiting",
+  scrapedItems: "Scraped items",
+  scrapedEmpty: "No scraped items",
+  droppedNote: "Dropped, not sent to Analyze, 24 h: {reasons}",
+  openItems: "Open all items",
   run: "Run",
   due: "due {time}",
+  failingSources: "Sources whose last poll failed",
   headOfQueue: "next up",
-  sources: "Sources, next run first",
-  noSources: "No enabled sources",
   nextRun: "next run",
   afterNextRun: "due, after the next run",
-  lastCount: "{count} last run",
   running: "running",
   failedTimes: "{count} failed",
   openMessages: "Open the publish backlog",
@@ -166,12 +226,6 @@ const pipeline = {
     payload: "Payload as JSON",
   },
 };
-
-/** The Scrape node's tabs: `?tab=`, so a reload or a shared link shows the same one. */
-const sourceTabs = [
-  { id: "next", name: pipeline.sources },
-  { id: "all", name: tables.sources.title },
-];
 
 /** The text fields of the scraped payload; `id`, `links` and `kind` show only in the JSON. */
 const scrapedFields = [
@@ -241,12 +295,13 @@ const telegram = {
 };
 
 /** A source in the Dashboard page's edit modal: every field; the ones scrape owns are read-only. */
-/** The Scrape node's All sources `Table`: the columns to scan by; the modal shows the rest. */
+/** The Scrape node's sources `Table`: the columns to scan by; the modal shows the rest. `due` is the scrape preview's. */
 const sourceColumns = [
   { id: "id", name: labels.id, width: "minmax(10rem, 2fr)" },
   { id: "type", name: labels.type, width: "minmax(6rem, 1fr)" },
   { id: "status", name: labels.status, width: "minmax(5rem, 1fr)" },
-  { id: "lastCount", name: labels.lastCount, width: "minmax(6rem, 1fr)" },
+  { id: "due", name: "Due", width: "minmax(8rem, 1fr)" },
+  { id: "lastCount", name: "Last run", width: "minmax(5rem, 1fr)" },
 ];
 
 const sourceFields = [
@@ -259,6 +314,7 @@ const sourceFields = [
   { id: "lastCount", name: labels.lastCount, type: "text", disabled: true },
   { id: "lastResult", name: labels.lastResult, type: "text", disabled: true },
   { id: "zeroYieldRuns", name: labels.zeroYieldRuns, type: "text", disabled: true },
+  { id: "lastError", name: labels.lastError, type: "text", disabled: true },
 ];
 
 /**
@@ -275,8 +331,6 @@ const stages = [
     caption: "Via a user account",
     metric: "scraped",
     metricLabel: "scraped, 24 h",
-    detail:
-      "Reads new posts from the Telegram sources (channels, groups and chats) through a logged-in Telegram account, and queues each one for analysis.",
     sources: "telegram",
   },
   {
@@ -310,23 +364,30 @@ const stages = [
     metric: "published",
     metricLabel: "published, all time",
     queue: "publish",
-    detail:
-      "Sends each settled story to every channel whose tags it carries, and records every post. Runs 5 minutes after the last merge, one at a time. Add a channel below, or select one to edit its tags or template.",
   },
 ] as const;
 
 const records = {
   republish: "Re-publish",
   delete: "Delete",
+  targets: "Target channels",
+  noTargets: "No target channel matched this message",
+  notPosted: "not posted",
 };
 
 const audit = {
   title: "Audit",
-  subtitle: "The items that used up their attempts, and the record of what went wrong.",
+  subtitle:
+    "Failing sources, items that used up their attempts, and the record of what went wrong.",
   failed: "Failed items",
   failedHint:
     "Every stage's failed items, oldest first, with the error and its cause. Analyse asks the model for the likely cause and a fix; Run sends one item back to its stage.",
   noErrors: "No errors",
+  failuresBadge: "Failed items and failing sources",
+  failingSources: "Failing sources",
+  failingSourcesHint:
+    "Their last poll failed, so they have no new posts. Each is polled again by the next run, which clears the error if it succeeds.",
+  openSources: "Open sources",
   attempts: "{count} attempts",
   analyse: "Analyse",
   analyseAgain: "Analyse again",
@@ -337,7 +398,8 @@ const audit = {
   cleanup: "Discard all",
   confirmCleanup: "Confirm: discard {count}",
   history: "History",
-  historyHint: "Every rejected send and every failed item, newest first. Kept for 30 days.",
+  historyHint:
+    "Every rejected send, failed item and failed scheduled run, newest first. Kept for 30 days.",
   empty: "Nothing went wrong in the last 30 days",
   rejected: "Rejected sends",
   open: "Rejected sends not yet followed by a successful post",
@@ -350,6 +412,7 @@ const toasts = {
   deleted: "Deleted {count} {noun}(s)",
   exported: "Exported {file}",
   runScraper: "Scraped {processed} items",
+  runScraperFailed: "Scraped {processed} items; {failed} sources failed",
   emulateItem: "Queued fake post {id}",
   resetIngest: "Deleted {deleted} ingest items",
   resetSourceCursors:
@@ -372,7 +435,8 @@ export const resources = {
   nav,
   tables,
   messageTabs,
-  sourceTabs,
+  items,
+  tags: tagsPage,
   common,
   auth,
   dashboard,

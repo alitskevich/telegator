@@ -43,6 +43,8 @@ const field = {
   lastResult: z.string().optional(),
   zeroYieldRuns: count,
   lastNonZeroCount: count,
+  /** Why the last poll failed; empty once a poll succeeds. */
+  lastError: z.string().optional(),
 
   deleted: z.boolean().optional(),
 } as const;
@@ -95,6 +97,7 @@ export const SourceCursorUpdate = z
     lastResult: field.lastResult,
     zeroYieldRuns: field.zeroYieldRuns,
     lastNonZeroCount: field.lastNonZeroCount,
+    lastError: field.lastError,
   })
   .partial()
   .strict();

@@ -1,0 +1,91 @@
+<Component id="Page.Items">
+  <Signature purpose="One stage's ingest items or every stage's, picked from a dropdown, filtered by status, newest first; a row opens the item modal"
+    description="The stage and status are `?stage=` and `?status=` in the url, so a reload or a shared link shows the same list. Reads `listItems`; *Run* renders only for an admin." />
+
+  <ItemsService Ref="items" api="@api" stage="{@browser.params.stage}"
+    status="{@browser.params.status}" />
+  <ItemService Ref="item" api="@api" owner="@items" />
+
+  <PageTitle title="{R.items.title}" subtitle="{R.items.subtitle}">
+    <Btn class="sm:btn-sm" mode="soft" icon="refresh-cw" text="{R.common.refresh}"
+      busy="{@items.loading}" click="-> @items.load()" />
+  </PageTitle>
+
+  <div class="flex flex-col sm:flex-row gap-2">
+    <select class="select sm:select-sm w-full sm:w-44" aria-label="{R.items.stage}"
+      change="-> @browser.setParam('stage', event.value || null)">
+      <option Each="option of R.items.stages" value="{option.id}"
+        selected="{@items.stage == option.id}">{option.name}</option>
+    </select>
+    <select class="select sm:select-sm w-full sm:w-44" aria-label="{R.items.status}"
+      change="-> @browser.setParam('status', event.value || null)">
+      <option Each="option of R.items.statuses" value="{option.id}"
+        selected="{@items.status == option.id}">{option.name}</option>
+    </select>
+  </div>
+
+  <ErrorBanner If="@items.error" text="{@items.error}" />
+
+  <section class="bg-base-100 rounded-box flex flex-col min-w-0">
+    <div class="flex flex-wrap items-center gap-2 p-3 border-b border-base-200">
+      <label class="input w-full sm:input-sm sm:w-72">
+        <span class="icon icon-search text-base-content/50" aria-hidden="true"></span>
+        <input type="search" class="grow" placeholder="{R.common.search}" aria-label="{R.common.search}"
+          value="{@items.keyword}" input="-> @items.search(event)" />
+      </label>
+      <span class="text-xs text-base-content/60">{@items.rows.length ?? 0} / {@items.items.length ?? 0}</span>
+    </div>
+    <div class="md:overflow-x-auto">
+      <table class="table table-sm block md:table">
+        <thead class="hidden md:table-header-group bg-base-200 text-base-content/80">
+          <tr>
+            <th>{R.items.columns.ref}</th>
+            <th>{R.items.columns.stage}</th>
+            <th>{R.items.columns.text}</th>
+            <th>{R.items.columns.status}</th>
+            <th class="text-right">{R.items.columns.failed}</th>
+            <th>{R.items.columns.created}</th>
+            <th>{R.items.columns.runAt}</th>
+            <th If="@api.canAdmin"></th>
+          </tr>
+        </thead>
+        <tbody class="block md:table-row-group">
+          <This-Row Each="row of @items.rows" row="{row}" />
+          <tr If="{!@items.rows.length}" class="block md:table-row">
+            <td colspan="20" class="block md:table-cell py-12 text-center text-base-content/60">
+              <Loading If="@items.loading" size="sm" />
+              <span If="{!@items.loading}">{R.items.empty}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <PipelineItem />
+
+  <Subcomponent id="Row">
+    <Signature purpose="One item — a card on a phone, a table row from `md` — opening the item modal on its id">
+      <Prop id="row" type="object" required="true" description="An `ItemRow` from `src/services/types.ts`" />
+    </Signature>
+    <tr class="flex flex-wrap items-start gap-x-4 gap-y-2 p-4 border-b border-base-200 md:table-row md:p-0 md:hover:bg-base-200/50 transition-colors duration-150">
+      <td class="block basis-full p-0 min-w-0 md:table-cell md:align-top md:px-3 md:py-2 font-medium">
+        <button type="button" data-id="{row.id}" click="-> @item.open(event)"
+          class="text-left break-all cursor-pointer hover:underline text-primary">{row.ref}</button>
+      </td>
+      <td class="block p-0 md:table-cell md:align-top md:px-3 md:py-2 capitalize text-base-content/70">{row.stage}</td>
+      <td class="block basis-full p-0 min-w-0 md:table-cell md:align-top md:px-3 md:py-2 md:max-w-[50ch]">
+        <span class="line-clamp-2 break-words text-base-content/80">{row.text}</span>
+        <span If="row.error" class="block text-xs text-error break-words">{row.error}</span>
+      </td>
+      <td class="block p-0 md:table-cell md:align-top md:px-3 md:py-2"><StatusBadge status="{row.status}" /></td>
+      <td class="block p-0 md:table-cell md:align-top md:px-3 md:py-2 md:text-right tabular-nums">{row.failed}</td>
+      <td class="block p-0 md:table-cell md:align-top md:px-3 md:py-2 tabular-nums text-base-content/70">{row.created}</td>
+      <td class="block p-0 md:table-cell md:align-top md:px-3 md:py-2 tabular-nums text-base-content/70">{row.runAt}</td>
+      <td If="@api.canAdmin" class="block p-0 md:table-cell md:align-top md:px-3 md:py-2 md:text-right">
+        <Btn If="row.canRun" class="md:btn-xs" mode="soft" icon="play" text="{R.pipeline.run}" data="{row}"
+          busy="{@api.busy.runItem}" click="-> @item.run(event)" />
+      </td>
+    </tr>
+  </Subcomponent>
+</Component>

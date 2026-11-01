@@ -33,9 +33,10 @@ Operators use a web console. The browser has **no** direct store access: every r
 | --- | --- | --- | --- |
 | `whoami` | viewer | — | `{email, roles}` |
 | `overview` | viewer | — | §4 |
-| `listSources`, `listTargets` | viewer | — | all non-deleted rows |
+| `listSources`, `listTargets`, `listTags` | viewer | — | all non-deleted rows |
 | `listMessages` | viewer | `{status}` | rows of that status, newest first, each with `errors` (§6) |
-| `loadMembers` | viewer | `{messageId}` | members as `{itemId, …block}`, oldest first |
+| `loadMembers` | viewer | `{messageId}` | members as `{itemId, url, …block}`, oldest first |
+| `loadPosts` | viewer | `{messageId}` | matched or posted targets as `{target, tgId, url}`; both `null` with no post |
 | `loadAudit` | viewer | `{messageId?}` | that message's entries, or the newest **200** of all; newest first |
 | `inspectQueue` | viewer | `{queueName}` | queue preview (QU §8) |
 | `inspectItem` | viewer | `{id}` | item detail |

@@ -41,7 +41,7 @@ describe("runScrape", () => {
     await sources.put(source("chan"));
     const result = await runScrape(reader({ chan: [post("9"), post("10")] }), NOW);
 
-    expect(result).toEqual({ processed: 2, enqueued: 2 });
+    expect(result).toEqual({ processed: 2, enqueued: 2, failed: 0 });
     expect(enqueue).toHaveBeenCalledTimes(2);
     expect(await sources.get("chan")).toMatchObject({ lastItemId: "10", lastCount: 2 });
   });
@@ -51,7 +51,9 @@ describe("runScrape", () => {
     vi.mocked(enqueue).mockRejectedValueOnce(new Error("queue down"));
     await runScrape(reader({ chan: [post("6"), post("7")] }), NOW);
 
-    expect((await sources.get("chan"))?.lastItemId).toBe("5");
+    const stored = await sources.get("chan");
+    expect(stored?.lastItemId).toBe("5");
+    expect(stored?.lastError).toContain("enqueued 1 of 2");
   });
 
   test("an empty page counts a zero-yield run, and the third one marks the source stale", async () => {
@@ -67,6 +69,14 @@ describe("runScrape", () => {
     await sources.put(source("chan"));
     const result = await runScrape(reader({ broken: new Error("boom"), chan: [post("1")] }), NOW);
 
-    expect(result.enqueued).toBe(1);
+    expect(result).toMatchObject({ enqueued: 1, failed: 1 });
+    expect((await sources.get("broken"))?.lastError).toBe("boom");
+  });
+
+  test("a poll that succeeds clears the source's error", async () => {
+    await sources.put(source("chan", { lastError: "boom" }));
+    await runScrape(reader({ chan: [post("1")] }), NOW);
+
+    expect((await sources.get("chan"))?.lastError).toBe("");
   });
 });

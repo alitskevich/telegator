@@ -55,13 +55,14 @@ describe("inspectSources", () => {
     await sources.patch("off", { status: "off" });
 
     expect(await inspectSources(now)).toEqual([
-      { id: "hot", type: "telegram", dueAt: now, next: true, lastCount: 25 },
+      { id: "hot", type: "telegram", dueAt: now, next: true, lastCount: 25, lastError: null },
       {
         id: "warm",
         type: "telegram",
         dueAt: now + WARM_INTERVAL_MS,
         next: false,
         lastCount: 3,
+        lastError: null,
       },
     ]);
   });

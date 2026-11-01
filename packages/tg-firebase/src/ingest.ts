@@ -1,5 +1,6 @@
 import { FieldValue, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { type IngestControl, IngestControlSchema, IngestItemSchema, refOf } from "tg-domain/ingest";
+import type { IngestStatus } from "tg-enums/ingestStatus";
 import type { QueueName } from "tg-enums/queueName";
 import { log } from "tg-utils/logger";
 import { db } from "./app";
@@ -275,6 +276,18 @@ export async function listQueue(stage: QueueName, limit: number): Promise<Stored
     .orderBy("runAt")
     .limit(limit)
     .get();
+  return snap.docs.map(parse);
+}
+
+/** One stage's items, or every stage's, in one status, or in any, newest first. */
+export async function listItems(
+  stage: QueueName | undefined,
+  status: IngestStatus | undefined,
+  limit: number,
+): Promise<StoredIngestItem[]> {
+  let query = stage === undefined ? ingestRef : ingestRef.where("stage", "==", stage);
+  if (status !== undefined) query = query.where("status", "==", status);
+  const snap = await query.orderBy("createdAt", "desc").limit(limit).get();
   return snap.docs.map(parse);
 }
 

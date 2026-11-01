@@ -1,5 +1,6 @@
 import type { AnalyzedItem, ScrapedItem } from "tg-domain/item";
 import type { NewsItem } from "tg-domain/newsItemSchema";
+import { mapTags, type Tag } from "tg-domain/tag";
 import { mergeTags } from "tg-domain/tags";
 import { DROPPED_CATEGORY } from "tg-enums/categories";
 import type { SkipReason } from "tg-enums/metrics";
@@ -67,21 +68,28 @@ export function normalizeCountry(country: string): string {
 }
 
 /**
- * AI tags merged with source tags, AI tags first, each once. Aggregate merges
- * with the same `mergeTags`, so the two agree.
+ * AI tags merged with source tags, AI tags first, each once, then mapped through
+ * the `tags` collection's keywords. Aggregate merges with the same `mergeTags`,
+ * so the two agree.
  */
 export function normalizeTags(
   aiTags: readonly string[] | undefined,
   sourceTags: readonly string[] | undefined,
+  dictionary: readonly Tag[] = [],
 ): string[] {
-  return mergeTags(aiTags, sourceTags);
+  return mapTags(mergeTags(aiTags, sourceTags), dictionary);
 }
 
 /**
  * The payload for aggregate. AI fields overwrite the scrape defaults, `tags`
- * is merged, and the scrape identity fields pass through. Inputs are not mutated.
+ * is merged and mapped, and the scrape identity fields pass through. Inputs are
+ * not mutated.
  */
-export function normalizeAnalyzed(scraped: ScrapedItem, ai: NewsItem): AnalyzedItem {
+export function normalizeAnalyzed(
+  scraped: ScrapedItem,
+  ai: NewsItem,
+  dictionary: readonly Tag[] = [],
+): AnalyzedItem {
   return {
     ...scraped,
     title: ai.title,
@@ -92,6 +100,6 @@ export function normalizeAnalyzed(scraped: ScrapedItem, ai: NewsItem): AnalyzedI
     importance: ai.importance,
     peoples: ai.peoples,
     properNames: ai.properNames,
-    tags: normalizeTags(ai.tags, scraped.tags),
+    tags: normalizeTags(ai.tags, scraped.tags, dictionary),
   };
 }

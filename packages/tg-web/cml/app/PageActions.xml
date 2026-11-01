@@ -1,0 +1,6 @@
+<Component id="PageActions">
+  <Signature purpose="The header's page actions for a route that has none"
+    description="`AppHeader` renders `PageActions.{Route}`; a route without its own falls back here by CML's dotted-prefix fallback." />
+
+  <span></span>
+</Component>

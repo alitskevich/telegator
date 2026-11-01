@@ -101,15 +101,30 @@ describe("runPublish", () => {
     expect(calls.map((c) => c.chatId)).toEqual(["@news_b"]);
   });
 
-  test("a message no target receives is marked published with no post", async () => {
+  test("a message no target receives is marked no_target with no post", async () => {
     await messages.putNew(message({ tags: ["sports"] }));
     const { bot, calls } = fakeBot();
     await runPublish("chan_a/1", bot, () => NOW);
 
     expect(calls).toEqual([]);
     const stored = await messages.get("chan_a/1");
-    expect(stored?.status).toBe("published");
+    expect(stored?.status).toBe("no_target");
     expect(stored?.posts).toEqual({});
+  });
+
+  test("a message with only a post that has no id is marked no_target", async () => {
+    await messages.putNew(message({ tags: ["sports"], posts: { news_a: { tgId: "", tgAt: 5 } } }));
+    await runPublish("chan_a/1", fakeBot().bot, () => NOW);
+
+    expect((await messages.get("chan_a/1"))?.status).toBe("no_target");
+  });
+
+  test("a message no target receives now keeps published when an earlier post stands", async () => {
+    const posts = { news_a: { tgId: "55", tgAt: 5 } };
+    await messages.putNew(message({ tags: ["sports"], posts }));
+    await runPublish("chan_a/1", fakeBot().bot, () => NOW);
+
+    expect((await messages.get("chan_a/1"))?.status).toBe("published");
   });
 
   test("a deleted or already published message is skipped", async () => {

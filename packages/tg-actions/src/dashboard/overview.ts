@@ -1,8 +1,9 @@
 import type { MessageListItem } from "tg-domain/message";
+import { SOURCE_STATUS_OK } from "tg-domain/source";
 import { MESSAGE_STATUSES } from "tg-enums/messageStatus";
 import { SKIP_REASONS, type SkipReason } from "tg-enums/metrics";
 import { QUEUES, type QueueName } from "tg-enums/queueName";
-import { messages } from "tg-firebase/db";
+import { messages, sources } from "tg-firebase/db";
 import { countErrors } from "tg-firebase/errors";
 import { countInQueue, readControl } from "tg-firebase/ingest";
 import { sumMetric, sumMetricBy } from "tg-firebase/metrics";
@@ -35,18 +36,31 @@ async function recentMessages(): Promise<MessageListItem[]> {
 
 export async function loadOverview(now = Date.now()): Promise<Overview> {
   const day = now - DAY_MS;
-  const [scraped, analyzed, skippedBy, categories, inQueue, errors, paused, statusCounts, recent] =
-    await Promise.all([
-      sumMetric("ItemsScraped", day, now),
-      sumMetric("ItemsAnalyzed", day, now),
-      sumMetricBy("ItemsSkipped", day, now),
-      sumMetricBy("ItemsClassified", now - WEEK_MS, now),
-      perStage(countInQueue),
-      countErrors(),
-      perStage(async (queue) => (await readControl(queue)).paused),
-      Promise.all(MESSAGE_STATUSES.map((status) => messages.countByStatus(status))),
-      recentMessages(),
-    ]);
+  const [
+    scraped,
+    dropped,
+    analyzed,
+    skippedBy,
+    categories,
+    inQueue,
+    errors,
+    enabledSources,
+    paused,
+    statusCounts,
+    recent,
+  ] = await Promise.all([
+    sumMetric("ItemsScraped", day, now),
+    sumMetricBy("ItemsDropped", day, now),
+    sumMetric("ItemsAnalyzed", day, now),
+    sumMetricBy("ItemsSkipped", day, now),
+    sumMetricBy("ItemsClassified", now - WEEK_MS, now),
+    perStage(countInQueue),
+    countErrors(),
+    sources.listByStatus(SOURCE_STATUS_OK),
+    perStage(async (queue) => (await readControl(queue)).paused),
+    Promise.all(MESSAGE_STATUSES.map((status) => messages.countByStatus(status))),
+    recentMessages(),
+  ]);
 
   const byReason = Object.fromEntries(
     SKIP_REASONS.map((reason) => [reason, skippedBy[reason] ?? 0]),
@@ -56,10 +70,12 @@ export async function loadOverview(now = Date.now()): Promise<Overview> {
 
   return {
     scraped,
+    dropped,
     analyzed,
     skipped: { total: Object.values(byReason).reduce((a, b) => a + b, 0), byReason },
     published: statusOf("published"),
     errors,
+    failingSources: enabledSources.filter((source) => source.lastError).length,
     statusSlices: MESSAGE_STATUSES.map((status) => ({ label: status, value: statusOf(status) })),
     categorySlices: Object.entries(categories).map(([label, value]) => ({ label, value })),
     inQueue,

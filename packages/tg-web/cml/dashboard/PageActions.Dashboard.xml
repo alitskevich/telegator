@@ -1,0 +1,14 @@
+<Component id="PageActions.Dashboard">
+  <Signature purpose="The dashboard's actions in the header: when it last read, Refresh and Reset ingest"
+    description="Reads `@pipeline`, which `AppShell` holds." />
+
+  <div class="flex items-center gap-2 shrink-0">
+    <span class="hidden lg:inline text-xs text-base-content/60">{R.common.updated} {@pipeline.updatedAt | clock}</span>
+    <Btn class="sm:btn-sm" mode="soft" icon="refresh-cw" text="{R.common.refresh}"
+      busy="{@pipeline.loading}" click="-> @pipeline.load()" />
+    <ConfirmButton If="@api.canAdmin" class="sm:btn-sm" icon="eraser"
+      text="{R.pipeline.resetIngest}" confirmText="{R.pipeline.confirmResetIngest}"
+      armed="{@pipeline.resetArmed}" busy="{@api.busy.resetIngest}"
+      click="-> @pipeline.resetIngest()" cancel="-> @pipeline.cancelReset()" />
+  </div>
+</Component>

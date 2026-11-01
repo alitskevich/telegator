@@ -10,7 +10,7 @@ import { db } from "tg-firebase/app";
  */
 
 /** What an operator curates. Everything else is produced by the pipeline. */
-export const SEED_COLLECTIONS = ["sources", "targets", "users"] as const;
+export const SEED_COLLECTIONS = ["sources", "targets", "tags", "users"] as const;
 
 export type SeedCollection = (typeof SEED_COLLECTIONS)[number];
 

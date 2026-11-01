@@ -1,4 +1,4 @@
-import type { MemberRow } from "tg-actions/dashboard/types";
+import type { MemberRow, PostRow } from "tg-actions/dashboard/types";
 import type { StoredAuditEntry } from "tg-firebase/types";
 import { filterByColumn, filterByKeyword } from "tg-utils/ui/filter";
 import { allSelected } from "tg-utils/ui/selection";
@@ -16,9 +16,10 @@ export type Row = Readonly<Record<string, unknown>> & { readonly id: string };
 /** Per row, per field: the operator's unsaved text. */
 export type Drafts = Readonly<Record<string, Readonly<Record<string, string>>>>;
 
-/** A message's panel once read: its members and its `audit` entries. */
+/** A message's panel once read: its members, its posts and its `audit` entries. */
 export interface MessagePanel {
   readonly members: readonly MemberRow[];
+  readonly posts: readonly PostRow[];
   readonly audit: readonly StoredAuditEntry[];
 }
 
@@ -65,6 +66,7 @@ export function gridView(rows: readonly Row[] | null, state: GridState, spec: Gr
         expanded: panel !== undefined,
         membersLoading: panel === "loading",
         members: (loaded?.members ?? []).map((member) => ({ ...member, id: member.itemId })),
+        posts: (loaded?.posts ?? []).map((post) => ({ ...post, id: post.target })),
         audit: loaded?.audit ?? [],
         cells: spec.columns.map((column, index) => ({
           id: column.id,

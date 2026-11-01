@@ -116,6 +116,11 @@ export const MessageSchema = messageFields.refine(
 
 export type Message = z.infer<typeof MessageSchema>;
 
+/** An operator's edit, closed to everything else; the console's `tags` text is read as a list. */
+export const MessageConfigInput = messageFields
+  .pick({ title: true, category: true, tags: true })
+  .strict();
+
 /**
  * The fields the console's message list selects. Its own type, so code cannot
  * read a field the query did not return; the member list is a separate read.

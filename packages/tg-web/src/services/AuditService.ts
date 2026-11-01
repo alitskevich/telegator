@@ -1,5 +1,5 @@
 import { WebClientService } from "arrmatura-web";
-import type { ErrorPreview, ErrorsPage } from "tg-actions/dashboard/types";
+import type { ErrorPreview, ErrorsPage, SourcePreview } from "tg-actions/dashboard/types";
 import type { StoredAuditEntry } from "tg-firebase/types";
 import { resources } from "tg-rc/web";
 import { clock } from "../functions";
@@ -42,6 +42,8 @@ export class AuditService extends WebClientService {
   entries: StoredAuditEntry[] | null = null;
   /** The oldest failed items, and their count in all: `null` until read. */
   errors: ErrorsPage | null = null;
+  /** The enabled sources whose last poll failed. */
+  failingSources: readonly SourcePreview[] = [];
   loading = false;
   error: string | null = null;
   replayMax = DEFAULT_REPLAY_MAX;
@@ -69,11 +71,13 @@ export class AuditService extends WebClientService {
   async load(): Promise<void> {
     this.up({ loading: true, error: null });
     try {
-      const [entries, errors] = await Promise.all([
+      const [entries, errors, enabled] = await Promise.all([
         this.api.call("loadAudit") as Promise<StoredAuditEntry[]>,
         this.api.call("inspectErrors") as Promise<ErrorsPage>,
+        this.api.call("inspectSources") as Promise<SourcePreview[]>,
       ]);
-      this.up({ entries, errors, loading: false });
+      const failingSources = enabled.filter((source) => source.lastError !== null);
+      this.up({ entries, errors, failingSources, loading: false });
     } catch (error) {
       this.logError(error);
       this.up({ loading: false, error: error instanceof Error ? error.message : String(error) });

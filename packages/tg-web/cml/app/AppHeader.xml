@@ -15,10 +15,13 @@
               class="btn btn-ghost sm:btn-sm gap-2 px-3 font-normal transition-colors duration-150 {item.id == (@browser.path || 'dashboard') ? 'bg-base-200 text-primary' : 'text-base-content/70'}">
               <span class="icon icon-{item.icon}" aria-hidden="true"></span>
               <span class="hidden md:inline">{item.name}</span>
+              <span If="{item.id == 'audit' AND @pipeline.failures GT 0}" title="{R.audit.failuresBadge}"
+                class="badge badge-xs badge-error tabular-nums">{@pipeline.failures | num}</span>
             </a>
           </li>
         </ul>
       </nav>
+      <Dynamic As="PageActions.{capitalize(@browser.path || 'dashboard')}" />
       <UserMenu />
     </div>
   </header>

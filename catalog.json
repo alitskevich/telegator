@@ -84,6 +84,20 @@
     "file": "packages/tg-web/cml/components/ErrorBanner.xml"
   },
   {
+    "id": "PageActions",
+    "description": "`AppHeader` renders `PageActions.{Route}`; a route without its own falls back here by CML's dotted-prefix fallback.",
+    "purpose": "The header's page actions for a route that has none",
+    "name": "PageActions",
+    "file": "packages/tg-web/cml/app/PageActions.xml"
+  },
+  {
+    "id": "PageActions.Dashboard",
+    "description": "Reads `@pipeline`, which `AppShell` holds.",
+    "purpose": "The dashboard's actions in the header: when it last read, Refresh and Reset ingest",
+    "name": "PageActions.Dashboard",
+    "file": "packages/tg-web/cml/dashboard/PageActions.Dashboard.xml"
+  },
+  {
     "id": "PageTitle",
     "description": "PageTitle",
     "purpose": "A page's title row: title, one line of context, and its actions on the right",
@@ -180,6 +194,13 @@
     "purpose": "The Messages table by status tab, with Publish now on the backlog for an admin",
     "name": "Page.Messages",
     "file": "packages/tg-web/cml/records/Page.Messages.xml"
+  },
+  {
+    "id": "Page.Tags",
+    "description": "Analyze reads these keywords to map the tags of each new post. Only an editor adds, saves and deletes; the API re-checks the role regardless.",
+    "purpose": "The `tags` collection, master and detail: a list to add to, and the selected tag's keywords to save or delete",
+    "name": "Page.Tags",
+    "file": "packages/tg-web/cml/records/Page.Tags.xml"
   },
   {
     "id": "RecordCell",

@@ -1,10 +1,23 @@
 <Component id="ErrorBanner">
-  <Signature purpose="An inline failure, in plain words, beside the block it belongs to">
+  <Signature purpose="An inline failure, in plain words, beside the block it belongs to, with a close button and, on localhost, one that hands it to the vibe agent"
+    description="Closing hides this text only: a different failure shows again.">
     <Prop id="text" type="string" required="true" />
+    <State id="dismissed" type="string" description="The text the close button hid" />
   </Signature>
 
-  <div role="alert" class="alert alert-error alert-soft text-sm">
+  <div If="{dismissed != text}" role="alert" class="alert alert-error alert-soft text-sm">
     <span class="icon icon-circle-alert" aria-hidden="true"></span>
-    <span class="break-words">{text}</span>
+    <span class="break-words min-w-0">{text}</span>
+    <div class="flex items-center gap-1">
+      <button If="@vibe.isLocal" type="button" class="btn btn-xs btn-soft btn-error" data-error="{text}"
+        click="-> @troubleshoot.start(event)">
+        <span class="icon icon-wrench" aria-hidden="true"></span>
+        <span>{R.common.troubleshoot}</span>
+      </button>
+      <button type="button" class="btn btn-xs btn-ghost btn-square" title="{R.common.dismiss}"
+        aria-label="{R.common.dismiss}" click="-> dismissed = text">
+        <span class="icon icon-x" aria-hidden="true"></span>
+      </button>
+    </div>
   </div>
 </Component>

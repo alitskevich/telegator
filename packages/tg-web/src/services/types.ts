@@ -30,13 +30,18 @@ export interface QueueRow {
   readonly canRun: boolean;
 }
 
-/** One enabled source, worded for the Scrape panel. */
-export interface SourceRow {
+/** One `ingest` item, worded for the Items page's table. */
+export interface ItemRow {
   readonly id: string;
-  /** When it is polled, its reader and its last yield: `due 14:30:00 · web · 3 last run`. */
-  readonly meta: string;
-  /** Its reader's next run polls it. */
-  readonly next: boolean;
+  readonly ref: string;
+  readonly stage: string;
+  readonly text: string;
+  readonly status: string;
+  readonly failed: number;
+  readonly created: string;
+  readonly runAt: string;
+  readonly error: string;
+  readonly canRun: boolean;
 }
 
 /** One line of the item modal's facts: `Status` · `error`. */

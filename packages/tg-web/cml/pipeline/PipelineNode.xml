@@ -18,6 +18,11 @@
       <span aria-hidden="true" class="icon icon-inbox"></span>
       <span>{node.queued | num}</span>
     </span>
+    <span If="node.failing" title="{R.pipeline.failingSources}"
+      class="badge badge-sm badge-error absolute -top-2.5 -right-2.5 gap-1 tabular-nums">
+      <span aria-hidden="true" class="icon icon-circle-alert"></span>
+      <span>{node.failing | num}</span>
+    </span>
     <span class="flex items-center gap-2 text-sm font-medium leading-tight min-w-0 {node.queue ? 'pr-8' : ''}">
       <span aria-hidden="true" class="icon icon-{node.icon} shrink-0 text-primary"></span>
       <span class="truncate">{node.title}</span>

@@ -8,11 +8,15 @@ import type { Slice } from "tg-utils/ui/types";
 
 export interface Overview {
   readonly scraped: number;
+  /** The scraped posts never sent to analyze, by kind: forward, empty, obsolete. */
+  readonly dropped: Readonly<Record<string, number>>;
   readonly analyzed: number;
   readonly skipped: { readonly total: number; readonly byReason: Record<SkipReason, number> };
   readonly published: number;
   /** `ingest` items of every stage that used up their attempts. */
   readonly errors: number;
+  /** Enabled sources whose last poll failed. */
+  readonly failingSources: number;
   readonly statusSlices: Slice[];
   readonly categorySlices: Slice[];
   /** Per task stage: its `ingest` items waiting or running. */
@@ -33,6 +37,13 @@ export interface QueueItemPreview {
   readonly ref: string;
   /** The start of its title or body. */
   readonly text: string;
+}
+
+/** One `ingest` item of any status for the Items page, without its payload. */
+export interface ItemPreview extends QueueItemPreview {
+  readonly stage: QueueName;
+  readonly createdAt: number;
+  readonly finishedAt: number | null;
 }
 
 /** One failed item for the Audit page: why it failed and the model's reading, without its payload. */
@@ -57,6 +68,8 @@ export interface SourcePreview {
   /** Its reader's next run polls it: it is due and within that run's cap. */
   readonly next: boolean;
   readonly lastCount: number;
+  /** Why its last poll failed; `null` when it did not. */
+  readonly lastError: string | null;
 }
 
 /** One `ingest` item whole, payload included, for the item modal. */
@@ -75,6 +88,15 @@ export interface ItemDetail {
 
 export interface MemberRow extends MemberBlock {
   readonly itemId: string;
+  /** The source post; `null` for an emulated one. */
+  readonly url: string | null;
+}
+
+/** One target of a message; `tgId` and `url` are `null` until it holds a post. */
+export interface PostRow {
+  readonly target: string;
+  readonly tgId: string | null;
+  readonly url: string | null;
 }
 
 /** A Messages table row: the listed fields, and how many of its `audit` entries are still open. */
