@@ -12,7 +12,6 @@ const values = (over: Partial<TemplateValues> = {}): TemplateValues => ({
   hashtags: HASHTAGS,
   message: {
     title: "Explosions & fire",
-    category: "politics",
     country: "by",
     location: "Minsk",
     date: "2026-09-08",
@@ -37,7 +36,7 @@ describe("renderTemplate", () => {
   });
 
   test("the collapse is over the whole string, so order does not matter", () => {
-    const empty = { title: "", category: "", country: "", location: "", date: "2026-09-08" };
+    const empty = { title: "", country: "", location: "", date: "2026-09-08" };
 
     expect(renderTemplate("{title}\n{location}\nx", values({ message: empty }))).toBe("x");
     expect(renderTemplate("{location}\n{title}\nx", values({ message: empty }))).toBe("x");
@@ -59,7 +58,6 @@ describe("renderTemplate", () => {
 
   test("the message fields are escaped", () => {
     expect(renderTemplate("{title}", values())).toBe("Explosions &amp; fire");
-    expect(renderTemplate("{category}", values())).toBe("politics");
     expect(renderTemplate("{location}", values())).toBe("Minsk");
   });
 
@@ -79,12 +77,12 @@ describe("renderTemplate", () => {
 
   /** A template exists to add markup, so its own literal text is trusted. */
   test("the template's own markup survives verbatim", () => {
-    expect(renderTemplate("<b>Live</b> {category}", values())).toBe("<b>Live</b> politics");
+    expect(renderTemplate("<b>Live</b> {location}", values())).toBe("<b>Live</b> Minsk");
   });
 
   /** An absent optional field is the empty string, not the word "undefined". */
   test("an absent field renders as nothing", () => {
-    const bare = { category: "politics", country: "by", date: "2026-09-08" };
+    const bare = { country: "by", date: "2026-09-08" };
 
     expect(renderTemplate("[{title}]", values({ message: bare }))).toBe("[]");
   });

@@ -34,7 +34,7 @@ All text uses Telegram **HTML** parse mode. `escape(s)` replaces `&`, `<`, `>`, 
 <b>⚡️</b> <i>{date}</i> <b>{parts}</b>
 ```
 
-`parts` = the non-blank values of [`country` uppercased, `location`, `category`], each trimmed and escaped, joined by a comma and a space. With no parts, the header ends after `</i>`. `date` is not escaped.
+`parts` = the non-blank values of [`country` uppercased, `location`], each trimmed and escaped, joined by a comma and a space. With no parts, the header ends after `</i>`. `date` is not escaped.
 
 **Member block**, one per line. Take members sorted by `ts` ascending, ties broken by item id (plain code-unit compare), the first **12**:
 
@@ -44,7 +44,7 @@ All text uses Telegram **HTML** parse mode. `escape(s)` replaces `&`, `<`, `>`, 
 
 `summary` is escaped, then each `[text](#N)` becomes `<a href="{escape(href)}">text</a>` when the member has link N, else just `text`. `itemId` and `channel` are escaped.
 
-**Hashtag line**. Collect tokens in this order: `category`, `location`, `peoples` (each split on `,` and trimmed), then `tags`, then each title word (split on whitespace) **longer than 4 characters** before cleaning, then `date_{date}`, then `ts_{ts}`. For each token:
+**Hashtag line**. Collect tokens in this order: `location`, `peoples` (each split on `,` and trimmed), then `tags`, then each title word (split on whitespace) **longer than 4 characters** before cleaning, then `date_{date}`, then `ts_{ts}`. For each token:
 
 - skip it if blank or `none` / `null` (any case);
 - clean: each whitespace or `-` → `_`; remove `.,@!'"()`; lowercase; prefix `#`;
@@ -71,7 +71,7 @@ Join with single spaces. Example: `date_2026-08-29` → `#date_2026_08_29`.
 | Placeholder | Value |
 | --- | --- |
 | `{header}`, `{body}`, `{hashtags}` | The header, the member blocks joined by `\n`, the hashtag line, as HTML (not escaped again). |
-| `{title}`, `{category}`, `{location}` | The message field, escaped; empty if absent. |
+| `{title}`, `{location}` | The message field, escaped; empty if absent. |
 | `{country}` | The country uppercased, escaped. |
 | `{date}` | The date key. |
 | anything else | empty string |

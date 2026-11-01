@@ -17,15 +17,7 @@ export const SOURCE_COLUMNS = [
 ] as const;
 
 /** The Messages table, minus the expandable member list. */
-export const MESSAGE_COLUMNS = [
-  "id",
-  "title",
-  "category",
-  "status",
-  "date",
-  "tags",
-  "memberCount",
-] as const;
+export const MESSAGE_COLUMNS = ["id", "title", "status", "date", "tags", "memberCount"] as const;
 
 /** The targets export. `messageTemplate` is last because it is by far the widest. */
 export const TARGET_COLUMNS = [
@@ -46,6 +38,6 @@ export type TableName = (typeof TABLES)[number];
 
 /** The fields an operator may edit, per collection. Everything else is the pipeline's. */
 export const SOURCE_WRITABLE_FIELDS = ["status", "category", "tags", "teaser", "type"] as const;
-export const MESSAGE_WRITABLE_FIELDS = ["title", "category", "tags"] as const;
+export const MESSAGE_WRITABLE_FIELDS = ["title", "tags"] as const;
 export const TARGET_WRITABLE_FIELDS = ["type", "messageTemplate", "tags"] as const;
 export const TAG_WRITABLE_FIELDS = ["keywords"] as const;

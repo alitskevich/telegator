@@ -71,11 +71,13 @@ const messageFields = z.object({
 
   // Copied or merged from member items.
   title: z.string().optional(),
-  category: z.string().optional(),
   country: z.string().optional(),
   location: z.string().optional(),
   peoples: z.string().optional(),
-  /** Publish sends the message to every target whose tags it carries (`tg-domain/target`). */
+  /**
+   * Each member's category and tags. Publish sends the message to every target
+   * whose tags it carries (`tg-domain/target`).
+   */
   tags: TagsSchema.optional(),
   image: z.string().optional(),
 
@@ -117,9 +119,7 @@ export const MessageSchema = messageFields.refine(
 export type Message = z.infer<typeof MessageSchema>;
 
 /** An operator's edit, closed to everything else; the console's `tags` text is read as a list. */
-export const MessageConfigInput = messageFields
-  .pick({ title: true, category: true, tags: true })
-  .strict();
+export const MessageConfigInput = messageFields.pick({ title: true, tags: true }).strict();
 
 /**
  * The fields the console's message list selects. Its own type, so code cannot
@@ -170,7 +170,6 @@ export const MessageMergeAttributesSchema = messageFields
     memberIds: true,
     date: true,
     title: true,
-    category: true,
     country: true,
     location: true,
     peoples: true,

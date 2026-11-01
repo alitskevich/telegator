@@ -39,15 +39,15 @@ function hasValue(value: string | undefined): value is string {
 }
 
 /** The fields the header is drawn from. */
-export type HeaderSource = Pick<Message, "date" | "country" | "location" | "category">;
+export type HeaderSource = Pick<Message, "date" | "country" | "location">;
 
 /**
- * `<b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location, category}</b>`, from the
- * non-empty parts in that order. With every part empty the `<b>…</b>` group is
- * dropped. `date` is not escaped: it holds only digits and hyphens.
+ * `<b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location}</b>`, from the non-empty parts
+ * in that order. With every part empty the `<b>…</b>` group is dropped. `date` is
+ * not escaped: it holds only digits and hyphens.
  */
 export function buildHeader(source: HeaderSource): string {
-  const parts = [source.country?.toUpperCase(), source.location, source.category]
+  const parts = [source.country?.toUpperCase(), source.location]
     .filter(hasValue)
     .map((part) => escapeHtml(part.trim()));
 
@@ -113,7 +113,6 @@ export function assembleMessage(
 
   const header = buildHeader(message);
   const hashtagLine = buildHashtagLine({
-    category: message.category,
     location: message.location,
     peoples: message.peoples,
     tags: message.tags,

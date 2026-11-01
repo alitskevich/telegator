@@ -69,8 +69,8 @@ Every record shape here is the source of truth. A stored record that fails its s
 | `memberIds` | The keys of `members`, kept as a list so the date query can return them. |
 | `keyEntities`, `keyTitle`, `keyTags` | The dedup match key ([05-dedup.md](05-dedup.md)). Default `[]`. |
 | `date` | Date key of the first item. |
-| `title`, `category`, `country`, `location`, `peoples` | Taken from the newest member. |
-| `tags` | Merged over all members. |
+| `title`, `country`, `location`, `peoples` | Taken from the newest member. |
+| `tags` | Each member's `category` and `tags`, merged over all members. |
 | `image` | The first non-absent image of any member. |
 | `posts` | Map `targetId → {tgId, tgAt}`: the Telegram post id on that target and when it was last sent or edited. Default `{}`. Publish is its only writer. |
 | `tgChannel`, `tgId`, `tgAt` | **Legacy**, read only: the single-target post of a message published before `posts` existed. |
@@ -79,7 +79,7 @@ Every record shape here is the source of truth. A stored record that fails its s
 
 **Member block**: `summary` (≤ 220, link tokens kept), `links`, `channel` (the item's source id), `ts` (when this member joined).
 
-- **DA-7** An operator MAY edit only a message's `title`, `category` and `tags`.
+- **DA-7** An operator MAY edit only a message's `title` and `tags`.
 - **DA-8** The default legacy target is `telegator_news`: a legacy message with an empty `tgChannel` was posted there.
 
 ## 6. `targets` — where to publish

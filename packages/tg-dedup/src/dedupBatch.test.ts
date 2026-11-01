@@ -2,6 +2,7 @@ import type { Adjudicator } from "tg-ai/types";
 import { DISTINCT_THRESHOLD, MAX_MEMBERS, MERGE_THRESHOLD } from "tg-configs/dedup";
 import { type AnalyzedItem, AnalyzedItemSchema } from "tg-domain/item";
 import { type MemberBlock, type Message, MessageSchema } from "tg-domain/message";
+import { mergeTags } from "tg-domain/tags";
 import { createLogger } from "tg-utils/logger";
 import { beforeEach, describe, expect, test } from "vitest";
 import {
@@ -93,10 +94,9 @@ function replayable(source: AnalyzedItem, over: Partial<Message> = {}): Message 
     id: source.id,
     ...keyOf(source),
     title: source.title,
-    category: source.category,
     country: source.country,
     location: source.location,
-    tags: source.tags ?? [],
+    tags: mergeTags([source.category ?? ""], source.tags),
     members: {
       [source.id]: {
         summary: source.summary,
@@ -408,7 +408,7 @@ describe("Pass 1 — intra-batch matching", () => {
     expect(Object.keys(merged.message.members).sort()).toEqual(["chan_a/1", "chan_c/3"]);
   });
 
-  /** Title, category, country, location and peoples come from the newest item. */
+  /** Title, country, location and peoples come from the newest item. */
   test("the newest item's descriptive fields overwrite", async () => {
     const a = item("chan_a/1", { ...SAME_EVENT, title: "first", location: "Kyiv" });
     const b = item("chan_b/2", { ...SAME_EVENT, title: "second", location: "Lviv" });
@@ -421,6 +421,18 @@ describe("Pass 1 — intra-batch matching", () => {
     expect(write.message.location).toBe("Lviv");
   });
 
+  test("each member's category joins the tags, but not the match key", async () => {
+    const a = item("chan_a/1", { ...SAME_EVENT, category: "war", tags: ["drones"] });
+    const b = item("chan_b/2", { ...SAME_EVENT, category: "politics", tags: ["drones"] });
+
+    const result = await dedupBatch([a, b], deps());
+
+    const write = result.writes[0];
+    if (write?.kind !== "create") throw new Error("expected a create");
+    expect(write.message.tags).toEqual(["politics", "drones", "war"]);
+    expect(write.message.keyTags).toEqual(["drones"]);
+  });
+
   test("tags are merged, not replaced", async () => {
     const a = item("chan_a/1", { ...SAME_EVENT, tags: ["war", "politics"] });
     const b = item("chan_b/2", { ...SAME_EVENT, tags: ["politics", "drones"] });
@@ -429,7 +441,7 @@ describe("Pass 1 — intra-batch matching", () => {
 
     const write = result.writes[0];
     if (write?.kind !== "create") throw new Error("expected a create");
-    expect(write.message.tags).toEqual(["politics", "drones", "war"]);
+    expect(write.message.tags).toEqual(["geopolitics", "politics", "drones", "war"]);
   });
 
   /** `??` preserves an empty-string image. */
@@ -757,9 +769,9 @@ describe("the band", () => {
   });
 
   /**
-   * The two sides are described in the same terms — real `title`, `category`
-   * and `location` on both, the canonical key for `entities` and `tags` on
-   * both. An asymmetry here would make part of every verdict an artefact of
+   * The two sides are described in the same terms — real `title`, `tags` and
+   * `location` on both, the canonical key for `entities` on both. The category
+   * reaches the model among the `tags`. An asymmetry here would make part of every verdict an artefact of
    * which side happened to be stored.
    */
   test("both sides of a pair are described the same way", async () => {
@@ -770,16 +782,14 @@ describe("the band", () => {
     expect(pair?.item).toEqual({
       title: "Alpha Gamma",
       entities: ["belaruskali", "minsk", "naftan"],
-      tags: ["fire", "industry"],
-      category: "geopolitics",
+      tags: ["geopolitics", "fire", "industry"],
       location: "Kyiv",
       date: DATE,
     });
     expect(pair?.candidate).toEqual({
       title: "Alpha Beta",
       entities: ["belaruskali", "minsk"],
-      tags: ["fire", "safety"],
-      category: "geopolitics",
+      tags: ["geopolitics", "fire", "safety"],
       location: "Kyiv",
       date: DATE,
     });
@@ -797,7 +807,7 @@ describe("the band", () => {
       id: "chan_z/9",
       ...keyOf(first),
       title: "Fire At The Potash Plant",
-      category: "industry",
+      tags: ["industry"],
       location: "Salihorsk",
     });
     const adjudicator = fakeAdjudicator(() => false);
@@ -811,9 +821,9 @@ describe("the band", () => {
 
     const pair = adjudicator.calls[0]?.[0];
     expect(pair?.candidate.title).toBe("Fire At The Potash Plant");
-    expect(pair?.candidate.category).toBe("industry");
+    expect(pair?.candidate.tags).toEqual(["industry"]);
     expect(pair?.candidate.location).toBe("Salihorsk");
-    // The key still supplies the canonical entity and tag sets.
+    // The key still supplies the canonical entity set.
     expect(pair?.candidate.entities).toEqual(["belaruskali", "minsk"]);
     // One read, not one per use: the merge branch would want the same record.
     expect(counting.reads).toEqual(["chan_z/9"]);
@@ -830,7 +840,6 @@ describe("the band", () => {
     const pair = adjudicator.calls[0]?.[0];
     for (const side of [pair?.item, pair?.candidate]) {
       expect(Object.keys(side ?? {}).sort()).toEqual([
-        "category",
         "date",
         "entities",
         "location",
@@ -885,7 +894,7 @@ describe("the band", () => {
     // Falls back to the key-derived title — lowercased and alphabetised, which
     // is exactly why it is a fallback and not the design.
     expect(adjudicator.calls[0]?.[0]?.candidate.title).toBe("alpha beta");
-    expect(adjudicator.calls[0]?.[0]?.candidate.category).toBeUndefined();
+    expect(adjudicator.calls[0]?.[0]?.candidate.tags).toEqual(["fire", "safety"]);
     expect(result.writes).toHaveLength(1);
   });
 

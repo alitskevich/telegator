@@ -59,7 +59,6 @@ function isDropped(token: string): boolean {
  */
 export function buildHashtagLine(source: HashtagSource): string {
   const tokens = [
-    ...splitTags(source.category),
     ...splitTags(source.location),
     ...splitTags(source.peoples),
     ...(source.tags ?? []),

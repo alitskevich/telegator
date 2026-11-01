@@ -80,7 +80,6 @@ function toMessageContent(message: Message): MessageContent {
     date: message.date,
     ts: message.ts,
     title: message.title,
-    category: message.category,
     country: message.country,
     location: message.location,
     peoples: message.peoples,

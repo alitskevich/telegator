@@ -51,10 +51,6 @@ describe("toHashtag", () => {
 });
 
 describe("buildHashtagLine", () => {
-  test("takes tags from category", () => {
-    expect(buildHashtagLine({ ...empty, category: "geopolitics" })).toBe(`#geopolitics ${DATE_TS}`);
-  });
-
   test("takes tags from location", () => {
     expect(buildHashtagLine({ ...empty, location: "Minsk" })).toBe(`#minsk ${DATE_TS}`);
   });
@@ -79,15 +75,14 @@ describe("buildHashtagLine", () => {
     );
   });
 
-  test("emits the four source fields in order: category, location, peoples, tags", () => {
+  test("emits the three source fields in order: location, peoples, tags", () => {
     const line = buildHashtagLine({
       ...empty,
-      category: "geopolitics",
       location: "Minsk",
       peoples: "Lukashenko",
       tags: ["war"],
     });
-    expect(line).toBe(`#geopolitics #minsk #lukashenko #war ${DATE_TS}`);
+    expect(line).toBe(`#minsk #lukashenko #war ${DATE_TS}`);
   });
 
   test("excludes a title word of exactly four characters and includes one of five", () => {
@@ -104,7 +99,7 @@ describe("buildHashtagLine", () => {
 
   test("drops none, null and their uppercase spellings", () => {
     expect(
-      buildHashtagLine({ ...empty, category: "none", location: "NULL", peoples: "None,NONE" }),
+      buildHashtagLine({ ...empty, tags: ["none"], location: "NULL", peoples: "None,NONE" }),
     ).toBe(DATE_TS);
   });
 
@@ -117,13 +112,13 @@ describe("buildHashtagLine", () => {
   });
 
   test("deduplicates across source fields", () => {
-    expect(buildHashtagLine({ ...empty, category: "war", tags: ["war", "peace", "war"] })).toBe(
+    expect(buildHashtagLine({ ...empty, location: "war", tags: ["war", "peace", "war"] })).toBe(
       `#war #peace ${DATE_TS}`,
     );
   });
 
   test("deduplicates after normalisation, so one hashtag never repeats", () => {
-    expect(buildHashtagLine({ ...empty, category: "real-estate", tags: ["Real Estate"] })).toBe(
+    expect(buildHashtagLine({ ...empty, tags: ["real-estate", "Real Estate"] })).toBe(
       `#real_estate ${DATE_TS}`,
     );
   });
@@ -135,8 +130,8 @@ describe("buildHashtagLine", () => {
   });
 
   test("keeps first-seen order when deduplicating", () => {
-    expect(buildHashtagLine({ ...empty, category: "war", location: "Minsk", tags: ["war"] })).toBe(
-      `#war #minsk ${DATE_TS}`,
+    expect(buildHashtagLine({ ...empty, location: "Minsk", tags: ["war", "minsk"] })).toBe(
+      `#minsk #war ${DATE_TS}`,
     );
   });
 
@@ -153,15 +148,14 @@ describe("buildHashtagLine", () => {
   });
 
   test("yields only the date and ts tags when every field is empty", () => {
-    expect(
-      buildHashtagLine({ ...empty, category: "", location: "", peoples: "", tags: [], title: "" }),
-    ).toBe(DATE_TS);
+    expect(buildHashtagLine({ ...empty, location: "", peoples: "", tags: [], title: "" })).toBe(
+      DATE_TS,
+    );
   });
 
   test("starts every token with #", () => {
     const line = buildHashtagLine({
       ...empty,
-      category: "geopolitics",
       location: "Minsk",
       peoples: "Lukashenko",
       tags: ["war"],
@@ -173,7 +167,7 @@ describe("buildHashtagLine", () => {
   });
 
   test("joins with a single space and neither leads nor trails with one", () => {
-    const line = buildHashtagLine({ ...empty, category: "a b", tags: ["war", "peace"] });
+    const line = buildHashtagLine({ ...empty, location: "a b", tags: ["war", "peace"] });
     expect(line).toBe(line.trim());
     expect(line).not.toContain("  ");
   });
@@ -182,7 +176,6 @@ describe("buildHashtagLine", () => {
   test("is deterministic across repeated calls", () => {
     const source = {
       ...empty,
-      category: "geopolitics",
       location: "Minsk, Belarus",
       peoples: "Lukashenko",
       tags: ["war", "politics"],

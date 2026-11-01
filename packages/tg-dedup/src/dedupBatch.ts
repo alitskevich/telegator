@@ -8,7 +8,7 @@ import type {
   Message,
   MessageMergeAttributes,
 } from "tg-domain/message";
-import { mergeTags } from "tg-domain/tags";
+import { mergeTags, splitTags } from "tg-domain/tags";
 import { buildMatchKey, matchKeyAttributes, matchKeyOf, unionMatchKeys } from "./matchKey";
 import { classify, matchScore } from "./score";
 import type { DedupDeps, DedupResult, MatchKey, MemberMerge } from "./types";
@@ -56,11 +56,18 @@ interface Pending {
   tags: string[];
   image: string | undefined;
   title: string | undefined;
-  category: string | undefined;
   country: string | undefined;
   location: string | undefined;
   peoples: string | undefined;
 }
+
+/**
+ * What an item adds to its message's `tags`: its category first, then its tags.
+ * Not part of the match key, whose `tags` stay the item's own, so scoring ignores
+ * the category.
+ */
+const messageTagsOf = (item: AnalyzedItem): string[] =>
+  mergeTags(splitTags(item.category), item.tags);
 
 /** An item whose best candidate fell in the band, held until the verdicts arrive. */
 interface Deferred {
@@ -87,7 +94,7 @@ interface Described {
   readonly key: MatchKey;
   readonly date: string;
   readonly title: string | undefined;
-  readonly category: string | undefined;
+  readonly tags: readonly string[];
   readonly location: string | undefined;
 }
 
@@ -169,10 +176,9 @@ export async function dedupBatch(
             members: { [item.id]: block },
             addedMembers: { [item.id]: block },
             origin: undefined,
-            tags: mergeTags(item.tags),
+            tags: messageTagsOf(item),
             image: item.image,
             title: item.title,
-            category: item.category,
             country: item.country,
             location: item.location,
             peoples: item.peoples,
@@ -183,12 +189,11 @@ export async function dedupBatch(
             members: { ...state.members, [item.id]: block },
             addedMembers: { ...state.addedMembers, [item.id]: block },
             // Item side first, so a replay is a fixed point.
-            tags: mergeTags(item.tags, state.tags),
+            tags: mergeTags(messageTagsOf(item), state.tags),
             // `??` keeps an empty-string image.
             image: state.image ?? item.image,
             // The newest item's descriptive fields overwrite.
             title: item.title,
-            category: item.category,
             country: item.country,
             location: item.location,
             peoples: item.peoples,
@@ -286,7 +291,7 @@ export async function dedupBatch(
         key: entry.key,
         date: entry.item.date,
         title: entry.item.title,
-        category: entry.item.category,
+        tags: messageTagsOf(entry.item),
         location: entry.item.location,
       }),
       candidate: await bandFieldsOf(entry.candidate, pending, loadPending),
@@ -351,16 +356,16 @@ async function adjudicate(
 
 /**
  * What crosses the model boundary: English fields only, never `summary` or
- * `body`. `entities` and `tags` come from the match key; `title`, `category`
- * and `location` are the record's own. The key-derived title is a poor
- * fallback, since `titleTokens` is sorted and has no word order.
+ * `body`. `entities` come from the match key; `title`, `tags` and `location` are
+ * the record's own, so the model sees the category among the tags. The
+ * key-derived title is a poor fallback, since `titleTokens` is sorted and has no
+ * word order.
  */
 function fieldsOf(from: Described): AdjudicationFields {
   return {
     title: from.title ?? from.key.titleTokens.join(" "),
     entities: from.key.entities,
-    tags: from.key.tags,
-    category: from.category,
+    tags: from.tags,
     location: from.location,
     date: from.date,
   };
@@ -368,7 +373,7 @@ function fieldsOf(from: Described): AdjudicationFields {
 
 /**
  * The candidate's side of a band pair, from the full message. The date query
- * has no `title`, `category` or `location`, and the key alone would give the
+ * has no `title`, `tags` or `location`, and the key alone would give the
  * model the same sets `matchScore` could not decide on.
  *
  * A message that cannot be read falls back to the key-derived form: a weaker
@@ -389,7 +394,7 @@ async function bandFieldsOf(
       key: candidate.key,
       date: candidate.date,
       title: undefined,
-      category: undefined,
+      tags: candidate.key.tags,
       location: undefined,
     });
   }
@@ -398,7 +403,7 @@ async function bandFieldsOf(
     key: described.key,
     date: described.date,
     title: described.title,
-    category: described.category,
+    tags: described.tags,
     location: described.location,
   });
 }
@@ -419,7 +424,6 @@ async function load(id: string, deps: DedupDeps): Promise<Pending | undefined> {
     tags: message.tags ?? [],
     image: message.image,
     title: message.title,
-    category: message.category,
     country: message.country,
     location: message.location,
     peoples: message.peoples,
@@ -433,7 +437,6 @@ async function load(id: string, deps: DedupDeps): Promise<Pending | undefined> {
 interface PublishedContent {
   readonly members: string;
   readonly title: string | undefined;
-  readonly category: string | undefined;
   readonly country: string | undefined;
   readonly location: string | undefined;
   readonly peoples: string | undefined;
@@ -445,7 +448,6 @@ interface PublishedContent {
 const publishedContentOf = (message: {
   members: Record<string, MemberBlock>;
   title?: string;
-  category?: string;
   country?: string;
   location?: string;
   peoples?: string;
@@ -454,7 +456,6 @@ const publishedContentOf = (message: {
 }): PublishedContent => ({
   members: JSON.stringify(message.members),
   title: message.title,
-  category: message.category,
   country: message.country,
   location: message.location,
   peoples: message.peoples,
@@ -483,7 +484,6 @@ function toWrite(state: Pending, ts: number): DedupWrite {
     memberIds: Object.keys(state.members),
     date: state.date,
     title: state.title,
-    category: state.category,
     country: state.country,
     location: state.location,
     peoples: state.peoples,

@@ -17,7 +17,7 @@ export const TEMPLATE_PLACEHOLDER = /\{([a-zA-Z]+)\}/g;
 export const MAX_CONSECUTIVE_NEWLINES = 2;
 
 /** The message fields a template can name. */
-export type TemplateMessage = Pick<Message, "title" | "category" | "country" | "location" | "date">;
+export type TemplateMessage = Pick<Message, "title" | "country" | "location" | "date">;
 
 /**
  * The value for one token. The three rendered values are already HTML and are
@@ -36,8 +36,6 @@ function valueFor(name: string, values: TemplateValues): string | undefined {
       return values.hashtags;
     case "title":
       return escapeHtml(message.title ?? "");
-    case "category":
-      return escapeHtml(message.category ?? "");
     case "country":
       return escapeHtml((message.country ?? "").toUpperCase());
     case "location":

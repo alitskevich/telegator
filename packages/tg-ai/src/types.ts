@@ -12,7 +12,6 @@ export interface AdjudicationFields {
   readonly title: string;
   readonly entities: readonly string[];
   readonly tags: readonly string[];
-  readonly category: string | undefined;
   readonly location: string | undefined;
   readonly date: string;
 }

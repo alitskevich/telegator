@@ -99,8 +99,7 @@ function adjudicationFields(title: string) {
   return {
     title,
     entities: ["Minsk"],
-    tags: ["energy"],
-    category: "geopolitics",
+    tags: ["geopolitics", "energy"],
     location: "Minsk",
     date: "2026-09-06",
   };

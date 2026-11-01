@@ -65,8 +65,8 @@ Aggregate runs **one item at a time** ([03-queue.md](03-queue.md) §1).
 | `members` | `{itemId: block}` |
 | `memberIds`, `memberCount` | `[itemId]`, 1 |
 | key fields | the item's key |
-| `date`, `title`, `category`, `country`, `location`, `peoples`, `image` | the item's |
-| `tags` | `mergeTags(item.tags)` |
+| `date`, `title`, `country`, `location`, `peoples`, `image` | the item's |
+| `tags` | `mergeTags(item.category, item.tags)` |
 | `posts` | `{}` |
 | `ts` | now |
 
@@ -75,9 +75,9 @@ Aggregate runs **one item at a time** ([03-queue.md](03-queue.md) §1).
 - **DD-11** **Cap.** If the message has 20 members and the item is not one of them, drop the item: count `MemberCapReached`, write nothing, request no publish.
 - **DD-12** Set `members.{itemId}` = the block; `memberIds`, `memberCount` from the new map.
 - **DD-13** Key = union of the message key and the item key (DD-4).
-- **DD-14** `tags = mergeTags(item.tags, message.tags)` (item first).
+- **DD-14** `tags = mergeTags(item.category, item.tags, message.tags)` (item first). The category stays out of the match key.
 - **DD-15** `image` = the message's image if present, else the item's.
-- **DD-16** `title`, `category`, `country`, `location`, `peoples` = the item's (the newest member wins).
+- **DD-16** `title`, `country`, `location`, `peoples` = the item's (the newest member wins).
 - **DD-17** `ts` = now. `status = topublish` **only if** the rendered content changed (§7); otherwise `status` is not written.
 
 ## 6. Adjudication
@@ -85,7 +85,7 @@ Aggregate runs **one item at a time** ([03-queue.md](03-queue.md) §1).
 Only the unclear band costs a model call.
 
 - **DD-18** Pair id: `{itemId}->{messageId}`. Each side is sent as English fields only, never `summary` or `body`:
-  `title` (the record's own; if absent, the sorted title tokens joined by spaces), `entities`, `tags` (from the key), `category`, `location`, `date`. The candidate side comes from the full message.
+  `title` (the record's own; if absent, the sorted title tokens joined by spaces), `entities` (from the key), `tags` (the item's category and tags, or the message's), `location`, `date`. The candidate side comes from the full message.
 - **DD-19** Request: model `anthropic/claude-haiku-4.5`, `max_tokens` 1000, JSON-schema output `{verdicts: [{id: string, same: boolean}]}`, user content = `JSON.stringify({pairs})`, and this system prompt, verbatim:
 
 ```text
@@ -97,7 +97,7 @@ You decide whether two news reports describe the same underlying event. Two repo
 
 ## 7. "Rendered content changed"
 
-- **DD-22** The rendered content is: the whole `members` map (by value), `title`, `category`, `country`, `location`, `peoples`, `tags` (by value, in order), `image`. A create always counts as changed. A merge counts as changed when any of these differs from the stored message before the merge.
+- **DD-22** The rendered content is: the whole `members` map (by value), `title`, `country`, `location`, `peoples`, `tags` (by value, in order), `image`. A create always counts as changed. A merge counts as changed when any of these differs from the stored message before the merge.
 
 So an exact replay (same item, same fields, member `ts` kept) writes no status change and requests no publish (G-2).
 

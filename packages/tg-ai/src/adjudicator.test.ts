@@ -12,7 +12,6 @@ const fields = (title: string): AdjudicationFields => ({
   title,
   entities: ["minsk"],
   tags: ["fire"],
-  category: "geopolitics",
   location: "Minsk",
   date: "2026-08-30",
 });

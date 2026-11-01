@@ -84,31 +84,29 @@ function memberBlockCount(text: string): number {
 }
 
 describe("buildHeader", () => {
-  test("<b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location, category}</b>", () => {
+  test("<b>⚡️</b> <i>{date}</i> <b>{COUNTRY, location}</b>", () => {
     const header = buildHeader({
       date: DEFAULT_DATE,
       country: "Belarus",
       location: "Minsk",
-      category: "politics",
     });
 
-    expect(header).toBe("<b>⚡️</b> <i>2026-08-29</i> <b>BELARUS, Minsk, politics</b>");
+    expect(header).toBe("<b>⚡️</b> <i>2026-08-29</i> <b>BELARUS, Minsk</b>");
   });
 
-  test("country is uppercased, location and category are not", () => {
+  test("country is uppercased, location is not", () => {
     const header = buildHeader({
       date: DEFAULT_DATE,
       country: "belarus",
       location: "Minsk",
-      category: "politics",
     });
 
-    expect(header).toContain("<b>BELARUS, Minsk, politics</b>");
+    expect(header).toContain("<b>BELARUS, Minsk</b>");
   });
 
   test("an absent part is omitted, and no separator is left behind", () => {
-    expect(buildHeader({ date: DEFAULT_DATE, country: "Belarus", category: "politics" })).toBe(
-      "<b>⚡️</b> <i>2026-08-29</i> <b>BELARUS, politics</b>",
+    expect(buildHeader({ date: DEFAULT_DATE, country: "Belarus" })).toBe(
+      "<b>⚡️</b> <i>2026-08-29</i> <b>BELARUS</b>",
     );
     expect(buildHeader({ date: DEFAULT_DATE, location: "Minsk" })).toBe(
       "<b>⚡️</b> <i>2026-08-29</i> <b>Minsk</b>",
@@ -116,8 +114,8 @@ describe("buildHeader", () => {
   });
 
   test("an empty or whitespace-only part counts as absent", () => {
-    expect(buildHeader({ date: DEFAULT_DATE, country: "", location: "   ", category: "war" })).toBe(
-      "<b>⚡️</b> <i>2026-08-29</i> <b>war</b>",
+    expect(buildHeader({ date: DEFAULT_DATE, country: "", location: "   " })).toBe(
+      "<b>⚡️</b> <i>2026-08-29</i>",
     );
   });
 
@@ -138,7 +136,6 @@ describe("assembleMessage — layout", () => {
       message({
         country: "Belarus",
         location: "Minsk",
-        category: "politics",
         members: {
           "chan/1": member({ summary: "first", ts: 1 }),
           "chan/2": member({ summary: "second", ts: 2 }),
@@ -147,17 +144,16 @@ describe("assembleMessage — layout", () => {
     );
     const lines = assembled.text.split("\n");
 
-    expect(lines[0]).toBe("<b>⚡️</b> <i>2026-08-29</i> <b>BELARUS, Minsk, politics</b>");
+    expect(lines[0]).toBe("<b>⚡️</b> <i>2026-08-29</i> <b>BELARUS, Minsk</b>");
     expect(lines[1]).toBe("");
     expect(lines[2]).toBe('🔘 first - <a href="https://t.me/chan/1">@chan</a>');
     expect(lines[3]).toBe('🔘 second - <a href="https://t.me/chan/2">@chan</a>');
   });
 
   test("the hashtag line is appended after the members, behind a blank line", () => {
-    const record = message({ category: "politics", tags: ["minsk"] });
+    const record = message({ tags: ["politics", "minsk"] });
     const line = buildHashtagLine({
-      category: "politics",
-      tags: ["minsk"],
+      tags: ["politics", "minsk"],
       date: DEFAULT_DATE,
       ts: DEFAULT_TS,
     });
@@ -279,8 +275,8 @@ describe("assembleMessage — overflow", () => {
   });
 
   test("a message that already fits is left exactly as assembled", () => {
-    const record = message({ category: "politics", members: fullMembers() });
-    const line = buildHashtagLine({ category: "politics", date: DEFAULT_DATE, ts: DEFAULT_TS });
+    const record = message({ tags: ["politics"], members: fullMembers() });
+    const line = buildHashtagLine({ tags: ["politics"], date: DEFAULT_DATE, ts: DEFAULT_TS });
     const assembled = assemble(record);
 
     expect(assembled.text.length).toBeLessThanOrEqual(TELEGRAM_MESSAGE_LIMIT);

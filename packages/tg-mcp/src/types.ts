@@ -34,7 +34,6 @@ export interface MessageContent {
   readonly date: string;
   readonly ts: number;
   readonly title?: string;
-  readonly category?: string;
   readonly country?: string;
   readonly location?: string;
   readonly peoples?: string;

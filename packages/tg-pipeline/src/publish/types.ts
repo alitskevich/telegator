@@ -12,7 +12,6 @@ export interface AssembledMessage {
 
 /** The fields the line is drawn from, all optional but `date` and `ts`. */
 export interface HashtagSource {
-  readonly category?: string | undefined;
   readonly location?: string | undefined;
   readonly peoples?: string | undefined;
   readonly tags?: readonly string[] | undefined;

@@ -38,7 +38,7 @@
             <StatusBadge status="{message.status}" />
             <span class="truncate text-sm" title="{message.title ?? message.id}">{message.title ?? message.id}</span>
           </div>
-          <span class="text-xs text-base-content/60">{message.category ?? '—'} · {message.date}</span>
+          <span class="text-xs text-base-content/60">{message.date}</span>
         </li>
       </ul>
       <p If="{!@pipeline.data.recent.length}" class="text-sm text-base-content/60 py-10">{R.dashboard.noMessages}</p>

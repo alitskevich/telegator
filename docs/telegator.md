@@ -68,7 +68,7 @@ All ids that contain `/` (`channel/12345`) are stored with `~` in the document i
 | `members` | Map `itemId → {summary, links, channel, ts}`: all that publish renders. At most **20**. |
 | `memberCount`, `memberIds` | Size of the map, and its keys (for the replay check). |
 | `keyEntities`, `keyTitle`, `keyTags` | The dedup match key (§5). |
-| `date`, `title`, `category`, `country`, `location`, `peoples`, `tags`, `image` | Copied or merged from members. |
+| `date`, `title`, `country`, `location`, `peoples`, `tags`, `image` | Copied or merged from members. `tags` also takes each member's `category`, which the match key does not. |
 | `tgChannel` | Legacy comma-separated targets. No longer written; publish reads it only to find a legacy `tgId`. |
 | `posts` | Map `target → {tgId, tgAt}`. A post present makes the next publish an **edit**. |
 | `ts`, `deleted` | Last write; soft delete. `deleted` is always written, so queries can filter on it. |

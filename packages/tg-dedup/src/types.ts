@@ -16,7 +16,7 @@ export interface DedupDeps {
   loadCandidatesByDate(date: string): Promise<DedupCandidate[]>;
   /**
    * Reads the full message: the `members` a merge needs, and the `title`,
-   * `category` and `location` a band pair describes it with. Memoised per batch.
+   * `tags` and `location` a band pair describes it with. Memoised per batch.
    */
   loadMessage(id: string): Promise<Message | undefined>;
   readonly clock: Clock;
