@@ -21,7 +21,6 @@
     "format": "biome check --write .",
     "deploy": "npm run build && firebase deploy -P telegator-581db",
     "deploy:hosting": "npm run build && firebase deploy --only hosting --config ./firebase.json -P telegator-581db",
-    "migrate:message-category": "tsx scripts/migrate-message-category.ts",
     "mcp": "tsx scripts/mcp.ts",
     "codegen:cml-catalog": "bun ../proton/ops/generate-catalog.ts packages/tg-web/cml",
     "mtproto:login": "export TG_API_ID=$(. ~/.keys/.env; echo $TG_API_ID) TG_API_HASH=$(. ~/.keys/.env; echo $TG_API_HASH) && tsx scripts/mtproto-login.ts",
