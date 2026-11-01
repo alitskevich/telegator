@@ -1,8 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
-import { readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, posix, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import * as esbuild from "esbuild";
-import { cmlIndexSource } from "./cmlIndexSource";
 
 /**
  * Builds the console into `packages/tg-web/www/`, the directory Firebase
@@ -11,8 +9,8 @@ import { cmlIndexSource } from "./cmlIndexSource";
  *   npm run build        # one production build
  *   npm run dev          # watch, and serve on http://localhost:8080
  *
- * Three steps: regenerate the CML index, compile Tailwind, bundle with
- * esbuild. The bundle reads the real `arrmatura-web` source — `tsconfigRaw`
+ * Two steps: compile Tailwind, bundle with esbuild. Both npm scripts regenerate
+ * the CML index first. The bundle reads the real `arrmatura-web` source — `tsconfigRaw`
  * keeps esbuild from following the root tsconfig's `paths`, which point the
  * type-checker at a declaration file (`src/types/arrmatura-web.d.ts`).
  */
@@ -21,7 +19,6 @@ const ROOT = resolve(import.meta.dirname, "..");
 const WEB = join(ROOT, "packages/tg-web");
 const WWW = join(WEB, "www");
 const DIST = join(WWW, "dist");
-const INDEX = join(WEB, "src/index.cml.ts");
 
 /** The dev origin; the api function allows any localhost origin in the emulator. */
 const DEV_PORT = 8080;
@@ -29,22 +26,6 @@ const DEV_PORT = 8080;
 const RELOAD_DELAY_MS = 2000;
 
 const serve = process.argv.includes("--serve");
-
-function templates(dir: string): string[] {
-  return readdirSync(dir).flatMap((entry) => {
-    const path = join(dir, entry);
-    if (statSync(path).isDirectory()) return templates(path);
-    return entry.endsWith(".xml") ? [path] : [];
-  });
-}
-
-function writeCmlIndex(): void {
-  const files = templates(join(WEB, "cml")).map((file) =>
-    relative(posix.dirname(INDEX), file).split("\\").join("/"),
-  );
-  writeFileSync(INDEX, cmlIndexSource(files));
-  console.log(`cml      ${files.length} templates → ${relative(process.cwd(), INDEX)}`);
-}
 
 const tailwind = (watch: boolean): string[] => [
   "@tailwindcss/cli",
@@ -84,8 +65,6 @@ const options: esbuild.BuildOptions = {
       }
     : {}),
 };
-
-writeCmlIndex();
 
 if (serve) {
   spawn("npx", tailwind(true), { stdio: "inherit" });

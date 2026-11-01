@@ -1,7 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
-import { cmlIndexSource } from "../scripts/cmlIndexSource";
 
 const web = resolve(import.meta.dirname, "../packages/tg-web");
 
@@ -15,14 +14,16 @@ function templates(dir: string): string[] {
 
 /**
  * A template missing from the generated registry renders silently as an
- * unknown-tag stub. `scripts/web.ts` regenerates it on every build; this
- * catches a checked-in copy that was not rebuilt after a template moved.
+ * unknown-tag stub. `npm run codegen:cml-index` regenerates it on every build;
+ * this catches a checked-in copy that was not rebuilt after a template moved.
  */
 describe("the console's CML registry", () => {
   test("src/index.cml.ts lists exactly the templates on disk", () => {
     const files = templates(join(web, "cml")).map((file) => relative(join(web, "src"), file));
+    const index = readFileSync(join(web, "src/index.cml.ts"), "utf8");
+    const imported = [...index.matchAll(/from "(.+\.xml)"/g)].map((match) => match[1]);
 
-    expect(readFileSync(join(web, "src/index.cml.ts"), "utf8")).toBe(cmlIndexSource(files));
+    expect(imported.sort()).toEqual(files.sort());
   });
 
   /** Every service a template mounts is registered, or its tag is an unknown stub too. */
