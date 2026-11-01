@@ -1,4 +1,4 @@
-import bigInt, { type BigInteger } from "big-integer";
+import bigInt from "big-integer";
 import { Api } from "telegram";
 import { BinaryReader } from "telegram/extensions";
 import { describe, expect, test } from "vitest";
@@ -25,7 +25,7 @@ const message = (fields: Partial<ConstructorParameters<typeof Api.Message>[0]>):
   });
 
 interface FakeClient extends MessageClient {
-  readonly calls: { readonly entity: string | BigInteger; readonly page: MessagePage }[];
+  readonly calls: { readonly entity: string; readonly page: MessagePage }[];
   dialogLoads: number;
 }
 
@@ -151,9 +151,6 @@ describe("createMtprotoReader", () => {
     await reader.read("-1001234567890", undefined);
 
     expect(client.dialogLoads).toBe(1);
-    expect(client.calls.map((call) => call.entity.toString())).toEqual([
-      "-1004360889387",
-      "-1001234567890",
-    ]);
+    expect(client.calls.map((call) => call.entity)).toEqual(["-1004360889387", "-1001234567890"]);
   });
 });

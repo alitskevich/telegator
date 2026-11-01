@@ -1,4 +1,3 @@
-import bigInt, { type BigInteger } from "big-integer";
 import { Api, utils } from "telegram";
 import type { Link } from "tg-domain/item";
 import type { ChannelPost, ChannelReader } from "tg-domain/types";
@@ -104,15 +103,13 @@ export function toChannelPost(message: Api.Message): ChannelPost {
   };
 }
 
-/** A `-100…` id is a peer GramJS resolves by number; anything else is a username. */
-function toEntity(channel: string): string | BigInteger {
-  return NUMERIC_PEER_PATTERN.test(channel) ? bigInt(channel) : channel;
-}
-
 /**
  * The MTProto reader. A numeric id resolves only from GramJS's entity cache,
  * which a `StringSession` does not persist, so the first numeric source of a run
  * loads the dialog list once.
+ *
+ * The id stays a string: GramJS parses it itself, and rejects a `bigInt` built
+ * here, because the functions bundle holds its own copy of `big-integer`.
  */
 export function createMtprotoReader(client: MessageClient): ChannelReader {
   let dialogs: Promise<unknown> | undefined;
@@ -125,7 +122,7 @@ export function createMtprotoReader(client: MessageClient): ChannelReader {
         await dialogs;
       }
 
-      const messages = await client.getMessages(toEntity(channel), pageAfter(afterId));
+      const messages = await client.getMessages(channel, pageAfter(afterId));
       return messages.map(toChannelPost);
     },
   };

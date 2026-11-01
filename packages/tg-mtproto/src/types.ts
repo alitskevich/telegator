@@ -1,4 +1,3 @@
-import type { BigInteger } from "big-integer";
 import type { Api } from "telegram";
 
 /** The page `read` asks GramJS for. */
@@ -13,6 +12,6 @@ export interface MessagePage {
  * and a test fakes it without a socket.
  */
 export interface MessageClient {
-  getMessages(entity: string | BigInteger, page: MessagePage): Promise<readonly Api.Message[]>;
+  getMessages(entity: string, page: MessagePage): Promise<readonly Api.Message[]>;
   getDialogs(): Promise<unknown>;
 }
