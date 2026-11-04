@@ -31,17 +31,31 @@ This spec defines *behaviour*: inputs, outputs, rules, numbers and failure handl
 
 ## 3. The system in one picture
 
-```mermaid
-flowchart LR
-  Clock["Clock"] --> Scrape["1 scrape"]
-  Scrape -->|queue| Analyze["2 analyze<br/>5 at a time"]
-  Analyze -->|queue| Aggregate["3 aggregate<br/>1 at a time"]
-  Aggregate -->|queue, 5 min delay| Publish["4 publish<br/>1 at a time"]
-  Publish --> Bot["Telegram Bot API"]
-  Analyze & Aggregate --> AI["AI model"]
-  Console["Console"] -->|POST action| Api["API"]
-  Api --> Store[("Store")]
-  Scrape & Aggregate & Publish --> Store
+```svg
+<Panel>
+  <Node key="clock" col="0" row="0" label="Clock" />
+  <Node key="ai" col="1" row="0" colspan="2" label="AI model" />
+  <Node key="scrape" col="0" row="1" label="1 scrape" />
+  <Node key="analyze" col="1" row="1" label="2 analyze" note="5 at a time" />
+  <Node key="aggregate" col="2" row="1" label="3 aggregate" note="1 at a time" />
+  <Node key="store" col="1" row="2" colspan="2" label="Store" shape="db" />
+  <Node key="publish" col="3" row="2" label="4 publish" note="1 at a time" />
+  <Node key="bot" col="4" row="2" label="Telegram Bot API" />
+  <Node key="console" col="0" row="3" label="Console" />
+  <Node key="api" col="1" row="3" label="API" />
+  <Edge from="clock" to="scrape" />
+  <Edge from="scrape" to="analyze" label="queue" />
+  <Edge from="analyze" to="aggregate" label="queue" />
+  <Edge from="aggregate" to="publish" label="queue, 5 min delay" toSide="top" />
+  <Edge from="publish" to="bot" />
+  <Edge from="analyze" to="ai" fromSide="top" toSide="bottom" />
+  <Edge from="aggregate" to="ai" fromSide="top" toSide="bottom" />
+  <Edge from="console" to="api" label="POST action" />
+  <Edge from="api" to="store" fromSide="top" toSide="bottom" />
+  <Edge from="scrape" to="store" fromSide="bottom" toSide="left" />
+  <Edge from="aggregate" to="store" fromSide="bottom" toSide="top" />
+  <Edge from="publish" to="store" />
+</Panel>
 ```
 
 A post moves through four stages. Between stages it waits as an item in a **work queue** that the store holds. Only the message is a durable record of a post: aggregate stores the post's content *inside* the message.

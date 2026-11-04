@@ -10,17 +10,31 @@ The behaviour, stated precisely enough to rebuild the system, is in the [functio
 
 ## 1. The system in one picture
 
-```mermaid
-flowchart LR
-  Clock["Cloud Scheduler<br/>every 30 min"] --> Scrape["scrape"]
-  Scrape -->|ingest| Analyze["analyze<br/>5 at a time"]
-  Analyze -->|ingest| Aggregate["aggregate<br/>1 at a time"]
-  Aggregate -->|ingest, 5 min delay| Publish["publish<br/>1 at a time"]
-  Publish --> TG["Telegram Bot API"]
-  Analyze & Aggregate --> AI["OpenRouter: Claude"]
-  Scrape & Aggregate & Publish --> FS[("Firestore")]
-  Console["Console<br/>Firebase Hosting"] -->|POST| Api["api function"]
-  Api --> FS
+```svg
+<Panel>
+  <Node key="clock" col="0" row="0" label="Cloud Scheduler" note="every 30 min" />
+  <Node key="ai" col="1" row="0" colspan="2" label="OpenRouter: Claude" />
+  <Node key="scrape" col="0" row="1" label="scrape" />
+  <Node key="analyze" col="1" row="1" label="analyze" note="5 at a time" />
+  <Node key="aggregate" col="2" row="1" label="aggregate" note="1 at a time" />
+  <Node key="fs" col="1" row="2" colspan="2" label="Firestore" shape="db" />
+  <Node key="publish" col="3" row="2" label="publish" note="1 at a time" />
+  <Node key="tg" col="4" row="2" label="Telegram Bot API" />
+  <Node key="console" col="0" row="3" label="Console" note="Firebase Hosting" />
+  <Node key="api" col="1" row="3" label="api function" />
+  <Edge from="clock" to="scrape" />
+  <Edge from="scrape" to="analyze" label="ingest" />
+  <Edge from="analyze" to="aggregate" label="ingest" />
+  <Edge from="aggregate" to="publish" label="ingest, 5 min delay" toSide="top" />
+  <Edge from="publish" to="tg" />
+  <Edge from="analyze" to="ai" fromSide="top" toSide="bottom" />
+  <Edge from="aggregate" to="ai" fromSide="top" toSide="bottom" />
+  <Edge from="scrape" to="fs" fromSide="bottom" toSide="left" />
+  <Edge from="aggregate" to="fs" fromSide="bottom" toSide="top" />
+  <Edge from="publish" to="fs" />
+  <Edge from="console" to="api" label="POST" />
+  <Edge from="api" to="fs" fromSide="top" toSide="bottom" />
+</Panel>
 ```
 
 **The queue is the pipeline.** A post in flight is an `ingest` document: its payload in `raw`, its `status` (`pending`, `running`, `done`, `error`), `retryCount`, `runAt` and timestamps. `aggregate` absorbs it into a message, where it is stored *inside* that message. A `done` item is deleted by a TTL policy after 7 days; an `error` one keeps its message (`error`) and what lay behind it (`cause`) until an operator runs, replays or discards it.
