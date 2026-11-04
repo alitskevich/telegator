@@ -40,8 +40,6 @@ export class ItemsService extends WebClientService {
   declare api: ApiService;
 
   items: ItemPreview[] | null = null;
-  loading = false;
-  error: string | null = null;
   keyword = "";
 
   #stage = DEFAULT_STAGE;
@@ -91,17 +89,13 @@ export class ItemsService extends WebClientService {
   }
 
   async load(): Promise<void> {
-    this.up({ loading: true, error: null });
-    try {
+    await this.track(async () => {
       const items = (await this.api.call("listItems", {
         ...(this.#stage === ALL_STAGES ? {} : { queueName: this.#stage }),
         ...(this.#status === ALL_STATUSES ? {} : { status: this.#status }),
       })) as ItemPreview[];
-      this.up({ items, loading: false });
-    } catch (error) {
-      this.logError(error);
-      this.up({ loading: false, error: error instanceof Error ? error.message : String(error) });
-    }
+      return { items };
+    });
   }
 
   search(event: ValueEvent): void {

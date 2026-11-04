@@ -85,8 +85,6 @@ export class GridService extends WebClientService {
   declare canEdit: boolean;
 
   rows: Row[] | null = null;
-  loading = false;
-  error: string | null = null;
   keyword = "";
   filters: Readonly<Record<string, string>> = {};
   sort: SortState | undefined = undefined;

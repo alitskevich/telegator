@@ -43,6 +43,12 @@ declare module "arrmatura-web" {
     readonly storage: ClientStorage;
     readonly localStorage: ClientStorage;
     readonly sessionStorage: ClientStorage;
+    /** Whether a `track`ed read is running. */
+    loading: boolean;
+    /** Why the last `track`ed read failed; `null` when it did not. */
+    error: string | null;
+    /** `loading` on, then one `up()` with what `read` answers; a failure is logged and shown as `error`. */
+    protected track(read: () => Promise<Delta>): Promise<void>;
     toast(entry: LogEntry): void;
   }
 

@@ -44,8 +44,6 @@ export class AuditService extends WebClientService {
   errors: ErrorsPage | null = null;
   /** The enabled sources whose last poll failed. */
   failingSources: readonly SourcePreview[] = [];
-  loading = false;
-  error: string | null = null;
   replayMax = DEFAULT_REPLAY_MAX;
   /** The error count a purge was armed at; see `purge`. */
   purgeArmedAt: number | null = null;
@@ -69,19 +67,15 @@ export class AuditService extends WebClientService {
   }
 
   async load(): Promise<void> {
-    this.up({ loading: true, error: null });
-    try {
+    await this.track(async () => {
       const [entries, errors, enabled] = await Promise.all([
         this.api.call("loadAudit") as Promise<StoredAuditEntry[]>,
         this.api.call("inspectErrors") as Promise<ErrorsPage>,
         this.api.call("inspectSources") as Promise<SourcePreview[]>,
       ]);
       const failingSources = enabled.filter((source) => source.lastError !== null);
-      this.up({ entries, errors, failingSources, loading: false });
-    } catch (error) {
-      this.logError(error);
-      this.up({ loading: false, error: error instanceof Error ? error.message : String(error) });
-    }
+      return { entries, errors, failingSources };
+    });
   }
 
   setReplayMax(event: ValueEvent): void {

@@ -36,7 +36,6 @@ export class RecordService extends WebClientService {
 
   /** The live records: `null` until read. */
   rows: readonly Row[] | null = null;
-  error: string | null = null;
   newId = "";
   /** The record the modal edits: `null` while closed. */
   detail: Row | null = null;

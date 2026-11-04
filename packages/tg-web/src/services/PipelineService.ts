@@ -91,8 +91,6 @@ export class PipelineService extends WebClientService {
   declare browser: Browser;
 
   data: Overview | null = null;
-  loading = false;
-  error: string | null = null;
   updatedAt: number | null = null;
   /** The next items per stage: `undefined` until read. */
   next: Readonly<Partial<Record<QueueName, readonly QueueItemPreview[]>>> = {};
