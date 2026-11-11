@@ -1,4 +1,23 @@
 {
   "port": 8080,
-  "start": "npm run dev"
+  "start": "npm run dev",
+  "id": "telegator",
+  "name": "TELEGATOR",
+  "description": "Telegram news pipeline on Firebase",
+  "purpose": "Get the signal from many Telegram channels without reading them all.",
+  "goals": [
+    "Scrape a broad set of Telegram channels into a spreadsheet",
+    "Analyze scraped content with AI to extract signal",
+    "Auto-publish the analyzed output to a Telegram forum"
+  ],
+  "outcome": [
+    "Scrap plenty of tg-channels into spreadsheet, analyze with AI and publish on TG forum."
+  ],
+  "status": "maintain",
+  "repoUrl": "https://github.com/alitskevich/telegator",
+  "prodUrl": "https://docs.google.com/spreadsheets/d/16GgF-ERUttIEKKZFsq0YB5zvHaav3stj2Zkpwivl0MQ/edit#gid=0",
+  "domain": "dev",
+  "type": "app",
+  "symbol": "🪗",
+  "startDate": "2023"
 }
