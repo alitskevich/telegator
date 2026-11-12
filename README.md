@@ -4,6 +4,16 @@ Reads Telegram news channels, classifies and deduplicates the posts with Claude 
 
 It runs on Firebase: Firestore, Cloud Functions and Hosting. **How it works is in [`docs/telegator.md`](docs/telegator.md).**
 
+## Purpose
+
+Get the signal from many Telegram channels without reading them all.
+
+## Goals
+
+- Scrape a broad set of Telegram channels into a spreadsheet
+- Analyze scraped content with AI to extract signal
+- Auto-publish the analyzed output to a Telegram forum
+
 ## Run it locally
 
 ```bash
