@@ -1,0 +1,11 @@
+{
+  "events": [
+    {
+      "id": "telegator-001",
+      "date": "2023-01-01",
+      "precision": "year",
+      "name": "start",
+      "kind": "event"
+    }
+  ]
+}

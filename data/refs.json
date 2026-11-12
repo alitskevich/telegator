@@ -1,0 +1,16 @@
+{
+  "refs": [
+    {
+      "id": "telegator-001",
+      "name": "Telegator Google Sheet",
+      "url": "https://docs.google.com/spreadsheets/d/16GgF-ERUttIEKKZFsq0YB5zvHaav3stj2Zkpwivl0MQ/edit#gid=0",
+      "type": "sheet"
+    },
+    {
+      "id": "telegator-002",
+      "name": "TGStat – My Channels",
+      "url": "https://tgstat.com/ru/my/channels",
+      "type": "web"
+    }
+  ]
+}
