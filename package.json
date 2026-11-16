@@ -12,7 +12,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "export PORT=8080; npm run stop && npm -w tg-functions run build && npx --yes npm-run-all --parallel dev:*",
+    "dev": "export PORT=$(jq .port project.json); npm run stop && npm -w tg-functions run build && npx --yes npm-run-all --parallel dev:*",
     "build": "npm run codegen:cml-index && tsx scripts/web.ts && npm -w tg-functions run build",
     "gates": "npx --yes npm-run-all --parallel --continue-on-error --aggregate-output typecheck test lint",
     "typecheck": "tsc --noEmit",
@@ -32,10 +32,10 @@
     "dev:functions": "npm -w tg-functions run watch",
     "dev:emulators": "./scripts/emulators.sh",
     "dev:web": "npm run codegen:cml-index && tsx scripts/web.ts --serve",
-    "dev:vibe": "bun node_modules/arrmatura-vibe/src/server/main.ts . 8091",
+    "dev:vibe": "bun node_modules/arrmatura-vibe/src/server/main.ts . $(jq .vibePort project.json)",
     "dev:open": "npx --yes wait-on http-get://127.0.0.1:4000 && npm -w tg-seed run upload:dev -- --write && npm run open",
-    "open": "npx --yes wait-on http://localhost:${PORT:-8080} http-get://127.0.0.1:4000 && open http://localhost:${PORT:-8080}",
-    "stop": "lsof -t -sTCP:LISTEN -i tcp:${PORT:-8080},8091,9099,9199,5000,5001,8180,4000 | xargs -r kill -9"
+    "open": "npx --yes wait-on http://localhost:$(jq .port project.json) http-get://127.0.0.1:4000 && open http://localhost:$(jq .port project.json)",
+    "stop": "lsof -t -sTCP:LISTEN -i tcp:$(jq .port project.json),$(jq .vibePort project.json),9099,9199,5000,5001,8180,4000 | xargs -r kill -9"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

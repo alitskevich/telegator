@@ -1,13 +1,14 @@
 import { spawn, spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import * as esbuild from "esbuild";
+import project from "../project.json" with { type: "json" };
 
 /**
  * Builds the console into `packages/tg-web/www/`, the directory Firebase
  * Hosting serves.
  *
  *   npm run build        # one production build
- *   npm run dev          # watch, and serve on http://localhost:8080
+ *   npm run dev          # watch, and serve on `port` from project.json
  *
  * Two steps: compile Tailwind, bundle with esbuild. Both npm scripts regenerate
  * the CML index first. The bundle reads the real `arrmatura-web` source — `tsconfigRaw`
@@ -21,7 +22,7 @@ const WWW = join(WEB, "www");
 const DIST = join(WWW, "dist");
 
 /** The dev origin; the api function allows any localhost origin in the emulator. */
-const DEV_PORT = 8080;
+const DEV_PORT = project.port;
 /** Batches a burst of file changes into one rebuild, and so one page reload. */
 const RELOAD_DELAY_MS = 2000;
 

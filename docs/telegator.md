@@ -201,21 +201,21 @@ Code: `tg-dedup/`. Constants: `tg-configs/dedup.ts`.
 
 ```bash
 npm install              # also links the private arrmatura checkouts
-npm run dev              # emulators + functions watch + console on :8080
+npm run dev              # emulators + functions watch + console on :8081
 ```
 
 `npm run dev` builds the functions bundle, then runs these in parallel:
 
 - the **emulators**: Functions 5001, Firestore 8180, Tasks 9499, UI 4000. Data persists in `.emulator/`.
 - an esbuild **watch** of `tg-functions`. The Functions emulator reloads on every rebuild.
-- the **console** with live reload at `http://localhost:8080`.
+- the **console** with live reload at `http://localhost:8081`.
 - the **vibe server** on 127.0.0.1:8091: Cmd+I in the console opens the DevTools drawer, whose agent edits this repo.
 - once the emulators are ready, `npm -w tg-seed run upload:dev -- --write` restores the dev snapshot (if any), then the console opens.
 
 | Need | Do |
 | --- | --- |
 | Secrets for the emulator | `packages/tg-functions/.secret.local` (git-ignored), linked from `~/.keys/.env` (shared by all projects). `TELEGRAM_BOT_TOKEN` there is a placeholder, so local runs never post to live channels. Put a test bot's token there to try publishing. |
-| Sign in locally | Press *Sign in* and pick your real Google account. Its token is real; the first sign-in under the emulator is an enabled admin in the local `users`. `http://localhost:8080` must be an authorized JavaScript origin of the `googleClientId` OAuth client. |
+| Sign in locally | Press *Sign in* and pick your real Google account. Its token is real; the first sign-in under the emulator is an enabled admin in the local `users`. `http://localhost:8081` must be an authorized JavaScript origin of the `googleClientId` OAuth client. |
 | Data | `npm -w tg-seed run download:dev` or `download:prod` saves `sources`, `targets` and `users` to `packages/tg-seed/data/<env>/<collection>.json`. `npm -w tg-seed run upload:dev -- --write` makes each dev collection match its file, deleting documents missing from it; dry run without `--write`. |
 | A scrape | *Scrape now* on the Dashboard page's Scrape node. Scheduled functions do not fire in the emulator, so neither does `sweep`: drive the flow from the Dashboard page instead. *Run now* runs a stage's delayed and retried items, *Pause* and *Step* walk items through one at a time, *Run* on a failed item of the Audit page re-runs it. |
 

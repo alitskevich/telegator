@@ -18,7 +18,7 @@ Get the signal from many Telegram channels without reading them all.
 
 ```bash
 npm install     # also links the private Arrmatura checkouts (~/Projects/arrmatura, arrmatura-web, ultimus)
-npm run dev     # emulators + functions watch + console at http://localhost:8080
+npm run dev     # emulators + functions watch + console at http://localhost:8081
 ```
 
 Everything runs in the Firebase emulators, with live reload for both the functions and the console. Sign in with the emulator's dev account. See the doc's §7 for secrets, seeding and how to trigger a scrape.
