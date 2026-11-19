@@ -8,7 +8,7 @@
   "outcome": [
     "Scrap plenty of tg-channels into spreadsheet, analyze with AI and publish on TG forum."
   ],
-  "status": "maintain",
+  "status": "hold",
   "repoUrl": "https://github.com/alitskevich/telegator",
   "prodUrl": "https://docs.google.com/spreadsheets/d/16GgF-ERUttIEKKZFsq0YB5zvHaav3stj2Zkpwivl0MQ/edit#gid=0",
   "domain": "dev",
