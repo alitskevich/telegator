@@ -118,7 +118,7 @@
         <div class="flex items-center gap-1">
           <IBtn icon="{row.expanded ? 'chevron-down' : 'chevron-right'}" title="{R.common.members}"
             class="md:btn-xs" click="-> @grid.expand(row.id)" />
-          <span If="{row.errors GT 0}" class="badge badge-error badge-soft badge-xs gap-0.5 tabular-nums"
+          <span If="{row.errors GT 0}" class="badge badge-error badge-soft badge-sm gap-0.5 tabular-nums"
             title="{R.audit.open}">
             <span class="icon icon-triangle-alert" aria-hidden="true"></span>
             <span>{row.errors}</span>

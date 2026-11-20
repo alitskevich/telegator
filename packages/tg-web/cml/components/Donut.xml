@@ -20,7 +20,7 @@
               <span class="size-2.5 rounded-full shrink-0" style="background: {slice.color}"></span>
               <span class="flex-1 truncate">{slice.label}</span>
               <span class="text-base-content/70">{slice.value | num}</span>
-              <span class="w-10 text-right text-base-content/50">{slice.fraction | share}</span>
+              <span class="w-10 text-right text-base-content/60">{slice.fraction | share}</span>
             </li>
           </ul>
         </div>

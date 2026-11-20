@@ -63,7 +63,7 @@
     <Signature purpose="The model's reading of a failed item: a summary, the likely cause and a proposed fix">
       <Prop id="diagnosis" type="object" required="true" description="`summary`, `cause` and `fix`" />
     </Signature>
-    <dl class="col-span-2 border-l-2 border-primary/60 pl-3 text-xs flex flex-col gap-1.5">
+    <dl class="col-span-2 border-l border-base-content/20 pl-3 text-xs flex flex-col gap-1.5">
       <dt class="text-sm font-medium">{diagnosis.summary}</dt>
       <dd class="flex flex-col">
         <span class="text-base-content/60">{R.audit.likelyCause}</span>

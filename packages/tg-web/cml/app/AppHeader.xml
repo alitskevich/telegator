@@ -16,7 +16,7 @@
               <span class="icon icon-{item.icon}" aria-hidden="true"></span>
               <span class="hidden md:inline">{item.name}</span>
               <span If="{item.id == 'audit' AND @pipeline.failures GT 0}" title="{R.audit.failuresBadge}"
-                class="badge badge-xs badge-error tabular-nums">{@pipeline.failures | num}</span>
+                class="badge badge-sm badge-error tabular-nums">{@pipeline.failures | num}</span>
             </a>
           </li>
         </ul>
