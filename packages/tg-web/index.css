@@ -13,33 +13,45 @@
   themes: false;
 }
 
-/* Night shift: a deep slate ground, a soft light ink, one signal green for
-   "healthy / act here", and red kept for dead letters alone. */
+/* ── Night shift — the console's rules ────────────────────────────────────
+   - Ground → panel → zone: three opaque slate grades, told apart by lightness
+     alone. No shadow on a panel, no glass, no gradient; only toasts and menus
+     float (`shadow-overlay`).
+   - Ink is near-neutral (chroma ≤ 0.015, leaning to the slate hue 258);
+     secondary text is `base-content/60–70`, never below /60 for words.
+   - One signal: `primary` green, for the primary action, the current nav item
+     and the selected node. Nothing decorative is green.
+   - `success` is a cooler mint so "published" never reads as "act here";
+     `accent` is a quiet light slate for selected segments and tag chips.
+   - `error` red is for failures alone. Every pair is ≥ 4.5:1 for text and
+     ≥ 3:1 for icons and the focus ring (DESIGN.md has the table).
+   - Fira Sans for everything; Fira Mono only inside <pre> (causes, payloads).
+     No text under 13px; numbers align with tabular-nums. */
 @plugin "daisyui/theme" {
   name: "telegator";
   default: true;
   prefersdark: true;
   color-scheme: dark;
-  --color-base-100: oklch(21% 0.018 258);
-  --color-base-200: oklch(25% 0.02 258);
-  --color-base-300: oklch(16.5% 0.016 258);
-  --color-base-content: oklch(92% 0.012 258);
+  --color-base-100: oklch(21% 0.013 258);
+  --color-base-200: oklch(25% 0.014 258);
+  --color-base-300: oklch(16.5% 0.012 258);
+  --color-base-content: oklch(93% 0.006 258);
   --color-primary: oklch(74% 0.16 152);
   --color-primary-content: oklch(19% 0.04 152);
-  --color-secondary: oklch(36% 0.03 258);
-  --color-secondary-content: oklch(92% 0.012 258);
-  --color-accent: oklch(74% 0.16 152);
-  --color-accent-content: oklch(19% 0.04 152);
-  --color-neutral: oklch(30% 0.022 258);
-  --color-neutral-content: oklch(92% 0.012 258);
+  --color-secondary: oklch(36% 0.02 258);
+  --color-secondary-content: oklch(93% 0.006 258);
+  --color-accent: oklch(86% 0.015 258);
+  --color-accent-content: oklch(19% 0.012 258);
+  --color-neutral: oklch(30% 0.016 258);
+  --color-neutral-content: oklch(93% 0.006 258);
   --color-info: oklch(72% 0.12 240);
   --color-info-content: oklch(18% 0.04 240);
-  --color-success: oklch(74% 0.16 152);
-  --color-success-content: oklch(19% 0.04 152);
+  --color-success: oklch(80% 0.1 172);
+  --color-success-content: oklch(19% 0.03 172);
   --color-warning: oklch(82% 0.15 80);
   --color-warning-content: oklch(22% 0.05 80);
   --color-error: oklch(66% 0.2 25);
-  --color-error-content: oklch(98% 0.01 25);
+  --color-error-content: oklch(17% 0.04 25);
   --radius-selector: 1rem;
   --radius-field: 0.375rem;
   --radius-box: 0.5rem;
@@ -66,16 +78,80 @@
   --shadow-overlay: 0 12px 32px -8px oklch(0% 0 0 / 0.55);
 }
 
+/* DaisyUI's small controls set 11–12px; the console's floor is 13px. Declared
+   as utilities so `sm:btn-sm` and friends follow too. `badge-xs` (10px) is not
+   used: a chip is `badge-sm`. */
+@utility btn-sm {
+  font-size: var(--text-xs);
+}
+
+@utility btn-xs {
+  font-size: var(--text-xs);
+}
+
+@utility input-sm {
+  font-size: var(--text-xs);
+}
+
+@utility input-xs {
+  font-size: var(--text-xs);
+}
+
+@utility select-sm {
+  font-size: var(--text-xs);
+}
+
+@utility badge-sm {
+  font-size: var(--text-xs);
+}
+
+@utility table-sm {
+  :not(thead, tfoot) tr {
+    font-size: var(--text-xs);
+  }
+}
+
 @layer base {
+  /* `html:root` outranks DaisyUI's later `:root` scrollbar rule in this layer. */
+  html:root {
+    accent-color: var(--color-primary);
+    caret-color: var(--color-primary);
+    scrollbar-color: color-mix(in oklch, var(--color-base-content) 22%, transparent) transparent;
+  }
+
   html {
     font-feature-settings: "tnum" 1;
+    font-synthesis-weight: none;
   }
 
   body {
     @apply bg-base-300 text-base-content antialiased;
   }
 
+  ::selection {
+    background-color: color-mix(in oklch, var(--color-primary) 30%, transparent);
+    color: var(--color-base-content);
+  }
+
+  /* Preflight's 50% placeholder is 4.4:1 on a panel; 62% clears 4.5:1 on every grade. */
+  ::placeholder {
+    color: color-mix(in oklab, currentcolor 62%, transparent);
+  }
+
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-primary;
+  }
+}
+
+/* Reduced motion drops every transition and loop. Unlayered, so it outranks
+   DaisyUI's and the templates' layered transitions without `!important`. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
   }
 }
