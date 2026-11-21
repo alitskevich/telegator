@@ -40,7 +40,7 @@
     </Signature>
     <li class="bg-base-200 rounded-box p-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-2">
       <button type="button" data-id="{row.id}" click="-> @item.open(event)"
-        class="group flex flex-col gap-0.5 min-w-0 text-left cursor-pointer">
+        class="group flex flex-col gap-0.5 min-w-0 text-start cursor-pointer">
         <span class="text-xs text-base-content/60 truncate">{row.meta}</span>
         <span class="text-sm text-error break-words group-hover:underline">{row.error}</span>
         <span If="row.text" class="text-xs text-base-content/70 line-clamp-2 break-words">{row.text}</span>
@@ -63,7 +63,7 @@
     <Signature purpose="The model's reading of a failed item: a summary, the likely cause and a proposed fix">
       <Prop id="diagnosis" type="object" required="true" description="`summary`, `cause` and `fix`" />
     </Signature>
-    <dl class="col-span-2 border-l border-base-content/20 pl-3 text-xs flex flex-col gap-1.5">
+    <dl class="col-span-2 border-s border-base-content/20 ps-3 text-xs flex flex-col gap-1.5">
       <dt class="text-sm font-medium">{diagnosis.summary}</dt>
       <dd class="flex flex-col">
         <span class="text-base-content/60">{R.audit.likelyCause}</span>

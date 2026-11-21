@@ -13,10 +13,9 @@ export interface RunOptions {
   readonly success?: (result: unknown) => string;
 }
 
+/** A stacked-bar chart: its parts, in input order. */
 export interface Donut {
   readonly slices: readonly PieSlice[];
-  /** The chart itself, as a CSS background. */
-  readonly background: string;
 }
 
 /** One of a stage's next items, worded for the panel. */

@@ -1,6 +1,6 @@
 import type { SortDirection } from "./sort";
 
-/** A pie slice, in the shape the dashboard's charts consume. */
+/** A labelled value, the input of the dashboard's stacked-bar charts. */
 export interface Slice {
   readonly label: string;
   readonly value: number;

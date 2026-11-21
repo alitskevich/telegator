@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { conicGradient, PIE_PALETTE, sliceColor, toPieSlices } from "./pie";
+import { PIE_PALETTE, sliceColor, toPieSlices } from "./pie";
 
 const slice = (label: string, value: number) => ({ label, value });
 
@@ -31,31 +31,6 @@ describe("toPieSlices", () => {
     test("negative values are dropped", () => {
       expect(toPieSlices([slice("a", -5), slice("b", 2)]).map((s) => s.label)).toEqual(["b"]);
     });
-  });
-});
-
-describe("conicGradient", () => {
-  test("each slice starts where the last one ended", () => {
-    expect(conicGradient(toPieSlices([slice("a", 1), slice("b", 3)]))).toBe(
-      `conic-gradient(${PIE_PALETTE[0]} 0% 25%, ${PIE_PALETTE[1]} 25% 100%)`,
-    );
-  });
-
-  /**
-   * The case a live dashboard hits most — every message published, every item
-   * one category — and the one SVG arcs needed special-casing for.
-   */
-  test("a lone slice is the full circle", () => {
-    expect(conicGradient(toPieSlices([slice("a", 0), slice("b", 5)]))).toBe(
-      `conic-gradient(${PIE_PALETTE[1]} 0% 100%)`,
-    );
-  });
-
-  test("thirds round to two decimals rather than spilling digits", () => {
-    const gradient = conicGradient(toPieSlices([slice("a", 1), slice("b", 1), slice("c", 1)]));
-
-    expect(gradient).toContain("33.33% 66.67%");
-    expect(gradient).toContain("66.67% 100%");
   });
 });
 

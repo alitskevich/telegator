@@ -18,8 +18,8 @@ describe("template helpers", () => {
   });
 
   test("an unknown status is neutral, not an alarm", () => {
-    expect(statusTone("error")).toBe("badge-error");
-    expect(statusTone("something-new")).toBe("badge-ghost");
+    expect(statusTone("error")).toBe("bg-error");
+    expect(statusTone("something-new")).toBe("bg-base-content/40");
   });
 
   test("only the sorted column reports its direction", () => {

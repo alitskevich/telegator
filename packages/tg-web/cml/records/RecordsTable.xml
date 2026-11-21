@@ -78,7 +78,7 @@
     <thead class="hidden md:table-header-group bg-base-200 text-base-content/80">
       <tr>
         <th If="@grid.canEdit" class="w-8">
-          <input type="checkbox" class="checkbox checkbox-xs rounded-[0.25rem]" aria-label="{R.common.selectAll}"
+          <input type="checkbox" class="checkbox checkbox-xs" aria-label="{R.common.selectAll}"
             checked="{@grid.view.allSelected}" toggle="-> @grid.toggleAll()" />
         </th>
         <th If="{table == 'messages'}" class="w-8"></th>
@@ -111,7 +111,7 @@
     </Signature>
     <tr class="flex flex-wrap items-start gap-x-4 gap-y-3 p-4 md:table-row md:p-0 transition-colors duration-150 {row.selected ? 'bg-primary/5' : 'md:hover:bg-base-200/50'}">
       <td If="@grid.canEdit" class="order-1 block p-0 pt-1 md:table-cell md:align-top md:px-3 md:pt-2.5">
-        <input type="checkbox" class="checkbox checkbox-sm md:checkbox-xs rounded-[0.25rem]" aria-label="{row.id}"
+        <input type="checkbox" class="checkbox checkbox-sm md:checkbox-xs" aria-label="{row.id}"
           checked="{row.selected}" data-id="{row.id}" toggle="-> @grid.toggle(event)" />
       </td>
       <td If="{table == 'messages'}" class="order-3 block p-0 md:table-cell md:align-top md:px-3 md:py-2">
@@ -130,7 +130,7 @@
         <RecordCell cell="{cell}" rowId="{row.id}" />
       </td>
       <td If="{@grid.canEdit OR (table == 'messages' AND @api.canAdmin)}"
-        class="order-5 basis-full flex justify-end gap-2 p-0 md:table-cell md:align-top md:px-3 md:py-2 md:text-right md:whitespace-nowrap">
+        class="order-5 basis-full flex justify-end gap-2 p-0 md:table-cell md:align-top md:px-3 md:py-2 md:text-end md:whitespace-nowrap">
         <Btn If="@grid.canEdit" class="md:btn-xs" mode="soft" type="{row.dirty ? 'primary' : 'neutral'}"
           text="{R.common.save}" disabled="{!row.dirty}" busy="{@api.busy['save:' + row.id]}"
           click="-> @grid.save(row.id)" />

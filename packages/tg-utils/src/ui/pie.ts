@@ -1,26 +1,28 @@
 import type { PieSlice, Slice } from "./types";
 
 /**
- * The dashboard's donut charts, drawn as one CSS `conic-gradient` rather than
- * SVG paths: the browser does the arc geometry, and a single slice needs no
- * special case. Pure functions, so the arithmetic is testable without rendering.
+ * The dashboard's charts: parts of a whole, drawn as one stacked bar whose parts
+ * are flex items sized by value. Pure functions, so the arithmetic is testable
+ * without rendering.
  */
 
 /**
- * Ten colours, cycled across the categories, tuned for the dark theme. No red:
- * the console keeps red for failures, so a category in red would read as an alarm.
+ * Ten lightness steps of the ink's slate (hue 258), cycled across the parts. The
+ * console colours nothing else: no green (the signal), no red (failures alone).
+ * Light and dark steps alternate, so neighbouring parts differ by 18% or more, and
+ * each is 3.2:1 or more on the panel. A part's row in the legend names it.
  */
 export const PIE_PALETTE = [
-  "#4a9eff",
-  "#3fb950",
-  "#d29922",
-  "#c3cfe0",
-  "#a371f7",
-  "#39c5cf",
-  "#db6d28",
-  "#db61a2",
-  "#8ddb8c",
-  "#6e7681",
+  "oklch(92% 0.02 258)",
+  "oklch(70% 0.02 258)",
+  "oklch(88% 0.02 258)",
+  "oklch(65% 0.02 258)",
+  "oklch(83% 0.02 258)",
+  "oklch(61% 0.02 258)",
+  "oklch(79% 0.02 258)",
+  "oklch(56% 0.02 258)",
+  "oklch(74% 0.02 258)",
+  "oklch(52% 0.02 258)",
 ] as const;
 
 export function sliceColor(index: number): string {
@@ -28,8 +30,6 @@ export function sliceColor(index: number): string {
   // instead of `undefined` painted as nothing.
   return PIE_PALETTE[index % PIE_PALETTE.length] ?? PIE_PALETTE[0];
 }
-
-const PERCENT = 100;
 
 /**
  * Turn labelled values into slices.
@@ -51,22 +51,4 @@ export function toPieSlices(values: readonly Slice[]): PieSlice[] {
     fraction: slice.value / total,
     color: sliceColor(values.indexOf(slice)),
   }));
-}
-
-/** Two decimals of a percent is finer than any donut on a screen can show. */
-const round = (value: number): number => Math.round(value * PERCENT * PERCENT) / PERCENT;
-
-/**
- * `conic-gradient(#4a9eff 0% 25%, #3fb950 25% 100%)` — each slice a hard stop
- * from where the last one ended, clockwise from twelve o'clock.
- */
-export function conicGradient(slices: readonly PieSlice[]): string {
-  let start = 0;
-  const stops = slices.map((slice) => {
-    const end = start + slice.fraction;
-    const stop = `${slice.color} ${round(start)}% ${round(end)}%`;
-    start = end;
-    return stop;
-  });
-  return `conic-gradient(${stops.join(", ")})`;
 }

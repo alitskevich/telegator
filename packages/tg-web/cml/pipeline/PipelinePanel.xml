@@ -69,7 +69,7 @@
     <ol If="@pipeline.scrapedRows.length" class="flex flex-col gap-2">
       <li Each="row of @pipeline.scrapedRows" class="bg-base-200 rounded-box p-3 flex items-start gap-3">
         <button type="button" data-id="{row.id}" click="-> @item.open(event)"
-          class="group flex flex-col gap-0.5 min-w-0 grow text-left cursor-pointer">
+          class="group flex flex-col gap-0.5 min-w-0 grow text-start cursor-pointer">
           <span class="text-xs text-base-content/60 truncate">{row.ref} · {row.created}</span>
           <span If="row.text" class="text-sm line-clamp-2 break-words group-hover:underline">{row.text}</span>
           <span If="row.error" class="text-xs text-error truncate" title="{row.error}">{row.error}</span>
@@ -133,7 +133,7 @@
       <ol If="@pipeline.nextItems.length" class="flex flex-col gap-2">
         <li Each="item of @pipeline.nextItems" class="bg-base-200 rounded-box p-3 flex items-start gap-3">
           <button type="button" data-id="{item.id}" click="-> @item.open(event)"
-            class="group flex flex-col gap-0.5 min-w-0 grow text-left cursor-pointer">
+            class="group flex flex-col gap-0.5 min-w-0 grow text-start cursor-pointer">
             <span class="text-xs text-base-content/60 truncate">{item.ref} · {item.meta}</span>
             <span If="item.text" class="text-sm line-clamp-2 break-words group-hover:underline">{item.text}</span>
             <span If="item.error" class="text-xs text-error truncate" title="{item.error}">{item.error}</span>

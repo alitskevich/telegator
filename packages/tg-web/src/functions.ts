@@ -25,20 +25,22 @@ export const share = (fraction: unknown): string => {
   return percent === 0 ? "<1%" : `${percent}%`;
 };
 
+const NEUTRAL = "bg-base-content/40";
+
 const TONES: Readonly<Record<string, string>> = {
-  ok: "badge-success",
-  published: "badge-success",
-  topublish: "badge-warning",
-  no_target: "badge-ghost",
-  paused: "badge-ghost",
-  pending: "badge-warning",
-  running: "badge-info",
-  done: "badge-success",
-  error: "badge-error",
+  ok: "bg-success",
+  published: "bg-success",
+  topublish: "bg-warning",
+  no_target: NEUTRAL,
+  paused: NEUTRAL,
+  pending: "bg-warning",
+  running: "bg-info",
+  done: "bg-success",
+  error: "bg-error",
 };
 
-/** A status value's badge colour; anything unknown is neutral rather than alarming. */
-export const statusTone = (status: unknown): string => TONES[String(status)] ?? "badge-ghost";
+/** A status value's dot colour (`StatusBadge`); anything unknown is neutral rather than alarming. */
+export const statusTone = (status: unknown): string => TONES[String(status)] ?? NEUTRAL;
 
 const sortOf = (sort: unknown, column: unknown): SortState["direction"] | undefined => {
   const state = sort as SortState | null | undefined;

@@ -15,7 +15,7 @@
   },
   {
     "id": "AppShell",
-    "description": "An unknown route renders `Page`, the not-found screen, by CML's dotted-prefix fallback.",
+    "description": "An unknown route renders `Page`, the not-found screen, by CML's dotted-prefix fallback. `@pipeline` lives here, not in `Page.Dashboard`, so the header's `PageActions.Dashboard` can reach it.",
     "purpose": "The signed-in console: header, then the page the url path names",
     "name": "AppShell",
     "file": "packages/tg-web/cml/app/AppShell.xml"
@@ -56,6 +56,13 @@
     "file": "packages/tg-web/cml/app/Page.xml"
   },
   {
+    "id": "PageActions",
+    "description": "`AppHeader` renders `PageActions.{Route}`; a route without its own falls back here by CML's dotted-prefix fallback.",
+    "purpose": "The header's page actions for a route that has none",
+    "name": "PageActions",
+    "file": "packages/tg-web/cml/app/PageActions.xml"
+  },
+  {
     "id": "UserMenu",
     "description": "UserMenu",
     "purpose": "Who is signed in, with which roles, and the way out",
@@ -65,37 +72,30 @@
   {
     "id": "AuditList",
     "description": "AuditList",
-    "purpose": "What went wrong, one per line: when and where, then the reason. A rejected send names its target and method; a failed item, its stage and post",
+    "purpose": "What went wrong, one per line: when and where, then the reason. A rejected send names its target and method; a failed item, its stage and post; a failed scheduled run, its job",
     "name": "AuditList",
     "file": "packages/tg-web/cml/components/AuditList.xml"
   },
   {
+    "id": "ConfirmButton",
+    "description": "Stateless: its owner keeps `armed`. Armed, it turns solid, says `confirmText` and shows a Cancel button beside it.",
+    "purpose": "A button for an action that cannot be undone: the first press arms it, the second runs it",
+    "name": "ConfirmButton",
+    "file": "packages/tg-web/cml/components/ConfirmButton.xml"
+  },
+  {
     "id": "Donut",
-    "description": "`chart` is `{ slices, background }` from `PipelineService`; an empty chart says so rather than drawing a hole.",
-    "purpose": "A donut chart with its legend, drawn as one CSS conic-gradient",
+    "description": "`chart` is `{ slices }` from `PipelineService`: each part a flex item sized by its value, in a slate step from `tg-utils/ui/pie`. An empty chart says so rather than drawing an empty bar.",
+    "purpose": "Parts of a whole as one stacked bar, with a legend in the same order",
     "name": "Donut",
     "file": "packages/tg-web/cml/components/Donut.xml"
   },
   {
     "id": "ErrorBanner",
-    "description": "ErrorBanner",
-    "purpose": "An inline failure, in plain words, beside the block it belongs to",
+    "description": "Closing hides this text only: a different failure shows again.",
+    "purpose": "An inline failure, in plain words, beside the block it belongs to, with a close button and, on localhost, one that hands it to the vibe agent",
     "name": "ErrorBanner",
     "file": "packages/tg-web/cml/components/ErrorBanner.xml"
-  },
-  {
-    "id": "PageActions",
-    "description": "`AppHeader` renders `PageActions.{Route}`; a route without its own falls back here by CML's dotted-prefix fallback.",
-    "purpose": "The header's page actions for a route that has none",
-    "name": "PageActions",
-    "file": "packages/tg-web/cml/app/PageActions.xml"
-  },
-  {
-    "id": "PageActions.Dashboard",
-    "description": "Reads `@pipeline`, which `AppShell` holds.",
-    "purpose": "The dashboard's actions in the header: when it last read, Refresh and Reset ingest",
-    "name": "PageActions.Dashboard",
-    "file": "packages/tg-web/cml/dashboard/PageActions.Dashboard.xml"
   },
   {
     "id": "PageTitle",
@@ -114,7 +114,7 @@
   {
     "id": "StatusBadge",
     "description": "StatusBadge",
-    "purpose": "A record's status as a coloured pill; unknown values are neutral",
+    "purpose": "A record's status as quiet text: a small dot in the status's colour, then the word; unknown values get a neutral dot",
     "name": "StatusBadge",
     "file": "packages/tg-web/cml/components/StatusBadge.xml"
   },
@@ -133,18 +133,18 @@
     "file": "packages/tg-web/cml/dashboard/Page.Dashboard.xml"
   },
   {
+    "id": "PageActions.Dashboard",
+    "description": "Reads `@pipeline`, which `AppShell` holds.",
+    "purpose": "The dashboard's actions in the header: when it last read, Refresh and Reset ingest",
+    "name": "PageActions.Dashboard",
+    "file": "packages/tg-web/cml/dashboard/PageActions.Dashboard.xml"
+  },
+  {
     "id": "PipelineItem",
     "description": "Reads `@item.detail`; opened from a queue row of the Pipeline panel or a failed item of the Audit page. Only an admin saves, and only a waiting or failed item; the API re-checks both and the stage's schema.",
     "purpose": "One ingest item whole: where it stands, its payload, and a form over the payload's text",
     "name": "PipelineItem",
     "file": "packages/tg-web/cml/pipeline/PipelineItem.xml"
-  },
-  {
-    "id": "PipelineNode",
-    "description": "A stage shows its count, and its queue count on its top-right corner when it has one. Pressing it selects it. The caption is cut at one line; the panel shows it whole.",
-    "purpose": "One node of the pipeline diagram: a stage",
-    "name": "PipelineNode",
-    "file": "packages/tg-web/cml/pipeline/PipelineNode.xml"
   },
   {
     "id": "PipelinePanel",
@@ -162,8 +162,8 @@
   },
   {
     "id": "SourcesTable",
-    "description": "Reads `@sources` and reloads it each time the tab opens. Its actions sit on the tabs' right, in `PipelinePanel`. Only an editor ticks rows; the API re-checks the role regardless.",
-    "purpose": "The Scrape node's All sources tab: every reader and status in a table; a click on an id opens `RecordModal`",
+    "description": "Reads `@sources` and reloads it each time the node opens. Export and cursor reset sit above it, in `PipelinePanel`; add and delete are the table's children. Only an editor ticks rows; the API re-checks the role regardless.",
+    "purpose": "The Scrape node's sources: every reader and status in a table, the next run's first, then soonest due; a click on an id opens `RecordModal`",
     "name": "SourcesTable",
     "file": "packages/tg-web/cml/pipeline/SourcesTable.xml"
   },
@@ -189,9 +189,16 @@
     "file": "packages/tg-web/cml/records/Page.Audit.xml"
   },
   {
+    "id": "Page.Items",
+    "description": "The stage and status are `?stage=` and `?status=` in the url, so a reload or a shared link shows the same list. Reads `listItems`; *Run* renders only for an admin.",
+    "purpose": "One stage's ingest items or every stage's, picked from a dropdown, filtered by status, newest first; a row opens the item modal",
+    "name": "Page.Items",
+    "file": "packages/tg-web/cml/records/Page.Items.xml"
+  },
+  {
     "id": "Page.Messages",
-    "description": "The tab is `?status=` in the url, so a reload or a shared link shows the same one.",
-    "purpose": "The Messages table by status tab, with Publish now on the backlog for an admin",
+    "description": "The status is `?status=` in the url, so a reload or a shared link shows the same one.",
+    "purpose": "The Messages table by status, picked from a radio group with each status's count, with Publish now on the backlog for an admin",
     "name": "Page.Messages",
     "file": "packages/tg-web/cml/records/Page.Messages.xml"
   },
@@ -205,7 +212,7 @@
   {
     "id": "RecordCell",
     "description": "On a phone the cell carries its column's name, since there is no header row; the row's first cell is the card's title and needs none. Edits go to `@grid.edit` on every keystroke; nothing is sent until the row's Save.",
-    "purpose": "One table cell: an input where the operator may write, a badge for a status, text otherwise",
+    "purpose": "One table cell: an input where the operator may write, a status label for a status, text otherwise",
     "name": "RecordCell",
     "file": "packages/tg-web/cml/records/RecordCell.xml"
   },

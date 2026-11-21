@@ -8,7 +8,7 @@ import type {
 import { MAX_PUBLISH_NOW } from "tg-configs/limits";
 import type { QueueName } from "tg-enums/queueName";
 import { resources } from "tg-rc/web";
-import { conicGradient, toPieSlices } from "tg-utils/ui/pie";
+import { toPieSlices } from "tg-utils/ui/pie";
 import type { Slice } from "tg-utils/ui/types";
 import { clock } from "../functions";
 import { pipelineNodes, queueOf } from "../pipeline/nodes";
@@ -62,10 +62,9 @@ export const whenPolled = (source: SourcePreview, now: number): string => {
   return fill(resources.pipeline.due, { time: clock(source.dueAt) });
 };
 
-const donut = (values: readonly Slice[] | undefined): Donut => {
-  const slices = toPieSlices(values ?? []);
-  return { slices, background: conicGradient(slices) };
-};
+const donut = (values: readonly Slice[] | undefined): Donut => ({
+  slices: toPieSlices(values ?? []),
+});
 
 const splitNote = (split: Readonly<Record<string, number>>): string =>
   Object.entries(split)

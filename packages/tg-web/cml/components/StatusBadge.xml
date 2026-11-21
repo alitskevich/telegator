@@ -1,7 +1,10 @@
 <Component id="StatusBadge">
-  <Signature purpose="A record's status as a coloured pill; unknown values are neutral">
+  <Signature purpose="A record's status as quiet text: a small dot in the status's colour, then the word; unknown values get a neutral dot">
     <Prop id="status" type="string" />
   </Signature>
 
-  <span class="badge badge-sm badge-soft whitespace-nowrap {status | statusTone}">{status}</span>
+  <span class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-base-content/70">
+    <span class="size-2 shrink-0 rounded-full {status | statusTone}" aria-hidden="true"></span>
+    <span>{status}</span>
+  </span>
 </Component>
